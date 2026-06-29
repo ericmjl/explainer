@@ -1,0 +1,98 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>AlphaFold Explainer - IPA Story</title>
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <main class="app-shell">
+      <section class="left-pane" aria-label="Story explanation">
+        <header class="story-header">
+          <div>
+            <p class="eyebrow">AlphaFold Structure Module</p>
+            <h1>Invariant Point Attention</h1>
+          </div>
+          <div class="step-counter" id="stepCounter">1 / 9</div>
+        </header>
+
+        <section class="step-copy">
+          <p class="phase" id="stepPhase">Frame setup</p>
+          <h2 id="stepTitle">Residues carry local frames</h2>
+          <p id="stepBody">
+            Each residue has a current rigid frame. IPA uses that frame to ask
+            geometry-aware attention questions.
+          </p>
+          <div class="equation" id="stepEquation">T_i = (R_i, t_i)</div>
+        </section>
+
+        <section class="code-panel" aria-label="IPA pseudocode">
+          <div class="panel-title">
+            <span>pseudocode</span>
+            <span id="activeLines">lines 1-2</span>
+          </div>
+          <ol class="code-list" id="codeList"></ol>
+        </section>
+
+        <section class="inspect-panel" aria-label="Current variables">
+          <div class="panel-title">
+            <span>variables</span>
+            <span id="sceneMode">frames</span>
+          </div>
+          <dl id="variableList"></dl>
+        </section>
+
+        <nav class="controls" aria-label="Story controls">
+          <button id="prevButton" type="button" aria-label="Previous step">
+            <span aria-hidden="true">←</span>
+          </button>
+          <div class="progress-track" id="progressTrack" aria-label="Story progress"></div>
+          <button id="nextButton" type="button" aria-label="Next step">
+            <span aria-hidden="true">→</span>
+          </button>
+        </nav>
+      </section>
+
+      <section class="right-pane" aria-label="3D visualization">
+        <div class="scene-toolbar">
+          <div>
+            <p class="eyebrow">scene</p>
+            <h2 id="sceneTitle">Virtual probe points</h2>
+          </div>
+          <div class="legend">
+            <span><i class="legend-dot residue-i"></i>residue i</span>
+            <span><i class="legend-dot residue-j"></i>residue j</span>
+            <span><i class="legend-dot probe-q"></i>query probe</span>
+            <span><i class="legend-dot probe-k"></i>key probe</span>
+          </div>
+        </div>
+
+        <div class="scene-stage">
+          <canvas id="sceneCanvas" aria-label="Interactive 3D IPA scene"></canvas>
+          <div id="sceneOverlay" class="scene-overlay" aria-hidden="true"></div>
+        </div>
+
+        <div class="scene-footer">
+          <div id="sceneCaption">
+            Use arrow keys to step through the story.
+          </div>
+          <div class="key-hints">
+            <kbd>←</kbd>
+            <kbd>→</kbd>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <script type="importmap">
+      {
+        "imports": {
+          "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+          "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
+        }
+      }
+    </script>
+    <script type="module" src="./app.js"></script>
+  </body>
+</html>
