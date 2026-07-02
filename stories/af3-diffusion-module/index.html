@@ -1,0 +1,131 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>AlphaFold Explainer - AF3 Diffusion Module Map</title>
+    <link rel="stylesheet" href="../../styles.css" />
+  </head>
+  <body>
+    <main class="app-shell diffusion-story">
+      <section class="left-pane" aria-label="Story explanation">
+        <header class="story-header">
+          <div>
+            <p class="eyebrow">AlphaFold 3 Diffusion Module</p>
+            <h1>Module Map</h1>
+          </div>
+          <div class="story-header-actions">
+            <a class="story-home-link" href="../../">All stories</a>
+            <div class="step-counter" id="stepCounter">1 / 8</div>
+          </div>
+        </header>
+
+        <section class="step-copy">
+          <p class="phase" id="stepPhase">Coarse map</p>
+          <h2 id="stepTitle">Three stages, two attention scales</h2>
+          <p id="stepBody">
+            The diffusion module alternates between atom-level local processing,
+            full token-level processing, then atom-level local decoding.
+          </p>
+          <div class="equation" id="stepEquation">atoms -> tokens -> atoms</div>
+        </section>
+
+        <section class="code-panel" aria-label="Diffusion module pseudocode">
+          <div class="panel-title">
+            <span>pseudocode</span>
+            <span id="activeLines">lines 1-3</span>
+          </div>
+          <ol class="code-list" id="codeList"></ol>
+        </section>
+
+        <section class="inspect-panel" aria-label="Current variables">
+          <div class="panel-title">
+            <span>variables</span>
+            <span id="sceneMode">overview</span>
+          </div>
+          <dl id="variableList"></dl>
+        </section>
+
+        <nav class="controls" aria-label="Story controls">
+          <button id="prevButton" type="button" aria-label="Previous step">
+            <span aria-hidden="true">←</span>
+          </button>
+          <div class="progress-track" id="progressTrack" aria-label="Story progress"></div>
+          <button id="nextButton" type="button" aria-label="Next step">
+            <span aria-hidden="true">→</span>
+          </button>
+        </nav>
+      </section>
+
+      <section class="right-pane" aria-label="Diffusion module visualization">
+        <div class="scene-toolbar">
+          <div>
+            <p class="eyebrow">module graph</p>
+            <h2 id="sceneTitle">Encoder, token core, decoder</h2>
+          </div>
+          <div class="legend module-legend">
+            <span><i class="legend-dot atom-mask"></i>atom-local</span>
+            <span><i class="legend-dot token-core-dot"></i>token full attention</span>
+            <span><i class="legend-dot atom-overlap"></i>fine story link</span>
+          </div>
+        </div>
+
+        <div class="scene-stage module-stage">
+          <div class="module-map" aria-label="AF3 diffusion module map">
+            <button class="module-node atom-node" type="button" data-step="1" data-module="encoder">
+              <span class="module-label">AtomAttentionEncoder</span>
+              <span class="module-scale">sequence-local atom attention</span>
+              <span class="module-spec">Nblock 3 · Nhead 4</span>
+              <span class="module-link">Open local atom story</span>
+            </button>
+
+            <div class="module-arrow" aria-hidden="true">
+              <span>token features</span>
+            </div>
+
+            <button class="module-node token-node" type="button" data-step="3" data-module="token">
+              <span class="module-label">DiffusionTransformer</span>
+              <span class="module-scale">full token self-attention</span>
+              <span class="module-spec">Nblock 24 · Nhead 16</span>
+              <span class="module-link is-muted">Token map detail</span>
+            </button>
+
+            <div class="module-arrow" aria-hidden="true">
+              <span>token updates</span>
+            </div>
+
+            <button class="module-node atom-node" type="button" data-step="5" data-module="decoder">
+              <span class="module-label">AtomAttentionDecoder</span>
+              <span class="module-scale">sequence-local atom attention</span>
+              <span class="module-spec">Nblock 3 · Nhead 4</span>
+              <span class="module-link">Open local atom story</span>
+            </button>
+          </div>
+
+          <div class="module-detail-card" id="moduleDetail">
+            <p class="eyebrow">selected module</p>
+            <h3 id="moduleTitle">Diffusion module</h3>
+            <p id="moduleBody">
+              Atom-local stages compress and expand atom information around
+              tokens. The middle transformer mixes token representations with
+              full self-attention.
+            </p>
+            <a id="moduleDrilldown" href="../af3-local-atom-attention/">Open fine story</a>
+          </div>
+        </div>
+
+        <div class="scene-footer">
+          <div id="sceneCaption">
+            The module graph is the coarse layer; module-specific stories are the fine layer.
+          </div>
+          <div class="key-hints">
+            <kbd>←</kbd>
+            <kbd>→</kbd>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <script type="module" src="./diffusion-module.js"></script>
+  </body>
+</html>

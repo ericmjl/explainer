@@ -1,0 +1,60 @@
+schema_version: architecture-comparison-v0.1
+id: atom_local_vs_token_pair_biased_attention
+question: Where do local atom attention and pair-biased token attention appear across AF3-style and Biohub ESMFold2 diffusion modules?
+participants:
+  - architectures/af3-diffusion-module.yaml
+  - architectures/biohub-esmfold2-diffusion-module.yaml
+axes:
+  - id: scale_split
+    label: Atom-token scale split
+    fields:
+      - modules.scale
+      - edges.operation
+  - id: attention_pattern
+    label: Attention pattern
+    fields:
+      - modules.attention.pattern
+      - modules.attention.window
+  - id: pair_bias_boundary
+    label: Pair-bias boundary
+    fields:
+      - modules.attention.pair_bias
+      - modules.attention.pair_bias_source
+  - id: geometry_encoding
+    label: Geometry encoding
+    fields:
+      - modules.attention.positional_encoding
+      - modules.attention.geometry_terms
+findings:
+  - id: both_have_atom_local_and_token_level_stages
+    statement: Both architecture slices can be described with atom-local stages around a token-level diffusion transformer.
+    evidence:
+      status: inferred
+      refs:
+        - kind: architecture_yaml
+          path: architectures/af3-diffusion-module.yaml
+        - kind: architecture_yaml
+          path: architectures/biohub-esmfold2-diffusion-module.yaml
+  - id: esmfold2_atom_encoder_no_pair_bias
+    statement: Biohub ESMFold2 atom encoder accepts z_ij in the signature but the atom attention call and SWA3DRoPEAttention path do not use pair bias.
+    evidence:
+      status: confirmed_from_code
+      refs:
+        - kind: code
+          path: /home/ruh/research/PhD/related_work/biohub-transformers/src/transformers/models/esmfold2/modeling_esmfold2_common.py
+          lines: "758-770,836-840,492-557"
+  - id: esmfold2_token_transformer_pair_bias
+    statement: Biohub ESMFold2 adds projected pair bias to token transformer attention logits.
+    evidence:
+      status: confirmed_from_code
+      refs:
+        - kind: code
+          path: /home/ruh/research/PhD/related_work/biohub-transformers/src/transformers/models/esmfold2/modeling_esmfold2_common.py
+          lines: "939-940,1114-1118,1426-1432"
+open_questions:
+  - id: af3_pair_bias_boundary
+    question: For AF3 diffusion, which exact pair or conditioning tensors bias token or atom attention logits?
+    status: unresolved
+  - id: esmfold2_concrete_token_depth
+    question: Which concrete ESMFold2 config should populate token_num_blocks and token_num_heads?
+    status: unresolved

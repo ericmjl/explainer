@@ -1,0 +1,128 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>AlphaFold Explainer - ESMFold2 Diffusion Module</title>
+    <link rel="stylesheet" href="../../styles.css" />
+  </head>
+  <body class="note-page">
+    <main class="note-shell">
+      <header class="note-header">
+        <div>
+          <p class="eyebrow">Biohub ESMFold2 architecture</p>
+          <h1>Diffusion Module</h1>
+          <p>
+            A working high-level scaffold for the Biohub ESMFold2 diffusion
+            module: diffusion conditioning, atom encoder, token transformer, and
+            atom decoder.
+          </p>
+        </div>
+        <nav class="note-nav" aria-label="Story navigation">
+          <a class="story-home-link" href="../../">All stories</a>
+          <a class="story-home-link" href="./story.md">Raw note</a>
+        </nav>
+      </header>
+
+      <section class="note-verdict">
+        <p class="eyebrow">bird's-eye scaffold</p>
+        <h2>Conditioning -> atom encoder -> token transformer -> atom decoder.</h2>
+        <p>
+          `DiffusionModule.forward` first prepares conditioned `s` and `z`, then
+          encodes atom-local features into token state, updates tokens with the
+          diffusion transformer, and decodes token output back to atom-coordinate
+          updates.
+        </p>
+      </section>
+
+      <section class="note-verdict">
+        <p class="eyebrow">pair-bias boundary</p>
+        <h2>Atom encoder: no pair bias. Token transformer: pair-biased attention.</h2>
+        <p>
+          `ESMFold2AtomEncoder.forward` has `z_ij` in the signature, but the
+          forward path builds atom features, 3D RoPE parameters, and calls
+          `SWAAtomTransformer` with `q_l`, `c_l`, and `attention_params` only.
+        </p>
+      </section>
+
+      <section class="evidence-grid" aria-label="Evidence">
+        <article class="evidence-card">
+          <p class="eyebrow">atom encoder</p>
+          <h2>`z_ij` enters the signature</h2>
+          <p>
+            Source line 770 declares `z_ij: Tensor | None = None` in
+            `ESMFold2AtomEncoder.forward`.
+          </p>
+          <code>modeling_esmfold2_common.py:758-770</code>
+        </article>
+
+        <article class="evidence-card">
+          <p class="eyebrow">atom path</p>
+          <h2>The transformer call omits pair input</h2>
+          <p>
+            The encoder calls `self.atom_transformer(q_l=q, c_l=c,
+            attention_params=attention_params, ...)`; no `z_ij` or pair-bias
+            tensor is passed.
+          </p>
+          <code>modeling_esmfold2_common.py:836-840</code>
+        </article>
+
+        <article class="evidence-card">
+          <p class="eyebrow">atom attention</p>
+          <h2>SWA + 3D RoPE, no pair argument</h2>
+          <p>
+            `SWA3DRoPEAttention.forward` takes `x` and `attention_params`,
+            builds Q/K/V, applies 3D RoPE, then calls sliding-window attention.
+          </p>
+          <code>modeling_esmfold2_common.py:492-557</code>
+        </article>
+
+        <article class="evidence-card">
+          <p class="eyebrow">token path</p>
+          <h2>Pair bias is added to token logits</h2>
+          <p>
+            `AttentionPairBias` projects `z` through `pair_bias_proj` and adds
+            it to attention logits before masking and softmax.
+          </p>
+          <code>modeling_esmfold2_common.py:939-940, 1114-1118</code>
+        </article>
+      </section>
+
+      <section class="note-flow note-flow-chain" aria-label="Architecture split">
+        <div class="flow-node token-node">
+          <span>DiffusionConditioning</span>
+          <strong>condition s and z</strong>
+          <em>noise/timestep aware</em>
+        </div>
+        <div class="flow-arrow-note">atom-local encode</div>
+        <div class="flow-node atom-node">
+          <span>ESMFold2AtomEncoder</span>
+          <strong>SWA + 3D RoPE</strong>
+          <em>no pair bias</em>
+        </div>
+        <div class="flow-arrow-note">pair-biased token update</div>
+        <div class="flow-node token-node">
+          <span>DiffusionTransformer</span>
+          <strong>AttentionPairBias</strong>
+          <em>pair bias from z</em>
+        </div>
+        <div class="flow-arrow-note">decode to atoms</div>
+        <div class="flow-node atom-node">
+          <span>ESMFold2AtomDecoder</span>
+          <strong>SWA + token-to-atom</strong>
+          <em>coordinate update</em>
+        </div>
+      </section>
+
+      <section class="note-next">
+        <h2>Future visual story</h2>
+        <p>
+          A good interactive version should keep the four-stage flow visible,
+          then drill into the atom encoder's local 3D-RoPE attention, the token
+          transformer's pair-biased full attention, and the atom decoder's
+          token-to-atom readout.
+        </p>
+      </section>
+    </main>
+  </body>
+</html>

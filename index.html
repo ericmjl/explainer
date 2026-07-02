@@ -3,96 +3,142 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>AlphaFold Explainer - IPA Story</title>
+    <title>AlphaFold Explainer - Story Index</title>
     <link rel="stylesheet" href="./styles.css" />
   </head>
-  <body>
-    <main class="app-shell">
-      <section class="left-pane" aria-label="Story explanation">
-        <header class="story-header">
-          <div>
-            <p class="eyebrow">AlphaFold Structure Module</p>
-            <h1>Invariant Point Attention</h1>
-          </div>
-          <div class="step-counter" id="stepCounter">1 / 9</div>
-        </header>
+  <body class="landing-page">
+    <main class="landing-shell">
+      <header class="landing-header">
+        <p class="eyebrow">AlphaFold visual notebook</p>
+        <h1>Mechanism stories</h1>
+        <p>
+          A small set of interactive explanations for architecture details that
+          are easy to confuse in prose: frames, pair bias, atom windows, and
+          diffusion-module data flow.
+        </p>
+      </header>
 
-        <section class="step-copy">
-          <p class="phase" id="stepPhase">Frame setup</p>
-          <h2 id="stepTitle">Residues carry local frames</h2>
-          <p id="stepBody">
-            Each residue has a current rigid frame. IPA uses that frame to ask
-            geometry-aware attention questions.
+      <section class="story-grid" aria-label="Available stories">
+        <a class="story-card is-ready" href="./protocol/architecture-language.md">
+          <span class="story-status">protocol</span>
+          <p class="eyebrow">Architecture language</p>
+          <h2>Protein Architecture DSL</h2>
+          <p>
+            A source-first YAML vocabulary for modules, representations,
+            attention patterns, evidence, and architecture comparisons.
           </p>
-          <div class="equation" id="stepEquation">T_i = (R_i, t_i)</div>
-        </section>
+          <span class="story-meta">v0.1 - protocol source</span>
+        </a>
 
-        <section class="code-panel" aria-label="IPA pseudocode">
-          <div class="panel-title">
-            <span>pseudocode</span>
-            <span id="activeLines">lines 1-2</span>
-          </div>
-          <ol class="code-list" id="codeList"></ol>
-        </section>
+        <a class="story-card is-ready" href="./protocol/pseudocode-language.md">
+          <span class="story-status">protocol</span>
+          <p class="eyebrow">Pseudocode language</p>
+          <h2>Algorithm Trace DSL</h2>
+          <p>
+            A line-level source format for algorithms, symbols, exact source
+            references, claims, and visualization hooks.
+          </p>
+          <span class="story-meta">v0.1 - protocol source</span>
+        </a>
 
-        <section class="inspect-panel" aria-label="Current variables">
-          <div class="panel-title">
-            <span>variables</span>
-            <span id="sceneMode">frames</span>
-          </div>
-          <dl id="variableList"></dl>
-        </section>
+        <a class="story-card is-ready" href="./protocol/protein-visualization-language.md">
+          <span class="story-status">protocol</span>
+          <p class="eyebrow">Visualization language</p>
+          <h2>Protein 2.5D Renderer</h2>
+          <p>
+            A protein-aware view model: architecture maps, hover peeks, click
+            focus, pseudocode steppers, evidence traces, and optional geometry.
+          </p>
+          <span class="story-meta">v0.1 - renderer architecture</span>
+        </a>
 
-        <nav class="controls" aria-label="Story controls">
-          <button id="prevButton" type="button" aria-label="Previous step">
-            <span aria-hidden="true">←</span>
-          </button>
-          <div class="progress-track" id="progressTrack" aria-label="Story progress"></div>
-          <button id="nextButton" type="button" aria-label="Next step">
-            <span aria-hidden="true">→</span>
-          </button>
-        </nav>
+        <a class="story-card is-ready" href="./renderer/esmfold2/">
+          <span class="story-status">prototype</span>
+          <p class="eyebrow">Generated renderer</p>
+          <h2>ESMFold2 Bird's-Eye View</h2>
+          <p>
+            A first coarse architecture map generated from the DSL: diffusion
+            conditioning, atom encoder, token transformer, atom decoder, and
+            semantic zoom into module internals.
+          </p>
+          <span class="story-meta">semantic zoom prototype</span>
+        </a>
+
+        <a class="story-card is-ready" href="./standard_blocks/pair-biased-attention.yaml">
+          <span class="story-status">block</span>
+          <p class="eyebrow">Standard block</p>
+          <h2>Pair-Biased Attention</h2>
+          <p>
+            A reusable attention motif: QK logits plus projected pair bias,
+            then mask, softmax, and value gathering.
+          </p>
+          <span class="story-meta">canonical block spec</span>
+        </a>
+
+        <a class="story-card is-ready" href="./stories/ipa/">
+          <span class="story-status">available</span>
+          <p class="eyebrow">AlphaFold 2 structure module</p>
+          <h2>Algorithm 22: IPA</h2>
+          <p>
+            Walk through scalar attention, pair bias, virtual point probes,
+            query-frame readout, and the boundary before BackboneUpdate.
+          </p>
+          <span class="story-meta">13 steps - Three.js scene</span>
+        </a>
+
+        <a class="story-card is-ready" href="./stories/af3-diffusion-module/">
+          <span class="story-status">available</span>
+          <p class="eyebrow">AlphaFold 3 diffusion module</p>
+          <h2>Diffusion Module Map</h2>
+          <p>
+            Move from atom encoder, to token-level diffusion transformer, to
+            atom decoder, with drill-down links on each module.
+          </p>
+          <span class="story-meta">8 steps - module map</span>
+        </a>
+
+        <a class="story-card is-ready" href="./stories/af3-local-atom-attention/">
+          <span class="story-status">available</span>
+          <p class="eyebrow">AlphaFold 3 fine detail</p>
+          <h2>Local Atom Attention</h2>
+          <p>
+            Visualize why 32 query atoms read from a 128-atom local
+            key/value window, and what that looks like as an attention mask.
+          </p>
+          <span class="story-meta">10 steps - mask view</span>
+        </a>
+
+        <a class="story-card is-ready" href="./stories/esmfold2-pair-bias-boundary/">
+          <span class="story-status">note</span>
+          <p class="eyebrow">Biohub ESMFold2 architecture</p>
+          <h2>Diffusion Module</h2>
+          <p>
+            Record the four-stage scaffold, then drill into the pair-bias
+            boundary between atom-local and token-level attention.
+          </p>
+          <span class="story-meta">source note - no animation yet</span>
+        </a>
+
+        <article class="story-card is-planned">
+          <span class="story-status">planned</span>
+          <p class="eyebrow">AlphaFold 3 trunk</p>
+          <h2>Pairformer Directionality</h2>
+          <p>
+            Document how pair updates stay in the pair stream, pair biases
+            single attention, and single does not feed pair inside the stack.
+          </p>
+          <span class="story-meta">source note pending</span>
+        </article>
       </section>
 
-      <section class="right-pane" aria-label="3D visualization">
-        <div class="scene-toolbar">
-          <div>
-            <p class="eyebrow">scene</p>
-            <h2 id="sceneTitle">Virtual probe points</h2>
-          </div>
-          <div class="legend">
-            <span><i class="legend-dot residue-i"></i>residue i</span>
-            <span><i class="legend-dot residue-j"></i>residue j</span>
-            <span><i class="legend-dot probe-q"></i>query probe</span>
-            <span><i class="legend-dot probe-k"></i>key probe</span>
-          </div>
-        </div>
-
-        <div class="scene-stage">
-          <canvas id="sceneCanvas" aria-label="Interactive 3D IPA scene"></canvas>
-          <div id="sceneOverlay" class="scene-overlay" aria-hidden="true"></div>
-        </div>
-
-        <div class="scene-footer">
-          <div id="sceneCaption">
-            Use arrow keys to step through the story.
-          </div>
-          <div class="key-hints">
-            <kbd>←</kbd>
-            <kbd>→</kbd>
-          </div>
-        </div>
+      <section class="landing-notes" aria-label="Working pattern">
+        <h2>How this grows</h2>
+        <p>
+          Clarifications first become short source-backed story notes. When the
+          concept needs a picture, the note becomes a step in an interactive
+          page.
+        </p>
       </section>
     </main>
-
-    <script type="importmap">
-      {
-        "imports": {
-          "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
-          "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
-        }
-      }
-    </script>
-    <script type="module" src="./app.js"></script>
   </body>
 </html>

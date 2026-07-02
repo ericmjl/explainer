@@ -2,137 +2,116 @@ import * as THREE from "three";
 import { OrbitControls } from "three/addons/controls/OrbitControls.js";
 
 const codeLines = [
-  "inputs: single s_i, pair z_ij, frame T_i = (R_i, t_i)",
-  "q_i, k_j, v_j = linear projections of single reps",
-  "q_i_local = W_q_point s_i",
-  "k_j_local = W_k_point s_j",
-  "q_i_global = R_i q_i_local + t_i",
-  "k_j_global = R_j k_j_local + t_j",
-  "geom_ij = -0.5 * ||q_i_global - k_j_global||^2",
-  "logit_ij = dot(q_i, k_j) + pair_bias(z_ij) + geom_ij",
-  "a_ij = softmax_j(logit_ij)",
-  "o_point_global = sum_j a_ij * v_j_point_global",
-  "o_point_local = R_i^T (o_point_global - t_i)",
-  "ipa_update_i = W_out(concat(scalar, point, norm, pair))",
+  "inputs: single s_i, pair z_ij, frames T_i = (R_i, t_i)",
+  "q_i^h, k_i^h, v_i^h = LinearNoBias(s_i)",
+  "q_i^{hp}, k_i^{hp} = LinearNoBias(s_i)",
+  "v_i^{hp} = LinearNoBias(s_i)",
+  "b_ij^h = LinearNoBias(z_ij)",
+  "w_C = sqrt(1 / (9 * N_query_points)); w_L = sqrt(1 / 3)",
+  "a_ij^h = softmax_j(w_L/sqrt(c) q_i^h . k_j^h + b_ij^h - gamma^h*w_C/2 * sum_p ||T_i q_i^{hp} - T_j k_j^{hp}||^2)",
+  "pair_out_i^h = sum_j a_ij^h z_ij",
+  "scalar_out_i^h = sum_j a_ij^h v_j^h",
+  "point_out_i^{hp} = T_i^-1 sum_j a_ij^h (T_j v_j^{hp})",
+  "norm_i^{hp} = ||point_out_i^{hp}||",
+  "s_tilde_i = Linear(concat_h,p(pair_out, scalar_out, point_out, norm))",
+  "return s_tilde_i",
 ];
 
 const steps = [
   {
     id: "frames",
-    phase: "Frame setup",
-    title: "Residues carry local frames",
+    phase: "Algorithm 22 input",
+    title: "IPA receives features plus frames",
     body:
-      "IPA starts with a current frame for each residue. The frame gives residue i an origin t_i and local axes R_i.",
-    equation: "T_i = (R_i, t_i)",
+      "Each residue has invariant features and a current rigid frame. IPA uses the frame only to place virtual points and later to read them back locally.",
+    equation: "inputs: {s_i}, {z_ij}, {T_i}",
     lines: [1],
     mode: "frames",
     caption:
-      "The two residue frames are current model state. They are not ground truth; they are the coordinate systems IPA can query.",
+      "The scene shows query residue i and a small subset of source residues j. In the real tensor, j ranges over all valid residues.",
     vars: {
-      "T_i": "frame for residue i",
-      "R_i": "local axes in global coordinates",
-      "t_i": "current global origin of residue i",
+      "s_i": "single representation, AF2 c_s = 384",
+      "z_ij": "pair representation, AF2 c_z = 128",
+      "T_i": "current frame (R_i, t_i)",
     },
     scene: { frames: true, residues: true, camera: 0.0 },
   },
   {
     id: "scalar",
-    phase: "Feature attention",
-    title: "IPA still has ordinary attention",
+    phase: "Lines 1-2",
+    title: "Project ordinary scalar attention",
     body:
-      "Before geometry enters, IPA creates scalar queries, keys, and values from the single representation.",
-    equation: "q_i, k_j, v_j = Linear(s)",
+      "IPA still starts like normal multi-head attention: every residue gets scalar queries, keys, and values from its single representation.",
+    equation: "q_i^h, k_i^h, v_i^h in R^c",
     lines: [2],
     mode: "scalar q/k/v",
     caption:
-      "The feature strips are scalar attention. Geometry adds another term to the same attention logit.",
+      "These scalar channels form one term in the attention logit and one output stream after the softmax.",
     vars: {
-      "s_i": "single representation for residue i",
-      "q_i": "feature query",
-      "k_j": "feature key",
+      heads: "h = 1..12 in AF2",
+      "scalar c": "16 channels per head",
+      shape: "q,k,v: [residue, head, 16]",
     },
     scene: { frames: true, residues: true, scalar: true, camera: 0.12 },
   },
   {
-    id: "query-local",
-    phase: "Virtual query point",
-    title: "Place a query probe in i's local frame",
+    id: "point-local",
+    phase: "Lines 2-3",
+    title: "Project local point probes",
     body:
-      "IPA predicts q_i_local as coordinates from (0,0,0) in residue i's local frame. This is a virtual probe attached to residue i, not a movement of the residue.",
-    equation: "q_i_local = W_q_point s_i",
-    lines: [3],
-    mode: "local query",
+      "The point projections are coordinate triples in each residue's own local frame. Query/key points are for distances; value points are gathered later.",
+    equation: "q_i^{hp}, k_i^{hp}, v_i^{hp} in R^3",
+    lines: [3, 4],
+    mode: "local points",
     caption:
-      "The inset shows raw local coordinates. They are not a world-space point until IPA applies R_i and t_i.",
+      "The inset shows local coordinates before any frame transform. They are virtual probes, not atom positions.",
     vars: {
-      "q_i_local": "[0.62, 0.48, 0.28]",
-      "(0,0,0)_i": "local origin of residue i",
-      "meaning": "coordinates relative to residue i's local origin",
+      "query/key points": "4 per head in AF2",
+      "value points": "8 per head in AF2",
+      units: "nanometres in AF2",
     },
-    scene: { frames: true, residues: true, qLocal: true, camera: 0.22 },
+    scene: { frames: true, residues: true, pointLocal: true, camera: 0.22 },
   },
   {
-    id: "query-global",
-    phase: "Local to global",
-    title: "Move the virtual probe into global space",
+    id: "probe-global",
+    phase: "Line 7",
+    title: "Place query and key probes globally",
     body:
-      "The local probe is rotated by R_i and translated by t_i. This creates the global query point used for a distance comparison.",
-    equation: "q_i_global = R_i q_i_local + t_i",
-    lines: [5],
-    mode: "query transform",
+      "To compare residue i with a source residue j, IPA maps i's query point and j's key point through their current frames.",
+    equation: "T_i q_i^{hp} = R_i q_i^{hp} + t_i",
+    lines: [7],
+    mode: "global probes",
     caption:
-      "The main scene now shows the same virtual point after local-to-global placement. The residue frame stays where it is.",
+      "The green query point follows frame i. The amber key points follow each source frame j.",
     vars: {
-      "R_i q_i_local": "offset oriented by residue i",
-      "+ t_i": "move from local origin to global position",
+      "T_i q_i": "query point in global coordinates",
+      "T_j k_j": "key point in global coordinates",
+      important: "frames move points; points do not move residues",
     },
     scene: {
       frames: true,
       residues: true,
-      qLocal: true,
+      pointLocal: true,
       qGlobal: true,
-      transformQ: true,
+      kGlobal: true,
       camera: 0.35,
     },
   },
   {
-    id: "key-global",
-    phase: "Key probe",
-    title: "Residue j gets its own key probe",
-    body:
-      "The key point is predicted in j's local frame, then placed globally using j's current frame.",
-    equation: "k_j_global = R_j k_j_local + t_j",
-    lines: [4, 6],
-    mode: "key transform",
-    caption:
-      "The orange key probe follows residue j's orientation, just as the query probe follows residue i.",
-    vars: {
-      "k_j_local": "learned key offset for residue j",
-      "k_j_global": "key probe after applying T_j",
-    },
-    scene: {
-      frames: true,
-      residues: true,
-      qGlobal: true,
-      kGlobal: true,
-      transformK: true,
-      camera: 0.48,
-    },
-  },
-  {
     id: "distance",
-    phase: "Geometry logit",
-    title: "Attention sees probe distance",
+    phase: "Line 7",
+    title: "Geometry becomes a distance penalty",
     body:
-      "If the query probe from i and key probe from j are close, the geometric term increases attention from i to j.",
-    equation: "geom_ij = -0.5 * ||q_i_global - k_j_global||^2",
+      "For each source j, IPA measures squared distances between the global query and key probes. Close virtual probes produce a smaller penalty.",
+    equation: "- gamma^h*w_C/2 * sum_p ||T_i q_i^{hp} - T_j k_j^{hp}||^2",
     lines: [7],
     mode: "distance term",
     caption:
-      "The dashed line is the geometry term. Shorter distance means less penalty in the attention logit.",
+      "The dashed lines are the point-distance part of the attention affinity. The real computation sums over the query/key point index p.",
     vars: {
-      "distance": "virtual probe-to-probe distance",
-      "sign": "negative squared distance penalty",
+      distance: "computed in global coordinates",
+      "sum_p": "4 query/key points per head in AF2",
+      "gamma^h": "learned positive weight per head",
     },
     scene: {
       frames: true,
@@ -140,24 +119,24 @@ const steps = [
       qGlobal: true,
       kGlobal: true,
       distance: true,
-      camera: 0.55,
+      camera: 0.52,
     },
   },
   {
     id: "logit",
-    phase: "Combine signals",
-    title: "Feature, pair, and geometry terms combine",
+    phase: "Lines 4-7",
+    title: "Three terms form one attention logit",
     body:
-      "IPA adds ordinary scalar attention, pair-representation bias, and the point-distance term into one logit.",
-    equation: "logit_ij = dot(q_i,k_j) + pair_bias(z_ij) + geom_ij",
-    lines: [8],
+      "The scalar query/key dot product, pair-representation bias, and geometric distance penalty are added before the softmax.",
+    equation: "logit_ij^h = scalar_qk + pair_bias - point_distance",
+    lines: [5, 6, 7],
     mode: "combined logit",
     caption:
-      "The pair representation is a learned residue-pair context term. The geometry term makes the logit frame-aware.",
+      "The pair representation is invariant context. Geometry enters through distances between frame-placed points.",
     vars: {
-      "dot(q_i,k_j)": "feature compatibility",
-      "pair_bias(z_ij)": "pair representation contribution",
-      "geom_ij": "probe distance contribution",
+      scalar_qk: "ordinary attention compatibility",
+      pair_bias: "LinearNoBias(z_ij)",
+      point_distance: "frame-aware distance penalty",
     },
     scene: {
       frames: true,
@@ -171,18 +150,19 @@ const steps = [
   },
   {
     id: "softmax",
-    phase: "Attention weights",
-    title: "Softmax turns logits into attention",
+    phase: "Line 7",
+    title: "Softmax normalizes over all source residues",
     body:
-      "After softmax, residue i uses the weights to gather value information from other residues.",
-    equation: "a_ij = softmax_j(logit_ij)",
-    lines: [9],
+      "For a fixed query residue i and head h, the softmax runs over j. The same weights are reused for pair, scalar, and point value outputs.",
+    equation: "a_ij^h = softmax_j(logit_ij^h)",
+    lines: [7],
     mode: "attention",
     caption:
-      "The thick teal arc shows residue i attending to residue j.",
+      "Arc thickness shows the attention weights from residue i to the displayed source residues.",
     vars: {
-      "a_ij": "attention from query residue i to key residue j",
-      "normalization": "softmax across target residues j",
+      "a_ij^h": "attention from query i to source j",
+      normalization: "sum_j a_ij^h = 1",
+      reuse: "same weights gather all value streams",
     },
     scene: {
       frames: true,
@@ -195,30 +175,155 @@ const steps = [
     },
   },
   {
-    id: "output",
-    phase: "IPA output",
-    title: "Gather values, then return to i's local frame",
+    id: "pair-output",
+    phase: "Line 8",
+    title: "Gather pair values",
     body:
-      "Point values are averaged in global space, converted back to residue i's local frame, concatenated with other outputs, and projected into a single-representation update.",
-    equation: "IPA(s,z,T)_i = W_out(concat(...))",
-    lines: [10, 11, 12],
-    mode: "single update",
+      "IPA uses the attention weights to average pair features z_ij into a per-residue, per-head pair output.",
+    equation: "pair_out_i^h = sum_j a_ij^h z_ij",
+    lines: [8],
+    mode: "pair output",
     caption:
-      "IPA updates the latent single representation. The actual frame movement happens later in BackboneUpdate.",
+      "This is the top blue stream in the AF2 supplementary figure: pair context modulates the update but is not a moving coordinate.",
     vars: {
-      "o_point_global": "weighted value point",
-      "o_point_local": "same point expressed in i's frame",
-      "output": "single representation update",
+      "input z_ij": "[c_z = 128]",
+      "per head": "one weighted pair vector per h",
+      "AF2 concat": "12 * 128 = 1536 channels",
     },
     scene: {
       frames: true,
       residues: true,
-      qGlobal: true,
-      kGlobal: true,
+      attention: true,
+      pairOut: true,
+      camera: 0.75,
+    },
+  },
+  {
+    id: "scalar-output",
+    phase: "Line 9",
+    title: "Gather scalar values",
+    body:
+      "The same attention weights average the ordinary scalar value vectors from source residues.",
+    equation: "scalar_out_i^h = sum_j a_ij^h v_j^h",
+    lines: [9],
+    mode: "scalar output",
+    caption:
+      "This is standard attention output, but its weights were influenced by both pair context and point geometry.",
+    vars: {
+      "v_j^h": "[c = 16]",
+      "per head": "one scalar value vector",
+      "AF2 concat": "12 * 16 = 192 channels",
+    },
+    scene: {
+      frames: true,
+      residues: true,
+      scalar: true,
+      attention: true,
+      scalarOut: true,
+      camera: 0.78,
+    },
+  },
+  {
+    id: "point-output",
+    phase: "Line 10",
+    title: "Gather value points in global space",
+    body:
+      "For one selected value point p, each source residue j first places its local value point globally. IPA then takes the attention-weighted sum of those global points.",
+    equation: "o_global = sum_j a_ij^h (T_j v_j^{hp})",
+    lines: [10],
+    mode: "point output",
+    caption:
+      "The purple arrows show one selected value point channel. AF2 has 8 value points per head.",
+    vars: {
+      "selected p": "one of 8 value points",
+      "sum over j": "all source residues",
+      space: "weighted sum happens in global coordinates",
+    },
+    scene: {
+      frames: true,
+      residues: true,
       attention: true,
       values: true,
+      camera: 0.84,
+    },
+  },
+  {
+    id: "local-output",
+    phase: "Lines 10-11",
+    title: "Read the point output in i's local frame",
+    body:
+      "The weighted global point is converted back through T_i^-1. Its local xyz components and its length are both fed to the output projection.",
+    equation: "point_out_i^{hp} = T_i^-1 o_global; norm = ||point_out_i^{hp}||",
+    lines: [10, 11],
+    mode: "local output",
+    caption:
+      "This local readout is why the output is invariant to a global rotation or translation of the whole structure.",
+    vars: {
+      "T_i^-1": "subtract t_i, then apply R_i^T",
+      "point coords": "3 numbers per value point",
+      norm: "1 extra invariant scalar",
+    },
+    scene: {
+      frames: true,
+      residues: true,
+      attention: true,
+      values: true,
+      localOutput: true,
+      camera: 0.88,
+    },
+  },
+  {
+    id: "concat",
+    phase: "Line 12",
+    title: "Concatenate the four output streams",
+    body:
+      "Algorithm 22 concatenates pair output, scalar output, local point coordinates, and point norms over heads and value-point channels.",
+    equation: "concat_h,p(pair_out, scalar_out, point_out, norm)",
+    lines: [12],
+    mode: "concat",
+    caption:
+      "For AF2 defaults, the concatenated IPA feature has 2112 channels before the final linear projection back to c_s = 384.",
+    vars: {
+      pair: "12 * 128 = 1536",
+      scalar: "12 * 16 = 192",
+      "point xyz": "12 * 8 * 3 = 288",
+      "point norm": "12 * 8 = 96",
+    },
+    scene: {
+      frames: true,
+      residues: true,
+      attention: true,
+      values: true,
+      localOutput: true,
+      concat: true,
+      camera: 0.9,
+    },
+  },
+  {
+    id: "return",
+    phase: "Line 13",
+    title: "IPA returns a single-representation update",
+    body:
+      "The final linear layer produces s_tilde_i. In the AF2 structure module, this updates the single representation; the frame update is a separate BackboneUpdate block after IPA.",
+    equation: "return {s_tilde_i}",
+    lines: [13],
+    mode: "single update",
+    caption:
+      "This boundary matters: IPA computes the geometry-aware latent update. It does not directly output the new backbone frame.",
+    vars: {
+      "IPA output": "s_tilde_i, shape [c_s]",
+      "structure module": "adds residual + transition",
+      "frame motion": "predicted later by BackboneUpdate",
+    },
+    scene: {
+      frames: true,
+      residues: true,
+      attention: true,
+      values: true,
+      localOutput: true,
+      concat: true,
       output: true,
-      camera: 0.82,
+      camera: 0.94,
     },
   },
 ];
@@ -246,11 +351,15 @@ const palette = {
   ink: "#1d2424",
   i: "#2a6fbb",
   j: "#c14c3d",
+  j2: "#7a6a2b",
+  j3: "#8260a8",
   q: "#16815f",
   k: "#c47b20",
   value: "#6d63b8",
+  norm: "#4d698d",
   attention: "#186c72",
   pair: "#7a8f9d",
+  scalar: "#55656a",
   x: "#cf4e3e",
   y: "#16815f",
   z: "#2b68b7",
@@ -262,7 +371,7 @@ const state = {
 };
 
 const frameI = {
-  origin: new THREE.Vector3(-1.25, 0.05, 0.0),
+  origin: new THREE.Vector3(-1.35, 0.04, 0.0),
   axes: [
     new THREE.Vector3(1, 0, 0),
     new THREE.Vector3(0, 1, 0),
@@ -270,18 +379,59 @@ const frameI = {
   ],
 };
 
-const frameJ = {
-  origin: new THREE.Vector3(1.18, 0.15, -0.32),
-  axes: eulerAxes(-0.62, 0.32, 0.2),
-};
+const sourceResidues = [
+  {
+    id: "j1",
+    frame: {
+      origin: new THREE.Vector3(1.18, 0.15, -0.32),
+      axes: eulerAxes(-0.62, 0.32, 0.2),
+    },
+    color: palette.j,
+    keyLocal: new THREE.Vector3(-0.52, 0.22, 0.44),
+    valueLocal: new THREE.Vector3(0.2, -0.42, -0.16),
+    weight: 0.53,
+    pairBias: 0.18,
+  },
+  {
+    id: "j2",
+    frame: {
+      origin: new THREE.Vector3(0.4, -0.08, 1.08),
+      axes: eulerAxes(0.58, -0.18, -0.38),
+    },
+    color: palette.j2,
+    keyLocal: new THREE.Vector3(0.35, 0.36, -0.12),
+    valueLocal: new THREE.Vector3(-0.18, 0.26, 0.42),
+    weight: 0.3,
+    pairBias: -0.04,
+  },
+  {
+    id: "j3",
+    frame: {
+      origin: new THREE.Vector3(1.05, -0.2, -1.12),
+      axes: eulerAxes(1.05, 0.24, 0.52),
+    },
+    color: palette.j3,
+    keyLocal: new THREE.Vector3(-0.28, -0.28, 0.36),
+    valueLocal: new THREE.Vector3(0.42, -0.15, 0.18),
+    weight: 0.17,
+    pairBias: 0.08,
+  },
+];
 
 const qLocal = new THREE.Vector3(0.62, 0.48, 0.28);
-const kLocal = new THREE.Vector3(-0.52, 0.22, 0.44);
-const valueLocal = new THREE.Vector3(0.2, -0.42, -0.16);
 const qGlobal = localToGlobal(frameI, qLocal);
-const kGlobal = localToGlobal(frameJ, kLocal);
-const vGlobal = localToGlobal(frameJ, valueLocal);
-const gathered = qGlobal.clone().lerp(vGlobal, 0.46);
+sourceResidues.forEach((residue) => {
+  residue.keyGlobal = localToGlobal(residue.frame, residue.keyLocal);
+  residue.valueGlobal = localToGlobal(residue.frame, residue.valueLocal);
+});
+
+const weightedPointGlobal = sourceResidues.reduce(
+  (sum, residue) =>
+    sum.add(residue.valueGlobal.clone().multiplyScalar(residue.weight)),
+  new THREE.Vector3(),
+);
+const outputPointLocal = globalToLocal(frameI, weightedPointGlobal);
+const outputPointNorm = outputPointLocal.length().toFixed(2);
 
 const renderer = new THREE.WebGLRenderer({
   canvas: elements.canvas,
@@ -331,6 +481,7 @@ root.add(objects.kProbe);
 root.add(objects.distance);
 root.add(objects.attention);
 root.add(objects.values);
+root.add(objects.localOutput);
 root.add(objects.output);
 
 function eulerAxes(yaw, pitch, roll) {
@@ -351,18 +502,29 @@ function localToGlobal(frame, local) {
     .add(frame.axes[2].clone().multiplyScalar(local.z));
 }
 
-function makeMaterial(color, roughness = 0.55) {
+function globalToLocal(frame, global) {
+  const offset = global.clone().sub(frame.origin);
+  return new THREE.Vector3(
+    offset.dot(frame.axes[0]),
+    offset.dot(frame.axes[1]),
+    offset.dot(frame.axes[2]),
+  );
+}
+
+function makeMaterial(color, roughness = 0.55, opacity = 1) {
   return new THREE.MeshStandardMaterial({
     color,
     roughness,
     metalness: 0.04,
+    transparent: opacity < 1,
+    opacity,
   });
 }
 
-function makeSphere(position, color, radius = 0.08) {
+function makeSphere(position, color, radius = 0.08, opacity = 1) {
   const mesh = new THREE.Mesh(
     new THREE.SphereGeometry(radius, 32, 18),
-    makeMaterial(color),
+    makeMaterial(color, 0.55, opacity),
   );
   mesh.position.copy(position);
   return mesh;
@@ -383,7 +545,7 @@ function makeArrow(start, end, color, lengthScale = 1) {
   return arrow;
 }
 
-function makeLine(points, color, dashed = false) {
+function makeLine(points, color, dashed = false, opacity = 0.9) {
   const geometry = new THREE.BufferGeometry().setFromPoints(points);
   const material = dashed
     ? new THREE.LineDashedMaterial({
@@ -391,18 +553,18 @@ function makeLine(points, color, dashed = false) {
         dashSize: 0.08,
         gapSize: 0.06,
         transparent: true,
-        opacity: 0.78,
+        opacity,
       })
-    : new THREE.LineBasicMaterial({ color, transparent: true, opacity: 0.9 });
+    : new THREE.LineBasicMaterial({ color, transparent: true, opacity });
   const line = new THREE.Line(geometry, material);
   if (dashed) line.computeLineDistances();
   return line;
 }
 
-function makeTube(points, color, radius = 0.025) {
+function makeTube(points, color, radius = 0.025, opacity = 0.92) {
   const curve = new THREE.CatmullRomCurve3(points);
   const geometry = new THREE.TubeGeometry(curve, 48, radius, 10, false);
-  return new THREE.Mesh(geometry, makeMaterial(color, 0.38));
+  return new THREE.Mesh(geometry, makeMaterial(color, 0.38, opacity));
 }
 
 function makeLabel(text, color = "#1d2424", size = 0.19) {
@@ -498,16 +660,32 @@ function buildSceneObjects() {
   frames.name = "frames";
   frames.add(grid);
   frames.add(makeFrame(frameI, palette.i, "i"));
-  frames.add(makeFrame(frameJ, palette.j, "j"));
+  sourceResidues.forEach((residue) => {
+    frames.add(makeFrame(residue.frame, residue.color, residue.id));
+  });
 
   const scalar = new THREE.Group();
-  scalar.add(makeFeatureStrip(frameI.origin.clone().add(new THREE.Vector3(0, 0.9, 0.05)), palette.i, "q_i"));
-  scalar.add(makeFeatureStrip(frameJ.origin.clone().add(new THREE.Vector3(0, 0.9, 0.05)), palette.j, "k_j"));
+  scalar.add(
+    makeFeatureStrip(
+      frameI.origin.clone().add(new THREE.Vector3(0, 0.9, 0.05)),
+      palette.i,
+      "q_i",
+    ),
+  );
+  sourceResidues.forEach((residue, index) => {
+    scalar.add(
+      makeFeatureStrip(
+        residue.frame.origin.clone().add(new THREE.Vector3(0, 0.9 + index * 0.05, 0.05)),
+        residue.color,
+        `k_${residue.id}, v_${residue.id}`,
+      ),
+    );
+  });
 
   const qProbe = new THREE.Group();
   qProbe.add(makeArrow(frameI.origin, qGlobal, palette.q));
-  qProbe.add(makeSphere(qGlobal, palette.q, 0.085));
-  const qLabel = makeLabel("q_i global", palette.q, 0.18);
+  qProbe.add(makeSphere(qGlobal, palette.q, 0.09));
+  const qLabel = makeLabel("T_i q_i", palette.q, 0.18);
   qLabel.position.copy(qGlobal).add(new THREE.Vector3(0.18, 0.2, 0));
   qProbe.add(qLabel);
   const tiLabel = makeLabel("t_i", palette.i, 0.15);
@@ -515,43 +693,73 @@ function buildSceneObjects() {
   qProbe.add(tiLabel);
 
   const kProbe = new THREE.Group();
-  kProbe.add(makeArrow(frameJ.origin, kGlobal, palette.k));
-  kProbe.add(makeSphere(kGlobal, palette.k, 0.085));
-  const kLabel = makeLabel("k_j global", palette.k, 0.18);
-  kLabel.position.copy(kGlobal).add(new THREE.Vector3(-0.35, 0.19, 0));
-  kProbe.add(kLabel);
+  sourceResidues.forEach((residue) => {
+    kProbe.add(makeArrow(residue.frame.origin, residue.keyGlobal, palette.k));
+    kProbe.add(makeSphere(residue.keyGlobal, palette.k, 0.075));
+    const label = makeLabel(`T_${residue.id} k`, palette.k, 0.15);
+    label.position.copy(residue.keyGlobal).add(new THREE.Vector3(0.14, 0.16, 0));
+    kProbe.add(label);
+  });
 
   const distance = new THREE.Group();
-  distance.add(makeLine([qGlobal, kGlobal], palette.attention, true));
-  const distanceLabel = makeLabel("distance penalty", palette.attention, 0.16);
-  distanceLabel.position.copy(qGlobal.clone().lerp(kGlobal, 0.5)).add(new THREE.Vector3(0.1, 0.22, 0));
+  sourceResidues.forEach((residue) => {
+    distance.add(makeLine([qGlobal, residue.keyGlobal], palette.attention, true, 0.66));
+  });
+  const distanceLabel = makeLabel("distance penalties", palette.attention, 0.16);
+  distanceLabel.position.copy(qGlobal).add(new THREE.Vector3(0.22, 0.38, 0.05));
   distance.add(distanceLabel);
 
   const attention = new THREE.Group();
-  const mid = frameI.origin
-    .clone()
-    .lerp(frameJ.origin, 0.5)
-    .add(new THREE.Vector3(0, 1.05, 0.2));
-  attention.add(makeTube([frameJ.origin, mid, frameI.origin], palette.attention, 0.026));
-  const attentionLabel = makeLabel("attention a_ij", palette.attention, 0.16);
-  attentionLabel.position.copy(mid).add(new THREE.Vector3(0, 0.2, 0));
+  sourceResidues.forEach((residue, index) => {
+    const mid = frameI.origin
+      .clone()
+      .lerp(residue.frame.origin, 0.5)
+      .add(new THREE.Vector3(0, 0.9 + index * 0.14, index % 2 ? -0.18 : 0.18));
+    attention.add(
+      makeTube(
+        [frameI.origin, mid, residue.frame.origin],
+        palette.attention,
+        0.012 + residue.weight * 0.045,
+        0.48 + residue.weight * 0.5,
+      ),
+    );
+  });
+  const attentionLabel = makeLabel("a_ij^h over j", palette.attention, 0.16);
+  attentionLabel.position.set(-0.1, 1.34, 0.22);
   attention.add(attentionLabel);
 
   const values = new THREE.Group();
-  values.add(makeArrow(frameJ.origin, vGlobal, palette.value));
-  values.add(makeSphere(vGlobal, palette.value, 0.08));
-  values.add(makeLine([vGlobal, gathered], palette.value, true));
-  values.add(makeSphere(gathered, palette.value, 0.075));
-  const valueLabel = makeLabel("weighted value point", palette.value, 0.16);
-  valueLabel.position.copy(gathered).add(new THREE.Vector3(0.2, 0.18, 0));
+  sourceResidues.forEach((residue) => {
+    values.add(makeArrow(residue.frame.origin, residue.valueGlobal, palette.value));
+    values.add(makeSphere(residue.valueGlobal, palette.value, 0.078));
+    values.add(
+      makeLine(
+        [residue.valueGlobal, weightedPointGlobal],
+        palette.value,
+        true,
+        0.28 + residue.weight * 0.5,
+      ),
+    );
+  });
+  values.add(makeSphere(weightedPointGlobal, palette.value, 0.11));
+  const valueLabel = makeLabel("sum_j a_ij T_j v_j^p", palette.value, 0.16);
+  valueLabel.position.copy(weightedPointGlobal).add(new THREE.Vector3(0.2, 0.18, 0));
   values.add(valueLabel);
 
+  const localOutput = new THREE.Group();
+  localOutput.add(makeArrow(frameI.origin, weightedPointGlobal, palette.norm));
+  localOutput.add(makeSphere(weightedPointGlobal, palette.norm, 0.065));
+  const localLabel = makeLabel("T_i^-1 readout", palette.norm, 0.16);
+  localLabel.position.copy(frameI.origin.clone().lerp(weightedPointGlobal, 0.55));
+  localLabel.position.add(new THREE.Vector3(-0.1, -0.25, 0.08));
+  localOutput.add(localLabel);
+
   const output = new THREE.Group();
-  const outputLabel = makeLabel("updated single representation s_i", palette.attention, 0.22);
+  const outputLabel = makeLabel("updated single representation s_tilde_i", palette.attention, 0.22);
   outputLabel.position.set(0, -0.42, 1.2);
   output.add(outputLabel);
 
-  return { frames, scalar, qProbe, kProbe, distance, attention, values, output };
+  return { frames, scalar, qProbe, kProbe, distance, attention, values, localOutput, output };
 }
 
 function setVisible(group, value) {
@@ -589,19 +797,21 @@ function formatLineRange(lines) {
 function renderOverlay(sceneState) {
   elements.overlay.innerHTML = "";
 
-  if (sceneState.qLocal) {
+  if (sceneState.pointLocal) {
     elements.overlay.insertAdjacentHTML(
       "beforeend",
       `<div class="scene-card local-inset">
-        <strong>q_i local frame</strong>
+        <strong>local point projections</strong>
         <div class="local-grid">
           <i class="local-axis x"></i>
           <i class="local-axis y"></i>
           <i class="local-axis z"></i>
           <i class="local-origin"></i>
-          <i class="local-probe"></i>
+          <i class="local-probe q"></i>
+          <i class="local-probe k"></i>
+          <i class="local-probe v"></i>
         </div>
-        <div>[0.62, 0.48, 0.28] from (0,0,0)_i</div>
+        <div>q/k/v are local xyz triples before applying T.</div>
       </div>`,
     );
   }
@@ -611,24 +821,89 @@ function renderOverlay(sceneState) {
       "beforeend",
       `<div class="scene-card logit-card">
         <strong>attention logit</strong>
-        <span><i class="term-dot" style="background:#5f6e74"></i>dot(q_i,k_j)</span>
-        <span><i class="term-dot" style="background:${palette.pair}"></i>pair_bias(z_ij)</span>
-        <span><i class="term-dot" style="background:${palette.attention}"></i>geometry distance</span>
+        <span><i class="term-dot" style="background:${palette.scalar}"></i>scalar q dot k</span>
+        <span><i class="term-dot" style="background:${palette.pair}"></i>pair bias b_ij</span>
+        <span><i class="term-dot" style="background:${palette.attention}"></i>point distance penalty</span>
       </div>`,
     );
   }
 
   if (sceneState.softmax) {
+    const bars = sourceResidues
+      .map(
+        (residue) =>
+          `<span class="softmax-entry">
+            <i style="height:${Math.round(24 + residue.weight * 72)}px;background:${residue.color}"></i>
+            <b>${residue.id}</b>
+            <em>${Math.round(residue.weight * 100)}%</em>
+          </span>`,
+      )
+      .join("");
     elements.overlay.insertAdjacentHTML(
       "beforeend",
       `<div class="scene-card softmax-card">
         <strong>softmax over j</strong>
-        <div class="softmax-bars">
-          <i style="height:24px"></i>
-          <i style="height:54px"></i>
-          <i style="height:35px"></i>
-          <i style="height:17px"></i>
+        <div class="softmax-bars">${bars}</div>
+      </div>`,
+    );
+  }
+
+  if (sceneState.pairOut) {
+    const rows = sourceResidues
+      .map(
+        (residue) =>
+          `<span>
+            <i class="term-dot" style="background:${residue.color}"></i>
+            ${residue.id}: a=${residue.weight.toFixed(2)}, b=${residue.pairBias.toFixed(2)}
+          </span>`,
+      )
+      .join("");
+    elements.overlay.insertAdjacentHTML(
+      "beforeend",
+      `<div class="scene-card pair-card">
+        <strong>pair stream</strong>
+        ${rows}
+      </div>`,
+    );
+  }
+
+  if (sceneState.scalarOut) {
+    elements.overlay.insertAdjacentHTML(
+      "beforeend",
+      `<div class="scene-card scalar-card">
+        <strong>scalar stream</strong>
+        <div class="mini-vector">
+          <i style="height:18px"></i><i style="height:36px"></i><i style="height:27px"></i>
+          <i style="height:46px"></i><i style="height:24px"></i><i style="height:31px"></i>
         </div>
+        <div>weighted value vector, c = 16 per head</div>
+      </div>`,
+    );
+  }
+
+  if (sceneState.localOutput) {
+    elements.overlay.insertAdjacentHTML(
+      "beforeend",
+      `<div class="scene-card local-output-card">
+        <strong>query-frame readout</strong>
+        <span>x_i = ${outputPointLocal.x.toFixed(2)}</span>
+        <span>y_i = ${outputPointLocal.y.toFixed(2)}</span>
+        <span>z_i = ${outputPointLocal.z.toFixed(2)}</span>
+        <span>norm = ${outputPointNorm}</span>
+      </div>`,
+    );
+  }
+
+  if (sceneState.concat) {
+    elements.overlay.insertAdjacentHTML(
+      "beforeend",
+      `<div class="scene-card concat-card">
+        <strong>AF2 concat ledger</strong>
+        <div class="dimension-row"><span>pair</span><b>1536</b></div>
+        <div class="dimension-row"><span>scalar</span><b>192</b></div>
+        <div class="dimension-row"><span>point xyz</span><b>288</b></div>
+        <div class="dimension-row"><span>point norm</span><b>96</b></div>
+        <div class="dimension-total"><span>total</span><b>2112 -> 384</b></div>
       </div>`,
     );
   }
@@ -672,13 +947,38 @@ function renderStep() {
   elements.nextButton.disabled = state.stepIndex === steps.length - 1;
 
   setVisible(objects.frames, sceneState.frames || sceneState.residues);
-  setVisible(objects.scalar, sceneState.scalar);
-  setVisible(objects.qProbe, sceneState.qGlobal);
-  setVisible(objects.kProbe, sceneState.kGlobal);
+  setVisible(objects.scalar, sceneState.scalar || sceneState.scalarOut);
+  setVisible(
+    objects.qProbe,
+    sceneState.qGlobal || sceneState.distance || sceneState.logit,
+  );
+  setVisible(
+    objects.kProbe,
+    sceneState.kGlobal || sceneState.distance || sceneState.logit,
+  );
   setVisible(objects.distance, sceneState.distance || sceneState.logit);
-  setVisible(objects.attention, sceneState.attention || sceneState.values || sceneState.output);
-  setVisible(objects.values, sceneState.values || sceneState.output);
-  setVisible(objects.output, sceneState.output);
+  setVisible(
+    objects.attention,
+    sceneState.attention ||
+      sceneState.pairOut ||
+      sceneState.scalarOut ||
+      sceneState.values ||
+      sceneState.localOutput ||
+      sceneState.concat ||
+      sceneState.output,
+  );
+  setVisible(
+    objects.values,
+    sceneState.values ||
+      sceneState.localOutput ||
+      sceneState.concat ||
+      sceneState.output,
+  );
+  setVisible(
+    objects.localOutput,
+    sceneState.localOutput || sceneState.concat || sceneState.output,
+  );
+  setVisible(objects.output, sceneState.concat || sceneState.output);
 
   renderOverlay(sceneState);
   setStoryCamera(sceneState.camera ?? 0);
@@ -687,8 +987,8 @@ function renderStep() {
 
 function setStoryCamera(t) {
   const angle = -0.6 + t * 1.5;
-  const radius = 4.9;
-  const y = 2.4 - t * 0.45;
+  const radius = 4.95;
+  const y = 2.45 - t * 0.45;
   state.desiredCamera = new THREE.Vector3(
     Math.sin(angle) * radius,
     y,

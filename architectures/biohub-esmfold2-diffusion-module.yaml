@@ -1,0 +1,331 @@
+schema_version: protein-architecture-v0.1
+id: biohub_esmfold2_diffusion_module
+name: Biohub Transformers ESMFold2 Diffusion Module
+family: esmfold
+status: partial
+task_modes:
+  - structure_prediction
+  - diffusion_sampling
+sources:
+  - kind: code
+    path: /home/ruh/research/PhD/related_work/biohub-transformers/src/transformers/models/esmfold2/modeling_esmfold2_common.py
+representations:
+  - id: conditioning_single
+    scale: token
+    semantic_role: timestep-conditioned single/token stream
+    shape: "B x N_token x d_token"
+    evidence:
+      status: confirmed_from_code
+      refs:
+        - kind: code
+          path: /home/ruh/research/PhD/related_work/biohub-transformers/src/transformers/models/esmfold2/modeling_esmfold2_common.py
+          lines: "1263-1357,1478-1488"
+  - id: atom_features
+    scale: atom
+    semantic_role: atom latent state
+    shape: "B x N_atom x d_atom"
+    evidence:
+      status: confirmed_from_code
+      refs:
+        - kind: code
+          path: /home/ruh/research/PhD/related_work/biohub-transformers/src/transformers/models/esmfold2/modeling_esmfold2_common.py
+          lines: "786-797"
+  - id: pair_repr
+    scale: token_pair
+    semantic_role: pair conditioning for token transformer
+    shape: "B x N_token x N_token x d_pair"
+    evidence:
+      status: confirmed_from_code
+      refs:
+        - kind: code
+          path: /home/ruh/research/PhD/related_work/biohub-transformers/src/transformers/models/esmfold2/modeling_esmfold2_common.py
+          lines: "939-940,1114-1118"
+  - id: token_repr
+    scale: token
+    semantic_role: token-level diffusion representation
+    shape: "B x N_token x d_token"
+    evidence:
+      status: inferred
+      refs:
+        - kind: code
+          path: /home/ruh/research/PhD/related_work/biohub-transformers/src/transformers/models/esmfold2/modeling_esmfold2_common.py
+          lines: "1426-1432"
+  - id: coordinate_update
+    scale: coordinate
+    semantic_role: atom-coordinate update predicted by the decoder
+    shape: "B x N_atom x 3"
+    evidence:
+      status: confirmed_from_code
+      refs:
+        - kind: code
+          path: /home/ruh/research/PhD/related_work/biohub-transformers/src/transformers/models/esmfold2/modeling_esmfold2_common.py
+          lines: "867-917,1527-1537"
+modules:
+  - id: diffusion_conditioning
+    label: DiffusionConditioning
+    kind: conditioning
+    role: prepare timestep-conditioned single/token features and pair features
+    scale: token
+    outputs:
+      - conditioning_single
+      - pair_repr
+    contains:
+      - id: noise_embedding
+        label: Fourier noise embedding
+        pseudocode_ref: pseudocode/esmfold2-pair-bias-boundary.yaml
+      - id: pair_conditioning
+        label: z trunk + relative position conditioning
+        pseudocode_ref: pseudocode/esmfold2-pair-bias-boundary.yaml
+    evidence:
+      status: confirmed_from_code
+      refs:
+        - kind: code
+          path: /home/ruh/research/PhD/related_work/biohub-transformers/src/transformers/models/esmfold2/modeling_esmfold2_common.py
+          lines: "1263-1357"
+        - kind: code
+          path: /home/ruh/research/PhD/related_work/biohub-transformers/src/transformers/models/esmfold2/modeling_esmfold2_common.py
+          lines: "1385-1394,1478-1488"
+  - id: atom_encoder
+    label: ESMFold2AtomEncoder
+    kind: attention_stack
+    role: encode atom features with sliding-window atom attention
+    scale: atom
+    repeats: 3
+    story_ref: stories/esmfold2-pair-bias-boundary/
+    pseudocode_ref: pseudocode/esmfold2-pair-bias-boundary.yaml
+    depth:
+      blocks: 3
+      heads: 4
+    contains:
+      - id: swa_3d_rope_attention
+        label: SWA3DRoPEAttention
+        pseudocode_ref: pseudocode/esmfold2-pair-bias-boundary.yaml
+    inputs:
+      - atom_features
+      - coordinates
+    accepts_but_does_not_use:
+      - pair_repr
+    outputs:
+      - token_repr
+    attention:
+      pattern: sequence_local
+      query_scale: atom
+      key_value_scale: atom
+      window:
+        kind: contiguous_sequence
+        size: 128
+      pair_bias: false
+      pair_bias_source: none
+      positional_encoding:
+        kind: 3d_rope
+      geometry_terms:
+        - coordinates
+        - ref_space_uid
+    evidence:
+      status: confirmed_from_code
+      refs:
+        - kind: code
+          path: /home/ruh/research/PhD/related_work/biohub-transformers/src/transformers/models/esmfold2/modeling_esmfold2_common.py
+          lines: "742-752"
+        - kind: code
+          path: /home/ruh/research/PhD/related_work/biohub-transformers/src/transformers/models/esmfold2/modeling_esmfold2_common.py
+          lines: "758-770"
+        - kind: code
+          path: /home/ruh/research/PhD/related_work/biohub-transformers/src/transformers/models/esmfold2/modeling_esmfold2_common.py
+          lines: "836-840"
+  - id: swa_3d_rope_attention
+    label: SWA3DRoPEAttention
+    kind: attention
+    role: atom-level sliding-window attention with 3D RoPE
+    scale: atom
+    inputs:
+      - atom_features
+      - attention_params
+    outputs:
+      - atom_features
+    attention:
+      pattern: sequence_local
+      query_scale: atom
+      key_value_scale: atom
+      window:
+        kind: contiguous_sequence
+        size: 128
+      pair_bias: false
+      pair_bias_source: none
+      positional_encoding:
+        kind: 3d_rope
+    evidence:
+      status: confirmed_from_code
+      refs:
+        - kind: code
+          path: /home/ruh/research/PhD/related_work/biohub-transformers/src/transformers/models/esmfold2/modeling_esmfold2_common.py
+          lines: "492-557"
+  - id: token_transformer
+    label: DiffusionTransformer
+    kind: attention_stack
+    role: token-level diffusion transformer with pair-biased attention
+    scale: token
+    story_ref: stories/esmfold2-pair-bias-boundary/
+    pseudocode_ref: pseudocode/esmfold2-pair-bias-boundary.yaml
+    depth:
+      blocks: config.token_num_blocks
+      heads: config.token_num_heads
+    contains:
+      - id: pair_biased_attention
+        label: Pair-biased attention
+        standard_block_ref: standard_blocks/pair-biased-attention.yaml
+        pseudocode_ref: pseudocode/esmfold2-pair-bias-boundary.yaml
+    inputs:
+      - token_repr
+      - pair_repr
+    outputs:
+      - token_repr
+    attention:
+      pattern: full
+      query_scale: token
+      key_value_scale: token
+      pair_bias: true
+      pair_bias_source: pair_repr
+      standard_block_ref: standard_blocks/pair-biased-attention.yaml
+      positional_encoding:
+        kind: unknown
+    evidence:
+      status: confirmed_from_code
+      refs:
+        - kind: code
+          path: /home/ruh/research/PhD/related_work/biohub-transformers/src/transformers/models/esmfold2/modeling_esmfold2_common.py
+          lines: "1426-1432"
+        - kind: code
+          path: /home/ruh/research/PhD/related_work/biohub-transformers/src/transformers/models/esmfold2/modeling_esmfold2_common.py
+          lines: "939-940,1114-1118"
+  - id: atom_decoder
+    label: ESMFold2AtomDecoder
+    kind: attention_stack
+    role: project token output back to atoms and predict coordinate updates
+    scale: atom
+    repeats: 3
+    depth:
+      blocks: 3
+      heads: 4
+    contains:
+      - id: decoder_swa_3d_rope_attention
+        label: SWAAtomTransformer
+        pseudocode_ref: pseudocode/esmfold2-pair-bias-boundary.yaml
+    inputs:
+      - token_repr
+      - atom_encoder_skip
+    outputs:
+      - coordinate_update
+    attention:
+      pattern: sequence_local
+      query_scale: atom
+      key_value_scale: atom
+      window:
+        kind: contiguous_sequence
+        size: 128
+      pair_bias: false
+      pair_bias_source: none
+      positional_encoding:
+        kind: 3d_rope
+    evidence:
+      status: confirmed_from_code
+      refs:
+        - kind: code
+          path: /home/ruh/research/PhD/related_work/biohub-transformers/src/transformers/models/esmfold2/modeling_esmfold2_common.py
+          lines: "867-917"
+        - kind: code
+          path: /home/ruh/research/PhD/related_work/biohub-transformers/src/transformers/models/esmfold2/modeling_esmfold2_common.py
+          lines: "1410-1424,1527-1537"
+edges:
+  - from: diffusion_conditioning
+    to: token_transformer
+    operation: single_conditioning
+    carries:
+      - conditioning_single
+    evidence:
+      status: confirmed_from_code
+      refs:
+        - kind: code
+          path: /home/ruh/research/PhD/related_work/biohub-transformers/src/transformers/models/esmfold2/modeling_esmfold2_common.py
+          lines: "1478-1519"
+  - from: diffusion_conditioning
+    to: token_transformer
+    operation: pair_conditioning
+    carries:
+      - pair_repr
+    evidence:
+      status: confirmed_from_code
+      refs:
+        - kind: code
+          path: /home/ruh/research/PhD/related_work/biohub-transformers/src/transformers/models/esmfold2/modeling_esmfold2_common.py
+          lines: "1478-1519"
+  - from: atom_encoder
+    to: token_transformer
+    operation: atom_to_token_aggregation
+    carries:
+      - token_repr
+    evidence:
+      status: confirmed_from_code
+      refs:
+        - kind: code
+          path: /home/ruh/research/PhD/related_work/biohub-transformers/src/transformers/models/esmfold2/modeling_esmfold2_common.py
+          lines: "848-855"
+  - from: token_transformer
+    to: atom_decoder
+    operation: token_to_atom_readout
+    carries:
+      - token_repr
+    evidence:
+      status: confirmed_from_code
+      refs:
+        - kind: code
+          path: /home/ruh/research/PhD/related_work/biohub-transformers/src/transformers/models/esmfold2/modeling_esmfold2_common.py
+          lines: "1514-1537"
+  - from: atom_encoder
+    to: atom_decoder
+    operation: atom_skip_connection
+    carries:
+      - q_skip
+      - c_skip
+      - p_skip
+    evidence:
+      status: confirmed_from_code
+      refs:
+        - kind: code
+          path: /home/ruh/research/PhD/related_work/biohub-transformers/src/transformers/models/esmfold2/modeling_esmfold2_common.py
+          lines: "1495-1509,1527-1537"
+claims:
+  - id: diffusion_module_four_part_scaffold
+    statement: Biohub ESMFold2 diffusion module can be read as diffusion conditioning, atom encoder, token transformer, and atom decoder.
+    scope:
+      module: diffusion_module
+    evidence:
+      status: confirmed_from_code
+      refs:
+        - kind: code
+          path: /home/ruh/research/PhD/related_work/biohub-transformers/src/transformers/models/esmfold2/modeling_esmfold2_common.py
+          lines: "1385-1434,1478-1537"
+  - id: atom_encoder_no_pair_bias
+    statement: Biohub ESMFold2 atom encoder does not add pair bias to atom attention logits.
+    scope:
+      module: atom_encoder
+    evidence:
+      status: confirmed_from_code
+      refs:
+        - kind: code
+          path: /home/ruh/research/PhD/related_work/biohub-transformers/src/transformers/models/esmfold2/modeling_esmfold2_common.py
+          lines: "758-770,836-840,492-557"
+  - id: token_transformer_uses_pair_bias
+    statement: Biohub ESMFold2 token diffusion transformer uses pair-biased attention.
+    scope:
+      module: token_transformer
+    evidence:
+      status: confirmed_from_code
+      refs:
+        - kind: code
+          path: /home/ruh/research/PhD/related_work/biohub-transformers/src/transformers/models/esmfold2/modeling_esmfold2_common.py
+          lines: "939-940,1114-1118,1426-1432"
+open_questions:
+  - id: token_transformer_config_values
+    question: What concrete token_num_blocks and token_num_heads are used in the target ESMFold2 config?
+    status: unresolved

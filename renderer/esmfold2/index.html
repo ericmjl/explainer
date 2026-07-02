@@ -1,0 +1,58 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>ESMFold2 Architecture Renderer</title>
+    <link rel="stylesheet" href="../../styles.css" />
+  </head>
+  <body class="renderer-page">
+    <main class="renderer-shell">
+      <header class="renderer-header">
+        <div>
+          <p class="eyebrow">Generated architecture view</p>
+          <h1>Biohub ESMFold2 Information Flow</h1>
+          <p>
+            A semantic-zoom board driven by architecture, view, pseudocode, and
+            standard block source files. The diffusion module is framed as
+            conditioning, atom encoder, token transformer, and atom decoder.
+          </p>
+        </div>
+        <nav class="note-nav" aria-label="Renderer navigation">
+          <a class="story-home-link" href="../../">All stories</a>
+          <a class="story-home-link" href="../../architectures/biohub-esmfold2-diffusion-module.yaml">Source YAML</a>
+        </nav>
+      </header>
+
+      <section class="renderer-grid">
+        <section class="architecture-canvas" aria-label="Architecture map">
+          <div class="scale-lane lane-token-pair">
+            <span>token pair</span>
+          </div>
+          <div class="scale-lane lane-token">
+            <span>token</span>
+          </div>
+          <div class="scale-lane lane-atom">
+            <span>atom</span>
+          </div>
+          <div class="scale-lane lane-coordinate">
+            <span>coordinate</span>
+          </div>
+
+          <div id="moduleLayer" class="module-layer"></div>
+          <svg id="edgeLayer" class="edge-layer" aria-hidden="true"></svg>
+        </section>
+
+        <aside class="focus-panel" aria-label="Focused module">
+          <div class="focus-panel-header">
+            <p class="eyebrow">main focus</p>
+            <h2 id="focusTitle">Architecture overview</h2>
+          </div>
+          <div id="focusBody" class="focus-body"></div>
+        </aside>
+      </section>
+    </main>
+
+    <script type="module" src="./renderer.js"></script>
+  </body>
+</html>

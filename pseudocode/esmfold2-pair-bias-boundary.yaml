@@ -1,0 +1,174 @@
+schema_version: protein-pseudocode-v0.1
+id: esmfold2_pair_bias_boundary
+title: "Biohub ESMFold2: Atom Encoder vs Token Pair Bias"
+status: partial
+linked_architecture: architectures/biohub-esmfold2-diffusion-module.yaml
+sources:
+  - id: esmfold2_common
+    kind: code
+    path: /home/ruh/research/PhD/related_work/biohub-transformers/src/transformers/models/esmfold2/modeling_esmfold2_common.py
+symbols:
+  - id: z_ij
+    label: z_ij
+    kind: representation
+    scale: token_pair
+    architecture_ref: representations.pair_repr
+  - id: q_atom
+    label: q
+    kind: representation
+    scale: atom
+  - id: c_atom
+    label: c
+    kind: representation
+    scale: atom
+  - id: attention_params
+    label: attention_params
+    kind: mask
+    scale: atom
+  - id: token_logits
+    label: token attention logits
+    kind: logit
+    scale: token_pair
+  - id: pair_bias
+    label: pair_bias
+    kind: logit
+    scale: token_pair
+lines:
+  - id: atom_encoder_signature
+    number: 1
+    text: "ESMFold2AtomEncoder.forward(..., z_ij=None, ...)"
+    text_mode: implementation_summary
+    operation: input
+    inputs: [z_ij]
+    outputs: []
+    architecture_refs:
+      - modules.atom_encoder
+    source_refs:
+      - source: esmfold2_common
+        lines: "758-770"
+    visual:
+      scene: source_trace
+      highlight: [z_ij]
+  - id: build_atom_params
+    number: 2
+    text: "build atom features and 3D-RoPE attention_params"
+    text_mode: implementation_summary
+    operation: rope
+    inputs: [q_atom]
+    outputs: [attention_params]
+    architecture_refs:
+      - modules.atom_encoder
+    source_refs:
+      - source: esmfold2_common
+        lines: "786-806"
+    visual:
+      scene: atom_attention_path
+      highlight: [attention_params]
+  - id: atom_transformer_call
+    number: 3
+    text: "atom_transformer(q_l=q, c_l=c, attention_params=attention_params)"
+    text_mode: implementation_summary
+    operation: window_attention
+    inputs: [q_atom, c_atom, attention_params]
+    outputs: [q_atom]
+    architecture_refs:
+      - modules.atom_encoder
+    source_refs:
+      - source: esmfold2_common
+        lines: "836-840"
+    visual:
+      scene: atom_attention_path
+      highlight: [q_atom, c_atom, attention_params]
+  - id: swa_attention_forward
+    number: 4
+    text: "SWA3DRoPEAttention.forward(x, attention_params)"
+    text_mode: implementation_summary
+    operation: window_attention
+    inputs: [q_atom, attention_params]
+    outputs: [q_atom]
+    architecture_refs:
+      - modules.swa_3d_rope_attention
+    source_refs:
+      - source: esmfold2_common
+        lines: "492-557"
+    visual:
+      scene: atom_attention_path
+      highlight: [q_atom, attention_params]
+  - id: token_transformer_constructed
+    number: 5
+    text: "DiffusionModule constructs token_transformer = DiffusionTransformer(d_pair=c_z)"
+    text_mode: implementation_summary
+    operation: module_construction
+    inputs: [z_ij]
+    outputs: [token_transformer]
+    architecture_refs:
+      - modules.token_transformer
+    source_refs:
+      - source: esmfold2_common
+        lines: "1426-1432"
+    visual:
+      scene: token_pair_bias_path
+      highlight: [z_ij]
+  - id: token_pair_bias_add
+    number: 6
+    text: "pair_bias = pair_bias_proj(pair_norm(z)); logits += pair_bias"
+    text_mode: implementation_summary
+    operation: pair_bias_add
+    standard_block_ref: standard_blocks/pair-biased-attention.yaml
+    inputs: [z_ij, token_logits]
+    outputs: [pair_bias, token_logits]
+    architecture_refs:
+      - modules.token_transformer
+    source_refs:
+      - source: esmfold2_common
+        lines: "939-940,1114-1118"
+    visual:
+      scene: token_pair_bias_path
+      block: pair_biased_attention
+      slots:
+        pair: z_ij
+        logits: token_logits
+        pair_bias: pair_bias
+      highlight: [z_ij, pair_bias, token_logits]
+visual_scenes:
+  - id: source_trace
+    type: source_trace
+    title: z_ij appears in the atom encoder signature
+  - id: atom_attention_path
+    type: dataflow
+    title: "Atom encoder path: SWA + 3D RoPE, no pair-bias input"
+  - id: token_pair_bias_path
+    type: attention_terms
+    title: "Token transformer path: projected pair bias added to logits"
+claims:
+  - id: atom_encoder_accepts_but_does_not_use_z
+    statement: z_ij is accepted by the atom encoder signature but is not passed into the atom transformer call.
+    line_refs: [atom_encoder_signature, atom_transformer_call]
+    evidence:
+      status: confirmed_from_code
+      refs:
+        - kind: code
+          source: esmfold2_common
+          lines: "758-770,836-840"
+  - id: atom_attention_no_pair_bias
+    statement: The atom attention implementation takes x and attention_params, applies 3D RoPE/window attention, and has no pair-bias input.
+    line_refs: [swa_attention_forward]
+    evidence:
+      status: confirmed_from_code
+      refs:
+        - kind: code
+          source: esmfold2_common
+          lines: "492-557"
+  - id: token_attention_pair_biased
+    statement: Pair bias is projected from z and added to token attention logits.
+    line_refs: [token_transformer_constructed, token_pair_bias_add]
+    evidence:
+      status: confirmed_from_code
+      refs:
+        - kind: code
+          source: esmfold2_common
+          lines: "939-940,1114-1118,1426-1432"
+open_questions:
+  - id: render_source_trace
+    question: What source-trace UI should display when a pseudocode line summarizes multiple implementation lines?
+    status: unresolved

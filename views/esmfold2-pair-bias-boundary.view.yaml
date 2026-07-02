@@ -1,0 +1,55 @@
+schema_version: protein-visualization-v0.1
+id: esmfold2_pair_bias_boundary_view
+title: Biohub ESMFold2 Pair Bias Boundary
+entry:
+  architecture: architectures/biohub-esmfold2-diffusion-module.yaml
+  pseudocode: pseudocode/esmfold2-pair-bias-boundary.yaml
+default_view: source_trace
+views:
+  - id: source_trace
+    type: pseudocode_stepper
+    pseudocode_ref: pseudocode/esmfold2-pair-bias-boundary.yaml
+    side_panels:
+      - symbols
+      - evidence
+      - architecture_refs
+  - id: token_pair_bias_block
+    type: standard_block_focus
+    standard_block_ref: standard_blocks/pair-biased-attention.yaml
+    binds_from_line: token_pair_bias_add
+  - id: architecture_boundary
+    type: architecture_map
+    layout:
+      x: dataflow
+      y: representation_scale
+      depth: containment
+    focus_modules:
+      - atom_encoder
+      - token_transformer
+focus_rules:
+  - target: lines.token_pair_bias_add
+    on_click:
+      standard_block_ref: standard_blocks/pair-biased-attention.yaml
+      fallback_view: source_trace
+  - target: modules.atom_encoder
+    on_click:
+      pseudocode_ref: pseudocode/esmfold2-pair-bias-boundary.yaml
+      active_line: atom_transformer_call
+  - target: modules.token_transformer
+    on_click:
+      pseudocode_ref: pseudocode/esmfold2-pair-bias-boundary.yaml
+      active_line: token_pair_bias_add
+interaction:
+  hover:
+    action: peek
+    shows:
+      - source_line_summary
+      - evidence_badge
+  click:
+    action: focus
+    resolution_order:
+      - story_ref
+      - standard_block_ref
+      - pseudocode_ref
+      - generated_yaml_inspector
+  breadcrumbs: true

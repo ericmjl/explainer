@@ -1,0 +1,171 @@
+schema_version: protein-pseudocode-v0.1
+id: af2_ipa_algorithm22
+title: "AF2 Algorithm 22: Invariant Point Attention"
+status: partial
+linked_architecture: null
+sources:
+  - id: af2_supp_algorithm_22
+    kind: paper_supplement
+    title: AlphaFold supplementary Algorithm 22
+    locator: "Algorithm 22"
+symbols:
+  - id: s_i
+    label: s_i
+    kind: representation
+    scale: residue
+    shape: "N_res x c_s"
+  - id: z_ij
+    label: z_ij
+    kind: representation
+    scale: residue_pair
+    shape: "N_res x N_res x c_z"
+  - id: T_i
+    label: T_i
+    kind: frame
+    scale: residue
+  - id: q_scalar
+    label: q_i^h
+    kind: representation
+    scale: residue
+  - id: k_scalar
+    label: k_i^h
+    kind: representation
+    scale: residue
+  - id: v_scalar
+    label: v_i^h
+    kind: representation
+    scale: residue
+  - id: q_point
+    label: q_i^{hp}
+    kind: coordinate
+    scale: residue
+  - id: k_point
+    label: k_i^{hp}
+    kind: coordinate
+    scale: residue
+  - id: v_point
+    label: v_i^{hp}
+    kind: coordinate
+    scale: residue
+  - id: attention_weight
+    label: a_ij^h
+    kind: weight
+    scale: residue_pair
+lines:
+  - id: inputs
+    number: 1
+    text: "inputs: single s_i, pair z_ij, frames T_i = (R_i, t_i)"
+    text_mode: simplified
+    operation: input
+    inputs: []
+    outputs: [s_i, z_ij, T_i]
+    source_refs:
+      - source: af2_supp_algorithm_22
+        locator: "Algorithm inputs"
+    visual:
+      scene: frames
+      highlight: [s_i, z_ij, T_i]
+  - id: scalar_qkv
+    number: 2
+    text: "q_i^h, k_i^h, v_i^h = LinearNoBias(s_i)"
+    text_mode: paper_symbolic
+    operation: projection
+    inputs: [s_i]
+    outputs: [q_scalar, k_scalar, v_scalar]
+    source_refs:
+      - source: af2_supp_algorithm_22
+        locator: "scalar q/k/v projection"
+    visual:
+      scene: scalar_projection
+      highlight: [s_i, q_scalar, k_scalar, v_scalar]
+  - id: point_qk
+    number: 3
+    text: "q_i^{hp}, k_i^{hp} = LinearNoBias(s_i)"
+    text_mode: paper_symbolic
+    operation: projection
+    inputs: [s_i]
+    outputs: [q_point, k_point]
+    source_refs:
+      - source: af2_supp_algorithm_22
+        locator: "point q/k projection"
+    visual:
+      scene: local_point_projection
+      highlight: [q_point, k_point]
+  - id: point_values
+    number: 4
+    text: "v_i^{hp} = LinearNoBias(s_i)"
+    text_mode: paper_symbolic
+    operation: projection
+    inputs: [s_i]
+    outputs: [v_point]
+    source_refs:
+      - source: af2_supp_algorithm_22
+        locator: "point value projection"
+    visual:
+      scene: local_point_projection
+      highlight: [v_point]
+  - id: pair_bias
+    number: 5
+    text: "b_ij^h = LinearNoBias(z_ij)"
+    text_mode: paper_symbolic
+    operation: projection
+    inputs: [z_ij]
+    outputs: [pair_bias]
+    source_refs:
+      - source: af2_supp_algorithm_22
+        locator: "pair bias projection"
+    visual:
+      scene: attention_terms
+      highlight: [z_ij, pair_bias]
+  - id: logits_and_softmax
+    number: 6
+    text: "a_ij^h = softmax_j(scalar_qk + pair_bias - point_distance)"
+    text_mode: simplified
+    operation: attention_logits
+    inputs: [q_scalar, k_scalar, z_ij, q_point, k_point, T_i]
+    outputs: [attention_weight]
+    source_refs:
+      - source: af2_supp_algorithm_22
+        locator: "attention logits and softmax"
+    visual:
+      scene: attention_terms
+      highlight: [attention_weight]
+  - id: gather_outputs
+    number: 7
+    text: "gather pair, scalar, and point values with a_ij^h"
+    text_mode: simplified
+    operation: weighted_sum
+    inputs: [attention_weight, z_ij, v_scalar, v_point]
+    outputs: [ipa_update]
+    source_refs:
+      - source: af2_supp_algorithm_22
+        locator: "output gathering"
+    visual:
+      scene: value_gather
+      highlight: [attention_weight, ipa_update]
+visual_scenes:
+  - id: frames
+    type: frame_geometry
+    title: Residue frames and invariant representations
+  - id: scalar_projection
+    type: tensor_shapes
+    title: Scalar Q/K/V projections
+  - id: local_point_projection
+    type: frame_geometry
+    title: Local point projections
+  - id: attention_terms
+    type: attention_terms
+    title: Scalar, pair, and point-distance logit terms
+  - id: value_gather
+    type: dataflow
+    title: Weighted value gathering
+claims:
+  - id: ipa_pair_bias_affects_single_update
+    statement: IPA uses pair representation as an attention-logit bias while returning a single-representation update.
+    line_refs: [pair_bias, logits_and_softmax, gather_outputs]
+    evidence:
+      status: confirmed_from_paper
+      refs:
+        - kind: paper_supplement
+          source: af2_supp_algorithm_22
+open_questions: []
