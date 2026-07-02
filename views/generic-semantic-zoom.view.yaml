@@ -188,7 +188,7 @@ boards:
           inside: The item encoder applies local attention and feedforward updates to the item stream.
       - from: conditioning_signal
         to: item_encoder
-        label: AdaLN
+        label: cond
         tone: conditioning
         connection:
           title: Per-item adaptive modulation

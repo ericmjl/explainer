@@ -1,0 +1,580 @@
+schema_version: architecture-v0.1
+id: diffusion_transformer
+name: Diffusion Transformer (DiT)
+family: transformer
+status: draft
+task_modes:
+  - generation
+sources:
+  - kind: paper
+    path: arXiv:2212.09748
+    note: Peebles & Xie, Scalable Diffusion Models with Transformers.
+  - kind: code
+    path: facebookresearch/DiT/models.py
+    note: Official reference implementation; embedder and block details checked here.
+execution:
+  loops:
+    - id: denoising_loop
+      repeats: num_sampling_steps
+      reruns:
+        - patchify
+        - timestep_embedder
+        - label_embedder
+        - cond_combiner
+        - dit_blocks
+        - final_layer
+        - unpatchify
+      cached: []
+      notes:
+        - The full backbone reruns at every denoising step; only the timestep input changes across steps for a fixed sample.
+        - Classifier-free guidance runs a conditional and an unconditional pass per step, batched together in the reference sampler.
+      evidence:
+        status: confirmed_from_paper
+        refs:
+          - kind: paper
+            path: arXiv:2212.09748
+            lines: "Sec. 3.1, Sec. 4"
+            note: DDPM sampling with classifier-free guidance; 250 sampling steps for reported results.
+state_semantics:
+  token_state:
+    role: mutable_state
+    produced_by: patchify
+    updated_by:
+      - dit_blocks
+    consumed_by:
+      - final_layer
+    notes:
+      - The token stream is the only mutable state inside one forward pass.
+  cond_vector:
+    role: read_only_conditioning
+    produced_by: cond_combiner
+    updated_by: []
+    consumed_by:
+      - dit_blocks
+      - final_layer
+    notes:
+      - Per-sample vector; every token in a sample shares the same modulation parameters.
+conditioning:
+  - id: block_adaln_zero
+    source: cond_vector
+    target: dit_blocks
+    mode: adaln_zero
+    standard_block_ref: standard_blocks/adaln-zero-conditioning.yaml
+    updates_source: false
+    evidence:
+      status: confirmed_from_code
+      refs:
+        - kind: code
+          path: facebookresearch/DiT/models.py
+          lines: DiTBlock
+          note: adaLN_modulation(c).chunk(6) yields shift/scale/gate for attention and MLP branches; gate projection zero-initialized.
+  - id: final_layer_adaln
+    source: cond_vector
+    target: final_layer
+    mode: adaln
+    updates_source: false
+    evidence:
+      status: confirmed_from_code
+      refs:
+        - kind: code
+          path: facebookresearch/DiT/models.py
+          lines: FinalLayer
+          note: adaLN_modulation(c).chunk(2) yields shift/scale before the linear decode; no gate in the final layer.
+scale_transitions:
+  - id: patchify_tokens
+    from_scale: spatial
+    to_scale: token
+    source: input_latent
+    target: token_state
+    projection: patch_embedding
+    aggregation: flatten_patches
+    copy_vs_pool: pool
+    evidence:
+      status: confirmed_from_paper
+      refs:
+        - kind: paper
+          path: arXiv:2212.09748
+          lines: "Sec. 3.2 (Patchify)"
+          note: p x p patches are linearly embedded into T = (I/p)^2 tokens.
+  - id: unpatchify_output
+    from_scale: token
+    to_scale: spatial
+    source: output_tokens
+    target: noise_prediction
+    projection: none
+    aggregation: reshape
+    copy_vs_pool: copy
+    evidence:
+      status: confirmed_from_paper
+      refs:
+        - kind: paper
+          path: arXiv:2212.09748
+          lines: "Sec. 3.2 (Transformer decoder)"
+          note: Decoded tokens are rearranged back to the spatial latent layout; lossless reshape.
+training_inference:
+  objective:
+    kind: diffusion_noise_prediction
+    notes:
+      - MSE on predicted noise epsilon; learned covariance Sigma trained with the full KL term, following ADM.
+  schedule:
+    kind: linear_variance
+    steps: 1000
+  sampler:
+    kind: ddpm
+    steps: 250
+    guidance: classifier_free
+  teacher_forcing: not_applicable
+  self_conditioning: none
+  checkpoint_notes:
+    - Operates in the latent space of a frozen, off-the-shelf VAE (8x spatial downsampling); the VAE is out of scope for this slice.
+representations:
+  - id: input_latent
+    scale: spatial
+    semantic_role: noised VAE latent at the current denoising step
+    shape: "B x 4 x I x I (I = 32 for 256^2 images)"
+    carries:
+      - noised image content
+    evidence:
+      status: confirmed_from_paper
+      refs:
+        - kind: paper
+          path: arXiv:2212.09748
+          lines: "Sec. 3 (Latent diffusion), Sec. 3.2"
+  - id: timestep
+    scale: sample
+    semantic_role: diffusion timestep index for the current step
+    shape: "B"
+    carries:
+      - noise level
+    evidence:
+      status: confirmed_from_paper
+      refs:
+        - kind: paper
+          path: arXiv:2212.09748
+          lines: "Sec. 3.2"
+  - id: class_label
+    scale: sample
+    semantic_role: class conditioning input (with a null class for classifier-free guidance)
+    shape: "B"
+    carries:
+      - class identity
+    evidence:
+      status: confirmed_from_code
+      refs:
+        - kind: code
+          path: facebookresearch/DiT/models.py
+          lines: LabelEmbedder
+          note: Dropped labels are mapped to an extra embedding index num_classes.
+  - id: t_embedding
+    scale: sample
+    semantic_role: embedded timestep
+    shape: "B x d"
+    carries:
+      - noise-level embedding
+    evidence:
+      status: confirmed_from_code
+      refs:
+        - kind: code
+          path: facebookresearch/DiT/models.py
+          lines: TimestepEmbedder
+  - id: y_embedding
+    scale: sample
+    semantic_role: embedded class label
+    shape: "B x d"
+    carries:
+      - class embedding
+    evidence:
+      status: confirmed_from_code
+      refs:
+        - kind: code
+          path: facebookresearch/DiT/models.py
+          lines: LabelEmbedder
+  - id: cond_vector
+    scale: sample
+    semantic_role: combined conditioning vector shared by all tokens of a sample
+    shape: "B x d"
+    carries:
+      - timestep and class conditioning
+    evidence:
+      status: confirmed_from_code
+      refs:
+        - kind: code
+          path: facebookresearch/DiT/models.py
+          lines: DiT.forward
+          note: c = t + y before the block stack.
+  - id: token_state
+    scale: token
+    semantic_role: mutable patch-token stream
+    shape: "B x T x d, T = (I/p)^2"
+    carries:
+      - patch content
+      - fixed 2D sin-cos positional embedding
+    evidence:
+      status: confirmed_from_paper
+      refs:
+        - kind: paper
+          path: arXiv:2212.09748
+          lines: "Sec. 3.2 (Patchify)"
+  - id: output_tokens
+    scale: token
+    semantic_role: decoded per-token patch predictions
+    shape: "B x T x (p * p * 2C)"
+    carries:
+      - predicted noise patch
+      - predicted covariance patch
+    evidence:
+      status: confirmed_from_code
+      refs:
+        - kind: code
+          path: facebookresearch/DiT/models.py
+          lines: FinalLayer
+          note: Linear(hidden_size, patch_size * patch_size * out_channels).
+  - id: noise_prediction
+    scale: spatial
+    semantic_role: predicted noise and covariance at latent resolution
+    shape: "B x 2C x I x I, split into epsilon and Sigma"
+    carries:
+      - noise prediction
+      - covariance prediction
+    evidence:
+      status: confirmed_from_paper
+      refs:
+        - kind: paper
+          path: arXiv:2212.09748
+          lines: "Sec. 3.2 (Transformer decoder)"
+modules:
+  - id: patchify
+    label: Patchify
+    kind: feature_adapter
+    role: embed p x p latent patches into tokens and add fixed 2D sin-cos positional embeddings
+    scale: token
+    inputs:
+      - input_latent
+    outputs:
+      - token_state
+    evidence:
+      status: confirmed_from_paper
+      refs:
+        - kind: paper
+          path: arXiv:2212.09748
+          lines: "Sec. 3.2 (Patchify)"
+        - kind: code
+          path: facebookresearch/DiT/models.py
+          lines: "DiT.__init__ (x_embedder, pos_embed)"
+          note: PatchEmbed plus non-learned sin-cos positional table.
+  - id: timestep_embedder
+    label: Timestep Embedder
+    kind: feature_adapter
+    role: encode the scalar timestep with a 256-dim sinusoidal embedding followed by a two-layer SiLU MLP
+    scale: sample
+    inputs:
+      - timestep
+    outputs:
+      - t_embedding
+    evidence:
+      status: confirmed_from_code
+      refs:
+        - kind: code
+          path: facebookresearch/DiT/models.py
+          lines: TimestepEmbedder
+  - id: label_embedder
+    label: Label Embedder
+    kind: feature_adapter
+    role: look up the class embedding; randomly drop labels to the null class during training for classifier-free guidance
+    scale: sample
+    inputs:
+      - class_label
+    outputs:
+      - y_embedding
+    evidence:
+      status: confirmed_from_code
+      refs:
+        - kind: code
+          path: facebookresearch/DiT/models.py
+          lines: LabelEmbedder
+  - id: cond_combiner
+    label: Conditioning Combiner
+    kind: feature_adapter
+    role: sum timestep and label embeddings into one per-sample conditioning vector
+    scale: sample
+    inputs:
+      - t_embedding
+      - y_embedding
+    outputs:
+      - cond_vector
+    evidence:
+      status: confirmed_from_code
+      refs:
+        - kind: code
+          path: facebookresearch/DiT/models.py
+          lines: DiT.forward
+          note: c = t + y.
+  - id: dit_blocks
+    label: DiT Block Stack
+    kind: attention_stack
+    role: update patch tokens with full self-attention and MLP branches, both modulated and gated by adaLN-Zero conditioning
+    scale: token
+    repeats: 28
+    pseudocode_ref: pseudocode/diffusion-transformer.yaml
+    depth:
+      blocks: 28
+      heads: 16
+    contains:
+      - id: adaln_zero
+        label: adaLN-Zero
+        standard_block_ref: standard_blocks/adaln-zero-conditioning.yaml
+    inputs:
+      - token_state
+      - cond_vector
+    outputs:
+      - token_state
+    attention:
+      pattern: full
+      query_scale: token
+      key_value_scale: token
+      heads: 16
+      pair_bias: false
+      pair_bias_source: none
+      positional_encoding:
+        kind: absolute_sincos_added_at_patchify
+    evidence:
+      status: confirmed_from_paper
+      refs:
+        - kind: paper
+          path: arXiv:2212.09748
+          lines: "Sec. 3.2 (DiT block design), Table 1"
+          note: Depth 28 / 16 heads is the DiT-XL configuration; other sizes exist.
+  - id: final_layer
+    label: Final Layer
+    kind: decoder
+    role: apply adaLN-modulated LayerNorm, then linearly decode each token to a p x p x 2C patch prediction
+    scale: token
+    inputs:
+      - token_state
+      - cond_vector
+    outputs:
+      - output_tokens
+    evidence:
+      status: confirmed_from_code
+      refs:
+        - kind: code
+          path: facebookresearch/DiT/models.py
+          lines: FinalLayer
+  - id: unpatchify
+    label: Unpatchify
+    kind: scale_transition
+    role: rearrange per-token patch predictions back to the spatial latent layout
+    scale: spatial
+    inputs:
+      - output_tokens
+    outputs:
+      - noise_prediction
+    evidence:
+      status: confirmed_from_code
+      refs:
+        - kind: code
+          path: facebookresearch/DiT/models.py
+          lines: DiT.unpatchify
+edges:
+  - from: input_latent
+    to: patchify
+    carries: [noised latent]
+    operation: patch_embedding
+    evidence:
+      status: confirmed_from_paper
+      refs:
+        - kind: paper
+          path: arXiv:2212.09748
+          lines: "Sec. 3.2 (Patchify)"
+  - from: patchify
+    to: token_state
+    carries: [token_state]
+    operation: initialize_tokens_with_positional_embedding
+    evidence:
+      status: confirmed_from_code
+      refs:
+        - kind: code
+          path: facebookresearch/DiT/models.py
+          lines: DiT.forward
+  - from: timestep
+    to: timestep_embedder
+    carries: [timestep]
+    operation: sinusoidal_embedding
+    evidence:
+      status: confirmed_from_code
+      refs:
+        - kind: code
+          path: facebookresearch/DiT/models.py
+          lines: TimestepEmbedder
+  - from: timestep_embedder
+    to: t_embedding
+    carries: [t_embedding]
+    operation: mlp_projection
+    evidence:
+      status: confirmed_from_code
+      refs:
+        - kind: code
+          path: facebookresearch/DiT/models.py
+          lines: TimestepEmbedder
+  - from: class_label
+    to: label_embedder
+    carries: [class_label]
+    operation: label_embedding_with_cfg_dropout
+    evidence:
+      status: confirmed_from_code
+      refs:
+        - kind: code
+          path: facebookresearch/DiT/models.py
+          lines: LabelEmbedder
+  - from: label_embedder
+    to: y_embedding
+    carries: [y_embedding]
+    operation: embedding_lookup
+    evidence:
+      status: confirmed_from_code
+      refs:
+        - kind: code
+          path: facebookresearch/DiT/models.py
+          lines: LabelEmbedder
+  - from: t_embedding
+    to: cond_combiner
+    carries: [t_embedding]
+    operation: sum
+    evidence:
+      status: confirmed_from_code
+      refs:
+        - kind: code
+          path: facebookresearch/DiT/models.py
+          lines: DiT.forward
+  - from: y_embedding
+    to: cond_combiner
+    carries: [y_embedding]
+    operation: sum
+    evidence:
+      status: confirmed_from_code
+      refs:
+        - kind: code
+          path: facebookresearch/DiT/models.py
+          lines: DiT.forward
+  - from: cond_combiner
+    to: cond_vector
+    carries: [cond_vector]
+    operation: initialize_conditioning
+    evidence:
+      status: confirmed_from_code
+      refs:
+        - kind: code
+          path: facebookresearch/DiT/models.py
+          lines: DiT.forward
+  - from: token_state
+    to: dit_blocks
+    carries: [token_state]
+    operation: self_attention_update
+    evidence:
+      status: confirmed_from_paper
+      refs:
+        - kind: paper
+          path: arXiv:2212.09748
+          lines: "Sec. 3.2"
+  - from: cond_vector
+    to: dit_blocks
+    carries: [cond_vector]
+    operation: adaln_zero_modulation
+    evidence:
+      status: confirmed_from_code
+      refs:
+        - kind: code
+          path: facebookresearch/DiT/models.py
+          lines: DiTBlock
+  - from: dit_blocks
+    to: final_layer
+    carries: [token_state]
+    operation: decode_tokens
+    evidence:
+      status: confirmed_from_code
+      refs:
+        - kind: code
+          path: facebookresearch/DiT/models.py
+          lines: DiT.forward
+  - from: cond_vector
+    to: final_layer
+    carries: [cond_vector]
+    operation: adaln_modulation
+    evidence:
+      status: confirmed_from_code
+      refs:
+        - kind: code
+          path: facebookresearch/DiT/models.py
+          lines: FinalLayer
+  - from: final_layer
+    to: output_tokens
+    carries: [output_tokens]
+    operation: linear_decode
+    evidence:
+      status: confirmed_from_code
+      refs:
+        - kind: code
+          path: facebookresearch/DiT/models.py
+          lines: FinalLayer
+  - from: output_tokens
+    to: unpatchify
+    carries: [output_tokens]
+    operation: reshape
+    evidence:
+      status: confirmed_from_code
+      refs:
+        - kind: code
+          path: facebookresearch/DiT/models.py
+          lines: DiT.unpatchify
+  - from: unpatchify
+    to: noise_prediction
+    carries: [noise_prediction]
+    operation: predict
+    evidence:
+      status: confirmed_from_paper
+      refs:
+        - kind: paper
+          path: arXiv:2212.09748
+          lines: "Sec. 3.2 (Transformer decoder)"
+claims:
+  - id: adaln_zero_beats_alternatives
+    statement: adaLN-Zero conditioning outperformed in-context conditioning and cross-attention conditioning in the DiT block ablations.
+    scope:
+      module: dit_blocks
+    evidence:
+      status: confirmed_from_paper
+      refs:
+        - kind: paper
+          path: arXiv:2212.09748
+          lines: "Sec. 3.2, Fig. 5"
+  - id: identity_initialization_helps
+    statement: Zero-initializing the residual gate projections makes each DiT block the identity at initialization, which accelerated training.
+    scope:
+      module: dit_blocks
+    evidence:
+      status: confirmed_from_paper
+      refs:
+        - kind: paper
+          path: arXiv:2212.09748
+          lines: "Sec. 3.2"
+        - kind: code
+          path: facebookresearch/DiT/models.py
+          lines: DiT.initialize_weights
+  - id: conditioning_is_per_sample
+    statement: The conditioning vector is per-sample, not per-token; all tokens of a sample share the same modulation parameters, unlike per-item AdaLN.
+    scope:
+      module: dit_blocks
+    evidence:
+      status: confirmed_from_code
+      refs:
+        - kind: code
+          path: facebookresearch/DiT/models.py
+          lines: DiTBlock
+          note: chunk(6, dim=1) on a B x d vector broadcasts over tokens.
+open_questions:
+  - id: model_vae_slice
+    question: Should the frozen VAE encoder/decoder become its own architecture slice, so latent-space methods can share it?
+    status: unresolved
+  - id: model_cfg_execution
+    question: Should classifier-free guidance's paired conditional/unconditional forward passes be modeled explicitly in execution loops, or is a note enough?
+    status: unresolved

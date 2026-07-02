@@ -1,4 +1,4 @@
-# Visualization Language v0.1
+# Visualization Language v0.2
 
 This file defines the generic semantic-zoom board language used by the static
 renderer. The view source decides which architecture objects are visible at
@@ -81,3 +81,79 @@ target. This is the most important part of an edge hover.
 
 A node is expandable only when the target board exists. If `module_ref` is set,
 the target board id is the module id. Otherwise the node id is used.
+
+## Derivation Rule
+
+View files position and style nodes; they must not restate architecture facts
+that can be derived. Two consequences:
+
+- Every board edge whose endpoints both resolve to architecture objects
+  (`module_ref` or `rep_ref`) must correspond to an architecture edge or to a
+  module `inputs`/`outputs` entry. The linter enforces this.
+- Conditioning-mode badges on edges are derived, not authored. When a board
+  edge runs from a node whose `rep_ref` is the `source` of an architecture
+  `conditioning` entry to a node whose `module_ref` is that entry's `target`
+  module, the renderer badges the edge with the entry's `mode` and applies the
+  conditioning tone automatically. Do not hand-write the mode into the edge
+  label.
+
+## Tensor-Shaped Representation Nodes
+
+Representations (variables) must read differently from modules (functions).
+A representation node is not a card describing a tensor — the node IS the
+tensor, in the style of paper figures: the box shape encodes rank, the math
+symbol sits inside, and the dimensions are annotated on non-scalars. Full
+name, meaning, state semantics, and evidence live in the hover/focus panel.
+
+Shape classes, derived from the architecture representation's `shape` string
+(parse up to the first comma, split on ` x `, drop a leading batch axis `B`):
+
+- 0 remaining axes -> `scalar`: a small square with only the symbol
+  (timestep `t`, class label `y`). No dims shown.
+- 1 axis -> `vector`: a flat wide box; symbol plus dims (`d`).
+- 2 axes -> `matrix`: a rectangle; symbol plus dims (`T × d`).
+- 3+ axes with the first two equal -> `pair`: a square with a drawn
+  diagonal; symbol plus dims (`N × N × d`).
+- 3+ axes otherwise -> `volume`: a rectangle with a stacked offset outline
+  suggesting depth; symbol plus dims (`C × H × W`).
+
+The heuristic can be overridden with `glyph: scalar|vector|matrix|pair|volume`
+on the architecture representation or on the view node (node wins).
+
+The symbol inside the box is derived from the pseudocode source: the
+pseudocode symbol whose `architecture_ref` points at the representation
+provides its `name` (`x`, `c`, `t`). Falls back to the view node label, then
+the representation id. Give pseudocode symbols paper notation — that is what
+boards display.
+
+## Elision and Edge Contraction
+
+A node with `elide: true` is authored on the board (with full edges) but not
+rendered. The renderer contracts the graph: for each elided node, every
+incoming/outgoing edge pair is merged into a through-edge that records the
+hidden hops.
+
+```yaml
+nodes:
+  - id: patchify
+    kind: module
+    module_ref: patchify
+    col: 2
+    row: 3
+    elide: true
+```
+
+Rules:
+
+- Author boards as the full graph; elision is a rendering projection. This is
+  what keeps hidden featurization consistent with the architecture source.
+- Contracted edges render dashed with a `+N` hop count. Hovering the edge port
+  peeks at the hidden chain (each hop's label and `connection.inside`);
+  clicking the port pins the popover, clicking again or panning unpins.
+- An elided node must have at least one incoming and one outgoing edge, and
+  must not have both fan-in and fan-out (in-degree and out-degree both above
+  one), because the contraction would be ambiguous. The linter enforces both
+  rules; `1xN` and `Nx1` are allowed.
+- `elide` hides a node the board still explains; `prominence: hidden` hides a
+  node without contraction. Use `elide` for pass-through stages such as
+  featurization, use `hidden` only for purely visual suppression.

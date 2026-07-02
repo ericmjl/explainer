@@ -1,0 +1,21 @@
+schema_version: registry-v0.1
+# Single source of truth for which source sets exist. build-manifest.rb and
+# scripts/lint_sources.rb both read this file; do not duplicate the lists there.
+source_sets:
+  - id: generic
+    label: Generic Feature Refinement
+    architecture: architectures/generic-feature-refinement.yaml
+    view: views/generic-semantic-zoom.view.yaml
+    pseudocode: pseudocode/generic-feature-refinement.yaml
+    standard_blocks:
+      - standard_blocks/pair-biased-attention.yaml
+      - standard_blocks/per-item-adaln-conditioning.yaml
+      - standard_blocks/additive-conditioning.yaml
+  - id: dit
+    label: Diffusion Transformer (DiT)
+    architecture: architectures/diffusion-transformer.yaml
+    view: views/dit-semantic-zoom.view.yaml
+    pseudocode: pseudocode/diffusion-transformer.yaml
+    standard_blocks:
+      - standard_blocks/adaln-zero-conditioning.yaml
+      - standard_blocks/per-item-adaln-conditioning.yaml

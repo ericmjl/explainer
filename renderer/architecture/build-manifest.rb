@@ -6,20 +6,7 @@ require "fileutils"
 require "yaml"
 
 ROOT = File.expand_path("../..", __dir__)
-
-MANIFESTS = [
-  {
-    out: "renderer/architecture/manifest.js",
-    architecture: "architectures/generic-feature-refinement.yaml",
-    view: "views/generic-semantic-zoom.view.yaml",
-    pseudocode: "pseudocode/generic-feature-refinement.yaml",
-    standard_blocks: [
-      "standard_blocks/pair-biased-attention.yaml",
-      "standard_blocks/per-item-adaln-conditioning.yaml",
-      "standard_blocks/additive-conditioning.yaml",
-    ],
-  },
-].freeze
+REGISTRY = "architectures/index.yaml"
 
 def load_yaml(path)
   YAML.load_file(File.join(ROOT, path))
@@ -71,6 +58,17 @@ def standard_block_manifest(paths)
   end
 end
 
+def pseudocode_symbols(pseudocode)
+  Array(pseudocode["symbols"]).map do |symbol|
+    {
+      "id" => symbol["id"],
+      "name" => symbol["name"],
+      "tex" => symbol["tex"],
+      "architectureRef" => symbol["architecture_ref"],
+    }.compact
+  end
+end
+
 def pseudocode_lines(pseudocode)
   pseudocode.fetch("lines").map do |line|
     {
@@ -84,9 +82,9 @@ def pseudocode_lines(pseudocode)
 end
 
 def build_manifest(config)
-  architecture = load_yaml(config.fetch(:architecture))
-  pseudocode = load_yaml(config.fetch(:pseudocode))
-  semantic_zoom = load_yaml(config.fetch(:view))
+  architecture = load_yaml(config.fetch("architecture"))
+  pseudocode = load_yaml(config.fetch("pseudocode"))
+  semantic_zoom = load_yaml(config.fetch("view"))
   modules = architecture.fetch("modules").map { |mod| normalize_module_refs(mod) }
 
   {
@@ -94,7 +92,7 @@ def build_manifest(config)
       "id" => architecture.fetch("id"),
       "name" => architecture.fetch("name"),
       "status" => architecture.fetch("status"),
-      "sourceYaml" => web_ref(config.fetch(:architecture)),
+      "sourceYaml" => web_ref(config.fetch("architecture")),
       "modules" => modules,
       "representations" => architecture.fetch("representations"),
       "execution" => architecture["execution"] || {},
@@ -105,24 +103,39 @@ def build_manifest(config)
       "edges" => architecture.fetch("edges"),
       "claims" => architecture.fetch("claims").map { |claim| claim.fetch("statement") },
     },
-    "standardBlocks" => standard_block_manifest(config.fetch(:standard_blocks)),
+    "standardBlocks" => standard_block_manifest(config.fetch("standard_blocks")),
     "pseudocode" => {
       pseudocode.fetch("id") => {
-        "sourceYaml" => web_ref(config.fetch(:pseudocode)),
+        "sourceYaml" => web_ref(config.fetch("pseudocode")),
+        "symbols" => pseudocode_symbols(pseudocode),
         "lines" => pseudocode_lines(pseudocode),
       },
     },
     "boards" => {
-      "sourceYaml" => web_ref(config.fetch(:view)),
+      "sourceYaml" => web_ref(config.fetch("view")),
       "rootBoard" => semantic_zoom.fetch("root_board"),
       "items" => semantic_zoom.fetch("boards"),
     },
   }
 end
 
-MANIFESTS.each do |config|
-  out = File.join(ROOT, config.fetch(:out))
+registry = load_yaml(REGISTRY)
+index_entries = []
+
+registry.fetch("source_sets").each do |config|
+  set_id = config.fetch("id")
+  out = File.join(ROOT, "renderer/architecture/manifest-#{set_id}.js")
   FileUtils.mkdir_p(File.dirname(out))
-  File.write(out, "export const manifest = #{JSON.pretty_generate(build_manifest(config))};\\n")
+  manifest = build_manifest(config)
+  File.write(out, "export const manifest = #{JSON.pretty_generate(manifest)};\n")
+  index_entries << {
+    "id" => set_id,
+    "name" => config["label"] || manifest.dig("architecture", "name"),
+    "file" => "manifest-#{set_id}.js",
+  }
   puts out
 end
+
+index_out = File.join(ROOT, "renderer/architecture/manifest-index.js")
+File.write(index_out, "export const manifestIndex = #{JSON.pretty_generate(index_entries)};\n")
+puts index_out

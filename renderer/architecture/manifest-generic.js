@@ -893,6 +893,43 @@ export const manifest = {
   "pseudocode": {
     "generic_feature_refinement": {
       "sourceYaml": "../../pseudocode/generic-feature-refinement.yaml",
+      "symbols": [
+        {
+          "id": "raw_records",
+          "name": "raw_records",
+          "architectureRef": "representations.raw_records"
+        },
+        {
+          "id": "item_state",
+          "name": "x",
+          "architectureRef": "representations.item_state"
+        },
+        {
+          "id": "conditioning_signal",
+          "name": "s",
+          "architectureRef": "representations.conditioning_signal"
+        },
+        {
+          "id": "pair_context",
+          "name": "c",
+          "architectureRef": "representations.pair_context"
+        },
+        {
+          "id": "group_state",
+          "name": "g",
+          "architectureRef": "representations.group_state"
+        },
+        {
+          "id": "item_output_state",
+          "name": "o",
+          "architectureRef": "representations.item_output_state"
+        },
+        {
+          "id": "predictions",
+          "name": "y",
+          "architectureRef": "representations.predictions"
+        }
+      ],
       "lines": [
         {
           "id": "adapt_inputs",
@@ -1201,7 +1238,7 @@ export const manifest = {
           {
             "from": "conditioning_signal",
             "to": "item_encoder",
-            "label": "AdaLN",
+            "label": "cond",
             "tone": "conditioning",
             "connection": {
               "title": "Per-item adaptive modulation",
@@ -1465,4 +1502,4 @@ export const manifest = {
       }
     ]
   }
-};\n
+};

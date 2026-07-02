@@ -5,15 +5,7 @@ require "set"
 require "yaml"
 
 ROOT = File.expand_path("..", __dir__)
-
-SOURCE_SETS = [
-  {
-    label: "generic",
-    architecture: "architectures/generic-feature-refinement.yaml",
-    view: "views/generic-semantic-zoom.view.yaml",
-    pseudocode: "pseudocode/generic-feature-refinement.yaml",
-  },
-].freeze
+REGISTRY = "architectures/index.yaml"
 
 @errors = []
 
@@ -138,17 +130,50 @@ def lint_architecture(arch, standard_blocks)
   [module_ids, rep_ids, claim_ids]
 end
 
-def lint_view(view, module_ids, rep_ids)
+def architecture_flow_pairs(arch)
+  pairs = Set.new
+  Array(arch["edges"]).each { |edge| pairs << [edge["from"], edge["to"]] }
+  Array(arch["modules"]).each do |mod|
+    Array(mod["inputs"]).each { |rep| pairs << [rep, mod["id"]] }
+    Array(mod["outputs"]).each { |rep| pairs << [mod["id"], rep] }
+  end
+  pairs
+end
+
+def lint_board_elision(board)
+  board_id = board["id"]
+  elided = Array(board["nodes"]).select { |node| node["elide"] }.map { |node| node["id"] }
+  return if elided.empty?
+
+  in_degree = Hash.new(0)
+  out_degree = Hash.new(0)
+  Array(board["edges"]).each do |edge|
+    out_degree[edge["from"]] += 1
+    in_degree[edge["to"]] += 1
+  end
+
+  elided.each do |node_id|
+    if in_degree[node_id].zero? || out_degree[node_id].zero?
+      @errors << "board #{board_id} node #{node_id} is elided but has no incoming or no outgoing edge; contraction would silently drop it"
+    elsif in_degree[node_id] > 1 && out_degree[node_id] > 1
+      @errors << "board #{board_id} node #{node_id} is elided with fan-in and fan-out (#{in_degree[node_id]}x#{out_degree[node_id]}); contraction would be ambiguous"
+    end
+  end
+end
+
+def lint_view(view, arch, module_ids, rep_ids)
   boards = Array(view["boards"])
   board_ids = require_unique_ids("board", boards)
   root = view["root_board"]
   @errors << "view root_board #{root} is not a board id" unless board_ids.include?(root)
+  flow_pairs = architecture_flow_pairs(arch)
 
   boards.each do |board|
     board_id = board["id"]
     parent = board["parent"]
     @errors << "board #{board_id} references unknown parent #{parent}" if parent && !board_ids.include?(parent)
     node_ids = require_unique_ids("node on board #{board_id}", board["nodes"])
+    nodes_by_id = Array(board["nodes"]).to_h { |node| [node["id"], node] }
 
     Array(board["nodes"]).each do |node|
       module_ref = node["module_ref"]
@@ -170,7 +195,16 @@ def lint_view(view, module_ids, rep_ids)
       unless connection.is_a?(Hash) && connection["title"] && connection["role"] && connection["inside"]
         @errors << "board #{board_id} edge #{from}->#{to} missing connection title/role/inside"
       end
+
+      from_ref = nodes_by_id.dig(from, "module_ref") || nodes_by_id.dig(from, "rep_ref")
+      to_ref = nodes_by_id.dig(to, "module_ref") || nodes_by_id.dig(to, "rep_ref")
+      next unless from_ref && to_ref
+      unless flow_pairs.include?([from_ref, to_ref])
+        @errors << "board #{board_id} edge #{from}->#{to} (architecture #{from_ref}->#{to_ref}) has no matching architecture edge or module input/output"
+      end
     end
+
+    lint_board_elision(board)
   end
 end
 
@@ -228,17 +262,22 @@ def lint_standard_blocks(standard_blocks)
 end
 
 standard_blocks = collect_standard_blocks
+registry = load_yaml(REGISTRY)
 
-SOURCE_SETS.each do |source_set|
-  arch = load_yaml(source_set.fetch(:architecture))
-  view = load_yaml(source_set.fetch(:view))
-  program = load_yaml(source_set.fetch(:pseudocode))
+Array(registry["source_sets"]).each do |source_set|
+  arch = load_yaml(source_set.fetch("architecture"))
+  view = load_yaml(source_set.fetch("view"))
+  program = load_yaml(source_set.fetch("pseudocode"))
+
+  Array(source_set["standard_blocks"]).each do |ref|
+    @errors << "registry set #{source_set['id']} references missing standard block #{ref}" unless standard_blocks.key?(ref)
+  end
 
   module_ids, rep_ids, claim_ids = lint_architecture(arch, standard_blocks)
-  lint_view(view, module_ids, rep_ids)
+  lint_view(view, arch, module_ids, rep_ids)
   lint_pseudocode(program, module_ids, rep_ids, claim_ids, standard_blocks)
 rescue StandardError => e
-  @errors << "#{source_set.fetch(:label)} lint failed: #{e.class}: #{e.message}"
+  @errors << "#{source_set.fetch('id')} lint failed: #{e.class}: #{e.message}"
 end
 
 lint_standard_blocks(standard_blocks)
@@ -246,6 +285,6 @@ lint_standard_blocks(standard_blocks)
 if @errors.empty?
   puts "source lint ok"
 else
-  warn @errors.map { |error| "- #{error}" }.join("\\n")
+  warn @errors.map { |error| "- #{error}" }.join("\n")
   exit 1
 end

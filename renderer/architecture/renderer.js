@@ -1,4 +1,8 @@
-import { manifest } from "./manifest.js";
+import { manifestIndex } from "./manifest-index.js";
+
+const archParam = new URLSearchParams(window.location.search).get("arch");
+const activeManifestEntry = manifestIndex.find((entry) => entry.id === archParam) || manifestIndex[0];
+const { manifest } = await import(`./${activeManifestEntry.file}`);
 
 const elements = {
   canvas: document.querySelector(".architecture-canvas"),
@@ -11,6 +15,12 @@ const elements = {
 const modulesById = new Map(manifest.architecture.modules.map((module) => [module.id, module]));
 const repsById = new Map(manifest.architecture.representations.map((rep) => [rep.id, rep]));
 const boardsById = new Map(manifest.boards.items.map((board) => [board.id, board]));
+const conditioningByPair = new Map(
+  (manifest.architecture.conditioning || []).map((cond) => [
+    `${cond.source}->${String(cond.target || "").split(".")[0]}`,
+    cond,
+  ]),
+);
 
 let connectionTooltip = null;
 let breadcrumbs = null;
@@ -20,6 +30,7 @@ const state = {
   focusedId: null,
   focusHasMath: false,
   boardStack: [manifest.boards.rootBoard],
+  pinnedEdge: null,
 };
 
 const viewport = {
@@ -36,12 +47,50 @@ const viewport = {
 };
 
 function render() {
+  renderPageChrome();
   ensureBoardChrome();
   renderBoard();
   focusOverview();
 }
 
-window.addEventListener("mathjax-ready", () => typesetMath());
+function renderPageChrome() {
+  document.title = `${manifest.architecture.name} — Architecture Renderer`;
+  const title = document.getElementById("archTitle");
+  if (title) title.textContent = manifest.architecture.name;
+  const sourceLink = document.getElementById("archSourceLink");
+  if (sourceLink) sourceLink.href = manifest.architecture.sourceYaml;
+  const switcher = document.getElementById("archSwitcher");
+  if (switcher && !switcher.dataset.ready) {
+    switcher.dataset.ready = "true";
+    for (const entry of manifestIndex) {
+      const option = document.createElement("option");
+      option.value = entry.id;
+      option.textContent = entry.name;
+      option.selected = entry.id === activeManifestEntry.id;
+      switcher.appendChild(option);
+    }
+    switcher.addEventListener("change", () => {
+      const params = new URLSearchParams(window.location.search);
+      params.set("arch", switcher.value);
+      window.location.search = params.toString();
+    });
+  }
+}
+
+window.addEventListener("mathjax-ready", () => {
+  typesetMath();
+  typesetBoardMath();
+});
+
+function typesetBoardMath() {
+  const mathJax = window.MathJax;
+  if (!mathJax?.typesetPromise) return;
+  mathJax.typesetClear?.([elements.moduleLayer]);
+  mathJax
+    .typesetPromise([elements.moduleLayer])
+    .then(() => renderEdges())
+    .catch((error) => console.warn("MathJax board typesetting failed", error));
+}
 
 function setFocusBody(html) {
   elements.focusBody.innerHTML = html;
@@ -106,6 +155,7 @@ function renderBoard() {
   applyViewport();
 
   window.requestAnimationFrame(renderEdges);
+  typesetBoardMath();
 }
 
 function renderBreadcrumbs() {
@@ -128,33 +178,138 @@ function renderNode(node) {
   return renderBlockNode(node);
 }
 
+function glyphKindForShape(shape = "") {
+  const head = String(shape).split(",")[0];
+  const dims = head
+    .split(" x ")
+    .map((token) => {
+      const stripped = token.split("(")[0].trim();
+      return stripped || token.trim();
+    })
+    .filter(Boolean);
+  if (!dims.length) return null;
+  const rest = dims[0].toLowerCase() === "b" ? dims.slice(1) : dims;
+  if (rest.length === 0) return "scalar";
+  if (rest.length === 1) return "vector";
+  if (rest.length === 2) return "matrix";
+  return rest[0] === rest[1] ? "pair" : "volume";
+}
+
+function shapeDimsLabel(shape = "") {
+  const head = String(shape).split(",")[0];
+  const dims = head
+    .split(" x ")
+    .map((token) => {
+      const stripped = token.split("(")[0].trim();
+      return stripped || token.trim();
+    })
+    .filter(Boolean);
+  const rest = dims[0]?.toLowerCase() === "b" ? dims.slice(1) : dims;
+  return rest.join(" × ");
+}
+
+const repSymbolById = new Map();
+for (const program of Object.values(manifest.pseudocode || {})) {
+  for (const symbol of program.symbols || []) {
+    const ref = String(symbol.architectureRef || "");
+    if (ref.startsWith("representations.") && symbol.name) {
+      repSymbolById.set(ref.slice("representations.".length), symbol);
+    }
+  }
+}
+
+function symbolMarkup(symbol, fallback) {
+  if (symbol?.tex) return `\\(${symbol.tex}\\)`;
+  const name = symbol?.name || fallback;
+  if (/^[A-Za-zͰ-Ͽ]$/.test(name)) return `\\(${name}\\)`;
+  const subscripted = name.match(/^([A-Za-zͰ-Ͽ])_([A-Za-z0-9]+)$/);
+  if (subscripted) return `\\(${subscripted[1]}_{\\mathrm{${subscripted[2]}}}\\)`;
+  return escapeHtml(name);
+}
+
+function tensorCellsSvg(kind) {
+  const grids = {
+    scalar: [1, 1],
+    vector: [10, 1],
+    matrix: [8, 6],
+    pair: [6, 6],
+    volume: [8, 6],
+  };
+  const [cols, rows] = grids[kind] || grids.vector;
+  let cells = "";
+  for (let r = 0; r < rows; r += 1) {
+    for (let c = 0; c < cols; c += 1) {
+      const index = r * cols + c;
+      const jitter = ((((index + 1) * 2654435761) >>> 16) % 1000) / 1000;
+      const opacity = (0.18 + jitter * 0.38).toFixed(2);
+      const inset = cols * rows === 1 ? 0 : 0.04;
+      cells += `<rect x="${c + inset}" y="${r + inset}" width="${1 - 2 * inset}" height="${1 - 2 * inset}" fill="var(--glyph-color)" opacity="${opacity}"></rect>`;
+    }
+  }
+  return `<svg class="tensor-cells" viewBox="0 0 ${cols} ${rows}" preserveAspectRatio="none" aria-hidden="true">${cells}</svg>`;
+}
+
 function renderRepresentationNode(node) {
   const rep = node.rep_ref ? repsById.get(node.rep_ref) : null;
   const scale = node.scale || rep?.scale || "item";
-  const label = node.label || rep?.id || node.id;
-  const role = node.role || rep?.semantic_role || "";
   const shape = node.shape || rep?.shape || "";
   const prominence = node.prominence || "secondary";
-  const treatment = node.treatment || "block";
-  const density = node.density || "normal";
+  const kind = node.glyph || rep?.glyph || glyphKindForShape(shape) || "vector";
+  const fullLabel = node.label || rep?.id || node.id;
+  const symbol = symbolMarkup(repSymbolById.get(rep?.id), fullLabel);
+  const dims = kind === "scalar" ? "" : shapeDimsLabel(shape);
   const card = document.createElement("article");
-  card.className = `arch-rep scale-${scale} prominence-${prominence} treatment-${treatment} density-${density}`;
+  card.className = `arch-rep tensor-${kind} scale-${scale} prominence-${prominence}`;
   card.dataset.nodeId = node.id;
+  card.title = shape ? `${fullLabel} — ${shape}` : fullLabel;
   placeNode(card, node);
-  if (treatment === "chip" || density === "micro") {
-    card.innerHTML = `
-      <span>${scale}</span>
-      <strong>${label}</strong>
-    `;
-    return card;
-  }
-  card.innerHTML = `
-    <span>${scale}</span>
-    <strong>${label}</strong>
-    <em>${role}</em>
-    ${shape ? `<code>${shape}</code>` : ""}
-  `;
+  const symbolHtml = `<strong class="tensor-symbol">${symbol}</strong>`;
+  const box = (inner) => `<span class="tensor-box">${tensorCellsSvg(kind)}${inner}</span>`;
+  card.innerHTML = kind === "scalar"
+    ? box(symbolHtml)
+    : `${symbolHtml}${box(dims ? `<small class="tensor-dims">${dims}</small>` : "")}`;
+  card.addEventListener("mouseenter", () => showRepPeek(node, rep));
+  card.addEventListener("mouseleave", () => {
+    if (!state.focusedId) focusOverview();
+  });
+  card.addEventListener("click", () => focusRepresentation(node, rep));
   return card;
+}
+
+function repFocusHtml(node, rep) {
+  const shape = node.shape || rep?.shape || "";
+  const semantics = rep ? manifest.architecture.stateSemantics?.[rep.id] : null;
+  const carries = rep?.carries || [];
+  return `
+    <div class="focus-section">
+      <p>${node.role || rep?.semantic_role || ""}</p>
+      <dl class="focus-dl">
+        ${shape ? `<dt>shape</dt><dd><code>${shape}</code></dd>` : ""}
+        <dt>scale</dt><dd>${node.scale || rep?.scale || "unknown"}</dd>
+        ${semantics ? `<dt>state</dt><dd>${String(semantics.role || "").replaceAll("_", " ")}</dd>` : ""}
+        ${semantics?.produced_by ? `<dt>produced by</dt><dd>${semantics.produced_by}</dd>` : ""}
+        ${semantics?.updated_by?.length ? `<dt>updated by</dt><dd>${semantics.updated_by.join(", ")}</dd>` : ""}
+        ${semantics?.consumed_by?.length ? `<dt>consumed by</dt><dd>${semantics.consumed_by.join(", ")}</dd>` : ""}
+      </dl>
+      ${semantics?.notes?.length ? semantics.notes.map((note) => `<p>${note}</p>`).join("") : ""}
+      ${carries.length ? `<h3>Carries</h3><ul class="claim-list">${carries.map((item) => `<li>${item}</li>`).join("")}</ul>` : ""}
+      ${rep?.evidence ? renderEvidence(rep) : ""}
+    </div>
+  `;
+}
+
+function showRepPeek(node, rep) {
+  if (state.focusedId) return;
+  elements.focusTitle.textContent = node.label || rep?.id || node.id;
+  setFocusBody(repFocusHtml(node, rep));
+}
+
+function focusRepresentation(node, rep) {
+  state.focusedId = node.id;
+  clearActiveNodes();
+  elements.moduleLayer.querySelector(`[data-node-id="${node.id}"]`)?.classList.add("is-focused");
+  elements.focusTitle.textContent = node.label || rep?.id || node.id;
+  setFocusBody(repFocusHtml(node, rep));
 }
 
 function renderBlockNode(node) {
@@ -248,8 +403,9 @@ function pushBoard(boardId) {
   if (!boardsById.has(boardId)) return;
   state.boardStack.push(boardId);
   state.focusedId = null;
+  state.pinnedEdge = null;
   resetViewport();
-  hideConnection();
+  hideConnection(true);
   renderBoard();
   focusOverview();
 }
@@ -257,10 +413,50 @@ function pushBoard(boardId) {
 function popToBoard(index) {
   state.boardStack = state.boardStack.slice(0, index + 1);
   state.focusedId = null;
+  state.pinnedEdge = null;
   resetViewport();
-  hideConnection();
+  hideConnection(true);
   renderBoard();
   focusOverview();
+}
+
+function displayGraph(board) {
+  const nodes = (board.nodes || []).filter((node) => !node.elide);
+  const elided = (board.nodes || []).filter((node) => node.elide);
+  let edges = (board.edges || []).map((edge) => ({ ...edge, segments: [edge] }));
+
+  for (const hidden of elided) {
+    const incoming = edges.filter((edge) => edge.to === hidden.id);
+    const outgoing = edges.filter((edge) => edge.from === hidden.id);
+    const rest = edges.filter((edge) => edge.from !== hidden.id && edge.to !== hidden.id);
+    const merged = [];
+    for (const inEdge of incoming) {
+      for (const outEdge of outgoing) {
+        merged.push({
+          from: inEdge.from,
+          to: outEdge.to,
+          label: outEdge.label,
+          tone: inEdge.tone === "conditioning" || outEdge.tone === "conditioning"
+            ? "conditioning"
+            : outEdge.tone || inEdge.tone,
+          connection: outEdge.connection,
+          segments: [...inEdge.segments, ...outEdge.segments],
+        });
+      }
+    }
+    edges = [...rest, ...merged];
+  }
+  return { nodes, edges };
+}
+
+function derivedConditioning(board, edge) {
+  const nodes = new Map((board.nodes || []).map((node) => [node.id, node]));
+  const from = nodes.get(edge.from);
+  const to = nodes.get(edge.to);
+  const fromRef = from?.rep_ref || from?.module_ref;
+  const toRef = to?.module_ref || to?.rep_ref;
+  if (!fromRef || !toRef) return null;
+  return conditioningByPair.get(`${fromRef}->${toRef}`) || null;
 }
 
 function renderEdges() {
@@ -270,7 +466,11 @@ function renderEdges() {
   elements.edgeLayer.setAttribute("viewBox", `0 0 ${width} ${height}`);
   elements.edgeLayer.innerHTML = "";
 
-  for (const edge of board.edges || []) {
+  for (const edge of displayGraph(board).edges) {
+    const conditioning = derivedConditioning(board, edge);
+    if (conditioning && !edge.tone) edge.tone = "conditioning";
+    const contracted = (edge.segments || []).length > 1;
+
     const dockedEdge = edgeDocking(edge);
     if (!dockedEdge) continue;
     const { from, to } = dockedEdge;
@@ -278,6 +478,7 @@ function renderEdges() {
     const path = document.createElementNS("http://www.w3.org/2000/svg", "path");
     path.setAttribute("d", `M ${from.x} ${from.y} C ${midX} ${from.y}, ${midX} ${to.y}, ${to.x} ${to.y}`);
     path.setAttribute("class", "arch-edge");
+    if (contracted) path.classList.add("is-contracted");
     applyEdgeTone(path, edge);
     elements.edgeLayer.appendChild(path);
 
@@ -286,8 +487,17 @@ function renderEdges() {
     label.setAttribute("y", String((from.y + to.y) / 2 - 12));
     label.setAttribute("class", "arch-edge-label");
     applyEdgeTone(label, edge);
-    label.textContent = edge.label;
+    label.textContent = contracted ? `${edge.label} +${edge.segments.length - 1}` : edge.label;
     elements.edgeLayer.appendChild(label);
+
+    if (conditioning) {
+      const badge = document.createElementNS("http://www.w3.org/2000/svg", "text");
+      badge.setAttribute("x", String(midX));
+      badge.setAttribute("y", String((from.y + to.y) / 2 + 4));
+      badge.setAttribute("class", "arch-edge-badge");
+      badge.textContent = String(conditioning.mode || "").replaceAll("_", " ");
+      elements.edgeLayer.appendChild(badge);
+    }
 
     elements.edgeLayer.appendChild(renderConnectionPort(edge, to));
   }
@@ -351,9 +561,19 @@ function renderConnectionPort(edge, point) {
   group.appendChild(dot);
 
   group.addEventListener("mouseenter", () => showConnection(edge, point));
-  group.addEventListener("mouseleave", hideConnection);
+  group.addEventListener("mouseleave", () => hideConnection());
   group.addEventListener("focus", () => showConnection(edge, point));
-  group.addEventListener("blur", hideConnection);
+  group.addEventListener("blur", () => hideConnection());
+  group.addEventListener("click", (event) => {
+    event.stopPropagation();
+    if (state.pinnedEdge === edge) {
+      state.pinnedEdge = null;
+      hideConnection(true);
+    } else {
+      state.pinnedEdge = edge;
+      showConnection(edge, point);
+    }
+  });
   return group;
 }
 
@@ -381,22 +601,52 @@ function showConnection(edge, point) {
   const shouldFlip = x > canvasRect.width - 320;
 
   connectionTooltip.classList.toggle("is-left", shouldFlip);
+  connectionTooltip.classList.toggle("is-pinned", state.pinnedEdge === edge);
   connectionTooltip.classList.add("is-visible");
   connectionTooltip.style.left = `${x}px`;
   connectionTooltip.style.top = `${y}px`;
-  connectionTooltip.innerHTML = `
-    <span>${edge.connection.role}</span>
-    <strong>${edge.connection.title}</strong>
-    <p>${edge.connection.inside}</p>
-  `;
+  const contracted = (edge.segments || []).length > 1;
+  connectionTooltip.innerHTML = contracted
+    ? contractedTooltipHtml(edge)
+    : `
+      <span>${edge.connection.role}</span>
+      <strong>${edge.connection.title}</strong>
+      <p>${edge.connection.inside}</p>
+    `;
 
   if (!state.focusedId) {
     focusConnection(edge);
   }
 }
 
-function hideConnection() {
-  connectionTooltip?.classList.remove("is-visible");
+function nodeLabelById(id) {
+  const node = (currentBoard().nodes || []).find((candidate) => candidate.id === id);
+  if (!node) return id;
+  return node.label || modulesById.get(node.module_ref)?.label || node.rep_ref || node.id;
+}
+
+function contractedTooltipHtml(edge) {
+  const hops = edge.segments.slice(0, -1).map((segment) => nodeLabelById(segment.to));
+  const steps = edge.segments
+    .map(
+      (segment) => `
+        <li>
+          <strong>${nodeLabelById(segment.from)} → ${nodeLabelById(segment.to)}</strong>
+          <p>${segment.connection?.inside || ""}</p>
+        </li>
+      `,
+    )
+    .join("");
+  return `
+    <span>elided path · ${hops.length} hidden</span>
+    <strong>via ${hops.join(" → ")}</strong>
+    <ol class="connection-chain">${steps}</ol>
+  `;
+}
+
+function hideConnection(force = false) {
+  if (state.pinnedEdge && !force) return;
+  connectionTooltip?.classList.remove("is-visible", "is-pinned");
   if (!state.focusedId) focusOverview();
 }
 
@@ -404,6 +654,9 @@ function focusConnection(edge) {
   clearActiveNodes();
   elements.moduleLayer.querySelector(`[data-node-id="${edge.to}"]`)?.classList.add("is-focused");
   elements.focusTitle.textContent = edge.connection.title;
+  const hops = (edge.segments || []).length > 1
+    ? edge.segments.slice(0, -1).map((segment) => nodeLabelById(segment.to)).join(" → ")
+    : null;
   setFocusBody(`
     <div class="focus-section">
       <p>${edge.connection.inside}</p>
@@ -411,6 +664,7 @@ function focusConnection(edge) {
         <dt>from</dt><dd>${edge.from}</dd>
         <dt>to</dt><dd>${edge.to}</dd>
         <dt>role</dt><dd>${edge.connection.role}</dd>
+        ${hops ? `<dt>via</dt><dd>${hops}</dd>` : ""}
       </dl>
     </div>
   `);
@@ -475,7 +729,9 @@ function renderBoardSummaryNode(node) {
 }
 
 function visibleNodes(board) {
-  return (board.nodes || []).filter((node) => node.prominence !== "hidden" && node.treatment !== "hidden");
+  return (board.nodes || []).filter(
+    (node) => !node.elide && node.prominence !== "hidden" && node.treatment !== "hidden",
+  );
 }
 
 function renderClaims() {
@@ -525,8 +781,7 @@ function focusModule(module) {
   elements.moduleLayer.querySelector(`[data-module-id="${module.id}"]`)?.classList.add("is-focused");
   elements.focusTitle.textContent = module.label;
 
-  const pairBlock = module.contains?.find((child) => child.standard_block_ref);
-  const blockHtml = pairBlock ? renderPairBiasedAttentionBlock() : "";
+  const blockHtml = renderStandardBlocks(module);
   const pseudocodeHtml = module.pseudocode_ref ? renderPseudocode(module) : "";
 
   setFocusBody(`
@@ -673,7 +928,7 @@ function renderEvidence(module) {
     <h3>Evidence</h3>
     <div class="evidence-list">
       <span class="evidence-badge">${module.evidence.status.replaceAll("_", " ")}</span>
-      ${refs.map((ref) => `<code>${shortPath(ref.path)}:${ref.lines}</code>`).join("")}
+      ${refs.map((ref) => `<code>${shortPath(ref.path)}${ref.lines ? `:${ref.lines}` : ""}</code>`).join("")}
     </div>
   `;
 }
@@ -735,6 +990,10 @@ function onCanvasWheel(event) {
 function onCanvasPointerDown(event) {
   if (event.button !== 0 && event.button !== 1) return;
   if (event.target.closest(".arch-node, .arch-rep, .edge-port, .board-breadcrumbs, .canvas-controls")) return;
+  if (state.pinnedEdge) {
+    state.pinnedEdge = null;
+    hideConnection(true);
+  }
   viewport.isPanning = true;
   viewport.startClientX = event.clientX;
   viewport.startClientY = event.clientY;

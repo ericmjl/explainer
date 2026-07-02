@@ -36,6 +36,20 @@ and renderer validation commands.
 
 Path: `renderer/architecture/`
 
+The renderer hosts multiple architectures. `architectures/index.yaml` is the
+registry of source sets; the page switches between them with the header
+dropdown or a `?arch=<id>` query parameter:
+
+- `?arch=generic` (default): the domain-neutral feature-refinement pipeline.
+- `?arch=dit`: the Diffusion Transformer (Peebles & Xie, arXiv:2212.09748),
+  rendered from evidence-graded sources. Its board demonstrates edge elision:
+  featurization modules (patchify, embedders) are contracted into dashed
+  edges; hover the edge port to peek at the hidden chain, click to pin.
+
+Conditioning badges on edges (adaLN-Zero, pair bias, per-item AdaLN) are
+derived from the architecture `conditioning` section, never hand-authored in
+views.
+
 The generic demo models a feature-refinement pipeline:
 
 - input records become item states;
@@ -56,12 +70,21 @@ drilldown.
 After changing YAML/view sources:
 
 ```bash
-ruby renderer/architecture/build-manifest.rb
+ruby renderer/architecture/build-manifest.rb   # regenerates manifest-<id>.js per registry entry
 ruby scripts/lint_sources.rb
-node --check renderer/architecture/renderer.js
-node --check renderer/architecture/manifest.js
 ruby -c renderer/architecture/build-manifest.rb
 ```
+
+If a JS runtime is available, also syntax-check the ES modules (they use
+`export` and top-level `await`, so check them as modules, e.g. via an `.mjs`
+copy):
+
+```bash
+node --check renderer/architecture/renderer.js
+```
+
+Both scripts read `architectures/index.yaml`; register new source sets there,
+not in the scripts.
 
 Serve locally with any static file server, for example:
 

@@ -1,0 +1,364 @@
+schema_version: visualization-v0.2
+id: dit_semantic_zoom_board
+title: DiT Semantic Zoom Board
+entry:
+  architecture: architectures/diffusion-transformer.yaml
+root_board: dit_overview
+boards:
+  - id: dit_overview
+    title: Diffusion Transformer (DiT)
+    summary: A one-block overview. Open the backbone to see patch featurization, conditioning embedders, the adaLN-Zero block stack, and the token decoder. Featurization stages are elided into edges; hover an edge port to peek at them, click to pin.
+    scale_lanes: false
+    grid:
+      columns: 3
+      rows: 3
+    nodes:
+      - id: dit_pipeline
+        kind: module
+        label: DiT denoising backbone
+        scale: abstract
+        role: class- and timestep-conditioned denoising over VAE latent patches
+        detail: patchify -> N x DiT blocks (adaLN-Zero) -> linear decode
+        col: 2
+        row: 2
+        expandable: true
+
+  - id: dit_pipeline
+    title: DiT Denoising Backbone
+    summary: The backbone patchifies the noised latent into tokens, builds one per-sample conditioning vector from timestep and class label, refines tokens with adaLN-Zero blocks, and decodes back to noise and covariance. Featurization modules are elided; their edges carry them.
+    parent: dit_overview
+    scale_lanes: false
+    grid:
+      columns: 7
+      rows: 5
+    nodes:
+      - id: timestep
+        kind: representation
+        rep_ref: timestep
+        prominence: context
+        treatment: chip
+        density: micro
+        col: 1
+        row: 1
+      - id: class_label
+        kind: representation
+        rep_ref: class_label
+        prominence: context
+        treatment: chip
+        density: micro
+        col: 1
+        row: 2
+      - id: input_latent
+        kind: representation
+        rep_ref: input_latent
+        prominence: context
+        treatment: chip
+        density: micro
+        col: 1
+        row: 4
+      - id: timestep_embedder
+        kind: module
+        module_ref: timestep_embedder
+        treatment: compact
+        density: compact
+        col: 2
+        row: 1
+        elide: true
+      - id: label_embedder
+        kind: module
+        module_ref: label_embedder
+        treatment: compact
+        density: compact
+        col: 2
+        row: 2
+        elide: true
+      - id: t_embedding
+        kind: representation
+        rep_ref: t_embedding
+        treatment: compact
+        density: compact
+        col: 3
+        row: 1
+        elide: true
+      - id: y_embedding
+        kind: representation
+        rep_ref: y_embedding
+        treatment: compact
+        density: compact
+        col: 3
+        row: 2
+        elide: true
+      - id: cond_combiner
+        kind: module
+        module_ref: cond_combiner
+        treatment: compact
+        density: compact
+        col: 4
+        row: 2
+        elide: true
+      - id: patchify
+        kind: module
+        module_ref: patchify
+        treatment: compact
+        density: compact
+        col: 2
+        row: 4
+        elide: true
+      - id: cond_vector
+        kind: representation
+        rep_ref: cond_vector
+        prominence: secondary
+        treatment: compact
+        density: compact
+        col: 4
+        row: 1
+      - id: token_state
+        kind: representation
+        rep_ref: token_state
+        prominence: secondary
+        treatment: compact
+        density: compact
+        col: 3
+        row: 4
+      - id: dit_blocks
+        kind: module
+        module_ref: dit_blocks
+        prominence: primary
+        treatment: block
+        col: 5
+        row: 3
+        expandable: true
+      - id: final_layer
+        kind: module
+        module_ref: final_layer
+        prominence: primary
+        treatment: compact
+        density: compact
+        col: 6
+        row: 3
+      - id: output_tokens
+        kind: representation
+        rep_ref: output_tokens
+        treatment: compact
+        density: compact
+        col: 6
+        row: 4
+        elide: true
+      - id: unpatchify
+        kind: module
+        module_ref: unpatchify
+        treatment: compact
+        density: compact
+        col: 7
+        row: 4
+        elide: true
+      - id: noise_prediction
+        kind: representation
+        rep_ref: noise_prediction
+        prominence: context
+        treatment: chip
+        density: micro
+        col: 7
+        row: 3
+    edges:
+      - from: timestep
+        to: timestep_embedder
+        label: t
+        connection:
+          title: Timestep into embedder
+          role: noise-level featurization
+          inside: The scalar timestep is expanded with a 256-dim sinusoidal embedding and projected by a two-layer SiLU MLP.
+      - from: timestep_embedder
+        to: t_embedding
+        label: t emb
+        connection:
+          title: Embedded timestep
+          role: sample-scale embedding
+          inside: The MLP output is a per-sample vector at model width d.
+      - from: class_label
+        to: label_embedder
+        label: y
+        connection:
+          title: Label into embedder
+          role: class featurization
+          inside: The class index is looked up in an embedding table; during training labels randomly drop to a null class for classifier-free guidance.
+      - from: label_embedder
+        to: y_embedding
+        label: y emb
+        connection:
+          title: Embedded label
+          role: sample-scale embedding
+          inside: The lookup output is a per-sample vector at model width d.
+      - from: t_embedding
+        to: cond_combiner
+        label: add
+        connection:
+          title: Timestep embedding into combiner
+          role: additive combination
+          inside: Timestep and label embeddings are summed elementwise; no gating or concatenation.
+      - from: y_embedding
+        to: cond_combiner
+        label: add
+        connection:
+          title: Label embedding into combiner
+          role: additive combination
+          inside: Timestep and label embeddings are summed elementwise; no gating or concatenation.
+      - from: cond_combiner
+        to: cond_vector
+        label: c
+        tone: conditioning
+        connection:
+          title: Conditioning vector
+          role: read-only conditioning source
+          inside: The summed vector c = t_emb + y_emb is per-sample and is never updated by the block stack.
+      - from: input_latent
+        to: patchify
+        label: latent
+        connection:
+          title: Noised latent into patchify
+          role: patch featurization
+          inside: The spatial latent is cut into p x p patches, each linearly embedded into one token.
+      - from: patchify
+        to: token_state
+        label: tokens + pos
+        connection:
+          title: Token initialization
+          role: mutable token stream
+          inside: Patch tokens receive fixed 2D sin-cos positional embeddings; this is the only mutable state in the forward pass.
+      - from: cond_vector
+        to: dit_blocks
+        label: c
+        tone: conditioning
+        connection:
+          title: adaLN-Zero conditioning
+          role: per-sample modulation of every block
+          inside: Each block regresses shift, scale, and zero-initialized residual gates from c and applies them to its attention and MLP branches.
+      - from: token_state
+        to: dit_blocks
+        label: x
+        connection:
+          title: Tokens into the block stack
+          role: coarse mutable state
+          inside: Full self-attention over all patch tokens updates the token stream block by block.
+      - from: dit_blocks
+        to: final_layer
+        label: refined tokens
+        connection:
+          title: Refined tokens to decoder
+          role: token decoding
+          inside: The final layer normalizes tokens with adaLN-modulated LayerNorm before the linear decode.
+      - from: cond_vector
+        to: final_layer
+        label: c
+        tone: conditioning
+        connection:
+          title: Final-layer adaLN
+          role: shift/scale modulation
+          inside: The final layer regresses shift and scale (no gate) from c before decoding.
+      - from: final_layer
+        to: output_tokens
+        label: p*p*2C per token
+        connection:
+          title: Linear decode
+          role: per-token patch prediction
+          inside: Each token is decoded to a p x p patch of predicted noise and covariance channels.
+      - from: output_tokens
+        to: unpatchify
+        label: reshape
+        connection:
+          title: Tokens into unpatchify
+          role: layout restoration
+          inside: Per-token patch predictions are rearranged back to the spatial latent grid; this is a lossless reshape.
+      - from: unpatchify
+        to: noise_prediction
+        label: eps, sigma
+        connection:
+          title: Noise and covariance prediction
+          role: final outputs
+          inside: The output splits channelwise into the predicted noise epsilon and covariance Sigma.
+    open_notes:
+      - Featurization (patchify, embedders, combiner) and output reshaping are elided; the contracted edges carry them.
+
+  - id: dit_blocks
+    title: DiT Block (adaLN-Zero)
+    summary: One block of the stack. A per-sample MLP on c regresses six modulation vectors; attention and MLP branches are shifted, scaled, and residual-gated, with gates zero-initialized so the block starts as the identity.
+    parent: dit_pipeline
+    scale_lanes: false
+    grid:
+      columns: 5
+      rows: 3
+    nodes:
+      - id: token_state_in
+        kind: representation
+        rep_ref: token_state
+        label: tokens in
+        col: 1
+        row: 2
+      - id: cond_vector
+        kind: representation
+        rep_ref: cond_vector
+        col: 2
+        row: 1
+      - id: adaln_mod
+        kind: operation
+        label: adaLN-Zero modulation
+        scale: sample
+        role: regress shift1, scale1, gate1, shift2, scale2, gate2 from SiLU(c); gate projection zero-initialized
+        col: 2
+        row: 2
+      - id: self_attention
+        kind: module
+        module_ref: dit_blocks
+        label: multi-head self-attention
+        col: 3
+        row: 2
+      - id: mlp_branch
+        kind: operation
+        label: pointwise MLP branch
+        scale: token
+        role: second modulated, gated residual branch after attention
+        col: 4
+        row: 2
+      - id: token_state_out
+        kind: representation
+        rep_ref: token_state
+        label: tokens out
+        col: 5
+        row: 2
+    edges:
+      - from: token_state_in
+        to: adaln_mod
+        label: LN(x)
+        connection:
+          title: Normalize tokens
+          role: branch input
+          inside: Tokens are LayerNorm-normalized (no learned affine) before receiving shift and scale from the conditioning MLP.
+      - from: cond_vector
+        to: adaln_mod
+        label: SiLU + MLP
+        tone: conditioning
+        connection:
+          title: Per-sample modulation parameters
+          role: adaptive conditioning
+          inside: One MLP on c produces all six modulation vectors, shared by every token of the sample.
+      - from: adaln_mod
+        to: self_attention
+        label: scale1*x + shift1
+        connection:
+          title: Modulated tokens into attention
+          role: attention input
+          inside: The modulated stream enters full self-attention; the branch output is multiplied by the zero-initialized gate1 before the residual add.
+      - from: self_attention
+        to: mlp_branch
+        label: x + gate1*attn
+        connection:
+          title: Gated attention residual
+          role: intermediate token state
+          inside: The MLP branch repeats the pattern with shift2, scale2, and gate2 on the post-attention state.
+      - from: mlp_branch
+        to: token_state_out
+        label: x + gate2*mlp
+        connection:
+          title: Updated tokens
+          role: mutable output
+          inside: The block returns tokens with the same shape and ownership; at initialization both gates are zero, so the block is the identity.

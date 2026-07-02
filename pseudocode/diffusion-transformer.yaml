@@ -1,0 +1,151 @@
+schema_version: pseudocode-v0.1
+id: diffusion_transformer
+title: DiT Forward Pass Trace
+sources:
+  - id: dit_paper
+    kind: paper
+    path: arXiv:2212.09748
+    note: Peebles & Xie, Scalable Diffusion Models with Transformers.
+  - id: dit_code
+    kind: code
+    path: facebookresearch/DiT/models.py
+    note: Official reference implementation.
+symbols:
+  - id: input_latent
+    name: z
+    type: input
+    shape: "B x 4 x I x I"
+    architecture_ref: representations.input_latent
+  - id: timestep
+    name: t
+    type: input
+    shape: "B"
+    architecture_ref: representations.timestep
+  - id: class_label
+    name: y
+    type: input
+    shape: "B"
+    architecture_ref: representations.class_label
+  - id: t_embedding
+    name: t_emb
+    tex: 't_{\mathrm{emb}}'
+    type: representation
+    shape: "B x d"
+    architecture_ref: representations.t_embedding
+  - id: y_embedding
+    name: y_emb
+    tex: 'y_{\mathrm{emb}}'
+    type: representation
+    shape: "B x d"
+    architecture_ref: representations.y_embedding
+  - id: cond_vector
+    name: c
+    type: representation
+    shape: "B x d"
+    architecture_ref: representations.cond_vector
+  - id: token_state
+    name: x
+    type: representation
+    shape: "B x T x d"
+    architecture_ref: representations.token_state
+  - id: output_tokens
+    name: u
+    type: representation
+    shape: "B x T x (p*p*2C)"
+    architecture_ref: representations.output_tokens
+  - id: noise_prediction
+    name: "ε, Σ"
+    tex: '\varepsilon_\theta, \Sigma_\theta'
+    type: output
+    shape: "B x 2C x I x I"
+    architecture_ref: representations.noise_prediction
+lines:
+  - id: patchify_tokens
+    text: "x = PatchEmbed(z) + pos_embed  # fixed 2D sin-cos"
+    operation: patch_embedding
+    inputs: [input_latent]
+    outputs: [token_state]
+    architecture_refs:
+      - modules.patchify
+    source_refs:
+      - source: dit_code
+        locator: DiT.forward
+  - id: embed_timestep
+    text: "t_emb = MLP(SinCosEmbed_256(t))"
+    operation: sinusoidal_embedding
+    inputs: [timestep]
+    outputs: [t_embedding]
+    architecture_refs:
+      - modules.timestep_embedder
+    source_refs:
+      - source: dit_code
+        locator: TimestepEmbedder
+  - id: embed_label
+    text: "y_emb = Embedding(drop_to_null(y))  # label dropout for CFG"
+    operation: label_embedding_with_cfg_dropout
+    inputs: [class_label]
+    outputs: [y_embedding]
+    architecture_refs:
+      - modules.label_embedder
+    source_refs:
+      - source: dit_code
+        locator: LabelEmbedder
+  - id: combine_conditioning
+    text: "c = t_emb + y_emb"
+    operation: sum
+    inputs: [t_embedding, y_embedding]
+    outputs: [cond_vector]
+    architecture_refs:
+      - modules.cond_combiner
+      - claims.conditioning_is_per_sample
+    source_refs:
+      - source: dit_code
+        locator: DiT.forward
+  - id: run_blocks
+    text: "for block in blocks: x = DiTBlock(x, c)  # adaLN-Zero, N blocks"
+    operation: adaln_zero
+    standard_block_ref: standard_blocks/adaln-zero-conditioning.yaml
+    inputs: [token_state, cond_vector]
+    outputs: [token_state]
+    architecture_refs:
+      - modules.dit_blocks
+      - claims.adaln_zero_beats_alternatives
+    source_refs:
+      - source: dit_code
+        locator: DiTBlock
+    visual:
+      block: adaln_zero_conditioning
+      slots:
+        token_state: token_state
+        cond_vector: cond_vector
+  - id: decode_tokens
+    text: "u = Linear(modulate(LayerNorm(x), MLP(c)))"
+    operation: linear_decode
+    inputs: [token_state, cond_vector]
+    outputs: [output_tokens]
+    architecture_refs:
+      - modules.final_layer
+    source_refs:
+      - source: dit_code
+        locator: FinalLayer
+  - id: unpatchify_output
+    text: "eps, sigma = split(Unpatchify(u))"
+    operation: reshape
+    inputs: [output_tokens]
+    outputs: [noise_prediction]
+    architecture_refs:
+      - modules.unpatchify
+    source_refs:
+      - source: dit_code
+        locator: DiT.unpatchify
+claims:
+  - id: modulation_broadcasts_over_tokens
+    statement: The modulation parameters are regressed once per sample from c and broadcast over all tokens; no token-resolved conditioning enters the block stack.
+    line_refs: [combine_conditioning, run_blocks]
+    evidence:
+      status: confirmed_from_code
+      refs:
+        - kind: code
+          path: facebookresearch/DiT/models.py
+          lines: DiTBlock
+          note: chunk(6, dim=1) on a B x d conditioning vector.

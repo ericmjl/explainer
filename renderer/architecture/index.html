@@ -3,7 +3,7 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Generic Architecture Renderer</title>
+    <title>Architecture Renderer</title>
     <link rel="stylesheet" href="../../styles.css" />
   </head>
   <body class="renderer-page">
@@ -11,16 +11,17 @@
       <header class="renderer-header">
         <div>
           <p class="eyebrow">Generated architecture view</p>
-          <h1>Generic Feature Refinement</h1>
+          <h1 id="archTitle">Architecture</h1>
           <p>
             A semantic-zoom board driven by architecture, view, pseudocode,
-            and standard-block source files. The demo is domain-neutral and
-            exists to exercise the design language.
+            and standard-block source files. All facts render from YAML
+            sources; the renderer only decides presentation.
           </p>
         </div>
         <nav class="note-nav" aria-label="Renderer navigation">
+          <select id="archSwitcher" class="arch-switcher" aria-label="Choose architecture"></select>
           <a class="story-home-link" href="../../">All pages</a>
-          <a class="story-home-link" href="../../architectures/generic-feature-refinement.yaml">Source YAML</a>
+          <a class="story-home-link" id="archSourceLink" href="#">Source YAML</a>
         </nav>
       </header>
 
