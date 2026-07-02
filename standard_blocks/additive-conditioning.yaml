@@ -1,0 +1,43 @@
+schema_version: standard-block-v0.1
+id: additive_conditioning
+name: Additive Conditioning
+kind: conditioning
+status: draft
+description: Project a conditioning stream and add it into a mutable state.
+canonical_operation: additive_conditioning
+input_slots:
+  - id: state
+    label: state
+    scale: item
+    kind: representation
+    required: true
+  - id: conditioning_signal
+    label: condition
+    scale: item
+    kind: conditioning
+    required: true
+output_slots:
+  - id: conditioned_state
+    label: conditioned state
+    scale: item
+    kind: representation
+math:
+  - id: project_conditioning
+    text: "delta = Linear(LayerNorm(condition))"
+    tex: "\\Delta = W\\,\\operatorname{LN}(c)"
+    operation: projection
+    inputs: [conditioning_signal]
+    outputs: [conditioned_state]
+  - id: add_conditioning
+    text: "state = state + delta"
+    tex: "x' = x + \\Delta"
+    operation: additive_injection
+    inputs: [state, conditioning_signal]
+    outputs: [conditioned_state]
+visual_template:
+  type: additive_stream_merge
+renderer_contract:
+  shows:
+    - additive merge into mutable state
+evidence_policy:
+  require_usage_evidence: true

@@ -1,207 +1,71 @@
 # Renderer Architecture v0.1
 
-This document describes the planned renderer stack for the protein visualization
-language.
+This document describes the generic renderer stack for semantic architecture
+explainers. The renderer should stay domain-neutral: source files decide what
+a node means, while JavaScript handles layout mechanics, interaction, and
+reusable presentation rules.
 
 ## Layers
 
-```text
-Source files
-  architecture YAML
-  pseudocode YAML
-  standard block YAML
-  comparison YAML
-  story refs
+1. **Architecture source**: `architectures/*.yaml` defines modules,
+   representations, edges, evidence, state semantics, conditioning, and scale
+   transitions.
+2. **View source**: `views/*.view.yaml` defines boards, node placement,
+   compactness, drilldown, and visible edges.
+3. **Pseudocode source**: `pseudocode/*.yaml` defines line-level traces and
+   source references.
+4. **Standard blocks**: `standard_blocks/*.yaml` defines reusable visual and
+   mathematical motifs.
+5. **Manifest builder**: `renderer/architecture/build-manifest.rb` compiles the
+   YAML sources into `renderer/architecture/manifest.js`.
+6. **Browser renderer**: `renderer/architecture/renderer.js` renders boards,
+   focus panels, MathJax equations, pan/zoom controls, and source links.
 
-Resolver
-  load files
-  validate schemas
-  resolve refs
-  attach evidence
-  build normalized graph
+## Renderer Responsibilities
 
-Layout engine
-  x: dataflow order
-  y: representation scale
-  depth: containment/focus affordance
+The browser renderer may:
 
-View registry
-  architecture_map
-  module_focus
-  standard_block_focus
-  pseudocode_stepper
-  mask_matrix
-  geometry_sidecar
-  evidence_trace
+- draw nodes and edges from a view source;
+- choose visual styling from generic fields such as `scale`, `prominence`,
+  `treatment`, and `density`;
+- show focus-panel summaries, evidence, pseudocode lines, and standard-block
+  math;
+- support hover peeks, click focus, semantic drilldown, pan, and zoom;
+- render generic standard-block diagrams when enough slot information exists.
 
-Interaction controller
-  hover -> peek
-  click -> focus
-  breadcrumb navigation
-  active pseudocode line
+The browser renderer should not:
 
-Render targets
-  SVG for graph/module structure
-  HTML/CSS for cards and panels
-  Canvas for dense masks/matrices
-  Three.js only for optional geometry sidecars
-```
+- encode a specific architecture's module order;
+- require paper-specific module names;
+- hardcode evidence claims that belong in YAML;
+- infer architecture facts from visual position.
 
-## Source Resolver
+## Current Prototype
 
-The resolver should turn source files into one normalized object:
+The current prototype is `renderer/architecture/`. It reads:
 
-```yaml
-resolved_view:
-  id: af3_diffusion_module_view
-  nodes: []
-  edges: []
-  standard_blocks: []
-  pseudocode_programs: []
-  stories: []
-  evidence_index: []
-```
+- `architectures/generic-feature-refinement.yaml`
+- `views/generic-semantic-zoom.view.yaml`
+- `pseudocode/generic-feature-refinement.yaml`
+- `standard_blocks/*.yaml`
 
-Resolver responsibilities:
+The prototype supports:
 
-- parse YAML;
-- resolve relative paths;
-- attach `story_ref`, `standard_block_ref`, and `pseudocode_ref`;
-- preserve evidence status and source refs;
-- identify repeated modules and canonical representative blocks;
-- create fallback inspectors for units with no curated story.
+- full-width board layout;
+- pan and zoom controls;
+- hoverable edge ports;
+- focus-panel summaries that do not resize the canvas;
+- compact and micro node treatments;
+- MathJax rendering for standard-block equations.
 
-## Focus Resolution
+## Extension Points
 
-Clicking a unit should follow this order:
+Prefer adding source-language fields before adding special-case renderer code.
+Useful generic extensions include:
 
-```text
-unit.story_ref
-  -> curated story page or embedded story renderer
-unit.standard_block_ref
-  -> standard block focus renderer
-unit.pseudocode_ref
-  -> pseudocode stepper
-otherwise
-  -> generated YAML inspector
-```
-
-This keeps authored explanations possible without requiring every block to have
-a hand-built page.
-
-## 2.5D View Model
-
-The renderer should look layered but remain legible.
-
-Use:
-
-- shadows;
-- slight lifts on hover;
-- stacked cards for repeated blocks;
-- exploded slices for internals;
-- breadcrumbs for nesting;
-- side panels for source/evidence.
-
-Do not use full 3D camera navigation for architecture maps.
-
-## View Registry
-
-### `architecture_map`
-
-Purpose: show the coarse architecture chain.
-
-Input:
-
-- architecture modules;
-- edges;
-- representation scales.
-
-Output:
-
-- lane-based graph;
-- module cards;
-- edge arrows;
-- hover previews.
-
-### `module_focus`
-
-Purpose: show one module and its immediate internals.
-
-Input:
-
-- one module;
-- `contains`;
-- depth/repeats/heads;
-- standard block refs.
-
-Output:
-
-- canonical repeated block;
-- incoming/outgoing representations;
-- available stories or standard blocks.
-
-### `standard_block_focus`
-
-Purpose: render a reusable motif.
-
-Input:
-
-- standard block YAML;
-- symbol bindings from pseudocode or architecture.
-
-Output:
-
-- canonical block diagram;
-- math steps;
-- slot cards;
-- evidence refs for this usage.
-
-### `pseudocode_stepper`
-
-Purpose: line-by-line source explanation.
-
-Input:
-
-- pseudocode YAML.
-
-Output:
-
-- pseudocode lines;
-- active symbols;
-- visual scene for active line;
-- source refs and evidence.
-
-### `geometry_sidecar`
-
-Purpose: optional geometry panel for concepts where spatial intuition matters.
-
-Input:
-
-- pseudocode visual scene;
-- geometry symbols.
-
-Output:
-
-- Three.js/SVG/canvas scene beside pseudocode.
-
-Use this for IPA frames, local atom coordinates, 3D RoPE, ligand/pocket geometry,
-or frame transforms. Do not make it the default renderer.
-
-## Minimal Implementation Plan
-
-1. Build a static YAML loader that fetches architecture, pseudocode, and standard
-   block YAML files.
-2. Implement `architecture_map` as SVG + HTML cards.
-3. Implement hover peek for module cards.
-4. Implement click focus with fallback inspector.
-5. Implement `standard_block_focus` for pair-biased attention.
-6. Implement `pseudocode_stepper` for ESMFold2 pair-bias boundary.
-7. Add optional canvas mask renderer for local atom attention.
-8. Add optional Three.js sidecar only for IPA/frame geometry.
-
-## Success Criteria
-
-- Adding a new architecture YAML creates a usable coarse map without HTML edits.
-- Adding a `standard_block_ref` gives a reusable block view without custom JS.
-- Adding a `story_ref` overrides the generated view with a curated story.
-- Evidence status is visible in every generated view.
+- `node.icon` for stable visual symbols;
+- `edge.geometry` for explicit routing hints;
+- `standard_block.visual_template` variants;
+- `board.layers` for optional overlays;
+- `comparison_refs` for multi-architecture tables;
+- `source_ref` deep links for code, docs, papers, or specs.

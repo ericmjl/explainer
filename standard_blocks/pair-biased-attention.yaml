@@ -1,52 +1,52 @@
-schema_version: protein-standard-block-v0.1
+schema_version: standard-block-v0.1
 id: pair_biased_attention
 name: Pair-Biased Attention
 kind: attention
 status: draft
-description: Add a projected pair representation to query/key attention logits before masking and softmax.
+description: Add a projected pair/context representation to query-key attention logits before masking and softmax.
 canonical_operation: pair_bias_add
 input_slots:
   - id: query
     label: Q
-    scale: token
+    scale: item
     kind: representation
     required: true
   - id: key
     label: K
-    scale: token
+    scale: item
     kind: representation
     required: true
   - id: value
     label: V
-    scale: token
+    scale: item
     kind: representation
     required: true
   - id: pair
-    label: z
-    scale: token_pair
+    label: C
+    scale: item_pair
     kind: representation
     required: true
   - id: attention_mask
     label: mask
-    scale: token
+    scale: item_pair
     kind: mask
     required: false
 output_slots:
   - id: logits
     label: logits
-    scale: token_pair
+    scale: item_pair
     kind: logit
   - id: pair_bias
-    label: pair_bias
-    scale: token_pair
+    label: pair bias
+    scale: item_pair
     kind: logit
   - id: attention_weights
     label: attention weights
-    scale: token_pair
+    scale: item_pair
     kind: weight
   - id: context
     label: context
-    scale: token
+    scale: item
     kind: representation
 math:
   - id: qk_logits
@@ -56,8 +56,8 @@ math:
     inputs: [query, key]
     outputs: [logits]
   - id: project_pair
-    text: "pair_bias_ijh = Linear(LayerNorm(z_ij))"
-    tex: "b_{ijh} = W_h\\,\\operatorname{LN}(z_{ij})"
+    text: "pair_bias_ijh = Linear(LayerNorm(c_ij))"
+    tex: "b_{ijh} = W_h\\,\\operatorname{LN}(c_{ij})"
     operation: projection
     inputs: [pair]
     outputs: [pair_bias]
@@ -89,55 +89,16 @@ math:
 visual_template:
   type: attention_terms
   layout: left_to_right
-  panels:
-    - id: qk
-      title: QK logits
-      shows: [query, key, logits]
-    - id: pair_bias
-      title: pair bias from z
-      shows: [pair, pair_bias]
-    - id: logits_sum
-      title: add before softmax
-      shows: [logits, pair_bias]
-    - id: values
-      title: gather values
-      shows: [attention_weights, value, context]
-  marks:
-    - kind: matrix
-      slot: logits
-      axes:
-        rows: query_tokens
-        columns: key_tokens
-    - kind: matrix
-      slot: pair_bias
-      axes:
-        rows: query_tokens
-        columns: key_tokens
-    - kind: arrow
-      from: pair_bias
-      to: logits
 renderer_contract:
-  required_bindings:
-    - query
-    - key
-    - value
-    - pair
-  optional_bindings:
-    - attention_mask
+  required_bindings: [query, key, value, pair]
+  optional_bindings: [attention_mask]
   supported_variants:
-    - full_token_attention
-    - masked_token_attention
+    - full_attention
+    - masked_attention
     - cross_attention_with_pair_bias
   default_scene_type: attention_terms
 evidence_policy:
   generic_block_evidence: not_applicable
   usage_requires:
-    - source line showing pair projection or pair-bias tensor
+    - source line showing pair/context projection
     - source line showing logits += pair_bias
-related_operations:
-  - attention_logits
-  - projection
-  - pair_bias_add
-  - attention_mask
-  - softmax
-  - weighted_sum

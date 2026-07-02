@@ -9,32 +9,15 @@ ROOT = File.expand_path("../..", __dir__)
 
 MANIFESTS = [
   {
-    out: "renderer/esmfold2/manifest.js",
-    architecture: "architectures/biohub-esmfold2-diffusion-module.yaml",
-    view: "views/esmfold2-semantic-zoom.view.yaml",
-    pseudocode: "pseudocode/esmfold2-pair-bias-boundary.yaml",
+    out: "renderer/architecture/manifest.js",
+    architecture: "architectures/generic-feature-refinement.yaml",
+    view: "views/generic-semantic-zoom.view.yaml",
+    pseudocode: "pseudocode/generic-feature-refinement.yaml",
     standard_blocks: [
       "standard_blocks/pair-biased-attention.yaml",
+      "standard_blocks/per-item-adaln-conditioning.yaml",
+      "standard_blocks/additive-conditioning.yaml",
     ],
-  },
-  {
-    out: "renderer/rfd3/manifest.js",
-    architecture: "architectures/rfd3-diffusion-module.yaml",
-    view: "views/rfd3-semantic-zoom.view.yaml",
-    pseudocode: "pseudocode/rfd3-diffusion-module.yaml",
-    standard_blocks: [
-      "standard_blocks/pair-biased-attention.yaml",
-      "standard_blocks/atom-to-token-scatter-mean.yaml",
-      "standard_blocks/token-to-atom-gather.yaml",
-      "standard_blocks/coordinate-injection.yaml",
-    ],
-  },
-  {
-    out: "renderer/genie3/manifest.js",
-    architecture: "architectures/genie3-model.yaml",
-    view: "views/genie3-semantic-zoom.view.yaml",
-    pseudocode: "pseudocode/genie3-model.yaml",
-    standard_blocks: [],
   },
 ].freeze
 
@@ -74,6 +57,7 @@ def standard_block_manifest(paths)
     acc[block.fetch("id")] = {
       "id" => block.fetch("id"),
       "name" => block.fetch("name"),
+      "sourceYaml" => web_ref(path),
       "description" => block.fetch("description"),
       "math" => Array(block["math"]).map do |step|
         {
@@ -93,7 +77,9 @@ def pseudocode_lines(pseudocode)
       "id" => line.fetch("id"),
       "text" => line.fetch("text"),
       "refs" => Array(line["source_refs"]).map { |ref| ref["lines"] || ref["locator"] }.compact.join(", "),
-    }
+      "architectureRefs" => Array(line["architecture_refs"]),
+      "standardBlockRef" => web_ref(line["standard_block_ref"]),
+    }.compact
   end
 end
 
@@ -137,6 +123,6 @@ end
 MANIFESTS.each do |config|
   out = File.join(ROOT, config.fetch(:out))
   FileUtils.mkdir_p(File.dirname(out))
-  File.write(out, "export const manifest = #{JSON.pretty_generate(build_manifest(config))};\n")
+  File.write(out, "export const manifest = #{JSON.pretty_generate(build_manifest(config))};\\n")
   puts out
 end

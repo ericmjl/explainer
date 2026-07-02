@@ -99,10 +99,12 @@ function renderBoard() {
   elements.canvas.classList.toggle("is-abstract-board", board.scale_lanes === false);
 
   renderBreadcrumbs();
+
   for (const node of visibleNodes(board)) {
     elements.moduleLayer.appendChild(renderNode(node));
   }
   applyViewport();
+
   window.requestAnimationFrame(renderEdges);
 }
 
@@ -128,7 +130,7 @@ function renderNode(node) {
 
 function renderRepresentationNode(node) {
   const rep = node.rep_ref ? repsById.get(node.rep_ref) : null;
-  const scale = node.scale || rep?.scale || "token";
+  const scale = node.scale || rep?.scale || "item";
   const label = node.label || rep?.id || node.id;
   const role = node.role || rep?.semantic_role || "";
   const shape = node.shape || rep?.shape || "";
@@ -157,7 +159,7 @@ function renderRepresentationNode(node) {
 
 function renderBlockNode(node) {
   const module = node.module_ref ? modulesById.get(node.module_ref) : null;
-  const scale = node.scale || module?.scale || "token";
+  const scale = node.scale || module?.scale || "item";
   const expandable = Boolean(node.expandable && boardsById.has(node.module_ref || node.id));
   const prominence = node.prominence || "secondary";
   const treatment = node.treatment || "block";
@@ -199,12 +201,14 @@ function blockCardHtml(node, module, expandable) {
   const detail = node.detail || moduleDetail(module) || kind;
   const repeat = module?.repeats ? `<span class="arch-repeat">x${module.repeats}</span>` : "";
   const badges = blockBadges(node, module, expandable);
+
   if (node.treatment === "chip" || node.density === "micro") {
     return `
       <strong>${label}</strong>
       <span class="arch-chip-meta">${node.scale || module?.scale || kind}</span>
     `;
   }
+
   return `
     <span class="arch-node-top">
       <span class="arch-kind">${kind}</span>
@@ -354,7 +358,7 @@ function renderConnectionPort(edge, point) {
 }
 
 function applyEdgeTone(element, edge) {
-  if (edge.tone === "conditioning" || edge.from.includes("pair")) {
+  if (edge.tone === "conditioning") {
     element.classList.add("is-conditioning");
   }
   if (edge.tone === "skip") {
@@ -375,6 +379,7 @@ function showConnection(edge, point) {
   const x = layerRect.left - canvasRect.left + point.x * viewport.scale;
   const y = layerRect.top - canvasRect.top + point.y * viewport.scale;
   const shouldFlip = x > canvasRect.width - 320;
+
   connectionTooltip.classList.toggle("is-left", shouldFlip);
   connectionTooltip.classList.add("is-visible");
   connectionTooltip.style.left = `${x}px`;
@@ -384,7 +389,10 @@ function showConnection(edge, point) {
     <strong>${edge.connection.title}</strong>
     <p>${edge.connection.inside}</p>
   `;
-  if (!state.focusedId) focusConnection(edge);
+
+  if (!state.focusedId) {
+    focusConnection(edge);
+  }
 }
 
 function hideConnection() {
@@ -490,22 +498,22 @@ function renderLanguageSummary() {
       <article class="mini-summary">
         <span>execution</span>
         <strong>${loops} loop${loops === 1 ? "" : "s"}</strong>
-        <em>diffusion pass and recycle loop</em>
+        <em>control flow and cached state</em>
       </article>
       <article class="mini-summary">
         <span>state</span>
         <strong>${states} representations</strong>
-        <em>atom/token/pair semantics</em>
+        <em>mutable vs conditioning semantics</em>
       </article>
       <article class="mini-summary">
         <span>conditioning</span>
         <strong>${conditioning} modes</strong>
-        <em>pair bias, AdaLN, coordinates</em>
+        <em>AdaLN, pair bias, additive conditioning</em>
       </article>
       <article class="mini-summary">
         <span>scale</span>
         <strong>${transitions} transitions</strong>
-        <em>atom-to-token and token-to-atom</em>
+        <em>pooling, compression, broadcast</em>
       </article>
     </div>
   `;
@@ -516,13 +524,19 @@ function focusModule(module) {
   clearActiveNodes();
   elements.moduleLayer.querySelector(`[data-module-id="${module.id}"]`)?.classList.add("is-focused");
   elements.focusTitle.textContent = module.label;
+
+  const pairBlock = module.contains?.find((child) => child.standard_block_ref);
+  const blockHtml = pairBlock ? renderPairBiasedAttentionBlock() : "";
+  const pseudocodeHtml = module.pseudocode_ref ? renderPseudocode(module) : "";
+
   setFocusBody(`
     <div class="focus-section">
       <p>${module.role}</p>
       ${renderAttentionSummary(module)}
+      ${module.accepts_but_does_not_use ? renderUnusedInputs(module.accepts_but_does_not_use) : ""}
       ${renderContains(module.contains || [])}
-      ${renderStandardBlocks(module)}
-      ${module.pseudocode_ref ? renderPseudocode(module) : ""}
+      ${blockHtml}
+      ${pseudocodeHtml}
       ${renderEvidence(module)}
       ${renderFocusLinks(module)}
     </div>
@@ -587,60 +601,67 @@ function renderAttentionSummary(module) {
   `;
 }
 
-function renderStandardBlocks(module) {
-  const children = module.contains?.filter((child) => child.standard_block_ref) || [];
-  if (!children.length) return "";
-  return children.map((child) => {
-    const block = manifest.standardBlocks[standardBlockIdFromRef(child.standard_block_ref)];
-    if (!block) return "";
-    if (block.id === "pair_biased_attention") return renderPairBiasedAttentionBlock(block);
-    return renderStandardBlock(block);
-  }).join("");
+function renderUnusedInputs(inputs) {
+  return `
+    <div class="warning-note">
+      <strong>Accepted but not used here</strong>
+      <span>${inputs.join(", ")}</span>
+    </div>
+  `;
 }
 
-function standardBlockIdFromRef(ref = "") {
-  const file = ref.split("/").at(-1) || "";
-  return file.replace(/\.yaml$/, "").replaceAll("-", "_");
+function renderStandardBlocks(module) {
+  const refs = [
+    module.attention?.standard_block_ref,
+    ...(module.contains || []).map((child) => child.standard_block_ref),
+  ].filter(Boolean);
+  const blocks = refs
+    .map((ref) => standardBlockFromRef(ref))
+    .filter(Boolean)
+    .filter((block, index, all) => all.findIndex((candidate) => candidate.id === block.id) === index);
+  if (!blocks.length) return "";
+  return blocks.map(renderStandardBlock).join("");
+}
+
+function standardBlockFromRef(ref) {
+  return Object.values(manifest.standardBlocks).find((block) => block.sourceYaml === ref);
 }
 
 function renderStandardBlock(block) {
   return `
     <h3>${block.name}</h3>
-    <p>${block.description}</p>
+    ${block.id === "pair_biased_attention" ? renderAttentionTermDiagram() : ""}
     <ol class="math-list">
       ${block.math.map(renderMathStep).join("")}
     </ol>
   `;
 }
 
-function renderPairBiasedAttentionBlock(block) {
+function renderAttentionTermDiagram() {
   return `
-    <h3>${block.name}</h3>
     <div class="pair-block">
       <div class="pair-matrix qk">QK logits</div>
       <div class="pair-plus">+</div>
-      <div class="pair-matrix bias">Linear(pair)</div>
+      <div class="pair-matrix bias">Linear(context)</div>
       <div class="pair-arrow">softmax</div>
       <div class="pair-matrix weights">weights @ V</div>
     </div>
-    <ol class="math-list">
-      ${block.math.map(renderMathStep).join("")}
-    </ol>
   `;
 }
 
 function renderPseudocode(module) {
   const program = Object.values(manifest.pseudocode)[0];
   if (!program) return "";
-  const ids = module.pseudocode_line_ids || [];
-  const lines = ids.length > 0
-    ? program.lines.filter((line) => ids.includes(line.id))
-    : program.lines.slice(0, 4);
-  if (!lines.length) return "";
+  const relevant = program.lines.filter((line) =>
+    (line.architectureRefs || []).includes(`modules.${module.id}`),
+  );
+  const lines = relevant.length ? relevant : program.lines.slice(0, 6);
   return `
     <h3>Pseudocode trace</h3>
     <ol class="pseudo-lines">
-      ${lines.map((line) => `<li><code>${line.text}</code><span>${line.refs}</span></li>`).join("")}
+      ${lines
+        .map((line) => `<li><code>${line.text}</code><span>${line.refs}</span></li>`)
+        .join("")}
     </ol>
   `;
 }

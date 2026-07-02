@@ -1,0 +1,150 @@
+schema_version: pseudocode-v0.1
+id: generic_feature_refinement
+title: Generic Feature Refinement Trace
+sources:
+  - id: demo_source
+    kind: source
+    path: architectures/generic-feature-refinement.yaml
+    note: Neutral demo source.
+symbols:
+  - id: raw_records
+    name: raw_records
+    type: input
+    shape: "B x N_item x input_fields"
+    architecture_ref: representations.raw_records
+  - id: item_state
+    name: x
+    type: representation
+    shape: "B x N_item x d_item"
+    architecture_ref: representations.item_state
+  - id: conditioning_signal
+    name: s
+    type: representation
+    shape: "B x N_item x d_cond"
+    architecture_ref: representations.conditioning_signal
+  - id: pair_context
+    name: c
+    type: representation
+    shape: "B x N_group x N_group x d_pair"
+    architecture_ref: representations.pair_context
+  - id: group_state
+    name: g
+    type: representation
+    shape: "B x N_group x d_group"
+    architecture_ref: representations.group_state
+  - id: item_output_state
+    name: o
+    type: representation
+    shape: "B x N_item x d_out"
+    architecture_ref: representations.item_output_state
+  - id: predictions
+    name: y
+    type: output
+    shape: "B x N_item x output_fields"
+    architecture_ref: representations.predictions
+lines:
+  - id: adapt_inputs
+    text: "x, s, item_to_group = InputAdapter(raw_records)"
+    operation: embed_inputs
+    inputs: [raw_records]
+    outputs: [item_state, conditioning_signal]
+    architecture_refs:
+      - modules.input_adapter
+    source_refs:
+      - source: demo_source
+        locator: input_adapter
+  - id: build_context
+    text: "c = ContextBuilder(x, item_to_group)"
+    operation: build_pair_context
+    inputs: [item_state]
+    outputs: [pair_context]
+    architecture_refs:
+      - modules.context_builder
+      - representations.pair_context
+    source_refs:
+      - source: demo_source
+        locator: context_builder
+  - id: item_adaln
+    text: "x = ItemEncoder(x, cond=s)"
+    operation: per_item_adaln
+    standard_block_ref: standard_blocks/per-item-adaln-conditioning.yaml
+    inputs: [item_state, conditioning_signal]
+    outputs: [item_state]
+    architecture_refs:
+      - modules.item_encoder
+    source_refs:
+      - source: demo_source
+        locator: item_encoder
+    visual:
+      block: per_item_adaln_conditioning
+      slots:
+        item_state: item_state
+        conditioning_signal: conditioning_signal
+  - id: pool_groups
+    text: "g = scatter_mean(Project(x), item_to_group)"
+    operation: scatter_mean
+    inputs: [item_state]
+    outputs: [group_state]
+    architecture_refs:
+      - modules.item_to_group_pool
+      - representations.group_state
+    source_refs:
+      - source: demo_source
+        locator: item_to_group_pool
+  - id: pair_bias_refine
+    text: "g = GroupRefiner(g, pair_bias=Linear(LayerNorm(c)))"
+    operation: pair_bias_add
+    standard_block_ref: standard_blocks/pair-biased-attention.yaml
+    inputs: [group_state, pair_context]
+    outputs: [group_state]
+    architecture_refs:
+      - modules.group_refiner
+      - claims.context_bias_is_read_only
+    source_refs:
+      - source: demo_source
+        locator: group_refiner
+    visual:
+      block: pair_biased_attention
+      slots:
+        query: group_state
+        key: group_state
+        value: group_state
+        pair: pair_context
+  - id: broadcast_groups
+    text: "o = OutputDecoder(gather(g, item_to_group), skip=x)"
+    operation: gather
+    inputs: [group_state, item_state]
+    outputs: [item_output_state]
+    architecture_refs:
+      - modules.output_decoder
+      - claims.compression_is_explicit
+    source_refs:
+      - source: demo_source
+        locator: output_decoder
+  - id: predict
+    text: "y = OutputHeads(o)"
+    operation: output_projection
+    inputs: [item_output_state]
+    outputs: [predictions]
+    architecture_refs:
+      - modules.output_heads
+    source_refs:
+      - source: demo_source
+        locator: output_heads
+claims:
+  - id: pair_context_read_only_in_refiner
+    statement: The pair/context tensor is used as pair bias inside the refiner and is not returned as updated state.
+    line_refs: [pair_bias_refine]
+    evidence:
+      status: inferred
+      refs:
+        - kind: source
+          path: architectures/generic-feature-refinement.yaml
+  - id: pool_then_broadcast
+    statement: Compression and broadcast are separate transitions; they should not be described as a reshape.
+    line_refs: [pool_groups, broadcast_groups]
+    evidence:
+      status: inferred
+      refs:
+        - kind: source
+          path: architectures/generic-feature-refinement.yaml

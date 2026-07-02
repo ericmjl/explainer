@@ -8,22 +8,10 @@ ROOT = File.expand_path("..", __dir__)
 
 SOURCE_SETS = [
   {
-    label: "esmfold2",
-    architecture: "architectures/biohub-esmfold2-diffusion-module.yaml",
-    view: "views/esmfold2-semantic-zoom.view.yaml",
-    pseudocode: "pseudocode/esmfold2-pair-bias-boundary.yaml",
-  },
-  {
-    label: "rfd3",
-    architecture: "architectures/rfd3-diffusion-module.yaml",
-    view: "views/rfd3-semantic-zoom.view.yaml",
-    pseudocode: "pseudocode/rfd3-diffusion-module.yaml",
-  },
-  {
-    label: "genie3",
-    architecture: "architectures/genie3-model.yaml",
-    view: "views/genie3-semantic-zoom.view.yaml",
-    pseudocode: "pseudocode/genie3-model.yaml",
+    label: "generic",
+    architecture: "architectures/generic-feature-refinement.yaml",
+    view: "views/generic-semantic-zoom.view.yaml",
+    pseudocode: "pseudocode/generic-feature-refinement.yaml",
   },
 ].freeze
 
@@ -63,13 +51,6 @@ def require_evidence(label, item)
   @errors << "#{label} missing evidence.status" unless evidence["status"]
   refs = evidence["refs"]
   @errors << "#{label} missing evidence.refs" if !refs.is_a?(Array) || refs.empty?
-end
-
-def require_existing_file(ref, context)
-  return unless ref
-  return if ref.start_with?("http", "/")
-
-  @errors << "#{context} references missing file #{ref}" unless File.exist?(File.join(ROOT, ref))
 end
 
 def architecture_ref_exists?(ref, module_ids, rep_ids, claim_ids)
@@ -137,7 +118,7 @@ def lint_architecture(arch, standard_blocks)
     ref = conditioning["standard_block_ref"]
     @errors << "conditioning #{conditioning['id']} references missing standard block #{ref}" if ref && !standard_blocks.key?(ref)
     source = conditioning["source"]
-    if source && !rep_ids.include?(source) && !source.include?(".") && source != "normalized_noisy_coordinates"
+    if source && !rep_ids.include?(source) && !source.include?(".")
       @errors << "conditioning #{conditioning['id']} has unknown source #{source}"
     end
     require_evidence("conditioning #{conditioning['id']}", conditioning)
@@ -265,6 +246,6 @@ lint_standard_blocks(standard_blocks)
 if @errors.empty?
   puts "source lint ok"
 else
-  warn @errors.map { |error| "- #{error}" }.join("\n")
+  warn @errors.map { |error| "- #{error}" }.join("\\n")
   exit 1
 end

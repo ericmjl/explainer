@@ -6,17 +6,12 @@ an architecture and larger than a single pseudocode line.
 Examples:
 
 - pair-biased attention;
-- per-token AdaLN conditioning;
-- per-atom AdaLN-Zero conditioning;
-- additive single conditioning;
-- coordinate injection;
-- atom-to-token scatter mean;
-- token-to-atom gather;
+- per-item adaptive normalization;
+- additive conditioning;
 - local window attention;
-- atom-to-token aggregation;
-- IPA point-distance attention;
-- triangular pair update;
-- diffusion denoising step.
+- group pooling;
+- broadcast/gather;
+- recurrent refinement step.
 
 The goal is that architecture and pseudocode sources can reference a standard
 block instead of each story hardcoding a new diagram.
@@ -24,13 +19,13 @@ block instead of each story hardcoding a new diagram.
 ## Standard Block Shape
 
 ```yaml
-schema_version: protein-standard-block-v0.1
+schema_version: standard-block-v0.1
 id: pair_biased_attention
 name: Pair-Biased Attention
 kind: attention
-description: Add projected pair features to QK attention logits.
-inputs: []
-outputs: []
+description: Add projected pair/context features to QK attention logits.
+input_slots: []
+output_slots: []
 math:
   - id: add_pair_bias
     text: logits = qk_logits + pair_bias
@@ -50,7 +45,7 @@ the block or usage site.
 
 ```yaml
 lines:
-  - id: token_pair_bias_add
+  - id: pair_bias_add
     operation: pair_bias_add
     standard_block_ref: standard_blocks/pair-biased-attention.yaml
     visual:
@@ -59,7 +54,7 @@ lines:
         query: q
         key: k
         value: v
-        pair: z
+        pair: c
         logits: logits
 ```
 
@@ -67,7 +62,7 @@ lines:
 
 ```yaml
 modules:
-  - id: token_transformer
+  - id: group_refiner
     attention:
       pattern: full
       pair_bias: true
@@ -88,15 +83,11 @@ A renderer should be able to:
 ## Evidence Policy
 
 Blocks are generic templates. A block file defines what the motif means, but it
-does not by itself prove that a specific model uses the motif. Specific usage
-must still be attached to architecture or pseudocode evidence.
+does not by itself prove that a specific architecture uses the motif. Specific
+usage must still be attached to architecture or pseudocode evidence.
 
 ## Current Block Files
 
 - `standard_blocks/pair-biased-attention.yaml`
-- `standard_blocks/per-token-adaln-conditioning.yaml`
-- `standard_blocks/per-atom-adaln-zero.yaml`
-- `standard_blocks/additive-single-conditioning.yaml`
-- `standard_blocks/coordinate-injection.yaml`
-- `standard_blocks/atom-to-token-scatter-mean.yaml`
-- `standard_blocks/token-to-atom-gather.yaml`
+- `standard_blocks/per-item-adaln-conditioning.yaml`
+- `standard_blocks/additive-conditioning.yaml`

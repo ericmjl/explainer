@@ -3,31 +3,42 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>AlphaFold Explainer - Story Index</title>
+    <title>Architecture Explainer</title>
     <link rel="stylesheet" href="./styles.css" />
   </head>
   <body class="landing-page">
     <main class="landing-shell">
       <header class="landing-header">
-        <p class="eyebrow">AlphaFold visual notebook</p>
-        <h1>Mechanism stories</h1>
+        <p class="eyebrow">Source-first architecture notebook</p>
+        <h1>Architecture explainers</h1>
         <p>
-          A small set of interactive explanations for architecture details that
-          are easy to confuse in prose: frames, pair bias, atom windows, and
-          diffusion-module data flow.
+          A generic design-language prototype for turning YAML architecture
+          sources into semantic-zoom diagrams, focus panels, evidence notes,
+          and reusable standard-block views.
         </p>
       </header>
 
-      <section class="story-grid" aria-label="Available stories">
+      <section class="story-grid" aria-label="Available pages">
+        <a class="story-card is-ready" href="./renderer/architecture/">
+          <span class="story-status">prototype</span>
+          <p class="eyebrow">Generated renderer</p>
+          <h2>Generic Feature Refinement</h2>
+          <p>
+            A neutral end-to-end architecture map generated from architecture,
+            view, pseudocode, and standard-block YAML sources.
+          </p>
+          <span class="story-meta">semantic zoom prototype</span>
+        </a>
+
         <a class="story-card is-ready" href="./protocol/architecture-language.md">
           <span class="story-status">protocol</span>
           <p class="eyebrow">Architecture language</p>
-          <h2>Protein Architecture DSL</h2>
+          <h2>Architecture DSL</h2>
           <p>
             A source-first YAML vocabulary for modules, representations,
             attention patterns, evidence, and architecture comparisons.
           </p>
-          <span class="story-meta">v0.1 - protocol source</span>
+          <span class="story-meta">protocol source</span>
         </a>
 
         <a class="story-card is-ready" href="./protocol/pseudocode-language.md">
@@ -35,56 +46,21 @@
           <p class="eyebrow">Pseudocode language</p>
           <h2>Algorithm Trace DSL</h2>
           <p>
-            A line-level source format for algorithms, symbols, exact source
+            A line-level source format for algorithms, symbols, source
             references, claims, and visualization hooks.
           </p>
-          <span class="story-meta">v0.1 - protocol source</span>
+          <span class="story-meta">protocol source</span>
         </a>
 
-        <a class="story-card is-ready" href="./protocol/protein-visualization-language.md">
+        <a class="story-card is-ready" href="./protocol/visualization-language.md">
           <span class="story-status">protocol</span>
           <p class="eyebrow">Visualization language</p>
-          <h2>Protein 2.5D Renderer</h2>
+          <h2>Semantic-Zoom Renderer</h2>
           <p>
-            A protein-aware view model: architecture maps, hover peeks, click
-            focus, pseudocode steppers, evidence traces, and optional geometry.
+            A board language for architecture maps, hover peeks, click focus,
+            compact nodes, pseudocode traces, and evidence summaries.
           </p>
-          <span class="story-meta">v0.1 - renderer architecture</span>
-        </a>
-
-        <a class="story-card is-ready" href="./renderer/esmfold2/">
-          <span class="story-status">prototype</span>
-          <p class="eyebrow">Generated renderer</p>
-          <h2>ESMFold2 Bird's-Eye View</h2>
-          <p>
-            A first coarse architecture map generated from the DSL: diffusion
-            conditioning, atom encoder, token transformer, atom decoder, and
-            semantic zoom into module internals.
-          </p>
-          <span class="story-meta">semantic zoom prototype</span>
-        </a>
-
-        <a class="story-card is-ready" href="./renderer/rfd3/">
-          <span class="story-status">prototype</span>
-          <p class="eyebrow">Generated renderer</p>
-          <h2>RFD3 Diffusion Module</h2>
-          <p>
-            A source-backed RFD3 board focused on atom14 slots, atom-level pair
-            bias, token pair refinement, and atom decoder scale transitions.
-          </p>
-          <span class="story-meta">semantic zoom prototype</span>
-        </a>
-
-        <a class="story-card is-ready" href="./renderer/genie3/">
-          <span class="story-status">prototype</span>
-          <p class="eyebrow">Generated renderer</p>
-          <h2>Genie3 Token-Frame Denoiser</h2>
-          <p>
-            A source-backed model map for sparse atom-token sidechains,
-            per-token Frenet frames, token-pair processing, and IPA frame
-            updates.
-          </p>
-          <span class="story-meta">semantic zoom prototype</span>
+          <span class="story-meta">renderer source</span>
         </a>
 
         <a class="story-card is-ready" href="./standard_blocks/pair-biased-attention.yaml">
@@ -92,74 +68,30 @@
           <p class="eyebrow">Standard block</p>
           <h2>Pair-Biased Attention</h2>
           <p>
-            A reusable attention motif: QK logits plus projected pair bias,
-            then mask, softmax, and value gathering.
+            A reusable attention motif: QK logits plus projected pair/context
+            bias, then mask, softmax, and value gathering.
           </p>
           <span class="story-meta">canonical block spec</span>
         </a>
 
-        <a class="story-card is-ready" href="./stories/ipa/">
-          <span class="story-status">available</span>
-          <p class="eyebrow">AlphaFold 2 structure module</p>
-          <h2>Algorithm 22: IPA</h2>
+        <a class="story-card is-ready" href="./standard_blocks/per-item-adaln-conditioning.yaml">
+          <span class="story-status">block</span>
+          <p class="eyebrow">Standard block</p>
+          <h2>Per-Item AdaLN</h2>
           <p>
-            Walk through scalar attention, pair bias, virtual point probes,
-            query-frame readout, and the boundary before BackboneUpdate.
+            A reusable conditioning motif where each item receives its own
+            adaptive normalization shift, scale, and gate.
           </p>
-          <span class="story-meta">13 steps - Three.js scene</span>
+          <span class="story-meta">canonical block spec</span>
         </a>
-
-        <a class="story-card is-ready" href="./stories/af3-diffusion-module/">
-          <span class="story-status">available</span>
-          <p class="eyebrow">AlphaFold 3 diffusion module</p>
-          <h2>Diffusion Module Map</h2>
-          <p>
-            Move from atom encoder, to token-level diffusion transformer, to
-            atom decoder, with drill-down links on each module.
-          </p>
-          <span class="story-meta">8 steps - module map</span>
-        </a>
-
-        <a class="story-card is-ready" href="./stories/af3-local-atom-attention/">
-          <span class="story-status">available</span>
-          <p class="eyebrow">AlphaFold 3 fine detail</p>
-          <h2>Local Atom Attention</h2>
-          <p>
-            Visualize why 32 query atoms read from a 128-atom local
-            key/value window, and what that looks like as an attention mask.
-          </p>
-          <span class="story-meta">10 steps - mask view</span>
-        </a>
-
-        <a class="story-card is-ready" href="./stories/esmfold2-pair-bias-boundary/">
-          <span class="story-status">note</span>
-          <p class="eyebrow">Biohub ESMFold2 architecture</p>
-          <h2>Diffusion Module</h2>
-          <p>
-            Record the four-stage scaffold, then drill into the pair-bias
-            boundary between atom-local and token-level attention.
-          </p>
-          <span class="story-meta">source note - no animation yet</span>
-        </a>
-
-        <article class="story-card is-planned">
-          <span class="story-status">planned</span>
-          <p class="eyebrow">AlphaFold 3 trunk</p>
-          <h2>Pairformer Directionality</h2>
-          <p>
-            Document how pair updates stay in the pair stream, pair biases
-            single attention, and single does not feed pair inside the stack.
-          </p>
-          <span class="story-meta">source note pending</span>
-        </article>
       </section>
 
       <section class="landing-notes" aria-label="Working pattern">
         <h2>How this grows</h2>
         <p>
-          Clarifications first become short source-backed story notes. When the
-          concept needs a picture, the note becomes a step in an interactive
-          page.
+          New architecture notes start as source-backed YAML. The renderer
+          should stay generic; domain facts belong in architecture, view,
+          pseudocode, and story sources.
         </p>
       </section>
     </main>
