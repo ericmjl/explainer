@@ -1,0 +1,41 @@
+schema_version: protein-standard-block-v0.1
+id: additive_single_conditioning
+name: Additive Single Conditioning
+kind: conditioning
+status: draft
+description: Project a single/token conditioning stream and add it into a mutable token state.
+canonical_operation: additive_single_conditioning
+input_slots:
+  - id: token_state
+    label: token state
+    scale: token
+    kind: representation
+    required: true
+  - id: conditioning_single
+    label: s
+    scale: token
+    kind: conditioning
+    required: true
+output_slots:
+  - id: conditioned_token_state
+    label: conditioned token state
+    scale: token
+    kind: representation
+math:
+  - id: project_conditioning
+    text: "delta = Linear(LayerNorm(s))"
+    operation: projection
+    inputs: [conditioning_single]
+    outputs: [conditioned_token_state]
+  - id: add_conditioning
+    text: "a = a + delta"
+    operation: additive_injection
+    inputs: [token_state, conditioning_single]
+    outputs: [conditioned_token_state]
+visual_template:
+  type: additive_stream_merge
+renderer_contract:
+  shows:
+    - additive merge into mutable state
+evidence_policy:
+  require_usage_evidence: true

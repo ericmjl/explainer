@@ -30,6 +30,11 @@ task_modes:
   - structure_prediction
   - structure_design
 sources: []
+execution: {}
+state_semantics: {}
+conditioning: []
+scale_transitions: []
+training_inference: {}
 representations: []
 modules: []
 edges: []
@@ -92,6 +97,72 @@ Common scales:
 - `ligand`
 - `pocket`
 - `global`
+
+## Execution
+
+Execution describes loops, cached state, and phase-specific behavior that is not
+visible from a static block diagram.
+
+```yaml
+execution:
+  loops:
+    - id: diffusion_sampling_loop
+      repeats: num_sampling_steps
+      reruns:
+        - diffusion_conditioning
+        - atom_encoder
+        - token_transformer
+        - atom_decoder
+      cached:
+        - pair_repr
+        - atom_rope
+        - masks
+      notes:
+        - z conditioning may be cached across diffusion steps when valid
+  cached_state:
+    - id: atom_encoder_attention_params
+      produced_by: atom_encoder
+      consumed_by: atom_decoder
+      scope: diffusion_step | sampling_loop | model_call
+```
+
+Use this section for diffusion loops, recycling, recurrent trunks, cached masks,
+stop-gradient loops, and inference-only reuse.
+
+## State Semantics
+
+State semantics say whether a representation is mutable model state, read-only
+conditioning, a cache, or an output. This is where questions like "is z updated
+or only injected?" should be answered directly.
+
+```yaml
+state_semantics:
+  pair_repr:
+    role: read_only_conditioning
+    produced_by: diffusion_conditioning
+    updated_by: []
+    consumed_by:
+      - token_transformer
+    notes:
+      - projected to attention logits but not returned updated
+  token_repr:
+    role: mutable_state
+    produced_by: atom_encoder
+    updated_by:
+      - token_transformer
+    consumed_by:
+      - atom_decoder
+```
+
+Common roles:
+
+- `mutable_state`
+- `read_only_conditioning`
+- `static_conditioning`
+- `cached_state`
+- `index_map`
+- `coordinate_state`
+- `output_update`
 
 ## Modules
 
@@ -161,6 +232,69 @@ attention:
     - coordinates
 ```
 
+## Conditioning
+
+Conditioning describes how one representation influences a target without
+necessarily becoming that target's mutable state. Different conditioning modes
+are not interchangeable, so encode the mode explicitly.
+
+```yaml
+conditioning:
+  - id: token_pair_bias
+    source: pair_repr
+    target: token_transformer.attention_logits
+    mode: pair_bias
+    standard_block_ref: standard_blocks/pair-biased-attention.yaml
+    updates_source: false
+  - id: token_adaln
+    source: conditioning_single
+    target: token_transformer
+    mode: per_token_adaln
+    standard_block_ref: standard_blocks/per-token-adaln-conditioning.yaml
+```
+
+Common modes:
+
+- `pair_bias`
+- `per_token_adaln`
+- `per_atom_adaln_zero`
+- `additive_injection`
+- `coordinate_injection`
+- `concat`
+- `cross_attention`
+- `gate`
+
+## Scale Transitions
+
+Scale transitions describe atom/token/pair/coordinate changes with enough
+structure to distinguish pooling from copying.
+
+```yaml
+scale_transitions:
+  - id: atom_to_token_mean_pool
+    from_scale: atom
+    to_scale: token
+    source: atom_query_state
+    target: token_repr
+    projection: atom_to_token_linear
+    index_map: atom_to_token_index
+    aggregation: scatter_mean
+    copy_vs_pool: pool
+    standard_block_ref: standard_blocks/atom-to-token-scatter-mean.yaml
+  - id: token_to_atom_gather
+    from_scale: token
+    to_scale: atom
+    source: token_repr
+    target: atom_query_state
+    projection: token_to_atom_linear
+    index_map: atom_to_token_index
+    aggregation: gather
+    copy_vs_pool: copy
+    standard_block_ref: standard_blocks/token-to-atom-gather.yaml
+```
+
+Prefer this section over encoding important scale jumps only as edge prose.
+
 ## Edges
 
 Edges describe how information moves between representations and modules.
@@ -190,6 +324,25 @@ claims:
       refs: []
 ```
 
+## Training And Inference
+
+Architecture alone often misses method behavior. Use this section for objective,
+noise/flow schedules, samplers, teacher forcing, self-conditioning, and
+checkpoint compatibility notes.
+
+```yaml
+training_inference:
+  objective:
+    kind: denoising | flow_matching | score_matching | masked_language_modeling | unknown
+  noise_schedule:
+    kind: diffusion | flow | none | unknown
+  sampler:
+    kind: diffusion_sampling | ode_solver | ancestral | unknown
+  teacher_forcing: unknown
+  self_conditioning: unknown
+  checkpoint_notes: []
+```
+
 ## Open Questions
 
 Open questions are part of the source format. Do not bury them in prose.
@@ -209,6 +362,9 @@ A future renderer should be able to:
 - draw edges from `edges`;
 - color nodes by `scale`;
 - display attention masks from `attention.pattern` and window fields;
+- display control-flow loops and cached state from `execution`;
+- distinguish mutable state from conditioning with `state_semantics`;
+- render common conditioning and scale-transition motifs from standard blocks;
 - build comparison tables from normalized module and attention fields;
 - show confidence/evidence badges from `evidence.status`;
 - link each claim to source refs.

@@ -7,6 +7,9 @@ sources:
   - id: esmfold2_common
     kind: code
     path: /home/ruh/research/PhD/related_work/biohub-transformers/src/transformers/models/esmfold2/modeling_esmfold2_common.py
+  - id: esmfold2_model
+    kind: code
+    path: /home/ruh/research/PhD/related_work/biohub-transformers/src/transformers/models/esmfold2/modeling_esmfold2.py
 symbols:
   - id: z_ij
     label: z_ij
@@ -33,13 +36,37 @@ symbols:
     label: pair_bias
     kind: logit
     scale: token_pair
+  - id: r_noisy
+    label: r_noisy
+    kind: coordinate
+    scale: atom
+  - id: pred_r1
+    label: pred_r1
+    kind: coordinate
+    scale: atom
+  - id: atom_to_token_idx
+    label: atom_to_token
+    kind: index
+    scale: atom_to_token
+  - id: a_token
+    label: a_i
+    kind: representation
+    scale: token
+  - id: s_token
+    label: s_i
+    kind: representation
+    scale: token
+  - id: lm_z
+    label: lm_z
+    kind: representation
+    scale: token_pair
 lines:
   - id: atom_encoder_signature
     number: 1
-    text: "ESMFold2AtomEncoder.forward(..., z_ij=None, ...)"
+    text: "ESMFold2AtomEncoder.forward(..., r_l=None, pred_r1=None, s_i=None, z_ij=None, ...)"
     text_mode: implementation_summary
     operation: input
-    inputs: [z_ij]
+    inputs: [r_noisy, pred_r1, s_token, z_ij]
     outputs: []
     architecture_refs:
       - modules.atom_encoder
@@ -48,9 +75,59 @@ lines:
         lines: "758-770"
     visual:
       scene: source_trace
-      highlight: [z_ij]
-  - id: build_atom_params
+      highlight: [r_noisy, pred_r1, s_token, z_ij]
+  - id: esmc_to_pair_path
     number: 2
+    text: "ESMC hidden states -> LanguageModelShim -> lm_z; recurrent trunk -> z_trunk"
+    text_mode: implementation_summary
+    operation: lm_pair_projection
+    inputs: [lm_z]
+    outputs: [z_ij]
+    architecture_refs:
+      - representations.lm_pair_repr
+      - representations.pair_repr
+    source_refs:
+      - source: esmfold2_common
+        lines: "2073-2108"
+      - source: esmfold2_model
+        lines: "919-929,971-992"
+    visual:
+      scene: token_pair_bias_path
+      highlight: [lm_z, z_ij]
+  - id: build_atom_conditioning
+    number: 3
+    text: "atom_feats = [ref_pos, charge, mask, element, atom_name_chars]; c = LayerNorm(atom_linear(atom_feats))"
+    text_mode: implementation_summary
+    operation: atom_feature_embedding
+    inputs: [q_atom]
+    outputs: [c_atom]
+    architecture_refs:
+      - representations.atom_conditioning
+      - modules.atom_encoder
+    source_refs:
+      - source: esmfold2_common
+        lines: "138-146,786-797"
+    visual:
+      scene: atom_attention_path
+      highlight: [c_atom]
+  - id: inject_noisy_coords
+    number: 4
+    text: "q = c + coords_linear(concat(r_noisy, pred_r1)); pred_r1 defaults to zeros"
+    text_mode: implementation_summary
+    operation: coordinate_injection
+    inputs: [c_atom, r_noisy, pred_r1]
+    outputs: [q_atom]
+    architecture_refs:
+      - representations.atom_query_state
+      - modules.atom_encoder
+    source_refs:
+      - source: esmfold2_common
+        lines: "826-832,1490-1503"
+    visual:
+      scene: atom_attention_path
+      highlight: [q_atom, r_noisy, pred_r1]
+  - id: build_atom_params
+    number: 5
     text: "build atom features and 3D-RoPE attention_params"
     text_mode: implementation_summary
     operation: rope
@@ -64,8 +141,23 @@ lines:
     visual:
       scene: atom_attention_path
       highlight: [attention_params]
+  - id: atom_adaln_modulation
+    number: 6
+    text: "shift/scale/gates = adaln_modulation(c_l); modulate q_l attention and FFN"
+    text_mode: implementation_summary
+    operation: adaptive_layer_norm
+    inputs: [c_atom, q_atom]
+    outputs: [q_atom]
+    architecture_refs:
+      - modules.atom_encoder
+    source_refs:
+      - source: esmfold2_common
+        lines: "603-605,619-630"
+    visual:
+      scene: atom_attention_path
+      highlight: [c_atom, q_atom]
   - id: atom_transformer_call
-    number: 3
+    number: 7
     text: "atom_transformer(q_l=q, c_l=c, attention_params=attention_params)"
     text_mode: implementation_summary
     operation: window_attention
@@ -80,7 +172,7 @@ lines:
       scene: atom_attention_path
       highlight: [q_atom, c_atom, attention_params]
   - id: swa_attention_forward
-    number: 4
+    number: 8
     text: "SWA3DRoPEAttention.forward(x, attention_params)"
     text_mode: implementation_summary
     operation: window_attention
@@ -94,9 +186,56 @@ lines:
     visual:
       scene: atom_attention_path
       highlight: [q_atom, attention_params]
+  - id: atom_to_token_mean_pool
+    number: 9
+    text: "q_to_a = relu(atom_to_token_linear(q)); a = scatter_atom_to_token(..., reduce='mean')"
+    text_mode: implementation_summary
+    operation: atom_to_token_mean_pool
+    inputs: [q_atom, atom_to_token_idx]
+    outputs: [a_token]
+    architecture_refs:
+      - modules.atom_encoder
+      - representations.token_repr
+    source_refs:
+      - source: esmfold2_common
+        lines: "180-208,848-856"
+    visual:
+      scene: atom_to_token_path
+      highlight: [q_atom, atom_to_token_idx, a_token]
+  - id: token_conditioning_single
+    number: 10
+    text: "s = s_proj(LN(s_inputs)) + noise_proj(Fourier(t_hat)); transition blocks refine s"
+    text_mode: implementation_summary
+    operation: single_conditioning
+    inputs: [s_token]
+    outputs: [s_token]
+    architecture_refs:
+      - modules.diffusion_conditioning
+      - representations.conditioning_single
+    source_refs:
+      - source: esmfold2_common
+        lines: "1291-1350"
+    visual:
+      scene: token_pair_bias_path
+      highlight: [s_token]
+  - id: token_adaln
+    number: 11
+    text: "x_i = sigmoid(W_gate LN(s_i)) * LN(a_i) + W_shift LN(s_i)"
+    text_mode: implementation_summary
+    operation: adaptive_layer_norm
+    inputs: [a_token, s_token]
+    outputs: [a_token]
+    architecture_refs:
+      - modules.token_transformer
+    source_refs:
+      - source: esmfold2_common
+        lines: "298-313,1022-1024"
+    visual:
+      scene: token_pair_bias_path
+      highlight: [a_token, s_token]
   - id: token_transformer_constructed
-    number: 5
-    text: "DiffusionModule constructs token_transformer = DiffusionTransformer(d_pair=c_z)"
+    number: 12
+    text: "DiffusionModule constructs token_transformer = DiffusionTransformer(d_pair=c_z, num_blocks=12, num_heads=16)"
     text_mode: implementation_summary
     operation: module_construction
     inputs: [z_ij]
@@ -105,12 +244,12 @@ lines:
       - modules.token_transformer
     source_refs:
       - source: esmfold2_common
-        lines: "1426-1432"
+        lines: "1363-1375,1426-1432"
     visual:
       scene: token_pair_bias_path
       highlight: [z_ij]
   - id: token_pair_bias_add
-    number: 6
+    number: 13
     text: "pair_bias = pair_bias_proj(pair_norm(z)); logits += pair_bias"
     text_mode: implementation_summary
     operation: pair_bias_add
@@ -130,19 +269,55 @@ lines:
         logits: token_logits
         pair_bias: pair_bias
       highlight: [z_ij, pair_bias, token_logits]
+  - id: token_blocks_do_not_update_z
+    number: 14
+    text: "for attn, transition in blocks: x = x + attn(x, s, z); x = x + transition(x, s); return x"
+    text_mode: implementation_summary
+    operation: token_update_fixed_pair
+    inputs: [a_token, s_token, z_ij]
+    outputs: [a_token]
+    architecture_refs:
+      - modules.token_transformer
+    source_refs:
+      - source: esmfold2_common
+        lines: "1203-1225,1241-1255"
+    visual:
+      scene: token_pair_bias_path
+      highlight: [a_token, s_token, z_ij]
+  - id: token_to_atom_gather
+    number: 15
+    text: "a_to_q = token_to_atom_linear(a); a_to_q = gather_token_to_atom(a_to_q, atom_to_token); q_l += a_to_q"
+    text_mode: implementation_summary
+    operation: token_to_atom_gather
+    inputs: [a_token, atom_to_token_idx]
+    outputs: [q_atom]
+    architecture_refs:
+      - modules.atom_decoder
+    source_refs:
+      - source: esmfold2_common
+        lines: "166-177,913-916"
+    visual:
+      scene: token_to_atom_path
+      highlight: [a_token, atom_to_token_idx, q_atom]
 visual_scenes:
   - id: source_trace
     type: source_trace
     title: z_ij appears in the atom encoder signature
   - id: atom_attention_path
     type: dataflow
-    title: "Atom encoder path: SWA + 3D RoPE, no pair-bias input"
+    title: "Atom encoder path: c_l modulates q_l; SWA + 3D RoPE; no pair-bias input"
+  - id: atom_to_token_path
+    type: dataflow
+    title: "Atom-to-token path: project atom states and mean-pool by atom_to_token"
   - id: token_pair_bias_path
     type: attention_terms
-    title: "Token transformer path: projected pair bias added to logits"
+    title: "Token transformer path: token-wise s conditioning and projected pair bias from fixed z"
+  - id: token_to_atom_path
+    type: dataflow
+    title: "Token-to-atom path: gather token output back onto atom slots"
 claims:
   - id: atom_encoder_accepts_but_does_not_use_z
-    statement: z_ij is accepted by the atom encoder signature but is not passed into the atom transformer call.
+    statement: z_ij and s_i are accepted by the atom encoder signature but are not passed into the atom transformer call.
     line_refs: [atom_encoder_signature, atom_transformer_call]
     evidence:
       status: confirmed_from_code
@@ -168,6 +343,45 @@ claims:
         - kind: code
           source: esmfold2_common
           lines: "939-940,1114-1118,1426-1432"
+  - id: atom_conditioning_is_per_atom_adaln
+    statement: The atom transformer uses c_l as per-atom conditioning for AdaLN-style shifts, scales, and gates on q_l.
+    line_refs: [build_atom_conditioning, inject_noisy_coords, atom_adaln_modulation]
+    evidence:
+      status: confirmed_from_code
+      refs:
+        - kind: code
+          source: esmfold2_common
+          lines: "603-605,619-630,786-839"
+  - id: atom_to_token_is_mean_pool
+    statement: Atom-to-token handoff projects each atom state to token width, then mean-pools atoms sharing the same atom_to_token index.
+    line_refs: [atom_to_token_mean_pool]
+    evidence:
+      status: confirmed_from_code
+      refs:
+        - kind: code
+          source: esmfold2_common
+          lines: "180-208,848-856"
+  - id: esmc_enters_pair_not_atom
+    statement: ESMC hidden states are projected to pair features and integrated into z_trunk; they are not direct atom-transformer inputs.
+    line_refs: [esmc_to_pair_path, atom_encoder_signature]
+    evidence:
+      status: confirmed_from_code
+      refs:
+        - kind: code
+          source: esmfold2_common
+          lines: "2073-2108"
+        - kind: code
+          source: esmfold2_model
+          lines: "919-929,971-1000"
+  - id: token_transformer_fixed_z
+    statement: The token transformer updates token state but does not update z; each block uses z as fixed pair conditioning through learned pair-bias projections.
+    line_refs: [token_pair_bias_add, token_blocks_do_not_update_z]
+    evidence:
+      status: confirmed_from_code
+      refs:
+        - kind: code
+          source: esmfold2_common
+          lines: "971-973,1203-1225,1241-1255"
 open_questions:
   - id: render_source_trace
     question: What source-trace UI should display when a pseudocode line summarizes multiple implementation lines?

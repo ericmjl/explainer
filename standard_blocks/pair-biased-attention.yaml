@@ -51,32 +51,38 @@ output_slots:
 math:
   - id: qk_logits
     text: "logits_ijh = dot(q_ih, k_jh) * scale"
+    tex: "\\ell^{qk}_{ijh} = \\langle q_{ih}, k_{jh} \\rangle \\cdot s"
     operation: attention_logits
     inputs: [query, key]
     outputs: [logits]
   - id: project_pair
     text: "pair_bias_ijh = Linear(LayerNorm(z_ij))"
+    tex: "b_{ijh} = W_h\\,\\operatorname{LN}(z_{ij})"
     operation: projection
     inputs: [pair]
     outputs: [pair_bias]
   - id: add_pair_bias
     text: "logits_ijh = logits_ijh + pair_bias_ijh"
+    tex: "\\ell_{ijh} = \\ell^{qk}_{ijh} + b_{ijh}"
     operation: pair_bias_add
     inputs: [logits, pair_bias]
     outputs: [logits]
   - id: apply_mask
     text: "logits = logits + mask_bias"
+    tex: "\\ell_{ijh} = \\ell_{ijh} + m_{ij}"
     operation: attention_mask
     inputs: [logits, attention_mask]
     outputs: [logits]
     optional: true
   - id: softmax
     text: "weights_ijh = softmax_j(logits_ijh)"
+    tex: "a_{ijh} = \\operatorname{softmax}_j(\\ell_{ijh})"
     operation: softmax
     inputs: [logits]
     outputs: [attention_weights]
   - id: gather_values
     text: "context_ih = sum_j weights_ijh * v_jh"
+    tex: "o_{ih} = \\sum_j a_{ijh} v_{jh}"
     operation: weighted_sum
     inputs: [attention_weights, value]
     outputs: [context]

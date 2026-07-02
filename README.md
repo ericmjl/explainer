@@ -27,6 +27,7 @@ This repo now has a source-first architecture description layer:
 - `standard_blocks/`: reusable block specs such as pair-biased attention.
 - `views/`: source specs for generated architecture/story views.
 - `renderer/esmfold2/`: first coarse generated architecture renderer prototype.
+- `renderer/rfd3/`: generated RFD3 diffusion-module renderer prototype.
 
 Stories should increasingly be rendered from these source files instead of
 hardcoding every module diagram in HTML or JavaScript.
@@ -35,9 +36,14 @@ For architecture-aware editing, read `AGENTS.md` first. It defines the
 source-first update order, evidence rules, semantic-zoom board conventions, and
 renderer validation commands.
 
-The ESMFold2 renderer currently uses `renderer/esmfold2/build-manifest.rb` to
-compile YAML sources into `renderer/esmfold2/manifest.js`, which the static
-browser page imports.
+The architecture language now has first-class sections for `execution`,
+`state_semantics`, `conditioning`, `scale_transitions`, and
+`training_inference`. Run `ruby scripts/lint_sources.rb` after changing the
+ESMFold2 architecture/view/pseudocode sources.
+
+The generated renderers currently use `renderer/esmfold2/build-manifest.rb` to
+compile YAML sources into static `manifest.js` files, which the browser pages
+import.
 
 Current stories:
 
@@ -104,6 +110,35 @@ Path: `stories/esmfold2-pair-bias-boundary/`
 - atom attention path uses sliding-window attention plus 3D RoPE, with no
   pair-bias input
 - pair bias is used later in token-level `AttentionPairBias`
+
+### RF Diffusion 3 Diffusion Module
+
+Path: `stories/rfd3-diffusion-module/`
+
+- generated renderer source: `views/rfd3-semantic-zoom.view.yaml`
+- architecture facts: `architectures/rfd3-diffusion-module.yaml`
+- pseudocode trace: `pseudocode/rfd3-diffusion-module.yaml`
+- dense atom14 slot path with VX virtual atoms
+- atom encoder and atom decoder use explicit `P_LL` atom-pair bias
+- `P_LL` is built from initializer atom-pair features and expanded token pairs,
+  not directly from noisy atom-pair distances
+- `DiffusionTokenEncoder` updates `Z_II` before the token transformer consumes it
+  as pair bias
+
+### Genie3 Token-Frame Denoiser
+
+Path: `stories/genie3-model/`
+
+- generated renderer source: `views/genie3-semantic-zoom.view.yaml`
+- architecture facts: `architectures/genie3-model.yaml`
+- pseudocode trace: `pseudocode/genie3-model.yaml`
+- sparse tokenization: non-atomized residues are CA-only; atomized residues are
+  CA plus sidechain heavy atom tokens
+- token-pair representation is over `N_token x N_token`, so sidechain tokens
+  receive their own rows and columns
+- token frames are recomputed from current coordinates at each denoiser call
+- IPA structure layers update rotations internally but return final
+  translations as the diffusion coordinate output
 
 ## Workflow
 

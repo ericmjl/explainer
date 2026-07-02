@@ -1,0 +1,739 @@
+schema_version: protein-architecture-v0.1
+id: genie3_model
+name: Genie 3 Token-Frame Denoiser
+family: genie
+status: partial
+task_modes:
+  - protein_design
+  - motif_scaffolding
+  - binder_design
+  - sidechain_packing
+  - diffusion_sampling
+sources:
+  - kind: code
+    path: /home/ruh/research/PhD/related_work/genie3/src/genie3/generation/utils/feat_utils.py
+  - kind: code
+    path: /home/ruh/research/PhD/related_work/genie3/src/genie3/generation/utils/geo_utils.py
+  - kind: code
+    path: /home/ruh/research/PhD/related_work/genie3/src/genie3/generation/model/implementation/v1.py
+  - kind: code
+    path: /home/ruh/research/PhD/related_work/genie3/src/genie3/generation/model/embedder/single/v1.py
+  - kind: code
+    path: /home/ruh/research/PhD/related_work/genie3/src/genie3/generation/model/embedder/pair/v1.py
+  - kind: code
+    path: /home/ruh/research/PhD/related_work/genie3/src/genie3/generation/model/structure_net.py
+  - kind: code
+    path: /home/ruh/research/PhD/related_work/genie3/src/genie3/generation/model/module/backbone_update.py
+  - kind: code
+    path: /home/ruh/research/PhD/related_work/genie3/src/genie3/generation/diffusion/ddpm.py
+  - kind: code
+    path: /home/ruh/research/PhD/related_work/genie3/src/genie3/generation/diffusion/sampler/ddim.py
+  - kind: paper
+    path: /home/ruh/research/PhD/related_work/genie3/genie3_paper.pdf
+execution:
+  loops:
+    - id: diffusion_sampling_loop
+      repeats: diffusion_timesteps
+      reruns:
+        - frame_builder
+        - single_feature_net
+        - pair_feature_net
+        - latent_transformer
+        - sequence_net
+        - structure_net
+      cached:
+        - token_topology
+        - residue_identity
+        - atom_type_features
+      notes:
+        - The sampler carries Cartesian token coordinates across diffusion steps.
+        - At each denoiser call, Genie 3 recomputes token frames from the current coordinates, then runs the single/pair trunk and structure stack.
+        - Frame rotations are internal to one denoiser call; only final translations are returned to the sampler.
+      evidence:
+        status: confirmed_from_code
+        refs:
+          - kind: code
+            path: /home/ruh/research/PhD/related_work/genie3/src/genie3/generation/diffusion/sampler/sampler.py
+            lines: "97-121"
+          - kind: code
+            path: /home/ruh/research/PhD/related_work/genie3/src/genie3/generation/model/implementation/v1.py
+            lines: "51-60"
+          - kind: code
+            path: /home/ruh/research/PhD/related_work/genie3/src/genie3/generation/model/structure_net.py
+            lines: "79-88,168-170"
+  cached_state:
+    - id: token_topology
+      produced_by: feature_pipeline
+      consumed_by:
+        - frame_builder
+        - single_feature_net
+        - pair_feature_net
+        - structure_net
+      scope: sample_or_training_item
+      evidence:
+        status: confirmed_from_code
+        refs:
+          - kind: code
+            path: /home/ruh/research/PhD/related_work/genie3/src/genie3/generation/utils/feat_utils.py
+            lines: "123-165,1053-1148"
+state_semantics:
+  input_structure:
+    role: task_input_structure_or_sample_config
+    produced_by: dataset_or_sample_config
+    updated_by: []
+    consumed_by:
+      - feature_pipeline
+    notes:
+      - In motif and binder tasks, task flags decide which residues are conditioned and which are atomized.
+      - In sidechain packing, known residues are atomized while backbone/CA coordinates are conditioning structure.
+  tokenized_coordinates:
+    role: mutable_diffusion_state
+    produced_by:
+      - feature_pipeline
+      - diffusion_sampler
+    updated_by:
+      - diffusion_sampler
+    consumed_by:
+      - frame_builder
+      - pair_feature_net
+      - structure_net
+    notes:
+      - One coordinate is stored per token, not a dense atom14 tensor per residue.
+      - Non-atomized residues contribute one CA token; atomized residues contribute CA plus sidechain heavy atom tokens.
+  token_frames:
+    role: derived_internal_state
+    produced_by:
+      - frame_builder
+    updated_by:
+      - structure_net
+    consumed_by:
+      - pair_feature_net
+      - structure_net
+    notes:
+      - Frames are recomputed from coordinates at the start of each denoiser call.
+      - Structure layers update rotations and translations internally, but only translations are returned.
+  token_single_repr:
+    role: mutable_token_single_state
+    produced_by:
+      - single_feature_net
+    updated_by:
+      - latent_transformer
+      - structure_net
+    consumed_by:
+      - latent_transformer
+      - sequence_net
+      - structure_net
+  token_pair_repr:
+    role: mutable_token_pair_state
+    produced_by:
+      - pair_feature_net
+    updated_by:
+      - latent_transformer
+    consumed_by:
+      - latent_transformer
+      - structure_net
+    notes:
+      - The pair axis is token-token. Sidechain atom tokens receive their own rows and columns.
+  conditional_structure_frames:
+    role: read_only_conditioning_geometry
+    produced_by:
+      - frame_builder
+    updated_by: []
+    consumed_by:
+      - pair_feature_net
+    notes:
+      - Conditional frames are computed from clean coordinates masked by cond_struct_mask.
+  residue_identity:
+    role: sequence_conditioning_or_prediction_target
+    produced_by:
+      - feature_pipeline
+      - sequence_net
+    updated_by:
+      - sequence_net
+    consumed_by:
+      - single_feature_net
+      - sequence_net
+  atom_type_features:
+    role: token_identity_features
+    produced_by:
+      - feature_pipeline
+    updated_by: []
+    consumed_by:
+      - single_feature_net
+    notes:
+      - Atomized sidechain tokens carry atom-type and atom-symbol features such as CB, OG, SG, SD, or NZ.
+  coordinate_output:
+    role: denoised_token_coordinate_prediction
+    produced_by:
+      - structure_net
+    updated_by: []
+    consumed_by:
+      - diffusion_sampler
+      - losses
+  sequence_logits:
+    role: auxiliary_sequence_prediction
+    produced_by:
+      - sequence_net
+    updated_by: []
+    consumed_by:
+      - sequence_loss
+      - postprocess
+conditioning:
+  - id: residue_identity_to_single
+    source: residue_identity
+    target: single_feature_net
+    mode: additive_feature_concat
+    updates_source: false
+    evidence:
+      status: confirmed_from_code
+      refs:
+        - kind: code
+          path: /home/ruh/research/PhD/related_work/genie3/src/genie3/generation/model/embedder/single/v1.py
+          lines: "90-115"
+  - id: atom_type_to_single
+    source: atom_type_features
+    target: single_feature_net
+    mode: additive_feature_concat
+    updates_source: false
+    evidence:
+      status: confirmed_from_code
+      refs:
+        - kind: code
+          path: /home/ruh/research/PhD/related_work/genie3/src/genie3/generation/model/embedder/single/v1.py
+          lines: "96-115"
+  - id: conditional_geometry_to_pair
+    source: conditional_structure_frames
+    target: pair_feature_net
+    mode: template_geometry_encoding
+    updates_source: false
+    evidence:
+      status: confirmed_from_code
+      refs:
+        - kind: code
+          path: /home/ruh/research/PhD/related_work/genie3/src/genie3/generation/model/embedder/pair/v1.py
+          lines: "163-183"
+  - id: current_frames_to_ipa
+    source: token_frames
+    target: structure_net.ipa
+    mode: invariant_point_attention_frames
+    updates_source: true
+    evidence:
+      status: confirmed_from_code
+      refs:
+        - kind: code
+          path: /home/ruh/research/PhD/related_work/genie3/src/genie3/generation/model/structure_net.py
+          lines: "79-88"
+scale_transitions:
+  - id: residue_to_flat_token_axis
+    from_scale: residue
+    to_scale: token
+    source: input_structure
+    target: tokenized_coordinates
+    projection: selected_residue_atomization
+    aggregation: expand_selected_residues
+    copy_vs_pool: copy
+    evidence:
+      status: confirmed_from_code
+      refs:
+        - kind: code
+          path: /home/ruh/research/PhD/related_work/genie3/src/genie3/generation/utils/feat_utils.py
+          lines: "123-165"
+training_inference:
+  objective:
+    kind: token_coordinate_denoising
+    evidence:
+      status: confirmed_from_code
+      refs:
+        - kind: code
+          path: /home/ruh/research/PhD/related_work/genie3/src/genie3/generation/diffusion/ddpm.py
+          lines: "119-142"
+  coordinate_state:
+    kind: cartesian_token_coordinates
+    note: The diffusion state is x_t with one 3D coordinate per token. It is not a persistent frame state.
+  sidechain_tasks:
+    kind: known_identity_atomized_sidechain_reconstruction
+    evidence:
+      status: confirmed_from_paper
+      refs:
+        - kind: paper
+          path: /home/ruh/research/PhD/related_work/genie3/genie3_paper.pdf
+          lines: "Section 3.2, Section 3.3, Appendix A.3.1, Appendix A.3.2"
+representations:
+  - id: input_structure
+    scale: residue
+    semantic_role: parsed chain residues plus task conditioning flags
+    shape: "n_res residues with residue type, atom list, masks, and coordinates"
+    evidence:
+      status: confirmed_from_code
+      refs:
+        - kind: code
+          path: /home/ruh/research/PhD/related_work/genie3/src/genie3/generation/utils/feat_utils.py
+          lines: "43-81"
+  - id: tokenized_coordinates
+    scale: token
+    semantic_role: flat coordinate state; CA for every residue plus sidechain heavy atoms for atomized residues
+    shape: "B x N_token x 3"
+    evidence:
+      status: confirmed_from_code
+      refs:
+        - kind: code
+          path: /home/ruh/research/PhD/related_work/genie3/src/genie3/generation/utils/feat_utils.py
+          lines: "123-165,202-212"
+  - id: token_topology
+    scale: token
+    semantic_role: token indices, residue indices, chain IDs, atomization flags, and conditioning masks
+    shape: "B x N_token"
+    evidence:
+      status: confirmed_from_code
+      refs:
+        - kind: code
+          path: /home/ruh/research/PhD/related_work/genie3/src/genie3/generation/utils/feat_utils.py
+          lines: "202-212"
+  - id: atom_type_features
+    scale: token
+    semantic_role: one-hot atom name and atom element features for each token
+    shape: "B x N_token x d_atom_type"
+    evidence:
+      status: confirmed_from_code
+      refs:
+        - kind: code
+          path: /home/ruh/research/PhD/related_work/genie3/src/genie3/generation/np/protein_constants.py
+          lines: "15-144"
+        - kind: code
+          path: /home/ruh/research/PhD/related_work/genie3/src/genie3/generation/utils/feat_utils.py
+          lines: "123-165"
+  - id: residue_identity
+    scale: token
+    semantic_role: residue one-hot repeated across all tokens belonging to a known residue
+    shape: "B x N_token x 20"
+    evidence:
+      status: confirmed_from_code
+      refs:
+        - kind: code
+          path: /home/ruh/research/PhD/related_work/genie3/src/genie3/generation/utils/feat_utils.py
+          lines: "143-148,184-188"
+  - id: token_frames
+    scale: token
+    semantic_role: per-token Frenet-style rigid frames derived from current coordinates
+    shape: "B x N_token x (R,t)"
+    evidence:
+      status: confirmed_from_code
+      refs:
+        - kind: code
+          path: /home/ruh/research/PhD/related_work/genie3/src/genie3/generation/utils/feat_utils.py
+          lines: "1053-1148"
+        - kind: code
+          path: /home/ruh/research/PhD/related_work/genie3/src/genie3/generation/utils/geo_utils.py
+          lines: "15-142"
+  - id: conditional_structure_frames
+    scale: token
+    semantic_role: clean conditioning geometry converted into frames for template-like pair features
+    shape: "B x N_token x (R,t)"
+    evidence:
+      status: confirmed_from_code
+      refs:
+        - kind: code
+          path: /home/ruh/research/PhD/related_work/genie3/src/genie3/generation/utils/geo_utils.py
+          lines: "151-174"
+  - id: token_single_repr
+    scale: token
+    semantic_role: single token representation for CA and sidechain atom tokens
+    shape: "B x N_token x c_s"
+    evidence:
+      status: confirmed_from_code
+      refs:
+        - kind: code
+          path: /home/ruh/research/PhD/related_work/genie3/src/genie3/generation/model/embedder/single/v1.py
+          lines: "70-115"
+  - id: token_pair_repr
+    scale: token_pair
+    semantic_role: pair representation over the flat token axis, including sidechain-token rows and columns
+    shape: "B x N_token x N_token x c_z"
+    evidence:
+      status: confirmed_from_code
+      refs:
+        - kind: code
+          path: /home/ruh/research/PhD/related_work/genie3/src/genie3/generation/model/embedder/pair/v1.py
+          lines: "96-183"
+  - id: sequence_logits
+    scale: token
+    semantic_role: amino-acid logits produced from final single representations
+    shape: "B x N_token x 20"
+    evidence:
+      status: confirmed_from_code
+      refs:
+        - kind: code
+          path: /home/ruh/research/PhD/related_work/genie3/src/genie3/generation/model/implementation/v1.py
+          lines: "55-60"
+  - id: coordinate_output
+    scale: coordinate
+    semantic_role: final frame translations used as denoised token coordinates
+    shape: "B x N_token x 3"
+    evidence:
+      status: confirmed_from_code
+      refs:
+        - kind: code
+          path: /home/ruh/research/PhD/related_work/genie3/src/genie3/generation/model/structure_net.py
+          lines: "168-170"
+modules:
+  - id: feature_pipeline
+    label: Feature pipelines
+    kind: data_pipeline
+    scale: residue
+    role: choose CA-only or atomized tokenization and set conditioning masks
+    evidence:
+      status: confirmed_from_code
+      refs:
+        - kind: code
+          path: /home/ruh/research/PhD/related_work/genie3/src/genie3/generation/data/feature_pipeline/motif.py
+          lines: "104-134"
+        - kind: code
+          path: /home/ruh/research/PhD/related_work/genie3/src/genie3/generation/data/feature_pipeline/target.py
+          lines: "185-236,278-307"
+        - kind: code
+          path: /home/ruh/research/PhD/related_work/genie3/src/genie3/generation/data/feature_pipeline/sidechain.py
+          lines: "80-92"
+  - id: atomize_selected_residues
+    label: Atomize selected residues
+    kind: operation
+    scale: token
+    role: expand known residues to CA plus sidechain heavy atom tokens
+    evidence:
+      status: confirmed_from_code
+      refs:
+        - kind: code
+          path: /home/ruh/research/PhD/related_work/genie3/src/genie3/generation/utils/feat_utils.py
+          lines: "123-165"
+  - id: frame_builder
+    label: Token frame builder
+    kind: geometry
+    scale: token
+    role: build per-token Frenet frames from current or conditional coordinates
+    evidence:
+      status: confirmed_from_code
+      refs:
+        - kind: code
+          path: /home/ruh/research/PhD/related_work/genie3/src/genie3/generation/utils/feat_utils.py
+          lines: "1053-1148"
+        - kind: code
+          path: /home/ruh/research/PhD/related_work/genie3/src/genie3/generation/utils/geo_utils.py
+          lines: "15-174"
+  - id: single_feature_net
+    label: V1SingleFeatureNet
+    kind: embedder
+    scale: token
+    role: embed token index, residue identity, atom identity, masks, and timestep
+    evidence:
+      status: confirmed_from_code
+      refs:
+        - kind: code
+          path: /home/ruh/research/PhD/related_work/genie3/src/genie3/generation/model/embedder/single/v1.py
+          lines: "70-115"
+  - id: pair_feature_net
+    label: V1PairFeatureNet
+    kind: embedder
+    scale: token_pair
+    role: build token-pair features from relative indices, noisy frames, and conditional frames
+    evidence:
+      status: confirmed_from_code
+      refs:
+        - kind: code
+          path: /home/ruh/research/PhD/related_work/genie3/src/genie3/generation/model/embedder/pair/v1.py
+          lines: "96-183"
+  - id: latent_transformer
+    label: LatentTransformer
+    kind: trunk
+    scale: token_pair
+    role: update token single and pair representations before structure decoding
+    evidence:
+      status: confirmed_from_code
+      refs:
+        - kind: code
+          path: /home/ruh/research/PhD/related_work/genie3/src/genie3/generation/model/implementation/v1.py
+          lines: "53-57"
+  - id: sequence_net
+    label: SequenceNet
+    kind: head
+    scale: token
+    role: predict amino-acid logits from token single representations
+    evidence:
+      status: confirmed_from_code
+      refs:
+        - kind: code
+          path: /home/ruh/research/PhD/related_work/genie3/src/genie3/generation/model/implementation/v1.py
+          lines: "55-60"
+  - id: structure_net
+    label: StructureNet
+    kind: decoder
+    scale: token
+    role: run IPA structure layers and return final token-frame translations
+    contains:
+      - id: ipa_layers
+        label: InvariantPointAttention
+        role: use current token frames to update single representations
+      - id: backbone_update
+        label: BackboneUpdate
+        role: predict quaternion and translation frame updates per token
+    evidence:
+      status: confirmed_from_code
+      refs:
+        - kind: code
+          path: /home/ruh/research/PhD/related_work/genie3/src/genie3/generation/model/structure_net.py
+          lines: "28-88,168-170"
+  - id: backbone_update
+    label: BackboneUpdate
+    kind: frame_update
+    scale: token
+    role: predict a local SE(3) update from each token single representation
+    evidence:
+      status: confirmed_from_code
+      refs:
+        - kind: code
+          path: /home/ruh/research/PhD/related_work/genie3/src/genie3/generation/model/module/backbone_update.py
+          lines: "62-77"
+  - id: diffusion_sampler
+    label: Diffusion sampler
+    kind: sampler
+    scale: coordinate
+    role: carry Cartesian token coordinates across reverse diffusion steps
+    evidence:
+      status: confirmed_from_code
+      refs:
+        - kind: code
+          path: /home/ruh/research/PhD/related_work/genie3/src/genie3/generation/diffusion/sampler/sampler.py
+          lines: "97-121"
+        - kind: code
+          path: /home/ruh/research/PhD/related_work/genie3/src/genie3/generation/diffusion/sampler/ddim.py
+          lines: "112-153"
+edges:
+  - from: input_structure
+    to: feature_pipeline
+    label: task flags
+    evidence:
+      status: confirmed_from_code
+      refs:
+        - kind: code
+          path: /home/ruh/research/PhD/related_work/genie3/src/genie3/generation/data/feature_pipeline/motif.py
+          lines: "104-134"
+  - from: feature_pipeline
+    to: atomize_selected_residues
+    label: residue masks
+    evidence:
+      status: confirmed_from_code
+      refs:
+        - kind: code
+          path: /home/ruh/research/PhD/related_work/genie3/src/genie3/generation/data/feature_pipeline/target.py
+          lines: "185-236,278-307"
+  - from: atomize_selected_residues
+    to: tokenized_coordinates
+    label: flat tokens
+    evidence:
+      status: confirmed_from_code
+      refs:
+        - kind: code
+          path: /home/ruh/research/PhD/related_work/genie3/src/genie3/generation/utils/feat_utils.py
+          lines: "123-165"
+  - from: tokenized_coordinates
+    to: frame_builder
+    label: current coords
+    evidence:
+      status: confirmed_from_code
+      refs:
+        - kind: code
+          path: /home/ruh/research/PhD/related_work/genie3/src/genie3/generation/model/implementation/v1.py
+          lines: "51"
+  - from: frame_builder
+    to: token_frames
+    label: frames
+    evidence:
+      status: confirmed_from_code
+      refs:
+        - kind: code
+          path: /home/ruh/research/PhD/related_work/genie3/src/genie3/generation/utils/geo_utils.py
+          lines: "101-142"
+  - from: token_topology
+    to: single_feature_net
+    label: masks and ids
+    evidence:
+      status: confirmed_from_code
+      refs:
+        - kind: code
+          path: /home/ruh/research/PhD/related_work/genie3/src/genie3/generation/model/embedder/single/v1.py
+          lines: "70-115"
+  - from: atom_type_features
+    to: single_feature_net
+    label: atom identity
+    evidence:
+      status: confirmed_from_code
+      refs:
+        - kind: code
+          path: /home/ruh/research/PhD/related_work/genie3/src/genie3/generation/model/embedder/single/v1.py
+          lines: "96-115"
+  - from: residue_identity
+    to: single_feature_net
+    label: residue identity
+    evidence:
+      status: confirmed_from_code
+      refs:
+        - kind: code
+          path: /home/ruh/research/PhD/related_work/genie3/src/genie3/generation/model/embedder/single/v1.py
+          lines: "90-115"
+  - from: single_feature_net
+    to: token_single_repr
+    label: single init
+    evidence:
+      status: confirmed_from_code
+      refs:
+        - kind: code
+          path: /home/ruh/research/PhD/related_work/genie3/src/genie3/generation/model/implementation/v1.py
+          lines: "53"
+  - from: token_frames
+    to: pair_feature_net
+    label: noisy geometry
+    evidence:
+      status: confirmed_from_code
+      refs:
+        - kind: code
+          path: /home/ruh/research/PhD/related_work/genie3/src/genie3/generation/model/embedder/pair/v1.py
+          lines: "137-157"
+  - from: conditional_structure_frames
+    to: pair_feature_net
+    label: conditioned geometry
+    evidence:
+      status: confirmed_from_code
+      refs:
+        - kind: code
+          path: /home/ruh/research/PhD/related_work/genie3/src/genie3/generation/model/embedder/pair/v1.py
+          lines: "163-183"
+  - from: pair_feature_net
+    to: token_pair_repr
+    label: pair init
+    evidence:
+      status: confirmed_from_code
+      refs:
+        - kind: code
+          path: /home/ruh/research/PhD/related_work/genie3/src/genie3/generation/model/implementation/v1.py
+          lines: "54"
+  - from: token_single_repr
+    to: latent_transformer
+    label: si
+    evidence:
+      status: confirmed_from_code
+      refs:
+        - kind: code
+          path: /home/ruh/research/PhD/related_work/genie3/src/genie3/generation/model/implementation/v1.py
+          lines: "55-57"
+  - from: token_pair_repr
+    to: latent_transformer
+    label: zij
+    evidence:
+      status: confirmed_from_code
+      refs:
+        - kind: code
+          path: /home/ruh/research/PhD/related_work/genie3/src/genie3/generation/model/implementation/v1.py
+          lines: "55-57"
+  - from: latent_transformer
+    to: sequence_net
+    label: si
+    evidence:
+      status: confirmed_from_code
+      refs:
+        - kind: code
+          path: /home/ruh/research/PhD/related_work/genie3/src/genie3/generation/model/implementation/v1.py
+          lines: "55-58"
+  - from: sequence_net
+    to: sequence_logits
+    label: logits
+    evidence:
+      status: confirmed_from_code
+      refs:
+        - kind: code
+          path: /home/ruh/research/PhD/related_work/genie3/src/genie3/generation/model/implementation/v1.py
+          lines: "58-60"
+  - from: latent_transformer
+    to: structure_net
+    label: si, zij
+    evidence:
+      status: confirmed_from_code
+      refs:
+        - kind: code
+          path: /home/ruh/research/PhD/related_work/genie3/src/genie3/generation/model/implementation/v1.py
+          lines: "59"
+  - from: token_frames
+    to: structure_net
+    label: frames
+    evidence:
+      status: confirmed_from_code
+      refs:
+        - kind: code
+          path: /home/ruh/research/PhD/related_work/genie3/src/genie3/generation/model/structure_net.py
+          lines: "79-88"
+  - from: backbone_update
+    to: token_frames
+    label: quat + trans update
+    evidence:
+      status: confirmed_from_code
+      refs:
+        - kind: code
+          path: /home/ruh/research/PhD/related_work/genie3/src/genie3/generation/model/module/backbone_update.py
+          lines: "62-77"
+        - kind: code
+          path: /home/ruh/research/PhD/related_work/genie3/src/genie3/generation/model/structure_net.py
+          lines: "87-88"
+  - from: structure_net
+    to: coordinate_output
+    label: final translations
+    evidence:
+      status: confirmed_from_code
+      refs:
+        - kind: code
+          path: /home/ruh/research/PhD/related_work/genie3/src/genie3/generation/model/structure_net.py
+          lines: "168-170"
+  - from: coordinate_output
+    to: diffusion_sampler
+    label: denoising direction
+    evidence:
+      status: confirmed_from_code
+      refs:
+        - kind: code
+          path: /home/ruh/research/PhD/related_work/genie3/src/genie3/generation/diffusion/ddpm.py
+          lines: "132-142"
+claims:
+  - id: sparse_atom_tokenization
+    statement: Genie 3 represents atomized residues as CA plus sidechain heavy atom tokens, not dense per-residue atom14 slots.
+    evidence:
+      status: confirmed_from_code
+      refs:
+        - kind: code
+          path: /home/ruh/research/PhD/related_work/genie3/src/genie3/generation/utils/feat_utils.py
+          lines: "123-165"
+  - id: ipa_over_flat_tokens
+    statement: The single, pair, and IPA structure stack operate over the flat token axis, so atomized sidechain tokens receive their own single slots and pair rows/columns.
+    evidence:
+      status: confirmed_from_code
+      refs:
+        - kind: code
+          path: /home/ruh/research/PhD/related_work/genie3/src/genie3/generation/model/embedder/pair/v1.py
+          lines: "96-183"
+        - kind: code
+          path: /home/ruh/research/PhD/related_work/genie3/src/genie3/generation/model/structure_net.py
+          lines: "79-88"
+  - id: rotations_are_internal
+    statement: Structure layers predict quaternion and translation updates, but the denoiser returns only final frame translations as token coordinates.
+    evidence:
+      status: confirmed_from_code
+      refs:
+        - kind: code
+          path: /home/ruh/research/PhD/related_work/genie3/src/genie3/generation/model/module/backbone_update.py
+          lines: "62-77"
+        - kind: code
+          path: /home/ruh/research/PhD/related_work/genie3/src/genie3/generation/model/structure_net.py
+          lines: "87-88,168-170"
+  - id: known_identity_sidechain_generation
+    statement: Sidechain coordinate generation happens for atomized known-identity regions; unknown-sequence binder design is CA-token level rather than full sidechain token generation.
+    evidence:
+      status: confirmed_from_paper
+      refs:
+        - kind: paper
+          path: /home/ruh/research/PhD/related_work/genie3/genie3_paper.pdf
+          lines: "Section 3.2, Section 3.3, Appendix A.3.1, Appendix A.3.2"

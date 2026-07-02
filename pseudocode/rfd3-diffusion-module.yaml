@@ -1,0 +1,467 @@
+schema_version: protein-pseudocode-v0.1
+id: rfd3_diffusion_module
+title: "RF Diffusion 3: Atom14 Diffusion Module"
+status: partial
+linked_architecture: architectures/rfd3-diffusion-module.yaml
+sources:
+  - id: rfd3_model
+    kind: code
+    path: /home/ruh/research/PhD/related_work/foundry/models/rfd3/src/rfd3/model/RFD3.py
+  - id: rfd3_diffusion
+    kind: code
+    path: /home/ruh/research/PhD/related_work/foundry/models/rfd3/src/rfd3/model/RFD3_diffusion_module.py
+  - id: rfd3_encoders
+    kind: code
+    path: /home/ruh/research/PhD/related_work/foundry/models/rfd3/src/rfd3/model/layers/encoders.py
+  - id: rfd3_blocks
+    kind: code
+    path: /home/ruh/research/PhD/related_work/foundry/models/rfd3/src/rfd3/model/layers/blocks.py
+  - id: rfd3_attention
+    kind: code
+    path: /home/ruh/research/PhD/related_work/foundry/models/rfd3/src/rfd3/model/layers/attention.py
+  - id: rfd3_block_utils
+    kind: code
+    path: /home/ruh/research/PhD/related_work/foundry/models/rfd3/src/rfd3/model/layers/block_utils.py
+  - id: rfd3_virtual_atoms
+    kind: code
+    path: /home/ruh/research/PhD/related_work/foundry/models/rfd3/src/rfd3/transforms/virtual_atoms.py
+  - id: rfd3_design_config
+    kind: config
+    path: /home/ruh/research/PhD/related_work/foundry/models/rfd3/configs/datasets/design_base.yaml
+symbols:
+  - id: atom14_slots
+    label: atom14 slots
+    kind: representation
+    scale: atom
+    architecture_ref: representations.atom14_slots
+  - id: tok_idx
+    label: atom_to_token_map
+    kind: index
+    scale: atom_to_token
+    architecture_ref: representations.atom_to_token_index
+  - id: x_noisy_l
+    label: X_noisy_L
+    kind: coordinate
+    scale: atom
+    architecture_ref: representations.noisy_coordinates
+  - id: r_noisy_l
+    label: R_noisy_L
+    kind: coordinate
+    scale: atom
+  - id: q_l
+    label: Q_L
+    kind: representation
+    scale: atom
+    architecture_ref: representations.atom_state
+  - id: c_l
+    label: C_L
+    kind: representation
+    scale: atom
+    architecture_ref: representations.atom_conditioning
+  - id: p_ll
+    label: P_LL
+    kind: representation
+    scale: atom_pair
+    architecture_ref: representations.atom_pair_repr
+  - id: a_i
+    label: A_I
+    kind: representation
+    scale: token
+    architecture_ref: representations.token_state
+  - id: s_i
+    label: S_I
+    kind: representation
+    scale: token
+  - id: z_ii
+    label: Z_II
+    kind: representation
+    scale: token_pair
+    architecture_ref: representations.token_pair_repr
+  - id: indices
+    label: attention indices
+    kind: index
+    scale: atom_or_token
+  - id: r_update_l
+    label: R_update_L
+    kind: coordinate
+    scale: atom
+    architecture_ref: representations.coordinate_update
+lines:
+  - id: pad_atom14_slots
+    number: 1
+    text: "PadTokensWithVirtualAtoms(n_atoms_per_token=14, association_scheme='dense') -> atom14 slots with VX padding"
+    text_mode: implementation_summary
+    operation: atom14_padding
+    inputs: []
+    outputs: [atom14_slots, tok_idx]
+    architecture_refs:
+      - modules.atom14_padding_pipeline
+      - representations.atom14_slots
+    source_refs:
+      - source: rfd3_design_config
+        lines: "35-42"
+      - source: rfd3_virtual_atoms
+        lines: "139-145,198-223,263-290"
+    visual:
+      scene: atom14_slotting
+      highlight: [atom14_slots, tok_idx]
+  - id: token_initializer_call
+    number: 2
+    text: "initializer_outputs = TokenInitializer(f) -> Q_L_init, C_L, P_LL, S_I, Z_II"
+    text_mode: implementation_summary
+    operation: initializer_call
+    inputs: [atom14_slots, tok_idx]
+    outputs: [q_l, c_l, p_ll, s_i, z_ii]
+    architecture_refs:
+      - modules.token_initializer
+    source_refs:
+      - source: rfd3_model
+        lines: "77-87,96-104"
+      - source: rfd3_encoders
+        lines: "163-292"
+    visual:
+      scene: initializer_outputs
+      highlight: [q_l, c_l, p_ll, s_i, z_ii]
+  - id: build_atom_pair_repr
+    number: 3
+    text: "P_LL = motif/ref atom-pair embeddings + process_single_l(C_L) + process_single_m(C_L)"
+    text_mode: implementation_summary
+    operation: atom_pair_construction
+    inputs: [c_l]
+    outputs: [p_ll]
+    architecture_refs:
+      - representations.atom_pair_repr
+      - modules.token_initializer
+    source_refs:
+      - source: rfd3_encoders
+        lines: "237-263"
+    visual:
+      scene: atom_pair_bias_construction
+      highlight: [p_ll, c_l]
+  - id: expand_token_pair_to_atom_pair
+    number: 4
+    text: "P_LL += process_z(Z_II)[tok_idx, tok_idx]; token pair state is expanded to atom-pair scale"
+    text_mode: implementation_summary
+    operation: token_pair_to_atom_pair
+    inputs: [z_ii, tok_idx]
+    outputs: [p_ll]
+    architecture_refs:
+      - representations.atom_pair_repr
+      - representations.token_pair_repr
+    source_refs:
+      - source: rfd3_encoders
+        lines: "264-268"
+    visual:
+      scene: token_pair_expansion
+      highlight: [z_ii, tok_idx, p_ll]
+  - id: pool_atom_pair_back_to_token_pair
+    number: 5
+    text: "Z_II += pairwise_mean_pool(P_LL, tok_idx) after P_LL pair MLP"
+    text_mode: implementation_summary
+    operation: atom_pair_to_token_pair_pool
+    inputs: [p_ll, tok_idx]
+    outputs: [z_ii]
+    architecture_refs:
+      - representations.token_pair_repr
+      - modules.token_initializer
+    source_refs:
+      - source: rfd3_encoders
+        lines: "268-278"
+      - source: rfd3_block_utils
+        lines: "513-579"
+    visual:
+      scene: atom_pair_pooling
+      highlight: [p_ll, tok_idx, z_ii]
+  - id: noisy_coords_to_atom_state
+    number: 6
+    text: "R_noisy_L = scale_positions_in(X_noisy_L); Q_L = Q_L_init + process_r(R_noisy_L)"
+    text_mode: implementation_summary
+    operation: coordinate_injection
+    standard_block_ref: standard_blocks/coordinate-injection.yaml
+    inputs: [x_noisy_l, q_l]
+    outputs: [r_noisy_l, q_l]
+    architecture_refs:
+      - modules.atom_attention_encoder
+      - representations.noisy_coordinates
+      - representations.atom_state
+    source_refs:
+      - source: rfd3_diffusion
+        lines: "211-220"
+    visual:
+      scene: diffusion_forward
+      highlight: [x_noisy_l, r_noisy_l, q_l]
+  - id: build_sparse_neighborhood
+    number: 7
+    text: "indices = create_attention_indices(X_noisy_L, f): sequence neighbors plus spatial nearest neighbors"
+    text_mode: implementation_summary
+    operation: sparse_neighborhood
+    inputs: [x_noisy_l]
+    outputs: [indices]
+    architecture_refs:
+      - modules.atom_attention_encoder
+    source_refs:
+      - source: rfd3_diffusion
+        lines: "196-201"
+      - source: rfd3_block_utils
+        lines: "199-204,316-320,397-399"
+    visual:
+      scene: sparse_neighborhood
+      highlight: [x_noisy_l, indices]
+  - id: atom_attention_pair_bias
+    number: 8
+    text: "LocalAttentionPairBias(Q_L, C_L, P_LL, indices): logits += Linear(P_LL)"
+    text_mode: implementation_summary
+    operation: pair_bias_add
+    standard_block_ref: standard_blocks/pair-biased-attention.yaml
+    inputs: [q_l, c_l, p_ll, indices]
+    outputs: [q_l]
+    architecture_refs:
+      - modules.atom_attention_encoder
+      - representations.atom_pair_repr
+    source_refs:
+      - source: rfd3_blocks
+        lines: "642-711"
+      - source: rfd3_attention
+        lines: "206,264-275,337-340,426-440"
+    visual:
+      scene: atom_attention_pair_bias
+      block: pair_biased_attention
+      slots:
+        pair: p_ll
+        logits: atom_attention_logits
+        pair_bias: atom_pair_bias
+      highlight: [q_l, p_ll]
+  - id: atom_to_token_downcast
+    number: 9
+    text: "A_I = downcast_q(Q_L, A_I, S_I, tok_idx): group atom14 slots by token, then mean or cross-attend to token state"
+    text_mode: implementation_summary
+    operation: atom_to_token_downcast
+    standard_block_ref: standard_blocks/atom-to-token-scatter-mean.yaml
+    inputs: [q_l, a_i, s_i, tok_idx]
+    outputs: [a_i]
+    architecture_refs:
+      - modules.atom_attention_encoder
+      - representations.token_state
+    source_refs:
+      - source: rfd3_diffusion
+        lines: "225-240"
+      - source: rfd3_blocks
+        lines: "518-577"
+    visual:
+      scene: atom_to_token_downcast
+      highlight: [q_l, tok_idx, a_i]
+  - id: token_encoder_with_noisy_distogram
+    number: 10
+    text: "DiffusionTokenEncoder(..., R_L_uniform, D_II_self): add noisy representative-coordinate distogram features to Z_II"
+    text_mode: implementation_summary
+    operation: token_pair_coordinate_conditioning
+    inputs: [z_ii, r_noisy_l]
+    outputs: [z_ii]
+    architecture_refs:
+      - modules.diffusion_token_encoder
+    source_refs:
+      - source: rfd3_diffusion
+        lines: "319-328"
+      - source: rfd3_encoders
+        lines: "381-403"
+    visual:
+      scene: token_pair_update
+      highlight: [z_ii, r_noisy_l]
+  - id: token_pairformer_updates_z
+    number: 11
+    text: "for block in pairformer: S_I, Z_II = block(S_I, Z_II)"
+    text_mode: implementation_summary
+    operation: token_pair_update
+    inputs: [s_i, z_ii]
+    outputs: [s_i, z_ii]
+    architecture_refs:
+      - modules.diffusion_token_encoder
+    source_refs:
+      - source: rfd3_encoders
+        lines: "411-414"
+    visual:
+      scene: token_pair_update
+      highlight: [s_i, z_ii]
+  - id: token_transformer_call
+    number: 12
+    text: "A_I = LocalTokenTransformer(A_I, S_I, Z_II, X_L=representative noisy/self coordinates)"
+    text_mode: implementation_summary
+    operation: token_transformer
+    inputs: [a_i, s_i, z_ii, r_noisy_l]
+    outputs: [a_i]
+    architecture_refs:
+      - modules.diffusion_transformer
+    source_refs:
+      - source: rfd3_diffusion
+        lines: "330-342"
+      - source: rfd3_blocks
+        lines: "589-639"
+    visual:
+      scene: token_transformer_pair_bias
+      highlight: [a_i, s_i, z_ii]
+  - id: token_attention_pair_bias
+    number: 13
+    text: "token LocalAttentionPairBias uses Z_II as pair bias while updating A_I"
+    text_mode: implementation_summary
+    operation: pair_bias_add
+    standard_block_ref: standard_blocks/pair-biased-attention.yaml
+    inputs: [a_i, z_ii]
+    outputs: [a_i]
+    architecture_refs:
+      - modules.diffusion_transformer
+    source_refs:
+      - source: rfd3_blocks
+        lines: "663-711"
+      - source: rfd3_attention
+        lines: "206,337-340,426-440"
+    visual:
+      scene: token_transformer_pair_bias
+      block: pair_biased_attention
+      slots:
+        pair: z_ii
+        logits: token_attention_logits
+        pair_bias: token_pair_bias
+      highlight: [a_i, z_ii]
+  - id: token_to_atom_upcast
+    number: 14
+    text: "Q_L = decoder.upcast_a(A_I, Q_L, C_L, tok_idx): copy/broadcast or cross-attend token output to atom14 slots"
+    text_mode: implementation_summary
+    operation: token_to_atom_upcast
+    standard_block_ref: standard_blocks/token-to-atom-gather.yaml
+    inputs: [a_i, q_l, c_l, tok_idx]
+    outputs: [q_l]
+    architecture_refs:
+      - modules.atom_attention_decoder
+    source_refs:
+      - source: rfd3_diffusion
+        lines: "347-373"
+      - source: rfd3_blocks
+        lines: "469-515,714-777"
+    visual:
+      scene: atom_decoder
+      highlight: [a_i, tok_idx, q_l]
+  - id: decoder_atom_attention_pair_bias
+    number: 15
+    text: "decoder LocalAtomTransformer(Q_L, C_L, P_LL, indices) again uses atom-pair bias"
+    text_mode: implementation_summary
+    operation: pair_bias_add
+    standard_block_ref: standard_blocks/pair-biased-attention.yaml
+    inputs: [q_l, c_l, p_ll, indices]
+    outputs: [q_l]
+    architecture_refs:
+      - modules.atom_attention_decoder
+    source_refs:
+      - source: rfd3_diffusion
+        lines: "347-373"
+      - source: rfd3_blocks
+        lines: "714-777"
+      - source: rfd3_attention
+        lines: "206,337-340,426-440"
+    visual:
+      scene: atom_decoder
+      block: pair_biased_attention
+      slots:
+        pair: p_ll
+        logits: atom_attention_logits
+        pair_bias: atom_pair_bias
+      highlight: [q_l, p_ll]
+  - id: coordinate_sequence_heads
+    number: 16
+    text: "R_update_L = to_r_update(Q_L); X_out_L = scale_positions_out(R_update_L); logits = seq_head(A_I)"
+    text_mode: implementation_summary
+    operation: output_heads
+    inputs: [q_l, a_i]
+    outputs: [r_update_l]
+    architecture_refs:
+      - modules.coordinate_sequence_heads
+      - representations.coordinate_update
+    source_refs:
+      - source: rfd3_diffusion
+        lines: "375-380"
+    visual:
+      scene: output_heads
+      highlight: [q_l, a_i, r_update_l]
+visual_scenes:
+  - id: atom14_slotting
+    type: scale_layout
+    title: "Atom14 slotting: each residue token owns a fixed block of atom slots"
+  - id: initializer_outputs
+    type: dataflow
+    title: "TokenInitializer emits atom, token, and pair streams"
+  - id: atom_pair_bias_construction
+    type: attention_terms
+    title: "P_LL is built before atom attention, not from noisy atom distances"
+  - id: token_pair_expansion
+    type: scale_transition
+    title: "Token pair state expands to atom-pair scale through atom_to_token"
+  - id: atom_pair_pooling
+    type: scale_transition
+    title: "Atom pair features are also pooled back into token pairs"
+  - id: diffusion_forward
+    type: dataflow
+    title: "Noisy coordinates enter Q_L and neighborhood construction"
+  - id: sparse_neighborhood
+    type: mask
+    title: "Sparse local attention indices come from sequence and spatial neighborhoods"
+  - id: atom_attention_pair_bias
+    type: attention_terms
+    title: "Atom attention adds pair bias from P_LL"
+  - id: atom_to_token_downcast
+    type: many_atoms_to_one_token
+    title: "Atom14 slots are compressed to token state"
+  - id: token_pair_update
+    type: dataflow
+    title: "Token pair state is updated with coordinate-derived token distograms"
+  - id: token_transformer_pair_bias
+    type: attention_terms
+    title: "Token transformer uses Z_II as local pair bias"
+  - id: atom_decoder
+    type: one_token_to_many_atoms
+    title: "Token state is upcast back to atom14 slots before atom decoding"
+  - id: output_heads
+    type: dataflow
+    title: "Decoded atom state produces coordinate updates"
+claims:
+  - id: atom14_slots_are_real_model_inputs
+    statement: RFD3 diffusion runs over dense atom14 slots, including virtual VX atoms, not only observed physical atoms.
+    line_refs: [pad_atom14_slots, token_initializer_call]
+    evidence:
+      status: confirmed_from_code
+      refs:
+        - kind: code
+          source: rfd3_virtual_atoms
+          lines: "139-145,198-223,263-290"
+  - id: atom_attention_has_pair_bias
+    statement: Atom encoder and decoder attention add a projected P_LL pair bias to attention logits.
+    line_refs: [atom_attention_pair_bias, decoder_atom_attention_pair_bias]
+    evidence:
+      status: confirmed_from_code
+      refs:
+        - kind: code
+          source: rfd3_attention
+          lines: "206,337-340,426-440"
+  - id: p_ll_is_not_noisy_distance_bias
+    statement: Noisy atom coordinates build Q_L and sparse neighborhoods, but P_LL itself comes from initializer atom-pair and token-pair features.
+    line_refs: [build_atom_pair_repr, expand_token_pair_to_atom_pair, noisy_coords_to_atom_state, build_sparse_neighborhood]
+    evidence:
+      status: confirmed_from_code
+      refs:
+        - kind: code
+          source: rfd3_encoders
+          lines: "237-268"
+        - kind: code
+          source: rfd3_diffusion
+          lines: "196-220"
+  - id: token_pair_state_is_updated
+    statement: Unlike the ESMFold2 token transformer slice, RFD3 has a DiffusionTokenEncoder that updates Z_II before token attention consumes it.
+    line_refs: [token_encoder_with_noisy_distogram, token_pairformer_updates_z, token_attention_pair_bias]
+    evidence:
+      status: confirmed_from_code
+      refs:
+        - kind: code
+          source: rfd3_encoders
+          lines: "381-414"
+open_questions:
+  - id: atom14_cleanup_visual
+    question: How should the final cleanup of virtual atom slots be represented alongside the diffusion loss path?
+    status: unresolved

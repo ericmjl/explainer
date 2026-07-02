@@ -1,0 +1,44 @@
+schema_version: protein-standard-block-v0.1
+id: token_to_atom_gather
+name: Token-To-Atom Gather
+kind: scale_transition
+status: draft
+description: Project token features to atom width and copy each token vector to atoms assigned to that token.
+canonical_operation: token_to_atom_gather
+input_slots:
+  - id: token_state
+    label: token state
+    scale: token
+    kind: representation
+    required: true
+  - id: atom_to_token_index
+    label: atom_to_token
+    scale: atom_to_token
+    kind: index
+    required: true
+output_slots:
+  - id: atom_state
+    label: atom state
+    scale: atom
+    kind: representation
+math:
+  - id: project_token_state
+    text: "h_token = Linear(token_state)"
+    tex: "h_j^{tok} = W\\,t_j"
+    operation: projection
+    inputs: [token_state]
+    outputs: [atom_state]
+  - id: gather
+    text: "atom_i = h_token[atom_to_token_i]"
+    tex: "a_i = h^{tok}_{\\operatorname{tok}(i)}"
+    operation: gather
+    inputs: [token_state, atom_to_token_index]
+    outputs: [atom_state]
+visual_template:
+  type: one_token_to_many_atoms
+renderer_contract:
+  shows:
+    - one-to-many copy
+    - index map lookup
+evidence_policy:
+  require_usage_evidence: true

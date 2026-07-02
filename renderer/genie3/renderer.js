@@ -14,25 +14,11 @@ const boardsById = new Map(manifest.boards.items.map((board) => [board.id, board
 
 let connectionTooltip = null;
 let breadcrumbs = null;
-let canvasControls = null;
 
 const state = {
   focusedId: null,
   focusHasMath: false,
   boardStack: [manifest.boards.rootBoard],
-};
-
-const viewport = {
-  x: 0,
-  y: 0,
-  scale: 1,
-  minScale: 0.55,
-  maxScale: 2.2,
-  isPanning: false,
-  startClientX: 0,
-  startClientY: 0,
-  startX: 0,
-  startY: 0,
 };
 
 function render() {
@@ -83,7 +69,6 @@ function ensureBoardChrome() {
     elements.canvas.appendChild(breadcrumbs);
   }
   ensureConnectionTooltip();
-  ensurePanZoom();
 }
 
 function currentBoard() {
@@ -99,12 +84,9 @@ function renderBoard() {
   elements.canvas.classList.toggle("is-abstract-board", board.scale_lanes === false);
 
   renderBreadcrumbs();
-
-  for (const node of visibleNodes(board)) {
+  for (const node of board.nodes || []) {
     elements.moduleLayer.appendChild(renderNode(node));
   }
-  applyViewport();
-
   window.requestAnimationFrame(renderEdges);
 }
 
@@ -201,18 +183,17 @@ function blockCardHtml(node, module, expandable) {
   const detail = node.detail || moduleDetail(module) || kind;
   const repeat = module?.repeats ? `<span class="arch-repeat">x${module.repeats}</span>` : "";
   const badges = blockBadges(node, module, expandable);
-
   if (node.treatment === "chip" || node.density === "micro") {
     return `
       <strong>${label}</strong>
       <span class="arch-chip-meta">${node.scale || module?.scale || kind}</span>
     `;
   }
-
   return `
     <span class="arch-node-top">
       <span class="arch-kind">${kind}</span>
       ${repeat}
+      ${expandable ? `<span class="arch-repeat">zoom</span>` : ""}
     </span>
     <strong>${label}</strong>
     <span class="arch-role">${role}</span>
@@ -231,8 +212,9 @@ function blockBadges(node, module, expandable) {
       : null;
   return [
     node.scale || module?.scale,
-    module?.attention?.pattern,
+    module?.attention?.pattern || node.kind,
     pairBias,
+    expandable ? "expandable" : null,
   ].filter(Boolean);
 }
 
@@ -248,7 +230,6 @@ function pushBoard(boardId) {
   if (!boardsById.has(boardId)) return;
   state.boardStack.push(boardId);
   state.focusedId = null;
-  resetViewport();
   hideConnection();
   renderBoard();
   focusOverview();
@@ -257,7 +238,6 @@ function pushBoard(boardId) {
 function popToBoard(index) {
   state.boardStack = state.boardStack.slice(0, index + 1);
   state.focusedId = null;
-  resetViewport();
   hideConnection();
   renderBoard();
   focusOverview();
@@ -265,13 +245,12 @@ function popToBoard(index) {
 
 function renderEdges() {
   const board = currentBoard();
-  const width = elements.moduleLayer.offsetWidth;
-  const height = elements.moduleLayer.offsetHeight;
-  elements.edgeLayer.setAttribute("viewBox", `0 0 ${width} ${height}`);
+  const canvasRect = elements.moduleLayer.getBoundingClientRect();
+  elements.edgeLayer.setAttribute("viewBox", `0 0 ${canvasRect.width} ${canvasRect.height}`);
   elements.edgeLayer.innerHTML = "";
 
   for (const edge of board.edges || []) {
-    const dockedEdge = edgeDocking(edge);
+    const dockedEdge = edgeDocking(edge, canvasRect);
     if (!dockedEdge) continue;
     const { from, to } = dockedEdge;
     const midX = (from.x + to.x) / 2;
@@ -293,9 +272,9 @@ function renderEdges() {
   }
 }
 
-function edgeDocking(edge) {
-  const fromBox = nodeBox(edge.from);
-  const toBox = nodeBox(edge.to);
+function edgeDocking(edge, canvasRect) {
+  const fromBox = nodeBox(edge.from, canvasRect);
+  const toBox = nodeBox(edge.to, canvasRect);
   if (!fromBox || !toBox) return null;
   return {
     from: dockPoint(fromBox, toBox),
@@ -303,18 +282,19 @@ function edgeDocking(edge) {
   };
 }
 
-function nodeBox(id) {
+function nodeBox(id, canvasRect) {
   const node = elements.moduleLayer.querySelector(`[data-node-id="${id}"]`);
   if (!node) return null;
-  const x = node.offsetLeft;
-  const y = node.offsetTop;
+  const rect = node.getBoundingClientRect();
+  const x = rect.left - canvasRect.left;
+  const y = rect.top - canvasRect.top;
   return {
     x,
     y,
-    width: node.offsetWidth,
-    height: node.offsetHeight,
-    cx: x + node.offsetWidth / 2,
-    cy: y + node.offsetHeight / 2,
+    width: rect.width,
+    height: rect.height,
+    cx: x + rect.width / 2,
+    cy: y + rect.height / 2,
   };
 }
 
@@ -358,7 +338,7 @@ function renderConnectionPort(edge, point) {
 }
 
 function applyEdgeTone(element, edge) {
-  if (edge.tone === "conditioning" || edge.from === "pair_repr") {
+  if (edge.tone === "conditioning" || edge.from.includes("pair")) {
     element.classList.add("is-conditioning");
   }
   if (edge.tone === "skip") {
@@ -376,10 +356,9 @@ function ensureConnectionTooltip() {
 function showConnection(edge, point) {
   const canvasRect = elements.canvas.getBoundingClientRect();
   const layerRect = elements.moduleLayer.getBoundingClientRect();
-  const x = layerRect.left - canvasRect.left + point.x * viewport.scale;
-  const y = layerRect.top - canvasRect.top + point.y * viewport.scale;
+  const x = layerRect.left - canvasRect.left + point.x;
+  const y = layerRect.top - canvasRect.top + point.y;
   const shouldFlip = x > canvasRect.width - 320;
-
   connectionTooltip.classList.toggle("is-left", shouldFlip);
   connectionTooltip.classList.add("is-visible");
   connectionTooltip.style.left = `${x}px`;
@@ -389,10 +368,7 @@ function showConnection(edge, point) {
     <strong>${edge.connection.title}</strong>
     <p>${edge.connection.inside}</p>
   `;
-
-  if (!state.focusedId) {
-    focusConnection(edge);
-  }
+  if (!state.focusedId) focusConnection(edge);
 }
 
 function hideConnection() {
@@ -451,7 +427,7 @@ function focusOverview() {
     <div class="focus-section">
       <p>${board.summary}</p>
       <div class="summary-grid">
-        ${visibleNodes(board).map(renderBoardSummaryNode).join("")}
+        ${(board.nodes || []).map(renderBoardSummaryNode).join("")}
       </div>
       ${board.id === manifest.boards.rootBoard ? renderLanguageSummary() : ""}
       ${board.id === manifest.boards.rootBoard ? renderClaims() : ""}
@@ -474,10 +450,6 @@ function renderBoardSummaryNode(node) {
   `;
 }
 
-function visibleNodes(board) {
-  return (board.nodes || []).filter((node) => node.prominence !== "hidden" && node.treatment !== "hidden");
-}
-
 function renderClaims() {
   return `
     <h3>Claims</h3>
@@ -498,22 +470,22 @@ function renderLanguageSummary() {
       <article class="mini-summary">
         <span>execution</span>
         <strong>${loops} loop${loops === 1 ? "" : "s"}</strong>
-        <em>control flow and cached state</em>
+        <em>diffusion pass and recycle loop</em>
       </article>
       <article class="mini-summary">
         <span>state</span>
         <strong>${states} representations</strong>
-        <em>mutable vs conditioning semantics</em>
+        <em>atom/token/pair semantics</em>
       </article>
       <article class="mini-summary">
         <span>conditioning</span>
         <strong>${conditioning} modes</strong>
-        <em>AdaLN, pair bias, coordinate injection</em>
+        <em>pair bias, AdaLN, coordinates</em>
       </article>
       <article class="mini-summary">
         <span>scale</span>
         <strong>${transitions} transitions</strong>
-        <em>atom/token pooling and gather</em>
+        <em>atom-to-token and token-to-atom</em>
       </article>
     </div>
   `;
@@ -524,19 +496,13 @@ function focusModule(module) {
   clearActiveNodes();
   elements.moduleLayer.querySelector(`[data-module-id="${module.id}"]`)?.classList.add("is-focused");
   elements.focusTitle.textContent = module.label;
-
-  const pairBlock = module.contains?.find((child) => child.standard_block_ref);
-  const blockHtml = pairBlock ? renderPairBiasedAttentionBlock() : "";
-  const pseudocodeHtml = module.pseudocode_ref ? renderPseudocode(module) : "";
-
   setFocusBody(`
     <div class="focus-section">
       <p>${module.role}</p>
       ${renderAttentionSummary(module)}
-      ${module.accepts_but_does_not_use ? renderUnusedInputs(module.accepts_but_does_not_use) : ""}
       ${renderContains(module.contains || [])}
-      ${blockHtml}
-      ${pseudocodeHtml}
+      ${renderStandardBlocks(module)}
+      ${module.pseudocode_ref ? renderPseudocode(module) : ""}
       ${renderEvidence(module)}
       ${renderFocusLinks(module)}
     </div>
@@ -601,23 +567,39 @@ function renderAttentionSummary(module) {
   `;
 }
 
-function renderUnusedInputs(inputs) {
+function renderStandardBlocks(module) {
+  const children = module.contains?.filter((child) => child.standard_block_ref) || [];
+  if (!children.length) return "";
+  return children.map((child) => {
+    const block = manifest.standardBlocks[standardBlockIdFromRef(child.standard_block_ref)];
+    if (!block) return "";
+    if (block.id === "pair_biased_attention") return renderPairBiasedAttentionBlock(block);
+    return renderStandardBlock(block);
+  }).join("");
+}
+
+function standardBlockIdFromRef(ref = "") {
+  const file = ref.split("/").at(-1) || "";
+  return file.replace(/\.yaml$/, "").replaceAll("-", "_");
+}
+
+function renderStandardBlock(block) {
   return `
-    <div class="warning-note">
-      <strong>Accepted but not used here</strong>
-      <span>${inputs.join(", ")}</span>
-    </div>
+    <h3>${block.name}</h3>
+    <p>${block.description}</p>
+    <ol class="math-list">
+      ${block.math.map(renderMathStep).join("")}
+    </ol>
   `;
 }
 
-function renderPairBiasedAttentionBlock() {
-  const block = manifest.standardBlocks.pair_biased_attention;
+function renderPairBiasedAttentionBlock(block) {
   return `
     <h3>${block.name}</h3>
     <div class="pair-block">
       <div class="pair-matrix qk">QK logits</div>
       <div class="pair-plus">+</div>
-      <div class="pair-matrix bias">Linear(z)</div>
+      <div class="pair-matrix bias">Linear(pair)</div>
       <div class="pair-arrow">softmax</div>
       <div class="pair-matrix weights">weights @ V</div>
     </div>
@@ -628,17 +610,17 @@ function renderPairBiasedAttentionBlock() {
 }
 
 function renderPseudocode(module) {
-  const program = manifest.pseudocode.esmfold2_pair_bias_boundary;
-  const relevant = module.id === "token_transformer"
-    ? ["token_pair_bias_add"]
-    : ["atom_encoder_signature", "atom_transformer_call", "swa_attention_forward"];
+  const program = Object.values(manifest.pseudocode)[0];
+  if (!program) return "";
+  const ids = module.pseudocode_line_ids || [];
+  const lines = ids.length > 0
+    ? program.lines.filter((line) => ids.includes(line.id))
+    : program.lines.slice(0, 4);
+  if (!lines.length) return "";
   return `
     <h3>Pseudocode trace</h3>
     <ol class="pseudo-lines">
-      ${program.lines
-        .filter((line) => relevant.includes(line.id))
-        .map((line) => `<li><code>${line.text}</code><span>${line.refs}</span></li>`)
-        .join("")}
+      ${lines.map((line) => `<li><code>${line.text}</code><span>${line.refs}</span></li>`).join("")}
     </ol>
   `;
 }
@@ -668,111 +650,6 @@ function renderFocusLinks(module) {
 function shortPath(path = "") {
   const parts = path.split("/");
   return parts.slice(-2).join("/");
-}
-
-function ensurePanZoom() {
-  if (!canvasControls) {
-    canvasControls = document.createElement("div");
-    canvasControls.className = "canvas-controls";
-    canvasControls.innerHTML = `
-      <button type="button" data-zoom="out" aria-label="Zoom out" title="Zoom out">-</button>
-      <button type="button" data-zoom="reset" aria-label="Reset view" title="Reset view">1:1</button>
-      <button type="button" data-zoom="in" aria-label="Zoom in" title="Zoom in">+</button>
-    `;
-    canvasControls.addEventListener("click", onCanvasControlClick);
-    elements.canvas.appendChild(canvasControls);
-  }
-
-  if (elements.canvas.dataset.panZoomReady) return;
-  elements.canvas.dataset.panZoomReady = "true";
-  elements.canvas.addEventListener("wheel", onCanvasWheel, { passive: false });
-  elements.canvas.addEventListener("pointerdown", onCanvasPointerDown);
-  elements.canvas.addEventListener("pointermove", onCanvasPointerMove);
-  elements.canvas.addEventListener("pointerup", endPan);
-  elements.canvas.addEventListener("pointercancel", endPan);
-}
-
-function onCanvasControlClick(event) {
-  const action = event.target.closest("button")?.dataset.zoom;
-  if (!action) return;
-  if (action === "reset") {
-    resetViewport();
-    return;
-  }
-  zoomAtCanvasCenter(action === "in" ? 1.18 : 1 / 1.18);
-}
-
-function onCanvasWheel(event) {
-  if (event.target.closest(".board-breadcrumbs, .canvas-controls")) return;
-  event.preventDefault();
-  const factor = Math.exp(-event.deltaY * 0.001);
-  zoomAt(event.clientX, event.clientY, factor);
-}
-
-function onCanvasPointerDown(event) {
-  if (event.button !== 0 && event.button !== 1) return;
-  if (event.target.closest(".arch-node, .arch-rep, .edge-port, .board-breadcrumbs, .canvas-controls")) return;
-  viewport.isPanning = true;
-  viewport.startClientX = event.clientX;
-  viewport.startClientY = event.clientY;
-  viewport.startX = viewport.x;
-  viewport.startY = viewport.y;
-  elements.canvas.classList.add("is-panning");
-  elements.canvas.setPointerCapture(event.pointerId);
-}
-
-function onCanvasPointerMove(event) {
-  if (!viewport.isPanning) return;
-  event.preventDefault();
-  viewport.x = viewport.startX + event.clientX - viewport.startClientX;
-  viewport.y = viewport.startY + event.clientY - viewport.startClientY;
-  applyViewport();
-}
-
-function endPan(event) {
-  if (!viewport.isPanning) return;
-  viewport.isPanning = false;
-  elements.canvas.classList.remove("is-panning");
-  if (event?.pointerId && elements.canvas.hasPointerCapture(event.pointerId)) {
-    elements.canvas.releasePointerCapture(event.pointerId);
-  }
-}
-
-function zoomAtCanvasCenter(factor) {
-  const rect = elements.canvas.getBoundingClientRect();
-  zoomAt(rect.left + rect.width / 2, rect.top + rect.height / 2, factor);
-}
-
-function zoomAt(clientX, clientY, factor) {
-  const canvasRect = elements.canvas.getBoundingClientRect();
-  const baseX = elements.moduleLayer.offsetLeft;
-  const baseY = elements.moduleLayer.offsetTop;
-  const px = clientX - canvasRect.left;
-  const py = clientY - canvasRect.top;
-  const nextScale = clamp(viewport.scale * factor, viewport.minScale, viewport.maxScale);
-  const localX = (px - baseX - viewport.x) / viewport.scale;
-  const localY = (py - baseY - viewport.y) / viewport.scale;
-  viewport.x = px - baseX - localX * nextScale;
-  viewport.y = py - baseY - localY * nextScale;
-  viewport.scale = nextScale;
-  applyViewport();
-}
-
-function resetViewport() {
-  viewport.x = 0;
-  viewport.y = 0;
-  viewport.scale = 1;
-  applyViewport();
-}
-
-function applyViewport() {
-  const transform = `translate(${viewport.x}px, ${viewport.y}px) scale(${viewport.scale})`;
-  elements.moduleLayer.style.transform = transform;
-  elements.edgeLayer.style.transform = transform;
-}
-
-function clamp(value, min, max) {
-  return Math.min(max, Math.max(min, value));
 }
 
 window.addEventListener("resize", renderEdges);

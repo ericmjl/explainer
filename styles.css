@@ -1270,14 +1270,18 @@ kbd {
 
 .renderer-grid {
   display: grid;
-  grid-template-columns: minmax(760px, 1fr) minmax(320px, 360px);
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-rows: clamp(760px, calc(100svh - 220px), 1040px) minmax(260px, 420px);
   gap: 14px;
   align-items: stretch;
-  min-height: clamp(720px, calc(100svh - 220px), 980px);
+  height: auto;
+  min-height: 0;
+  overflow: visible;
 }
 
 .architecture-canvas {
   position: relative;
+  height: 100%;
   min-height: 0;
   overflow: hidden;
   border: 1px solid var(--line);
@@ -1286,6 +1290,12 @@ kbd {
     linear-gradient(rgba(255, 255, 255, 0.74), rgba(255, 255, 255, 0.74)),
     linear-gradient(135deg, rgba(24, 108, 114, 0.08), rgba(208, 91, 63, 0.06));
   box-shadow: var(--shadow);
+  cursor: grab;
+  touch-action: none;
+}
+
+.architecture-canvas.is-panning {
+  cursor: grabbing;
 }
 
 .architecture-canvas.is-abstract-board .scale-lane {
@@ -1395,6 +1405,8 @@ kbd {
   grid-template-columns: repeat(var(--board-columns, 5), minmax(150px, 1fr));
   grid-template-rows: repeat(var(--board-rows, 4), minmax(118px, 1fr));
   gap: clamp(16px, 1.8vh, 24px) clamp(18px, 1.8vw, 32px);
+  transform-origin: 0 0;
+  will-change: transform;
 }
 
 .edge-layer {
@@ -1402,6 +1414,42 @@ kbd {
   inset: 58px 34px 30px 118px;
   z-index: 3;
   pointer-events: none;
+  transform-origin: 0 0;
+  will-change: transform;
+}
+
+.canvas-controls {
+  position: absolute;
+  top: 12px;
+  right: 14px;
+  z-index: 6;
+  display: flex;
+  gap: 6px;
+  padding: 5px;
+  border: 1px solid rgba(99, 112, 109, 0.22);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.84);
+  box-shadow: 0 10px 22px rgba(35, 41, 39, 0.1);
+}
+
+.canvas-controls button {
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 30px;
+  border: 1px solid rgba(99, 112, 109, 0.24);
+  border-radius: 7px;
+  background: rgba(255, 255, 255, 0.88);
+  color: var(--ink);
+  cursor: pointer;
+  font-size: 0.82rem;
+  font-weight: 900;
+  line-height: 1;
+}
+
+.canvas-controls button:hover {
+  border-color: var(--accent);
+  color: var(--accent);
 }
 
 .arch-rep {
@@ -1444,6 +1492,74 @@ kbd {
 
 .arch-rep.scale-scalar {
   border-left: 5px solid rgba(196, 123, 32, 0.76);
+}
+
+.arch-rep.prominence-context,
+.arch-node.prominence-context {
+  opacity: 0.78;
+}
+
+.arch-rep.prominence-primary,
+.arch-node.prominence-primary {
+  border-width: 2px;
+  box-shadow: 0 18px 38px rgba(35, 41, 39, 0.14);
+}
+
+.arch-rep.treatment-compact {
+  min-height: 76px;
+  padding: 10px;
+  gap: 4px;
+}
+
+.arch-rep.treatment-chip {
+  align-content: center;
+  min-height: auto;
+  padding: 8px 10px;
+  border-style: solid;
+  background: rgba(255, 255, 255, 0.74);
+  box-shadow: 0 6px 16px rgba(35, 41, 39, 0.06);
+}
+
+.arch-rep.treatment-chip strong {
+  font-size: 0.82rem;
+}
+
+.arch-rep.treatment-annotation,
+.arch-rep.treatment-lane_marker {
+  min-height: auto;
+  padding: 9px 11px;
+  border-style: solid;
+  background: rgba(255, 255, 255, 0.58);
+  box-shadow: none;
+}
+
+.arch-rep.density-compact {
+  min-height: 64px;
+  padding: 9px 10px;
+  gap: 4px;
+}
+
+.arch-rep.density-compact code {
+  display: none;
+}
+
+.arch-rep.density-micro {
+  align-content: center;
+  min-height: 38px;
+  padding: 7px 9px;
+  gap: 2px;
+  border-style: solid;
+  background: rgba(255, 255, 255, 0.66);
+  box-shadow: 0 5px 12px rgba(35, 41, 39, 0.05);
+}
+
+.arch-rep.density-micro span {
+  font-size: 0.58rem;
+}
+
+.arch-rep.density-micro strong {
+  font-size: 0.76rem;
+  line-height: 1.05;
 }
 
 .arch-rep span {
@@ -1503,7 +1619,7 @@ kbd {
   border-color: var(--accent);
   background: rgba(255, 255, 255, 0.96);
   box-shadow: 0 22px 42px rgba(35, 41, 39, 0.16);
-  transform: translateY(-8px);
+  transform: none;
 }
 
 .arch-node.is-expandable {
@@ -1543,6 +1659,104 @@ kbd {
 
 .arch-node.scale-abstract strong {
   font-size: 1.28rem;
+}
+
+.arch-node.prominence-primary {
+  min-height: 144px;
+}
+
+.arch-node.prominence-context {
+  box-shadow: 0 8px 18px rgba(35, 41, 39, 0.07);
+}
+
+.arch-node.treatment-compact {
+  min-height: 88px;
+  padding: 11px;
+  gap: 6px;
+}
+
+.arch-node.treatment-compact .arch-role {
+  display: -webkit-box;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
+.arch-node.treatment-compact .arch-spec {
+  display: none;
+}
+
+.arch-node.treatment-chip {
+  align-content: center;
+  min-height: auto;
+  padding: 9px 11px;
+  gap: 3px;
+  background: rgba(255, 255, 255, 0.74);
+  box-shadow: 0 6px 16px rgba(35, 41, 39, 0.06);
+}
+
+.arch-node.treatment-chip .arch-node-top,
+.arch-node.treatment-chip .arch-role,
+.arch-node.treatment-chip .arch-spec,
+.arch-node.treatment-chip .arch-badges {
+  display: none;
+}
+
+.arch-node.treatment-chip strong {
+  font-size: 0.9rem;
+  line-height: 1.08;
+}
+
+.arch-node.treatment-annotation,
+.arch-node.treatment-lane_marker {
+  min-height: auto;
+  padding: 9px 11px;
+  border-style: dashed;
+  background: rgba(255, 255, 255, 0.58);
+  box-shadow: none;
+}
+
+.arch-node.density-compact {
+  min-height: 76px;
+  padding: 10px;
+  gap: 5px;
+}
+
+.arch-node.density-compact .arch-role {
+  display: -webkit-box;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 1;
+}
+
+.arch-node.density-compact .arch-spec {
+  display: none;
+}
+
+.arch-node.density-micro {
+  align-content: center;
+  min-height: 40px;
+  padding: 7px 9px;
+  gap: 2px;
+  background: rgba(255, 255, 255, 0.66);
+  box-shadow: 0 5px 12px rgba(35, 41, 39, 0.05);
+}
+
+.arch-node.density-micro strong {
+  font-size: 0.78rem;
+  line-height: 1.04;
+}
+
+.arch-node.density-micro .arch-chip-meta {
+  font-size: 0.58rem;
+}
+
+.arch-chip-meta {
+  color: var(--muted);
+  font-size: 0.66rem;
+  font-weight: 900;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
 }
 
 .arch-node-top,
@@ -1711,6 +1925,8 @@ kbd {
 }
 
 .focus-panel {
+  height: 100%;
+  max-height: 420px;
   min-height: 0;
   overflow: auto;
   border: 1px solid var(--line);
@@ -1912,6 +2128,26 @@ kbd {
   line-height: 1.45;
 }
 
+.math-list li {
+  display: grid;
+  gap: 4px;
+}
+
+.math-step {
+  display: block;
+  overflow-x: auto;
+  color: #1f2a28;
+  font-size: 0.9rem;
+}
+
+.math-list code {
+  color: var(--muted);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 0.72rem;
+  line-height: 1.35;
+  white-space: normal;
+}
+
 .pseudo-lines code {
   color: #25302e;
   font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
@@ -2041,11 +2277,14 @@ kbd {
   }
 
   .renderer-grid {
+    height: auto;
     min-height: auto;
+    overflow: visible;
   }
 
   .architecture-canvas,
   .focus-panel {
+    height: auto;
     min-height: 620px;
   }
 }

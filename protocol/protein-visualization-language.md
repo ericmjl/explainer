@@ -89,6 +89,49 @@ edges:
   source: edges
 ```
 
+Architecture-map nodes may declare visual hierarchy without changing the
+architecture facts:
+
+```yaml
+nodes:
+  - id: atom_attention_encoder
+    module_ref: atom_attention_encoder
+    prominence: primary
+    treatment: block
+    density: normal
+  - id: atom14_padding_pipeline
+    module_ref: atom14_padding_pipeline
+    prominence: context
+    treatment: chip
+    density: micro
+```
+
+`prominence` controls visual importance:
+
+- `primary`: central mechanism for the current board.
+- `secondary`: useful supporting state or setup.
+- `context`: required background or boundary condition, shown quietly.
+- `hidden`: omitted from the canvas but still available to source/focus views.
+
+`treatment` controls visual form:
+
+- `block`: full card.
+- `compact`: reduced card for supporting components.
+- `chip`: small contextual marker.
+- `annotation`: explanatory note attached to nearby blocks.
+- `lane_marker`: scale or phase marker.
+
+`density` controls how much content appears inside that visual form:
+
+- `normal`: label, role, detail, and badges when available.
+- `compact`: shorter card, clipped role text, minimal metadata.
+- `micro`: label-only or label-plus-scale marker for boundary conditions,
+  padding, masks, and other bookkeeping.
+
+Use this for cases where the source must stay complete, but the board should not
+claim that every preprocessing or bookkeeping component has equal architectural
+weight.
+
 ### Module Focus
 
 A focused view for one module.

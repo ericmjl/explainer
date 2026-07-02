@@ -99,12 +99,10 @@ function renderBoard() {
   elements.canvas.classList.toggle("is-abstract-board", board.scale_lanes === false);
 
   renderBreadcrumbs();
-
   for (const node of visibleNodes(board)) {
     elements.moduleLayer.appendChild(renderNode(node));
   }
   applyViewport();
-
   window.requestAnimationFrame(renderEdges);
 }
 
@@ -201,14 +199,12 @@ function blockCardHtml(node, module, expandable) {
   const detail = node.detail || moduleDetail(module) || kind;
   const repeat = module?.repeats ? `<span class="arch-repeat">x${module.repeats}</span>` : "";
   const badges = blockBadges(node, module, expandable);
-
   if (node.treatment === "chip" || node.density === "micro") {
     return `
       <strong>${label}</strong>
       <span class="arch-chip-meta">${node.scale || module?.scale || kind}</span>
     `;
   }
-
   return `
     <span class="arch-node-top">
       <span class="arch-kind">${kind}</span>
@@ -358,7 +354,7 @@ function renderConnectionPort(edge, point) {
 }
 
 function applyEdgeTone(element, edge) {
-  if (edge.tone === "conditioning" || edge.from === "pair_repr") {
+  if (edge.tone === "conditioning" || edge.from.includes("pair")) {
     element.classList.add("is-conditioning");
   }
   if (edge.tone === "skip") {
@@ -379,7 +375,6 @@ function showConnection(edge, point) {
   const x = layerRect.left - canvasRect.left + point.x * viewport.scale;
   const y = layerRect.top - canvasRect.top + point.y * viewport.scale;
   const shouldFlip = x > canvasRect.width - 320;
-
   connectionTooltip.classList.toggle("is-left", shouldFlip);
   connectionTooltip.classList.add("is-visible");
   connectionTooltip.style.left = `${x}px`;
@@ -389,10 +384,7 @@ function showConnection(edge, point) {
     <strong>${edge.connection.title}</strong>
     <p>${edge.connection.inside}</p>
   `;
-
-  if (!state.focusedId) {
-    focusConnection(edge);
-  }
+  if (!state.focusedId) focusConnection(edge);
 }
 
 function hideConnection() {
@@ -498,22 +490,22 @@ function renderLanguageSummary() {
       <article class="mini-summary">
         <span>execution</span>
         <strong>${loops} loop${loops === 1 ? "" : "s"}</strong>
-        <em>control flow and cached state</em>
+        <em>diffusion pass and recycle loop</em>
       </article>
       <article class="mini-summary">
         <span>state</span>
         <strong>${states} representations</strong>
-        <em>mutable vs conditioning semantics</em>
+        <em>atom/token/pair semantics</em>
       </article>
       <article class="mini-summary">
         <span>conditioning</span>
         <strong>${conditioning} modes</strong>
-        <em>AdaLN, pair bias, coordinate injection</em>
+        <em>pair bias, AdaLN, coordinates</em>
       </article>
       <article class="mini-summary">
         <span>scale</span>
         <strong>${transitions} transitions</strong>
-        <em>atom/token pooling and gather</em>
+        <em>atom-to-token and token-to-atom</em>
       </article>
     </div>
   `;
@@ -524,19 +516,13 @@ function focusModule(module) {
   clearActiveNodes();
   elements.moduleLayer.querySelector(`[data-module-id="${module.id}"]`)?.classList.add("is-focused");
   elements.focusTitle.textContent = module.label;
-
-  const pairBlock = module.contains?.find((child) => child.standard_block_ref);
-  const blockHtml = pairBlock ? renderPairBiasedAttentionBlock() : "";
-  const pseudocodeHtml = module.pseudocode_ref ? renderPseudocode(module) : "";
-
   setFocusBody(`
     <div class="focus-section">
       <p>${module.role}</p>
       ${renderAttentionSummary(module)}
-      ${module.accepts_but_does_not_use ? renderUnusedInputs(module.accepts_but_does_not_use) : ""}
       ${renderContains(module.contains || [])}
-      ${blockHtml}
-      ${pseudocodeHtml}
+      ${renderStandardBlocks(module)}
+      ${module.pseudocode_ref ? renderPseudocode(module) : ""}
       ${renderEvidence(module)}
       ${renderFocusLinks(module)}
     </div>
@@ -601,23 +587,39 @@ function renderAttentionSummary(module) {
   `;
 }
 
-function renderUnusedInputs(inputs) {
+function renderStandardBlocks(module) {
+  const children = module.contains?.filter((child) => child.standard_block_ref) || [];
+  if (!children.length) return "";
+  return children.map((child) => {
+    const block = manifest.standardBlocks[standardBlockIdFromRef(child.standard_block_ref)];
+    if (!block) return "";
+    if (block.id === "pair_biased_attention") return renderPairBiasedAttentionBlock(block);
+    return renderStandardBlock(block);
+  }).join("");
+}
+
+function standardBlockIdFromRef(ref = "") {
+  const file = ref.split("/").at(-1) || "";
+  return file.replace(/\.yaml$/, "").replaceAll("-", "_");
+}
+
+function renderStandardBlock(block) {
   return `
-    <div class="warning-note">
-      <strong>Accepted but not used here</strong>
-      <span>${inputs.join(", ")}</span>
-    </div>
+    <h3>${block.name}</h3>
+    <p>${block.description}</p>
+    <ol class="math-list">
+      ${block.math.map(renderMathStep).join("")}
+    </ol>
   `;
 }
 
-function renderPairBiasedAttentionBlock() {
-  const block = manifest.standardBlocks.pair_biased_attention;
+function renderPairBiasedAttentionBlock(block) {
   return `
     <h3>${block.name}</h3>
     <div class="pair-block">
       <div class="pair-matrix qk">QK logits</div>
       <div class="pair-plus">+</div>
-      <div class="pair-matrix bias">Linear(z)</div>
+      <div class="pair-matrix bias">Linear(pair)</div>
       <div class="pair-arrow">softmax</div>
       <div class="pair-matrix weights">weights @ V</div>
     </div>
@@ -628,17 +630,17 @@ function renderPairBiasedAttentionBlock() {
 }
 
 function renderPseudocode(module) {
-  const program = manifest.pseudocode.esmfold2_pair_bias_boundary;
-  const relevant = module.id === "token_transformer"
-    ? ["token_pair_bias_add"]
-    : ["atom_encoder_signature", "atom_transformer_call", "swa_attention_forward"];
+  const program = Object.values(manifest.pseudocode)[0];
+  if (!program) return "";
+  const ids = module.pseudocode_line_ids || [];
+  const lines = ids.length > 0
+    ? program.lines.filter((line) => ids.includes(line.id))
+    : program.lines.slice(0, 4);
+  if (!lines.length) return "";
   return `
     <h3>Pseudocode trace</h3>
     <ol class="pseudo-lines">
-      ${program.lines
-        .filter((line) => relevant.includes(line.id))
-        .map((line) => `<li><code>${line.text}</code><span>${line.refs}</span></li>`)
-        .join("")}
+      ${lines.map((line) => `<li><code>${line.text}</code><span>${line.refs}</span></li>`).join("")}
     </ol>
   `;
 }

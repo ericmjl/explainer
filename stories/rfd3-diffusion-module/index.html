@@ -1,0 +1,117 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>AlphaFold Explainer - RFD3 Diffusion Module</title>
+    <link rel="stylesheet" href="../../styles.css" />
+  </head>
+  <body class="note-page">
+    <main class="note-shell">
+      <header class="note-header">
+        <div>
+          <p class="eyebrow">RF Diffusion 3 architecture</p>
+          <h1>Diffusion Module</h1>
+          <p>
+            A source-backed slice of the RFD3 diffusion module, centered on
+            atom14 slotting, atom-pair bias, token refinement, and atom decoding.
+          </p>
+        </div>
+        <nav class="note-nav" aria-label="Story navigation">
+          <a class="story-home-link" href="../../">All stories</a>
+          <a class="story-home-link" href="../../renderer/rfd3/">Generated board</a>
+          <a class="story-home-link" href="./story.md">Raw note</a>
+        </nav>
+      </header>
+
+      <section class="note-verdict">
+        <p class="eyebrow">main scaffold</p>
+        <h2>Atom14 slots -> atom pair-biased attention -> token pair refinement -> atom decoder.</h2>
+        <p>
+          RFD3 enters the diffusion module with dense atom14 slots, initializer
+          outputs, and the current noisy coordinates. The model moves through
+          atom-level attention, token-level refinement, and atom-level decoding.
+        </p>
+      </section>
+
+      <section class="note-verdict">
+        <p class="eyebrow">pair-bias boundary</p>
+        <h2>RFD3 uses explicit pair bias at both atom and token scale.</h2>
+        <p>
+          Atom attention consumes `P_LL`; token attention consumes `Z_II`. The
+          atom pair bias is not simply noisy atom-distance bias. Noisy coordinates
+          affect `Q_L`, local neighborhoods, and token distograms, while `P_LL`
+          is built in the initializer.
+        </p>
+      </section>
+
+      <section class="evidence-grid" aria-label="Evidence">
+        <article class="evidence-card">
+          <p class="eyebrow">atom14 path</p>
+          <h2>Dense slots include virtual atoms</h2>
+          <p>
+            The design config uses `n_atoms_per_token: 14` and the virtual-atom
+            transform pads tokens with VX slots.
+          </p>
+          <code>design_base.yaml:35-42; virtual_atoms.py:139-223</code>
+        </article>
+
+        <article class="evidence-card">
+          <p class="eyebrow">initializer</p>
+          <h2>`P_LL` is built before atom attention</h2>
+          <p>
+            TokenInitializer combines reference/motif pair terms, atom single
+            terms, and token pair `Z_II` expanded through `atom_to_token_map`.
+          </p>
+          <code>encoders.py:237-268</code>
+        </article>
+
+        <article class="evidence-card">
+          <p class="eyebrow">atom attention</p>
+          <h2>LocalAttentionPairBias adds projected pair logits</h2>
+          <p>
+            `LocalAttentionPairBias` projects pair features with `to_b` and adds
+            the result to attention logits in sparse or full attention paths.
+          </p>
+          <code>attention.py:206,337-340,426-440</code>
+        </article>
+
+        <article class="evidence-card">
+          <p class="eyebrow">token encoder</p>
+          <h2>`Z_II` is updated before token attention</h2>
+          <p>
+            DiffusionTokenEncoder adds coordinate-derived pair features and runs
+            pairformer blocks before LocalTokenTransformer consumes `Z_II`.
+          </p>
+          <code>encoders.py:381-414; RFD3_diffusion_module.py:319-342</code>
+        </article>
+      </section>
+
+      <section class="note-flow note-flow-chain" aria-label="Architecture split">
+        <div class="flow-node atom-node">
+          <span>Atom14 slots</span>
+          <strong>fixed residue blocks</strong>
+          <em>VX virtual atoms</em>
+        </div>
+        <div class="flow-arrow-note">initialize P_LL and Z_II</div>
+        <div class="flow-node atom-node">
+          <span>LocalAtomTransformer</span>
+          <strong>P_LL pair bias</strong>
+          <em>atom-local sparse attention</em>
+        </div>
+        <div class="flow-arrow-note">downcast to tokens</div>
+        <div class="flow-node token-node">
+          <span>LocalTokenTransformer</span>
+          <strong>Z_II pair bias</strong>
+          <em>18 blocks</em>
+        </div>
+        <div class="flow-arrow-note">upcast to atoms</div>
+        <div class="flow-node atom-node">
+          <span>CompactStreamingDecoder</span>
+          <strong>P_LL again</strong>
+          <em>coordinate update</em>
+        </div>
+      </section>
+    </main>
+  </body>
+</html>

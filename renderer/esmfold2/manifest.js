@@ -47,7 +47,7 @@ export const manifest = {
         "id": "atom_encoder",
         "label": "ESMFold2AtomEncoder",
         "kind": "attention_stack",
-        "role": "encode atom features with sliding-window atom attention",
+        "role": "build atom q/c streams, run sliding-window atom attention, then mean-pool atom state to token state",
         "scale": "atom",
         "repeats": 3,
         "story_ref": "../../stories/esmfold2-pair-bias-boundary/",
@@ -58,21 +58,88 @@ export const manifest = {
         },
         "contains": [
           {
+            "id": "atom_adaln_modulation",
+            "label": "per-atom AdaLN modulation",
+            "pseudocode_ref": "../../pseudocode/esmfold2-pair-bias-boundary.yaml"
+          },
+          {
             "id": "swa_3d_rope_attention",
             "label": "SWA3DRoPEAttention",
+            "pseudocode_ref": "../../pseudocode/esmfold2-pair-bias-boundary.yaml"
+          },
+          {
+            "id": "atom_to_token_mean_pool",
+            "label": "atom-to-token mean pooling",
             "pseudocode_ref": "../../pseudocode/esmfold2-pair-bias-boundary.yaml"
           }
         ],
         "inputs": [
           "atom_features",
+          "atom_to_token_index",
           "coordinates"
         ],
         "accepts_but_does_not_use": [
-          "pair_repr"
+          "pair_repr",
+          "conditioning_single"
         ],
         "outputs": [
+          "atom_conditioning",
+          "atom_query_state",
           "token_repr"
         ],
+        "coordinate_injection": {
+          "active": true,
+          "source": "normalized_noisy_coordinates",
+          "operation": "q_l = c_l + coords_linear(concat(r_noisy, pred_r1)); pred_r1 defaults to zeros in this path",
+          "evidence": {
+            "status": "confirmed_from_code",
+            "refs": [
+              {
+                "kind": "code",
+                "path": "/home/ruh/research/PhD/related_work/biohub-transformers/src/transformers/models/esmfold2/modeling_esmfold2_common.py",
+                "lines": "826-832,1490-1503"
+              }
+            ]
+          }
+        },
+        "modulation": {
+          "type": "per_atom_adaln_zero",
+          "source": "atom_conditioning",
+          "target": "atom_query_state",
+          "chunks": [
+            "shift_attention",
+            "scale_attention",
+            "gate_attention",
+            "shift_ffn",
+            "scale_ffn",
+            "gate_ffn"
+          ],
+          "evidence": {
+            "status": "confirmed_from_code",
+            "refs": [
+              {
+                "kind": "code",
+                "path": "/home/ruh/research/PhD/related_work/biohub-transformers/src/transformers/models/esmfold2/modeling_esmfold2_common.py",
+                "lines": "603-605,619-630"
+              }
+            ]
+          }
+        },
+        "readout": {
+          "operation": "atom_to_token_mean_pool",
+          "projection": "relu(atom_to_token_linear(q_l))",
+          "aggregation": "scatter_reduce_mean_by_atom_to_token_index",
+          "evidence": {
+            "status": "confirmed_from_code",
+            "refs": [
+              {
+                "kind": "code",
+                "path": "/home/ruh/research/PhD/related_work/biohub-transformers/src/transformers/models/esmfold2/modeling_esmfold2_common.py",
+                "lines": "180-208,848-856"
+              }
+            ]
+          }
+        },
         "attention": {
           "pattern": "sequence_local",
           "query_scale": "atom",
@@ -159,8 +226,8 @@ export const manifest = {
         "story_ref": "../../stories/esmfold2-pair-bias-boundary/",
         "pseudocode_ref": "../../pseudocode/esmfold2-pair-bias-boundary.yaml",
         "depth": {
-          "blocks": "config.token_num_blocks",
-          "heads": "config.token_num_heads"
+          "blocks": 12,
+          "heads": 16
         },
         "contains": [
           {
@@ -172,11 +239,44 @@ export const manifest = {
         ],
         "inputs": [
           "token_repr",
-          "pair_repr"
+          "pair_repr",
+          "conditioning_single"
         ],
         "outputs": [
           "token_repr"
         ],
+        "modulation": {
+          "type": "per_token_adaptive_layer_norm",
+          "source": "conditioning_single",
+          "target": "token_repr",
+          "operation": "sigmoid(W_gate LN(s_i)) * LN(a_i) + W_shift LN(s_i)",
+          "evidence": {
+            "status": "confirmed_from_code",
+            "refs": [
+              {
+                "kind": "code",
+                "path": "/home/ruh/research/PhD/related_work/biohub-transformers/src/transformers/models/esmfold2/modeling_esmfold2_common.py",
+                "lines": "298-313,1022-1024,1241-1252"
+              }
+            ]
+          }
+        },
+        "pair_conditioning": {
+          "updates_pair_repr": false,
+          "fixed_within_token_transformer": true,
+          "layer_specific_projection": true,
+          "operation": "each AttentionPairBias block owns pair_norm and pair_bias_proj; z is projected to per-head logits and not returned updated",
+          "evidence": {
+            "status": "confirmed_from_code",
+            "refs": [
+              {
+                "kind": "code",
+                "path": "/home/ruh/research/PhD/related_work/biohub-transformers/src/transformers/models/esmfold2/modeling_esmfold2_common.py",
+                "lines": "971-973,1203-1225,1241-1255"
+              }
+            ]
+          }
+        },
         "attention": {
           "pattern": "full",
           "query_scale": "token",
@@ -194,7 +294,7 @@ export const manifest = {
             {
               "kind": "code",
               "path": "/home/ruh/research/PhD/related_work/biohub-transformers/src/transformers/models/esmfold2/modeling_esmfold2_common.py",
-              "lines": "1426-1432"
+              "lines": "1363-1375,1426-1432"
             },
             {
               "kind": "code",
@@ -224,11 +324,27 @@ export const manifest = {
         ],
         "inputs": [
           "token_repr",
-          "atom_encoder_skip"
+          "atom_encoder_skip",
+          "atom_to_token_index"
         ],
         "outputs": [
           "coordinate_update"
         ],
+        "readout": {
+          "operation": "token_to_atom_gather",
+          "projection": "token_to_atom_linear",
+          "semantics": "copy each token vector to every atom slot whose atom_to_token index names that token, then add q_skip",
+          "evidence": {
+            "status": "confirmed_from_code",
+            "refs": [
+              {
+                "kind": "code",
+                "path": "/home/ruh/research/PhD/related_work/biohub-transformers/src/transformers/models/esmfold2/modeling_esmfold2_common.py",
+                "lines": "166-177,913-916"
+              }
+            ]
+          }
+        },
         "attention": {
           "pattern": "sequence_local",
           "query_scale": "atom",
@@ -264,7 +380,7 @@ export const manifest = {
       {
         "id": "conditioning_single",
         "scale": "token",
-        "semantic_role": "timestep-conditioned single/token stream",
+        "semantic_role": "timestep-conditioned per-token single stream used for adaptive normalization and gates",
         "shape": "B x N_token x d_token",
         "evidence": {
           "status": "confirmed_from_code",
@@ -273,6 +389,11 @@ export const manifest = {
               "kind": "code",
               "path": "/home/ruh/research/PhD/related_work/biohub-transformers/src/transformers/models/esmfold2/modeling_esmfold2_common.py",
               "lines": "1263-1357,1478-1488"
+            },
+            {
+              "kind": "code",
+              "path": "/home/ruh/research/PhD/related_work/biohub-transformers/src/transformers/models/esmfold2/modeling_esmfold2_common.py",
+              "lines": "298-313,1022-1024,1078-1079,1241-1252"
             }
           ]
         }
@@ -280,11 +401,16 @@ export const manifest = {
       {
         "id": "atom_features",
         "scale": "atom",
-        "semantic_role": "atom latent state",
-        "shape": "B x N_atom x d_atom",
+        "semantic_role": "raw atom metadata/reference feature vector before atom embedding",
+        "shape": "B x N_atom x 389",
         "evidence": {
           "status": "confirmed_from_code",
           "refs": [
+            {
+              "kind": "code",
+              "path": "/home/ruh/research/PhD/related_work/biohub-transformers/src/transformers/models/esmfold2/modeling_esmfold2_common.py",
+              "lines": "138-146"
+            },
             {
               "kind": "code",
               "path": "/home/ruh/research/PhD/related_work/biohub-transformers/src/transformers/models/esmfold2/modeling_esmfold2_common.py",
@@ -294,9 +420,83 @@ export const manifest = {
         }
       },
       {
+        "id": "atom_conditioning",
+        "scale": "atom",
+        "semantic_role": "static atom conditioning c_l used to generate per-atom AdaLN shift/scale/gates",
+        "shape": "B x N_atom x d_atom",
+        "evidence": {
+          "status": "confirmed_from_code",
+          "refs": [
+            {
+              "kind": "code",
+              "path": "/home/ruh/research/PhD/related_work/biohub-transformers/src/transformers/models/esmfold2/modeling_esmfold2_common.py",
+              "lines": "786-797,822-839"
+            },
+            {
+              "kind": "code",
+              "path": "/home/ruh/research/PhD/related_work/biohub-transformers/src/transformers/models/esmfold2/modeling_esmfold2_common.py",
+              "lines": "603-605,619-630"
+            }
+          ]
+        }
+      },
+      {
+        "id": "atom_query_state",
+        "scale": "atom",
+        "semantic_role": "mutable atom state q_l updated by atom attention; in diffusion it receives normalized noisy coordinates",
+        "shape": "B x N_atom x d_atom",
+        "evidence": {
+          "status": "confirmed_from_code",
+          "refs": [
+            {
+              "kind": "code",
+              "path": "/home/ruh/research/PhD/related_work/biohub-transformers/src/transformers/models/esmfold2/modeling_esmfold2_common.py",
+              "lines": "826-832,1490-1503"
+            }
+          ]
+        }
+      },
+      {
+        "id": "atom_to_token_index",
+        "scale": "atom_to_token",
+        "semantic_role": "index map assigning each atom slot to the token/residue used for mean pooling and gather",
+        "shape": "B x N_atom",
+        "evidence": {
+          "status": "confirmed_from_code",
+          "refs": [
+            {
+              "kind": "code",
+              "path": "/home/ruh/research/PhD/related_work/biohub-transformers/src/transformers/models/esmfold2/modeling_esmfold2_common.py",
+              "lines": "166-208,848-856,913-916"
+            }
+          ]
+        }
+      },
+      {
+        "id": "lm_pair_repr",
+        "scale": "token_pair",
+        "semantic_role": "ESMC-derived pair representation before recurrent trunk integration",
+        "shape": "B x N_token x N_token x d_pair",
+        "evidence": {
+          "status": "confirmed_from_code",
+          "refs": [
+            {
+              "kind": "code",
+              "path": "/home/ruh/research/PhD/related_work/biohub-transformers/src/transformers/models/esmfold2/modeling_esmfold2_common.py",
+              "lines": "2073-2108"
+            },
+            {
+              "kind": "code",
+              "path": "/home/ruh/research/PhD/related_work/biohub-transformers/src/transformers/models/esmfold2/modeling_esmfold2.py",
+              "lines": "919-929,971-985,990-992"
+            }
+          ]
+        }
+      },
+      {
         "id": "pair_repr",
         "scale": "token_pair",
-        "semantic_role": "pair conditioning for token transformer",
+        "semantic_role": "fixed per-step pair conditioning for token transformer; ESMC information enters here through z_trunk, not directly at atoms",
         "shape": "B x N_token x N_token x d_pair",
         "evidence": {
           "status": "confirmed_from_code",
@@ -305,6 +505,11 @@ export const manifest = {
               "kind": "code",
               "path": "/home/ruh/research/PhD/related_work/biohub-transformers/src/transformers/models/esmfold2/modeling_esmfold2_common.py",
               "lines": "939-940,1114-1118"
+            },
+            {
+              "kind": "code",
+              "path": "/home/ruh/research/PhD/related_work/biohub-transformers/src/transformers/models/esmfold2/modeling_esmfold2_common.py",
+              "lines": "1318-1329,1478-1488,1514-1521"
             }
           ]
         }
@@ -312,15 +517,15 @@ export const manifest = {
       {
         "id": "token_repr",
         "scale": "token",
-        "semantic_role": "token-level diffusion representation",
+        "semantic_role": "token-level diffusion state produced by atom-to-token mean pooling and updated by token transformer",
         "shape": "B x N_token x d_token",
         "evidence": {
-          "status": "inferred",
+          "status": "confirmed_from_code",
           "refs": [
             {
               "kind": "code",
               "path": "/home/ruh/research/PhD/related_work/biohub-transformers/src/transformers/models/esmfold2/modeling_esmfold2_common.py",
-              "lines": "1426-1432"
+              "lines": "848-856,1510-1524"
             }
           ]
         }
@@ -342,7 +547,322 @@ export const manifest = {
         }
       }
     ],
+    "execution": {
+      "loops": [
+        {
+          "id": "diffusion_sampling_loop",
+          "repeats": "num_diffusion_steps",
+          "reruns": [
+            "diffusion_conditioning",
+            "atom_encoder",
+            "token_transformer",
+            "atom_decoder"
+          ],
+          "cached": [
+            "pair_repr",
+            "atom_conditioning",
+            "atom_to_token_index",
+            "atom_attention_params"
+          ],
+          "notes": [
+            "pair z conditioning can be cached across diffusion steps when inference_cache is active",
+            "atom encoder caches static atom features, attention params, masks, and atom_to_token expansion"
+          ],
+          "evidence": {
+            "status": "confirmed_from_code",
+            "refs": [
+              {
+                "kind": "code",
+                "path": "/home/ruh/research/PhD/related_work/biohub-transformers/src/transformers/models/esmfold2/modeling_esmfold2_common.py",
+                "lines": "780-821,1318-1329,1478-1537"
+              }
+            ]
+          }
+        }
+      ],
+      "cached_state": [
+        {
+          "id": "atom_attention_params",
+          "produced_by": "atom_encoder",
+          "consumed_by": [
+            "atom_encoder",
+            "atom_decoder"
+          ],
+          "scope": "diffusion_step",
+          "evidence": {
+            "status": "confirmed_from_code",
+            "refs": [
+              {
+                "kind": "code",
+                "path": "/home/ruh/research/PhD/related_work/biohub-transformers/src/transformers/models/esmfold2/modeling_esmfold2_common.py",
+                "lines": "798-821,1527-1537"
+              }
+            ]
+          }
+        }
+      ]
+    },
+    "stateSemantics": {
+      "conditioning_single": {
+        "role": "read_only_conditioning",
+        "produced_by": "diffusion_conditioning",
+        "updated_by": [
+
+        ],
+        "consumed_by": [
+          "token_transformer"
+        ],
+        "notes": [
+          "per-token conditioning stream for adaptive normalization/gates and additive injection into token state"
+        ]
+      },
+      "pair_repr": {
+        "role": "read_only_conditioning",
+        "produced_by": "diffusion_conditioning",
+        "updated_by": [
+
+        ],
+        "consumed_by": [
+          "token_transformer"
+        ],
+        "notes": [
+          "projected to pair-bias logits by each token attention block but not returned updated"
+        ]
+      },
+      "token_repr": {
+        "role": "mutable_state",
+        "produced_by": "atom_encoder",
+        "updated_by": [
+          "token_transformer"
+        ],
+        "consumed_by": [
+          "atom_decoder"
+        ]
+      },
+      "atom_conditioning": {
+        "role": "static_conditioning",
+        "produced_by": "atom_encoder",
+        "updated_by": [
+
+        ],
+        "consumed_by": [
+          "atom_encoder",
+          "atom_decoder"
+        ]
+      },
+      "atom_query_state": {
+        "role": "mutable_state",
+        "produced_by": "atom_encoder",
+        "updated_by": [
+          "atom_encoder",
+          "atom_decoder"
+        ]
+      },
+      "atom_to_token_index": {
+        "role": "index_map",
+        "produced_by": "input_features",
+        "updated_by": [
+
+        ],
+        "consumed_by": [
+          "atom_encoder",
+          "atom_decoder"
+        ]
+      },
+      "coordinate_update": {
+        "role": "output_update",
+        "produced_by": "atom_decoder",
+        "updated_by": [
+
+        ]
+      }
+    },
+    "conditioning": [
+      {
+        "id": "token_pair_bias",
+        "source": "pair_repr",
+        "target": "token_transformer.attention_logits",
+        "mode": "pair_bias",
+        "standard_block_ref": "standard_blocks/pair-biased-attention.yaml",
+        "updates_source": false,
+        "evidence": {
+          "status": "confirmed_from_code",
+          "refs": [
+            {
+              "kind": "code",
+              "path": "/home/ruh/research/PhD/related_work/biohub-transformers/src/transformers/models/esmfold2/modeling_esmfold2_common.py",
+              "lines": "939-940,1114-1118"
+            }
+          ]
+        }
+      },
+      {
+        "id": "token_adaln",
+        "source": "conditioning_single",
+        "target": "token_transformer",
+        "mode": "per_token_adaln",
+        "standard_block_ref": "standard_blocks/per-token-adaln-conditioning.yaml",
+        "evidence": {
+          "status": "confirmed_from_code",
+          "refs": [
+            {
+              "kind": "code",
+              "path": "/home/ruh/research/PhD/related_work/biohub-transformers/src/transformers/models/esmfold2/modeling_esmfold2_common.py",
+              "lines": "298-313,1022-1024,1241-1252"
+            }
+          ]
+        }
+      },
+      {
+        "id": "atom_adaln_zero",
+        "source": "atom_conditioning",
+        "target": "atom_query_state",
+        "mode": "per_atom_adaln_zero",
+        "standard_block_ref": "standard_blocks/per-atom-adaln-zero.yaml",
+        "evidence": {
+          "status": "confirmed_from_code",
+          "refs": [
+            {
+              "kind": "code",
+              "path": "/home/ruh/research/PhD/related_work/biohub-transformers/src/transformers/models/esmfold2/modeling_esmfold2_common.py",
+              "lines": "603-605,619-630"
+            }
+          ]
+        }
+      },
+      {
+        "id": "noisy_coordinate_injection",
+        "source": "normalized_noisy_coordinates",
+        "target": "atom_query_state",
+        "mode": "coordinate_injection",
+        "standard_block_ref": "standard_blocks/coordinate-injection.yaml",
+        "evidence": {
+          "status": "confirmed_from_code",
+          "refs": [
+            {
+              "kind": "code",
+              "path": "/home/ruh/research/PhD/related_work/biohub-transformers/src/transformers/models/esmfold2/modeling_esmfold2_common.py",
+              "lines": "826-832,1490-1503"
+            }
+          ]
+        }
+      },
+      {
+        "id": "additive_single_to_token",
+        "source": "conditioning_single",
+        "target": "token_repr",
+        "mode": "additive_injection",
+        "standard_block_ref": "standard_blocks/additive-single-conditioning.yaml",
+        "evidence": {
+          "status": "confirmed_from_code",
+          "refs": [
+            {
+              "kind": "code",
+              "path": "/home/ruh/research/PhD/related_work/biohub-transformers/src/transformers/models/esmfold2/modeling_esmfold2_common.py",
+              "lines": "1510-1512"
+            }
+          ]
+        }
+      }
+    ],
+    "scaleTransitions": [
+      {
+        "id": "atom_to_token_mean_pool",
+        "from_scale": "atom",
+        "to_scale": "token",
+        "source": "atom_query_state",
+        "target": "token_repr",
+        "projection": "atom_to_token_linear",
+        "index_map": "atom_to_token_index",
+        "aggregation": "scatter_mean",
+        "copy_vs_pool": "pool",
+        "standard_block_ref": "standard_blocks/atom-to-token-scatter-mean.yaml",
+        "evidence": {
+          "status": "confirmed_from_code",
+          "refs": [
+            {
+              "kind": "code",
+              "path": "/home/ruh/research/PhD/related_work/biohub-transformers/src/transformers/models/esmfold2/modeling_esmfold2_common.py",
+              "lines": "180-208,848-856"
+            }
+          ]
+        }
+      },
+      {
+        "id": "token_to_atom_gather",
+        "from_scale": "token",
+        "to_scale": "atom",
+        "source": "token_repr",
+        "target": "atom_query_state",
+        "projection": "token_to_atom_linear",
+        "index_map": "atom_to_token_index",
+        "aggregation": "gather",
+        "copy_vs_pool": "copy",
+        "standard_block_ref": "standard_blocks/token-to-atom-gather.yaml",
+        "evidence": {
+          "status": "confirmed_from_code",
+          "refs": [
+            {
+              "kind": "code",
+              "path": "/home/ruh/research/PhD/related_work/biohub-transformers/src/transformers/models/esmfold2/modeling_esmfold2_common.py",
+              "lines": "166-177,913-916"
+            }
+          ]
+        }
+      }
+    ],
+    "trainingInference": {
+      "objective": {
+        "kind": "denoising",
+        "evidence": {
+          "status": "confirmed_from_code",
+          "refs": [
+            {
+              "kind": "code",
+              "path": "/home/ruh/research/PhD/related_work/biohub-transformers/src/transformers/models/esmfold2/modeling_esmfold2_common.py",
+              "lines": "1360-1361,1539-1544"
+            }
+          ]
+        }
+      },
+      "noise_schedule": {
+        "kind": "diffusion",
+        "status": "unresolved_details"
+      },
+      "sampler": {
+        "kind": "diffusion_sampling",
+        "status": "unresolved_details"
+      },
+      "teacher_forcing": "unknown",
+      "self_conditioning": "unknown",
+      "checkpoint_notes": [
+
+      ]
+    },
     "edges": [
+      {
+        "from": "lm_pair_repr",
+        "to": "pair_repr",
+        "operation": "esmc_to_trunk_pair_conditioning",
+        "carries": [
+          "lm_pair_repr"
+        ],
+        "evidence": {
+          "status": "confirmed_from_code",
+          "refs": [
+            {
+              "kind": "code",
+              "path": "/home/ruh/research/PhD/related_work/biohub-transformers/src/transformers/models/esmfold2/modeling_esmfold2_common.py",
+              "lines": "2073-2108"
+            },
+            {
+              "kind": "code",
+              "path": "/home/ruh/research/PhD/related_work/biohub-transformers/src/transformers/models/esmfold2/modeling_esmfold2.py",
+              "lines": "919-929,971-985,990-992"
+            }
+          ]
+        }
+      },
       {
         "from": "diffusion_conditioning",
         "to": "token_transformer",
@@ -392,7 +912,7 @@ export const manifest = {
             {
               "kind": "code",
               "path": "/home/ruh/research/PhD/related_work/biohub-transformers/src/transformers/models/esmfold2/modeling_esmfold2_common.py",
-              "lines": "848-855"
+              "lines": "180-208,848-856"
             }
           ]
         }
@@ -439,7 +959,11 @@ export const manifest = {
     "claims": [
       "Biohub ESMFold2 diffusion module can be read as diffusion conditioning, atom encoder, token transformer, and atom decoder.",
       "Biohub ESMFold2 atom encoder does not add pair bias to atom attention logits.",
-      "Biohub ESMFold2 token diffusion transformer uses pair-biased attention."
+      "Biohub ESMFold2 token diffusion transformer uses pair-biased attention.",
+      "Atom encoder c_l is static per-atom conditioning that produces per-atom AdaLN shift/scale/gate vectors for the mutable q_l atom state.",
+      "Atom encoder token readout projects each atom state to token width and mean-pools atoms with the same atom_to_token index.",
+      "ESMC hidden states are projected to pair features and integrated through the recurrent trunk before the diffusion structure head; they are not passed directly into the atom encoder.",
+      "The token transformer updates the token state a but does not update z; each attention block projects the same z through its own pair-bias parameters."
     ]
   },
   "standardBlocks": {
@@ -448,12 +972,42 @@ export const manifest = {
       "name": "Pair-Biased Attention",
       "description": "Add a projected pair representation to query/key attention logits before masking and softmax.",
       "math": [
-        "logits_ijh = dot(q_ih, k_jh) * scale",
-        "pair_bias_ijh = Linear(LayerNorm(z_ij))",
-        "logits_ijh = logits_ijh + pair_bias_ijh",
-        "logits = logits + mask_bias",
-        "weights_ijh = softmax_j(logits_ijh)",
-        "context_ih = sum_j weights_ijh * v_jh"
+        {
+          "id": "qk_logits",
+          "text": "logits_ijh = dot(q_ih, k_jh) * scale",
+          "tex": "\\ell^{qk}_{ijh} = \\langle q_{ih}, k_{jh} \\rangle \\cdot s",
+          "operation": "attention_logits"
+        },
+        {
+          "id": "project_pair",
+          "text": "pair_bias_ijh = Linear(LayerNorm(z_ij))",
+          "tex": "b_{ijh} = W_h\\,\\operatorname{LN}(z_{ij})",
+          "operation": "projection"
+        },
+        {
+          "id": "add_pair_bias",
+          "text": "logits_ijh = logits_ijh + pair_bias_ijh",
+          "tex": "\\ell_{ijh} = \\ell^{qk}_{ijh} + b_{ijh}",
+          "operation": "pair_bias_add"
+        },
+        {
+          "id": "apply_mask",
+          "text": "logits = logits + mask_bias",
+          "tex": "\\ell_{ijh} = \\ell_{ijh} + m_{ij}",
+          "operation": "attention_mask"
+        },
+        {
+          "id": "softmax",
+          "text": "weights_ijh = softmax_j(logits_ijh)",
+          "tex": "a_{ijh} = \\operatorname{softmax}_j(\\ell_{ijh})",
+          "operation": "softmax"
+        },
+        {
+          "id": "gather_values",
+          "text": "context_ih = sum_j weights_ijh * v_jh",
+          "tex": "o_{ih} = \\sum_j a_{ijh} v_{jh}",
+          "operation": "weighted_sum"
+        }
       ]
     }
   },
@@ -463,13 +1017,33 @@ export const manifest = {
       "lines": [
         {
           "id": "atom_encoder_signature",
-          "text": "ESMFold2AtomEncoder.forward(..., z_ij=None, ...)",
+          "text": "ESMFold2AtomEncoder.forward(..., r_l=None, pred_r1=None, s_i=None, z_ij=None, ...)",
           "refs": "758-770"
+        },
+        {
+          "id": "esmc_to_pair_path",
+          "text": "ESMC hidden states -> LanguageModelShim -> lm_z; recurrent trunk -> z_trunk",
+          "refs": "2073-2108, 919-929,971-992"
+        },
+        {
+          "id": "build_atom_conditioning",
+          "text": "atom_feats = [ref_pos, charge, mask, element, atom_name_chars]; c = LayerNorm(atom_linear(atom_feats))",
+          "refs": "138-146,786-797"
+        },
+        {
+          "id": "inject_noisy_coords",
+          "text": "q = c + coords_linear(concat(r_noisy, pred_r1)); pred_r1 defaults to zeros",
+          "refs": "826-832,1490-1503"
         },
         {
           "id": "build_atom_params",
           "text": "build atom features and 3D-RoPE attention_params",
           "refs": "786-806"
+        },
+        {
+          "id": "atom_adaln_modulation",
+          "text": "shift/scale/gates = adaln_modulation(c_l); modulate q_l attention and FFN",
+          "refs": "603-605,619-630"
         },
         {
           "id": "atom_transformer_call",
@@ -482,14 +1056,39 @@ export const manifest = {
           "refs": "492-557"
         },
         {
+          "id": "atom_to_token_mean_pool",
+          "text": "q_to_a = relu(atom_to_token_linear(q)); a = scatter_atom_to_token(..., reduce='mean')",
+          "refs": "180-208,848-856"
+        },
+        {
+          "id": "token_conditioning_single",
+          "text": "s = s_proj(LN(s_inputs)) + noise_proj(Fourier(t_hat)); transition blocks refine s",
+          "refs": "1291-1350"
+        },
+        {
+          "id": "token_adaln",
+          "text": "x_i = sigmoid(W_gate LN(s_i)) * LN(a_i) + W_shift LN(s_i)",
+          "refs": "298-313,1022-1024"
+        },
+        {
           "id": "token_transformer_constructed",
-          "text": "DiffusionModule constructs token_transformer = DiffusionTransformer(d_pair=c_z)",
-          "refs": "1426-1432"
+          "text": "DiffusionModule constructs token_transformer = DiffusionTransformer(d_pair=c_z, num_blocks=12, num_heads=16)",
+          "refs": "1363-1375,1426-1432"
         },
         {
           "id": "token_pair_bias_add",
           "text": "pair_bias = pair_bias_proj(pair_norm(z)); logits += pair_bias",
           "refs": "939-940,1114-1118"
+        },
+        {
+          "id": "token_blocks_do_not_update_z",
+          "text": "for attn, transition in blocks: x = x + attn(x, s, z); x = x + transition(x, s); return x",
+          "refs": "1203-1225,1241-1255"
+        },
+        {
+          "id": "token_to_atom_gather",
+          "text": "a_to_q = token_to_atom_linear(a); a_to_q = gather_token_to_atom(a_to_q, atom_to_token); q_l += a_to_q",
+          "refs": "166-177,913-916"
         }
       ]
     }
@@ -565,7 +1164,7 @@ export const manifest = {
             "kind": "representation",
             "label": "coordinates",
             "scale": "coordinate",
-            "role": "noisy/current atom coordinates",
+            "role": "normalized noisy/current atom coordinates for q_l injection",
             "shape": "B x N_atom x 3",
             "col": 1,
             "row": 4
@@ -648,8 +1247,8 @@ export const manifest = {
             "label": "coords",
             "connection": {
               "title": "Coordinates into atom encoder",
-              "role": "geometric attention context",
-              "inside": "Used through the 3D RoPE/window attention parameters. This is geometric context, not pair bias."
+              "role": "coordinate-conditioned atom state",
+              "inside": "Current noisy coordinates are normalized and projected into q_l; reference coordinates also build the 3D RoPE attention parameters. Neither path is pair bias."
             }
           },
           {
@@ -730,7 +1329,7 @@ export const manifest = {
       {
         "id": "diffusion_conditioning",
         "title": "DiffusionConditioning",
-        "summary": "Build conditioned single/token state s and pair state z before denoising.",
+        "summary": "Build conditioned single/token state s and pair state z before denoising. ESMC has already entered upstream through z_trunk.",
         "parent": "diffusion_module",
         "grid": {
           "columns": 5,
@@ -762,10 +1361,20 @@ export const manifest = {
             "kind": "representation",
             "label": "z_trunk + relative position",
             "scale": "token_pair",
-            "role": "trunk pair features and relative-position encoding",
+            "role": "ESMC-influenced trunk pair features plus relative-position encoding",
             "shape": "B x N_token x N_token x d_pair",
             "col": 1,
             "row": 1
+          },
+          {
+            "id": "esmc_pair_path",
+            "kind": "representation",
+            "label": "ESMC -> lm_z -> trunk",
+            "scale": "token_pair",
+            "role": "upstream language-model pair path, not an atom-level input",
+            "shape": "B x N_token x N_token x d_pair",
+            "col": 1,
+            "row": 4
           },
           {
             "id": "s_conditioning",
@@ -830,7 +1439,18 @@ export const manifest = {
             "connection": {
               "title": "z trunk into pair conditioning",
               "role": "pair stream input",
-              "inside": "z_trunk is concatenated with relative position encoding, normalized, projected, and cached."
+              "inside": "z_trunk, which already includes the ESMC-derived pair path through the recurrent trunk, is concatenated with relative position encoding, normalized, projected, and cached."
+            }
+          },
+          {
+            "from": "esmc_pair_path",
+            "to": "z_trunk",
+            "label": "upstream pair context",
+            "tone": "conditioning",
+            "connection": {
+              "title": "ESMC path stops at pair trunk",
+              "role": "language-model pair context",
+              "inside": "ESMC hidden states are projected to lm_z and integrated through the recurrent pair trunk before the diffusion module; they are not passed directly into the atom encoder."
             }
           },
           {
@@ -860,11 +1480,11 @@ export const manifest = {
       {
         "id": "atom_encoder",
         "title": "ESMFold2AtomEncoder",
-        "summary": "Encode atom-local features and noisy coordinates into token state.",
+        "summary": "Build static c_l and mutable q_l atom streams, run local atom attention, then mean-pool atoms into tokens.",
         "parent": "diffusion_module",
         "grid": {
           "columns": 5,
-          "rows": 4
+          "rows": 5
         },
         "nodes": [
           {
@@ -877,9 +1497,9 @@ export const manifest = {
           {
             "id": "coordinates",
             "kind": "representation",
-            "label": "coordinates",
+            "label": "r_noisy",
             "scale": "coordinate",
-            "role": "noisy/current atom coordinates",
+            "role": "normalized noisy atom coordinates injected into q_l",
             "shape": "B x N_atom x 3",
             "col": 1,
             "row": 4
@@ -889,16 +1509,39 @@ export const manifest = {
             "kind": "operation",
             "label": "atom feature embed",
             "scale": "atom",
-            "role": "build c and q atom states from reference atom features and coordinates",
+            "role": "project reference atom features into c_base",
             "col": 2,
             "row": 3
+          },
+          {
+            "id": "atom_conditioning",
+            "kind": "representation",
+            "rep_ref": "atom_conditioning",
+            "col": 2,
+            "row": 2
+          },
+          {
+            "id": "atom_query_state",
+            "kind": "representation",
+            "rep_ref": "atom_query_state",
+            "col": 2,
+            "row": 4
+          },
+          {
+            "id": "atom_adaln",
+            "kind": "operation",
+            "label": "per-atom AdaLN",
+            "scale": "atom",
+            "role": "c_l produces shift/scale/gates for q_l attention and FFN updates",
+            "col": 3,
+            "row": 2
           },
           {
             "id": "swa_atom_transformer",
             "kind": "module",
             "label": "SWAAtomTransformer",
             "scale": "atom",
-            "role": "local atom attention with 3D RoPE",
+            "role": "local atom attention over q_l with 3D RoPE and c_l modulation",
             "detail": "3 blocks / 4 heads / 128 window",
             "col": 3,
             "row": 3
@@ -906,9 +1549,9 @@ export const manifest = {
           {
             "id": "atom_to_token",
             "kind": "operation",
-            "label": "atom-to-token aggregation",
+            "label": "linear + mean pool",
             "scale": "token",
-            "role": "project atom state and scatter/gather into token state",
+            "role": "project atom state to token width and mean-pool by atom_to_token",
             "col": 4,
             "row": 2
           },
@@ -938,27 +1581,70 @@ export const manifest = {
             "connection": {
               "title": "atom features into embedder",
               "role": "atom feature basis",
-              "inside": "Reference atom features are projected and normalized to create the atom conditioning state."
+              "inside": "ref_pos, charge, mask, element one-hot, and atom-name character one-hots are concatenated and projected to c_base."
             }
           },
           {
             "from": "coordinates",
-            "to": "atom_embed",
+            "to": "atom_query_state",
             "label": "noisy coords",
             "connection": {
-              "title": "coordinates into atom encoder",
+              "title": "noisy coordinates into q_l",
               "role": "coordinate-conditioned q",
-              "inside": "Noisy coordinates are concatenated with pred_r1 and projected into the atom query state."
+              "inside": "r_noisy is concatenated with pred_r1; pred_r1 defaults to zeros in this path, and coords_linear injects the result into q_l."
             }
           },
           {
             "from": "atom_embed",
-            "to": "swa_atom_transformer",
-            "label": "q/c + 3D RoPE",
+            "to": "atom_conditioning",
+            "label": "c_l",
+            "tone": "conditioning",
             "connection": {
-              "title": "atom state into local transformer",
-              "role": "atom-local attention input",
-              "inside": "q_l, c_l, and attention_params enter SWAAtomTransformer; z_ij is not passed."
+              "title": "static atom conditioning",
+              "role": "AdaLN source",
+              "inside": "c_l is the static atom conditioning stream reused by every atom block."
+            }
+          },
+          {
+            "from": "atom_embed",
+            "to": "atom_query_state",
+            "label": "q_l base",
+            "connection": {
+              "title": "mutable atom state base",
+              "role": "q_l initialization",
+              "inside": "q_l starts from c_base before the coordinate projection is added."
+            }
+          },
+          {
+            "from": "atom_conditioning",
+            "to": "atom_adaln",
+            "label": "shift/scale/gates",
+            "tone": "conditioning",
+            "connection": {
+              "title": "c_l to per-atom AdaLN",
+              "role": "atom-wise modulation",
+              "inside": "c_l is passed through adaln_modulation to produce attention and FFN shift, scale, and gate vectors for each atom."
+            }
+          },
+          {
+            "from": "atom_adaln",
+            "to": "swa_atom_transformer",
+            "label": "modulation",
+            "tone": "conditioning",
+            "connection": {
+              "title": "AdaLN inside atom block",
+              "role": "atom block modulation",
+              "inside": "The generated shifts, scales, and gates modulate q_l before attention and FFN updates."
+            }
+          },
+          {
+            "from": "atom_query_state",
+            "to": "swa_atom_transformer",
+            "label": "q_l + 3D RoPE",
+            "connection": {
+              "title": "q_l into local transformer",
+              "role": "mutable atom state",
+              "inside": "q_l and attention_params enter SWAAtomTransformer; z_ij and s_i are not passed into the atom block."
             }
           },
           {
@@ -968,7 +1654,7 @@ export const manifest = {
             "connection": {
               "title": "atom transformer output",
               "role": "atom-to-token source",
-              "inside": "Atom outputs are linearly projected before scatter_atom_to_token."
+              "inside": "Atom outputs are linearly projected to token width and ReLUed before scatter_atom_to_token."
             }
           },
           {
@@ -978,7 +1664,7 @@ export const manifest = {
             "connection": {
               "title": "token representation output",
               "role": "token-scale handoff",
-              "inside": "scatter_atom_to_token produces the token representation a."
+              "inside": "scatter_atom_to_token uses scatter_reduce with reduce=mean, so atoms assigned to the same token/residue are averaged."
             }
           },
           {
@@ -997,11 +1683,11 @@ export const manifest = {
       {
         "id": "token_transformer",
         "title": "DiffusionTransformer",
-        "summary": "Full token self-attention conditioned by s and pair-biased by z.",
+        "summary": "Twelve full token self-attention blocks; s gives token-wise adaptive normalization and z gives fixed pair bias.",
         "parent": "diffusion_module",
         "grid": {
           "columns": 5,
-          "rows": 4
+          "rows": 5
         },
         "nodes": [
           {
@@ -1031,9 +1717,18 @@ export const manifest = {
             "label": "DiffusionTransformer blocks",
             "scale": "token",
             "role": "repeated token transformer stack",
-            "detail": "config.token_num_blocks / 16 heads",
+            "detail": "12 blocks / 16 heads",
             "col": 3,
             "row": 2
+          },
+          {
+            "id": "token_adaln",
+            "kind": "operation",
+            "label": "token-wise AdaLN",
+            "scale": "token",
+            "role": "s_i gates and shifts each token state before attention and transition updates",
+            "col": 2,
+            "row": 3
           },
           {
             "id": "pair_biased_attention",
@@ -1041,7 +1736,7 @@ export const manifest = {
             "label": "Pair-biased attention",
             "scale": "token_pair",
             "role": "add projected z to token attention logits",
-            "detail": "QK + pair_bias_proj(z)",
+            "detail": "fixed z, learned per-block projection",
             "col": 3,
             "row": 1
           },
@@ -1078,13 +1773,24 @@ export const manifest = {
           },
           {
             "from": "conditioning_single",
-            "to": "transformer_blocks",
+            "to": "token_adaln",
             "label": "conditioned s",
             "tone": "conditioning",
             "connection": {
               "title": "s into token transformer",
-              "role": "AdaLN conditioning",
-              "inside": "s conditions attention and transition blocks through adaptive normalization/gates."
+              "role": "token-wise AdaLN conditioning",
+              "inside": "Each s_i produces token-specific adaptive normalization gates and shifts; it is not only a global timestep vector."
+            }
+          },
+          {
+            "from": "token_adaln",
+            "to": "transformer_blocks",
+            "label": "modulated token state",
+            "tone": "conditioning",
+            "connection": {
+              "title": "token-wise modulation inside blocks",
+              "role": "attention and transition conditioning",
+              "inside": "Attention and transition sub-blocks receive a token state modulated by the matching s_i."
             }
           },
           {
@@ -1095,7 +1801,7 @@ export const manifest = {
             "connection": {
               "title": "z into pair-biased attention",
               "role": "attention-logit bias",
-              "inside": "pair_norm(z) is projected to per-head pair bias and added to attention logits."
+              "inside": "The same z is kept fixed through the token stack, but each attention block has learned pair_norm and pair_bias_proj parameters to project it to per-head logits."
             }
           },
           {
@@ -1226,7 +1932,7 @@ export const manifest = {
             "connection": {
               "title": "gathered token state into decoder attention",
               "role": "atom query update",
-              "inside": "gathered token features are added to q_l before local atom attention."
+              "inside": "gather_token_to_atom copies each token vector to every atom with the matching atom_to_token index; the copied vector is added to atom-specific q_l before local atom attention."
             }
           },
           {

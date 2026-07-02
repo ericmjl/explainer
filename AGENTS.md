@@ -30,6 +30,13 @@ When updating an architecture, prefer editing the declarative sources first:
   inferred or open.
 - Preserve useful unresolved questions in `open_questions`; they are part of the
   research artifact, not clutter.
+- Mature architecture notes should model:
+  - `execution` for loops, reruns, and cached state.
+  - `state_semantics` for mutable state versus read-only conditioning.
+  - `conditioning` for AdaLN, gates, pair bias, coordinate injection, additive
+    injection, concatenation, and cross-attention.
+  - `scale_transitions` for atom/token/pair/coordinate transitions.
+  - `training_inference` for objective, schedule, sampler, and checkpoint notes.
 
 ## Semantic-Zoom Views
 
@@ -99,6 +106,7 @@ Useful validation:
 
 ```bash
 ruby -e "require 'yaml'; YAML.load_file('architectures/biohub-esmfold2-diffusion-module.yaml'); YAML.load_file('views/esmfold2-semantic-zoom.view.yaml')"
+ruby scripts/lint_sources.rb
 node --check renderer/esmfold2/renderer.js
 node --check renderer/esmfold2/manifest.js
 ruby -c renderer/esmfold2/build-manifest.rb

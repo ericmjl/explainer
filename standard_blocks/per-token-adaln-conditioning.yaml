@@ -1,0 +1,48 @@
+schema_version: protein-standard-block-v0.1
+id: per_token_adaln_conditioning
+name: Per-Token AdaLN Conditioning
+kind: conditioning
+status: draft
+description: Use a per-token conditioning stream to produce adaptive normalization shifts, scales, and gates for token updates.
+canonical_operation: per_token_adaln
+input_slots:
+  - id: token_state
+    label: a_i
+    scale: token
+    kind: representation
+    required: true
+  - id: conditioning_single
+    label: s_i
+    scale: token
+    kind: conditioning
+    required: true
+output_slots:
+  - id: modulated_token_state
+    label: modulated token state
+    scale: token
+    kind: representation
+math:
+  - id: normalize_token
+    text: "x_i = LayerNorm(a_i)"
+    operation: normalize
+    inputs: [token_state]
+    outputs: [modulated_token_state]
+  - id: project_conditioning
+    text: "shift_i, scale_i, gate_i = Linear(s_i)"
+    operation: conditioning_projection
+    inputs: [conditioning_single]
+    outputs: [modulated_token_state]
+  - id: modulate
+    text: "x_i = gate_i * (scale_i * x_i + shift_i)"
+    operation: adaptive_modulation
+    inputs: [token_state, conditioning_single]
+    outputs: [modulated_token_state]
+visual_template:
+  type: conditioning_overlay
+  lanes: [token_state, conditioning_single]
+renderer_contract:
+  shows:
+    - per-token conditioning, not global conditioning
+    - adaptive normalization/gating before a token update
+evidence_policy:
+  require_usage_evidence: true
