@@ -1273,7 +1273,7 @@ code {
 .architecture-canvas.is-board-transition .module-layer,
 .architecture-canvas.is-board-transition .edge-layer {
   transition:
-    transform 340ms cubic-bezier(0.33, 0, 0.2, 1),
+    transform var(--board-transition-ms, 340ms) cubic-bezier(0.33, 0, 0.2, 1),
     opacity 300ms ease;
 }
 
@@ -1548,6 +1548,82 @@ code {
 
 .edit-export-button:hover {
   background: rgba(139, 111, 195, 0.1);
+}
+
+/* Tuning panel (?tune=1): live sliders for the renderer RULES knobs.
+   Session-only; "Copy RULES" exports the literal to commit back. */
+
+.tune-panel {
+  position: absolute;
+  right: 14px;
+  bottom: 14px;
+  z-index: 30;
+  width: 250px;
+  padding: 9px 12px 11px;
+  border: 1px solid var(--violet);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.94);
+  box-shadow: 0 8px 22px rgba(35, 43, 40, 0.1);
+  font-size: 0.72rem;
+}
+
+.tune-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 7px;
+}
+
+.tune-head strong {
+  color: var(--violet);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.tune-copy-button {
+  padding: 4px 9px;
+  border: 1px solid var(--violet);
+  border-radius: 6px;
+  background: white;
+  color: var(--violet);
+  cursor: pointer;
+  font-size: 0.72rem;
+  font-weight: 800;
+}
+
+.tune-copy-button:hover {
+  background: rgba(139, 111, 195, 0.1);
+}
+
+.tune-row {
+  display: grid;
+  grid-template-columns: 1fr 84px 34px;
+  align-items: center;
+  gap: 8px;
+  margin-top: 3px;
+}
+
+.tune-row span {
+  color: var(--muted);
+  font-family: var(--mono, monospace);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.tune-row input[type="range"] {
+  width: 100%;
+  accent-color: var(--violet);
+}
+
+.tune-row output {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+/* keep clear of the edit-mode badge when both modes are active */
+.architecture-canvas.is-edit-mode .tune-panel {
+  bottom: 64px;
 }
 
 .canvas-toast {

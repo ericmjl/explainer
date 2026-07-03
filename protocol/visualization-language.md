@@ -60,6 +60,16 @@ Skip-toned edges keep their authored clearance lanes (`route_clearance` on
 the view edge). Routing knobs live in the renderer `RULES.route` block;
 they are presentational, so views do not configure them.
 
+## Tuning Mode
+
+`?tune=1` opens a live slider panel for the `RULES` presentation knobs
+(label threshold, routing clearances, transition timing). Changes are
+session-only by design: experiment until the board reads well, then
+"Copy RULES" exports the literal to paste back into `renderer.js` and
+commit. Like edit mode for node positions, the panel is a shorter loop to
+the same durable artifact — code and protocol stay the source of truth;
+the panel never persists state of its own.
+
 ## Grid Density
 
 `grid.columns`/`grid.rows` size the board. Columns default to a 164px

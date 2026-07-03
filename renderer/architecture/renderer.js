@@ -4,6 +4,7 @@ const pageParams = new URLSearchParams(window.location.search);
 const archParam = pageParams.get("arch");
 const useElkLayout = pageParams.get("layout") === "elk";
 const editMode = pageParams.get("edit") === "1";
+const tuneMode = pageParams.get("tune") === "1";
 const activeManifestEntry = manifestIndex.find((entry) => entry.id === archParam) || manifestIndex[0];
 const { manifest } = await import(`./${activeManifestEntry.file}`);
 
@@ -181,6 +182,7 @@ function renderBoard() {
   }
   elements.canvas.classList.toggle("is-edit-mode", editMode);
   if (editMode) ensureEditChrome();
+  if (tuneMode) ensureTuneChrome();
   applyViewport();
   layoutBoard(graph);
 }
@@ -283,6 +285,82 @@ function showCanvasToast(message) {
   toast.classList.add("is-visible");
   window.clearTimeout(canvasToastTimer);
   canvasToastTimer = window.setTimeout(() => toast.classList.remove("is-visible"), 2600);
+}
+
+// Tuning mode (?tune=1): live sliders for the RULES presentation knobs.
+// Values are session-only by design — experiment, then "Copy RULES" and
+// commit the literal back into this file (and the protocol where specced).
+const TUNE_SPEC = [
+  ["edgeLabelMinSpan", 0, 300, 5],
+  ["route.margin", 0, 40, 1],
+  ["route.snap", 0, 40, 1],
+  ["route.channelStep", 6, 48, 2],
+  ["route.laneClearance", 8, 80, 2],
+  ["route.nudge", 4, 24, 1],
+  ["diveScale", 1, 4, 0.1],
+  ["arriveScale", 0.5, 1, 0.01],
+  ["transitionMs", 0, 800, 20],
+  ["fitMargin", 0, 48, 2],
+];
+
+function getRule(path) {
+  return path.split(".").reduce((obj, key) => obj[key], RULES);
+}
+
+function setRule(path, value) {
+  const keys = path.split(".");
+  const last = keys.pop();
+  keys.reduce((obj, key) => obj[key], RULES)[last] = value;
+}
+
+function ensureTuneChrome() {
+  if (document.querySelector(".tune-panel")) return;
+  const panel = document.createElement("div");
+  panel.className = "tune-panel";
+  const rows = TUNE_SPEC.map(([path, min, max, step]) => `
+    <label class="tune-row">
+      <span>${path}</span>
+      <input type="range" min="${min}" max="${max}" step="${step}" value="${getRule(path)}" data-rule="${path}" />
+      <output>${getRule(path)}</output>
+    </label>`).join("");
+  panel.innerHTML = `
+    <div class="tune-head">
+      <strong>tuning</strong>
+      <button type="button" class="tune-copy-button">Copy RULES</button>
+    </div>
+    ${rows}
+  `;
+  panel.addEventListener("input", (event) => {
+    const path = event.target.dataset?.rule;
+    if (!path) return;
+    const value = Number(event.target.value);
+    setRule(path, value);
+    event.target.parentElement.querySelector("output").textContent = String(value);
+    applyTransitionDuration();
+    renderEdges();
+  });
+  panel.querySelector(".tune-copy-button").addEventListener("click", exportRules);
+  panel.addEventListener("pointerdown", (event) => event.stopPropagation());
+  elements.canvas.appendChild(panel);
+}
+
+function serializeRules(value = RULES, indent = "") {
+  if (typeof value !== "object" || value === null) return String(value);
+  const inner = Object.entries(value)
+    .map(([key, child]) => `${indent}  ${key}: ${serializeRules(child, `${indent}  `)},`)
+    .join("\n");
+  return `{\n${inner}\n${indent}}`;
+}
+
+async function exportRules() {
+  const text = `const RULES = ${serializeRules()};`;
+  try {
+    await navigator.clipboard.writeText(text);
+    showCanvasToast("RULES literal copied — paste into renderer.js and commit");
+  } catch (error) {
+    console.log(text);
+    showCanvasToast("clipboard unavailable — RULES printed to the browser console");
+  }
 }
 
 let elkInstance = null;
@@ -844,7 +922,10 @@ const RULES = {
   // fit-to-content margin inside the canvas
   fitMargin: 12,
 };
-const BOARD_TRANSITION_MS = RULES.transitionMs;
+function applyTransitionDuration() {
+  elements.canvas.style.setProperty("--board-transition-ms", `${RULES.transitionMs}ms`);
+}
+applyTransitionDuration();
 
 function setBoardTransition(on) {
   elements.canvas.classList.toggle("is-board-transition", on);
@@ -872,7 +953,7 @@ function animateDiveIn(originNodeId, done) {
     elements.canvas.classList.remove("is-board-fading");
     state.isTransitioning = false;
     done();
-  }, BOARD_TRANSITION_MS);
+  }, RULES.transitionMs);
 }
 
 function animateFadeOut(done) {
@@ -900,7 +981,7 @@ function animateFadeOut(done) {
     elements.canvas.classList.remove("is-board-fading");
     state.isTransitioning = false;
     done();
-  }, BOARD_TRANSITION_MS);
+  }, RULES.transitionMs);
 }
 
 function animateArriveFrom(originNodeId) {
@@ -942,7 +1023,7 @@ function animateArriveFrom(originNodeId) {
       window.setTimeout(() => {
         setBoardTransition(false);
         state.isTransitioning = false;
-      }, BOARD_TRANSITION_MS);
+      }, RULES.transitionMs);
     });
   });
 }
