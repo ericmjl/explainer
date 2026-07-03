@@ -439,7 +439,7 @@ function fitToContent() {
   const baseY = elements.moduleLayer.offsetTop;
   const availableW = Math.max(120, canvasRect.width - baseX * 2);
   const availableH = Math.max(120, canvasRect.height - baseY - 26);
-  const margin = 12;
+  const margin = RULES.fitMargin;
   const fit = Math.min(
     1,
     (availableW - margin) / bounds.width,
@@ -821,7 +821,24 @@ function moduleDetail(module) {
 }
 
 const prefersReducedMotion = Boolean(window.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches);
-const BOARD_TRANSITION_MS = 340;
+// Presentation rules, gathered in one place. The ones that decide what is
+// VISIBLE (not just how it looks) are specced in
+// protocol/visualization-language.md — change them there first.
+const RULES = {
+  // an edge prints its label only when it spans at least this many px,
+  // is a contracted (elided) edge, or carries conditioning tone;
+  // shorter edges communicate by shape alone and reveal text on hover
+  edgeLabelMinSpan: 130,
+  // bezier control-point reach: fraction of edge length, clamped
+  edgeReach: { factor: 0.4, min: 24, max: 90 },
+  // board dive-in/emerge transition
+  diveScale: 2.2,
+  arriveScale: 0.92,
+  transitionMs: 340,
+  // fit-to-content margin inside the canvas
+  fitMargin: 12,
+};
+const BOARD_TRANSITION_MS = RULES.transitionMs;
 
 function setBoardTransition(on) {
   elements.canvas.classList.toggle("is-board-transition", on);
@@ -837,7 +854,7 @@ function animateDiveIn(originNodeId, done) {
   const canvasRect = elements.canvas.getBoundingClientRect();
   const baseX = elements.moduleLayer.offsetLeft;
   const baseY = elements.moduleLayer.offsetTop;
-  const targetScale = Math.max(viewport.scale * 2.2, 2.2);
+  const targetScale = Math.max(viewport.scale * RULES.diveScale, RULES.diveScale);
   setBoardTransition(true);
   elements.canvas.classList.add("is-board-fading");
   viewport.x = canvasRect.width / 2 - baseX - box.cx * targetScale;
@@ -889,7 +906,7 @@ function animateArriveFrom(originNodeId) {
       const canvasRect = elements.canvas.getBoundingClientRect();
       const baseX = elements.moduleLayer.offsetLeft;
       const baseY = elements.moduleLayer.offsetTop;
-      const scale = 2.2;
+      const scale = RULES.diveScale;
       start = {
         scale,
         x: canvasRect.width / 2 - baseX - box.cx * scale,
@@ -898,7 +915,7 @@ function animateArriveFrom(originNodeId) {
     }
   }
   if (!start) {
-    const scale = 0.92;
+    const scale = RULES.arriveScale;
     start = {
       scale,
       x: (elements.moduleLayer.offsetWidth * (1 - scale)) / 2,
@@ -1084,7 +1101,7 @@ function renderEdges() {
         const dockedEdge = edgeDocking(edge);
         if (!dockedEdge) return;
         const { from, to, fromNormal, toNormal } = dockedEdge;
-        const reach = clamp(Math.hypot(to.x - from.x, to.y - from.y) * 0.4, 24, 90);
+        const reach = clamp(Math.hypot(to.x - from.x, to.y - from.y) * RULES.edgeReach.factor, RULES.edgeReach.min, RULES.edgeReach.max);
         const c1x = from.x + fromNormal.x * reach;
         const c1y = from.y + fromNormal.y * reach;
         const c2x = to.x + toNormal.x * reach;
@@ -1106,7 +1123,7 @@ function renderEdges() {
     applyEdgeTone(path, edge);
     elements.edgeLayer.appendChild(path);
 
-    const showLabel = edge.label && (edgeSpan >= 130 || contracted || edge.tone === "conditioning");
+    const showLabel = edge.label && (edgeSpan >= RULES.edgeLabelMinSpan || contracted || edge.tone === "conditioning");
     if (showLabel) {
       const label = document.createElementNS("http://www.w3.org/2000/svg", "text");
       label.setAttribute("x", String(labelPoint.x));

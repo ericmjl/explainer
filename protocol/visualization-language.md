@@ -25,6 +25,21 @@ boards:
     edges: []
 ```
 
+## Renderer Visibility Defaults
+
+Rules the renderer applies that change what is visible (not merely styled).
+Authors should know these; if one fights a specific board, the fix is a view
+override (to be added when first needed), not a renderer tweak.
+
+- Edge labels render only on edges spanning at least ~130px, on contracted
+  edges, and on conditioning-toned edges. Short adjacent hops communicate by
+  arrow/tone alone; their label and connection text remain available on
+  hover.
+- Compact/micro node treatments suppress `role`/`detail` prose on the card;
+  it appears in the hover panel.
+- The board overview panel lists only drillable (expandable) nodes, plus
+  root-board claims and coverage.
+
 ## Grid Density
 
 `grid.columns`/`grid.rows` size the board. Columns default to a 164px
