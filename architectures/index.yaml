@@ -18,4 +18,5 @@ source_sets:
     pseudocode: pseudocode/diffusion-transformer.yaml
     standard_blocks:
       - standard_blocks/adaln-zero-conditioning.yaml
+      - standard_blocks/sinusoidal-timestep-embedding.yaml
       - standard_blocks/per-item-adaln-conditioning.yaml

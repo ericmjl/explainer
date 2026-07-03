@@ -40,6 +40,13 @@ export const manifest = {
         "kind": "feature_adapter",
         "role": "encode the scalar timestep with a 256-dim sinusoidal embedding followed by a two-layer SiLU MLP",
         "scale": "sample",
+        "contains": [
+          {
+            "id": "sinusoidal_embedding",
+            "label": "Sinusoidal embedding + MLP",
+            "standard_block_ref": "../../standard_blocks/sinusoidal-timestep-embedding.yaml"
+          }
+        ],
         "inputs": [
           "timestep"
         ],
@@ -83,7 +90,7 @@ export const manifest = {
       {
         "id": "cond_combiner",
         "label": "Conditioning Combiner",
-        "kind": "feature_adapter",
+        "kind": "elementwise_sum",
         "role": "sum timestep and label embeddings into one per-sample conditioning vector",
         "scale": "sample",
         "inputs": [
@@ -878,6 +885,32 @@ export const manifest = {
         }
       ]
     },
+    "sinusoidal_timestep_embedding": {
+      "id": "sinusoidal_timestep_embedding",
+      "name": "Sinusoidal Timestep Embedding",
+      "sourceYaml": "../../standard_blocks/sinusoidal-timestep-embedding.yaml",
+      "description": "Expand a scalar diffusion timestep into a fixed sinusoidal frequency embedding, then project it to model width with a two-layer SiLU MLP. A reusable atom for diffusion-style architectures.",
+      "math": [
+        {
+          "id": "frequencies",
+          "text": "freqs = exp(-ln(10^4) * arange(128) / 128)",
+          "tex": "\\omega_k = \\exp\\!\\left(-\\tfrac{k \\ln 10^4}{128}\\right),\\; k = 0..127",
+          "operation": "frequency_table"
+        },
+        {
+          "id": "sinusoid",
+          "text": "emb = concat(cos(t * freqs), sin(t * freqs))  # 256-dim",
+          "tex": "e = [\\cos(t\\,\\omega);\\; \\sin(t\\,\\omega)] \\in \\mathbb{R}^{256}",
+          "operation": "sinusoidal_expansion"
+        },
+        {
+          "id": "mlp_projection",
+          "text": "t_emb = Linear_d(SiLU(Linear_d(emb)))",
+          "tex": "t_{\\mathrm{emb}} = W_2\\,\\operatorname{SiLU}(W_1 e)",
+          "operation": "mlp_projection"
+        }
+      ]
+    },
     "per_item_adaln_conditioning": {
       "id": "per_item_adaln_conditioning",
       "name": "Per-Item AdaLN Conditioning",
@@ -927,11 +960,13 @@ export const manifest = {
         {
           "id": "t_embedding",
           "name": "t_emb",
+          "tex": "t_{\\mathrm{emb}}",
           "architectureRef": "representations.t_embedding"
         },
         {
           "id": "y_embedding",
           "name": "y_emb",
+          "tex": "y_{\\mathrm{emb}}",
           "architectureRef": "representations.y_embedding"
         },
         {
@@ -952,6 +987,7 @@ export const manifest = {
         {
           "id": "noise_prediction",
           "name": "ε, Σ",
+          "tex": "\\varepsilon_\\theta, \\Sigma_\\theta",
           "architectureRef": "representations.noise_prediction"
         }
       ],
@@ -1052,7 +1088,7 @@ export const manifest = {
         "parent": "dit_overview",
         "scale_lanes": false,
         "grid": {
-          "columns": 7,
+          "columns": 8,
           "rows": 5
         },
         "nodes": [
@@ -1112,7 +1148,7 @@ export const manifest = {
             "rep_ref": "t_embedding",
             "treatment": "compact",
             "density": "compact",
-            "col": 3,
+            "col": 2,
             "row": 1,
             "elide": true
           },
@@ -1122,7 +1158,7 @@ export const manifest = {
             "rep_ref": "y_embedding",
             "treatment": "compact",
             "density": "compact",
-            "col": 3,
+            "col": 2,
             "row": 2,
             "elide": true
           },
@@ -1130,11 +1166,9 @@ export const manifest = {
             "id": "cond_combiner",
             "kind": "module",
             "module_ref": "cond_combiner",
-            "treatment": "compact",
-            "density": "compact",
-            "col": 4,
-            "row": 2,
-            "elide": true
+            "label": "t + y",
+            "col": 3,
+            "row": 1
           },
           {
             "id": "patchify",
@@ -1183,7 +1217,7 @@ export const manifest = {
             "prominence": "primary",
             "treatment": "compact",
             "density": "compact",
-            "col": 6,
+            "col": 7,
             "row": 3
           },
           {
@@ -1192,7 +1226,7 @@ export const manifest = {
             "rep_ref": "output_tokens",
             "treatment": "compact",
             "density": "compact",
-            "col": 6,
+            "col": 7,
             "row": 4,
             "elide": true
           },
@@ -1202,7 +1236,7 @@ export const manifest = {
             "module_ref": "unpatchify",
             "treatment": "compact",
             "density": "compact",
-            "col": 7,
+            "col": 8,
             "row": 4,
             "elide": true
           },
@@ -1213,7 +1247,7 @@ export const manifest = {
             "prominence": "context",
             "treatment": "chip",
             "density": "micro",
-            "col": 7,
+            "col": 8,
             "row": 3
           }
         ],
@@ -1261,7 +1295,7 @@ export const manifest = {
           {
             "from": "t_embedding",
             "to": "cond_combiner",
-            "label": "add",
+            "label": "t emb",
             "connection": {
               "title": "Timestep embedding into combiner",
               "role": "additive combination",
@@ -1271,7 +1305,7 @@ export const manifest = {
           {
             "from": "y_embedding",
             "to": "cond_combiner",
-            "label": "add",
+            "label": "y emb",
             "connection": {
               "title": "Label embedding into combiner",
               "role": "additive combination",
@@ -1389,12 +1423,14 @@ export const manifest = {
       {
         "id": "dit_blocks",
         "title": "DiT Block (adaLN-Zero)",
-        "summary": "One block of the stack. A per-sample MLP on c regresses six modulation vectors; attention and MLP branches are shifted, scaled, and residual-gated, with gates zero-initialized so the block starts as the identity.",
+        "summary": "One block of the stack. A per-sample MLP on c emits six vectors: shift1, scale1, gate1 for the attention branch and shift2, scale2, gate2 for the MLP branch. Each branch is normalized, shifted/scaled, transformed, gated, then added back residually.",
         "parent": "dit_pipeline",
         "scale_lanes": false,
         "grid": {
-          "columns": 5,
-          "rows": 3
+          "columns": 12,
+          "rows": 4,
+          "min_col": 88,
+          "col_gap": 14
         },
         "nodes": [
           {
@@ -1403,7 +1439,7 @@ export const manifest = {
             "rep_ref": "token_state",
             "label": "tokens in",
             "col": 1,
-            "row": 2
+            "row": 4
           },
           {
             "id": "cond_vector",
@@ -1413,90 +1449,365 @@ export const manifest = {
             "row": 1
           },
           {
+            "id": "adaln_mlp",
+            "kind": "operation",
+            "label": "adaLN MLP",
+            "scale": "sample",
+            "treatment": "compact",
+            "density": "compact",
+            "role": "apply SiLU then a linear projection from c to six modulation vectors",
+            "detail": "c -> shift1, scale1, gate1, shift2, scale2, gate2",
+            "col": 4,
+            "row": 1
+          },
+          {
+            "id": "attn_params",
+            "kind": "operation",
+            "label": "branch-1 params",
+            "scale": "sample",
+            "treatment": "chip",
+            "density": "micro",
+            "role": "shift1, scale1, and gate1 modulate the attention residual branch",
+            "col": 3,
+            "row": 2
+          },
+          {
+            "id": "mlp_params",
+            "kind": "operation",
+            "label": "branch-2 params",
+            "scale": "sample",
+            "treatment": "chip",
+            "density": "micro",
+            "role": "shift2, scale2, and gate2 modulate the pointwise MLP residual branch",
+            "col": 8,
+            "row": 2
+          },
+          {
+            "id": "norm1",
+            "kind": "operation",
+            "label": "LayerNorm",
+            "scale": "token",
+            "treatment": "chip",
+            "density": "micro",
+            "role": "normalize tokens before the attention branch; no learned affine",
+            "col": 2,
+            "row": 4
+          },
+          {
             "id": "adaln_mod",
             "kind": "operation",
-            "label": "adaLN-Zero modulation",
-            "scale": "sample",
-            "role": "regress shift1, scale1, gate1, shift2, scale2, gate2 from SiLU(c); gate projection zero-initialized",
-            "col": 2,
-            "row": 2
+            "label": "shift/scale 1",
+            "scale": "token",
+            "treatment": "chip",
+            "density": "micro",
+            "role": "affine modulation",
+            "detail": "norm1 -> scale1, shift1",
+            "col": 3,
+            "row": 4
           },
           {
             "id": "self_attention",
             "kind": "module",
-            "module_ref": "dit_blocks",
-            "label": "multi-head self-attention",
-            "col": 3,
-            "row": 2
+            "label": "self-attention",
+            "scale": "token",
+            "treatment": "compact",
+            "density": "compact",
+            "role": "16-head full self-attention inside one DiT-XL block",
+            "detail": "standard QKV attention plus output projection",
+            "col": 4,
+            "row": 4
+          },
+          {
+            "id": "gate1",
+            "kind": "operation",
+            "operator": "*",
+            "label": "gate1",
+            "scale": "token",
+            "role": "multiply the attention output by the zero-initialized gate1 vector",
+            "col": 5,
+            "row": 4
+          },
+          {
+            "id": "add1",
+            "kind": "operation",
+            "operator": "+",
+            "label": "residual add 1",
+            "scale": "token",
+            "role": "add the gated attention branch back to the incoming token state",
+            "col": 6,
+            "row": 4
+          },
+          {
+            "id": "norm2",
+            "kind": "operation",
+            "label": "LayerNorm",
+            "scale": "token",
+            "treatment": "chip",
+            "density": "micro",
+            "role": "normalize the post-attention token state before the MLP branch",
+            "col": 7,
+            "row": 4
+          },
+          {
+            "id": "scale_shift2",
+            "kind": "operation",
+            "label": "shift/scale 2",
+            "scale": "token",
+            "treatment": "chip",
+            "density": "micro",
+            "role": "affine modulation",
+            "detail": "norm2 -> scale2, shift2",
+            "col": 8,
+            "row": 4
           },
           {
             "id": "mlp_branch",
             "kind": "operation",
             "label": "pointwise MLP branch",
             "scale": "token",
-            "role": "second modulated, gated residual branch after attention",
-            "col": 4,
-            "row": 2
+            "treatment": "compact",
+            "density": "compact",
+            "role": "transform each token independently with the DiT MLP branch",
+            "col": 9,
+            "row": 4
+          },
+          {
+            "id": "gate2",
+            "kind": "operation",
+            "operator": "*",
+            "label": "gate2",
+            "scale": "token",
+            "role": "multiply the MLP output by the zero-initialized gate2 vector",
+            "col": 10,
+            "row": 4
+          },
+          {
+            "id": "add2",
+            "kind": "operation",
+            "operator": "+",
+            "label": "residual add 2",
+            "scale": "token",
+            "role": "add the gated MLP branch back to the post-attention token state",
+            "col": 11,
+            "row": 4
           },
           {
             "id": "token_state_out",
             "kind": "representation",
             "rep_ref": "token_state",
             "label": "tokens out",
-            "col": 5,
-            "row": 2
+            "col": 12,
+            "row": 4
           }
         ],
         "edges": [
           {
-            "from": "token_state_in",
-            "to": "adaln_mod",
-            "label": "LN(x)",
+            "from": "cond_vector",
+            "to": "adaln_mlp",
+            "label": "c",
+            "tone": "conditioning",
             "connection": {
-              "title": "Normalize tokens",
-              "role": "branch input",
-              "inside": "Tokens are LayerNorm-normalized (no learned affine) before receiving shift and scale from the conditioning MLP."
+              "title": "Conditioning into adaLN MLP",
+              "role": "modulation source",
+              "inside": "The per-sample conditioning vector c is passed through SiLU and a linear layer to produce six vectors for the two residual branches."
             }
           },
           {
-            "from": "cond_vector",
-            "to": "adaln_mod",
-            "label": "SiLU + MLP",
+            "from": "adaln_mlp",
+            "to": "attn_params",
+            "label": "1st branch",
             "tone": "conditioning",
             "connection": {
-              "title": "Per-sample modulation parameters",
-              "role": "adaptive conditioning",
-              "inside": "One MLP on c produces all six modulation vectors, shared by every token of the sample."
+              "title": "Attention-branch parameters",
+              "role": "adaLN-Zero branch controls",
+              "inside": "The first three chunks are shift1, scale1, and gate1; they modulate and gate the self-attention branch."
+            }
+          },
+          {
+            "from": "adaln_mlp",
+            "to": "mlp_params",
+            "label": "2nd branch",
+            "tone": "conditioning",
+            "connection": {
+              "title": "MLP-branch parameters",
+              "role": "adaLN-Zero branch controls",
+              "inside": "The last three chunks are shift2, scale2, and gate2; they modulate and gate the pointwise MLP branch."
+            }
+          },
+          {
+            "from": "token_state_in",
+            "to": "norm1",
+            "label": "x",
+            "connection": {
+              "title": "Tokens into first LayerNorm",
+              "role": "branch input",
+              "inside": "The incoming token state is first LayerNorm-normalized for the attention residual branch."
+            }
+          },
+          {
+            "from": "norm1",
+            "to": "adaln_mod",
+            "label": "norm1",
+            "connection": {
+              "title": "Normalized tokens",
+              "role": "normalized branch input",
+              "inside": "DiT uses LayerNorm without learned affine parameters before applying adaptive shift and scale from c."
+            }
+          },
+          {
+            "from": "attn_params",
+            "to": "adaln_mod",
+            "label": "shift1, scale1",
+            "tone": "conditioning",
+            "connection": {
+              "title": "First adaLN shift and scale",
+              "role": "attention-branch modulation",
+              "inside": "shift1 and scale1 are broadcast over tokens and applied to the normalized token stream before self-attention."
             }
           },
           {
             "from": "adaln_mod",
             "to": "self_attention",
-            "label": "scale1*x + shift1",
+            "label": "modulated x",
             "connection": {
               "title": "Modulated tokens into attention",
               "role": "attention input",
-              "inside": "The modulated stream enters full self-attention; the branch output is multiplied by the zero-initialized gate1 before the residual add."
+              "inside": "The shifted and scaled token stream enters full multi-head self-attention."
             }
           },
           {
             "from": "self_attention",
-            "to": "mlp_branch",
-            "label": "x + gate1*attn",
+            "to": "gate1",
+            "label": "attn",
             "connection": {
-              "title": "Gated attention residual",
-              "role": "intermediate token state",
-              "inside": "The MLP branch repeats the pattern with shift2, scale2, and gate2 on the post-attention state."
+              "title": "Attention branch output",
+              "role": "residual branch value",
+              "inside": "The attention branch output is not added directly; it is first multiplied by gate1."
+            }
+          },
+          {
+            "from": "attn_params",
+            "to": "gate1",
+            "label": "gate1",
+            "tone": "conditioning",
+            "connection": {
+              "title": "First residual gate",
+              "role": "zero-initialized branch gate",
+              "inside": "gate1 is one of the six vectors from the adaLN MLP. It starts at zero initialization, so the attention branch initially contributes nothing."
+            }
+          },
+          {
+            "from": "gate1",
+            "to": "add1",
+            "label": "gate1*attn",
+            "connection": {
+              "title": "Gated attention update",
+              "role": "gated residual update",
+              "inside": "The gated attention output is the update term for the first residual add."
+            }
+          },
+          {
+            "from": "token_state_in",
+            "to": "add1",
+            "label": "skip x",
+            "tone": "skip",
+            "connection": {
+              "title": "First residual skip",
+              "role": "residual identity path",
+              "inside": "The original token state bypasses the attention branch and is added to the gated attention update."
+            }
+          },
+          {
+            "from": "add1",
+            "to": "norm2",
+            "label": "x1",
+            "connection": {
+              "title": "Post-attention state",
+              "role": "second branch input",
+              "inside": "The output of the first residual add becomes the input to the MLP residual branch."
+            }
+          },
+          {
+            "from": "norm2",
+            "to": "scale_shift2",
+            "label": "norm2",
+            "connection": {
+              "title": "Normalized post-attention tokens",
+              "role": "normalized branch input",
+              "inside": "The post-attention token state is LayerNorm-normalized before the second adaptive shift and scale."
+            }
+          },
+          {
+            "from": "mlp_params",
+            "to": "scale_shift2",
+            "label": "shift2, scale2",
+            "tone": "conditioning",
+            "connection": {
+              "title": "Second adaLN shift and scale",
+              "role": "MLP-branch modulation",
+              "inside": "shift2 and scale2 are broadcast over tokens and applied before the pointwise MLP branch."
+            }
+          },
+          {
+            "from": "scale_shift2",
+            "to": "mlp_branch",
+            "label": "modulated x1",
+            "connection": {
+              "title": "Modulated tokens into MLP",
+              "role": "MLP input",
+              "inside": "The second shifted and scaled token stream enters the pointwise feed-forward branch."
             }
           },
           {
             "from": "mlp_branch",
+            "to": "gate2",
+            "label": "mlp",
+            "connection": {
+              "title": "MLP branch output",
+              "role": "residual branch value",
+              "inside": "The pointwise MLP output is multiplied by gate2 before the second residual add."
+            }
+          },
+          {
+            "from": "mlp_params",
+            "to": "gate2",
+            "label": "gate2",
+            "tone": "conditioning",
+            "connection": {
+              "title": "Second residual gate",
+              "role": "zero-initialized branch gate",
+              "inside": "gate2 starts at zero initialization, so the MLP branch initially contributes nothing."
+            }
+          },
+          {
+            "from": "gate2",
+            "to": "add2",
+            "label": "gate2*mlp",
+            "connection": {
+              "title": "Gated MLP update",
+              "role": "gated residual update",
+              "inside": "The gated MLP output is the update term for the second residual add."
+            }
+          },
+          {
+            "from": "add1",
+            "to": "add2",
+            "label": "skip x1",
+            "tone": "skip",
+            "connection": {
+              "title": "Second residual skip",
+              "role": "residual identity path",
+              "inside": "The post-attention state bypasses the MLP branch and is added to the gated MLP update."
+            }
+          },
+          {
+            "from": "add2",
             "to": "token_state_out",
-            "label": "x + gate2*mlp",
+            "label": "x out",
             "connection": {
               "title": "Updated tokens",
               "role": "mutable output",
-              "inside": "The block returns tokens with the same shape and ownership; at initialization both gates are zero, so the block is the identity."
+              "inside": "The block returns tokens with the same shape and ownership; at initialization both gates are zero, so the whole block starts as an identity map."
             }
           }
         ]

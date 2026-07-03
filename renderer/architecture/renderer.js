@@ -1,6 +1,9 @@
 import { manifestIndex } from "./manifest-index.js";
 
-const archParam = new URLSearchParams(window.location.search).get("arch");
+const pageParams = new URLSearchParams(window.location.search);
+const archParam = pageParams.get("arch");
+const useElkLayout = pageParams.get("layout") === "elk";
+const editMode = pageParams.get("edit") === "1";
 const activeManifestEntry = manifestIndex.find((entry) => entry.id === archParam) || manifestIndex[0];
 const { manifest } = await import(`./${activeManifestEntry.file}`);
 
@@ -23,6 +26,7 @@ const conditioningByPair = new Map(
 );
 
 let connectionTooltip = null;
+let representationTooltip = null;
 let breadcrumbs = null;
 let canvasControls = null;
 
@@ -79,16 +83,19 @@ function renderPageChrome() {
 
 window.addEventListener("mathjax-ready", () => {
   typesetMath();
-  typesetBoardMath();
+  renderBoard();
 });
 
-function typesetBoardMath() {
+window.addEventListener("elk-ready", () => {
+  if (useElkLayout) renderBoard();
+});
+
+function typesetBoardMathAsync() {
   const mathJax = window.MathJax;
-  if (!mathJax?.typesetPromise) return;
+  if (!mathJax?.typesetPromise) return Promise.resolve();
   mathJax.typesetClear?.([elements.moduleLayer]);
-  mathJax
+  return mathJax
     .typesetPromise([elements.moduleLayer])
-    .then(() => renderEdges())
     .catch((error) => console.warn("MathJax board typesetting failed", error));
 }
 
@@ -132,6 +139,7 @@ function ensureBoardChrome() {
     elements.canvas.appendChild(breadcrumbs);
   }
   ensureConnectionTooltip();
+  ensureRepresentationTooltip();
   ensurePanZoom();
 }
 
@@ -141,21 +149,306 @@ function currentBoard() {
 
 function renderBoard() {
   const board = currentBoard();
+  hideRepPeek();
+  state.displayEdges = null;
+  state.layoutEdges = null;
   elements.moduleLayer.innerHTML = "";
   elements.edgeLayer.innerHTML = "";
   elements.moduleLayer.style.setProperty("--board-columns", String(board.grid?.columns || 5));
   elements.moduleLayer.style.setProperty("--board-rows", String(board.grid?.rows || 4));
+  elements.moduleLayer.style.setProperty(
+    "--board-min-col",
+    board.grid?.min_col ? `${board.grid.min_col}px` : "",
+  );
+  elements.moduleLayer.style.setProperty(
+    "--board-col-gap",
+    board.grid?.col_gap ? `${board.grid.col_gap}px` : "",
+  );
+  elements.canvas.dataset.boardId = board.id;
   elements.canvas.classList.toggle("is-abstract-board", board.scale_lanes === false);
 
   renderBreadcrumbs();
 
+  const graph = displayGraph(board);
+  state.displayEdges = graph.edges;
   for (const node of visibleNodes(board)) {
-    elements.moduleLayer.appendChild(renderNode(node));
+    const el = renderNode(node);
+    if (editMode) {
+      if (node.elide) el.classList.add("is-elide-ghost");
+      makeDraggable(el, node, board);
+    }
+    elements.moduleLayer.appendChild(el);
   }
+  elements.canvas.classList.toggle("is-edit-mode", editMode);
+  if (editMode) ensureEditChrome();
   applyViewport();
+  layoutBoard(graph);
+}
 
-  window.requestAnimationFrame(renderEdges);
-  typesetBoardMath();
+function makeDraggable(card, node, board) {
+  card.addEventListener("pointerdown", (event) => {
+    if (event.button !== 0) return;
+    event.stopPropagation();
+    state.dragMoved = false;
+    card.setPointerCapture(event.pointerId);
+    const onMove = (ev) => {
+      const cell = cellFromPointer(ev, board);
+      if (!cell) return;
+      if (cell.col !== (node.col || 1) || cell.row !== (node.row || 1)) {
+        state.dragMoved = true;
+        node.col = cell.col;
+        node.row = cell.row;
+        placeNode(card, node);
+        renderEdges();
+      }
+    };
+    const onUp = () => {
+      card.removeEventListener("pointermove", onMove);
+      card.removeEventListener("pointerup", onUp);
+      card.removeEventListener("pointercancel", onUp);
+    };
+    card.addEventListener("pointermove", onMove);
+    card.addEventListener("pointerup", onUp);
+    card.addEventListener("pointercancel", onUp);
+  });
+}
+
+function cellFromPointer(event, board) {
+  const rect = elements.moduleLayer.getBoundingClientRect();
+  if (!rect.width || !rect.height) return null;
+  const cols = board.grid?.columns || 5;
+  const rows = board.grid?.rows || 4;
+  const fx = (event.clientX - rect.left) / rect.width;
+  const fy = (event.clientY - rect.top) / rect.height;
+  return {
+    col: clamp(Math.ceil(fx * cols), 1, cols),
+    row: clamp(Math.ceil(fy * rows), 1, rows),
+  };
+}
+
+function ensureEditChrome() {
+  if (document.querySelector(".edit-mode-badge")) return;
+  const badge = document.createElement("div");
+  badge.className = "edit-mode-badge";
+  badge.innerHTML = `
+    <strong>edit mode</strong>
+    <span>drag nodes to reposition · elided nodes shown dashed</span>
+    <button type="button" class="edit-export-button">Copy nodes: YAML</button>
+  `;
+  badge.querySelector(".edit-export-button").addEventListener("click", exportBoardYaml);
+  elements.canvas.appendChild(badge);
+}
+
+function yamlValue(value) {
+  if (typeof value === "number" || typeof value === "boolean") return String(value);
+  const text = String(value);
+  const plain = /^[A-Za-z0-9_][A-Za-z0-9_.\/+*() -]*$/.test(text)
+    && !/^(true|false|null|yes|no|on|off)$/i.test(text)
+    && !text.includes(": ");
+  return plain ? text : JSON.stringify(text);
+}
+
+function serializeBoardNodes(board) {
+  const lines = ["    nodes:"];
+  for (const node of board.nodes || []) {
+    Object.entries(node).forEach(([key, value], index) => {
+      lines.push(`${index === 0 ? "      - " : "        "}${key}: ${yamlValue(value)}`);
+    });
+  }
+  return lines.join("\n");
+}
+
+async function exportBoardYaml() {
+  const board = currentBoard();
+  const yaml = serializeBoardNodes(board);
+  try {
+    await navigator.clipboard.writeText(yaml);
+    showCanvasToast(`nodes: block for board "${board.id}" copied — paste into the view YAML`);
+  } catch (error) {
+    console.log(yaml);
+    showCanvasToast("clipboard unavailable — YAML printed to the browser console");
+  }
+}
+
+let canvasToastTimer = null;
+
+function showCanvasToast(message) {
+  let toast = document.querySelector(".canvas-toast");
+  if (!toast) {
+    toast = document.createElement("div");
+    toast.className = "canvas-toast";
+    elements.canvas.appendChild(toast);
+  }
+  toast.textContent = message;
+  toast.classList.add("is-visible");
+  window.clearTimeout(canvasToastTimer);
+  canvasToastTimer = window.setTimeout(() => toast.classList.remove("is-visible"), 2600);
+}
+
+let elkInstance = null;
+
+function getElk() {
+  if (!elkInstance && typeof window.ELK === "function") {
+    try {
+      elkInstance = new window.ELK();
+    } catch (error) {
+      console.warn("ELK initialisation failed; using grid layout", error);
+    }
+  }
+  return elkInstance;
+}
+
+const ELK_LAYOUT_OPTIONS = {
+  "elk.algorithm": "layered",
+  "elk.direction": "RIGHT",
+  "elk.edgeRouting": "ORTHOGONAL",
+  "elk.layered.spacing.nodeNodeBetweenLayers": "96",
+  "elk.spacing.nodeNode": "48",
+  "elk.spacing.edgeNode": "30",
+  "elk.spacing.edgeEdge": "18",
+  "elk.layered.spacing.edgeNodeBetweenLayers": "30",
+  "elk.padding": "[top=24,left=24,bottom=24,right=24]",
+};
+
+function buildElkGraph(graph, sizeOf) {
+  return {
+    id: "board",
+    layoutOptions: ELK_LAYOUT_OPTIONS,
+    children: graph.nodes
+      .filter((node) => node.prominence !== "hidden" && node.treatment !== "hidden")
+      .map((node) => {
+        const { width, height } = sizeOf(node);
+        return { id: node.id, width, height };
+      }),
+    edges: graph.edges.map((edge, index) => ({
+      id: `edge_${index}`,
+      sources: [edge.from],
+      targets: [edge.to],
+    })),
+  };
+}
+
+async function layoutBoard(graph) {
+  const generation = (state.layoutGeneration = (state.layoutGeneration || 0) + 1);
+  await typesetBoardMathAsync();
+  if (generation !== state.layoutGeneration) return;
+
+  const elk = useElkLayout ? getElk() : null;
+  if (!elk || graph.nodes.length < 2) {
+    useGridLayout();
+    return;
+  }
+
+  elements.moduleLayer.classList.add("is-elk-layout", "is-layouting");
+  const elkGraph = buildElkGraph(graph, (node) => {
+    const el = elements.moduleLayer.querySelector(`[data-node-id="${node.id}"]`);
+    return { width: el?.offsetWidth || 200, height: el?.offsetHeight || 100 };
+  });
+
+  try {
+    const layout = await elk.layout(elkGraph);
+    if (generation !== state.layoutGeneration) return;
+    applyElkLayout(layout);
+  } catch (error) {
+    console.warn("ELK layout failed; falling back to grid", error);
+    useGridLayout();
+  } finally {
+    elements.moduleLayer.classList.remove("is-layouting");
+  }
+}
+
+function useGridLayout() {
+  state.layoutEdges = null;
+  elements.moduleLayer.classList.remove("is-elk-layout", "is-layouting");
+  elements.canvas.classList.remove("is-elk-layout");
+  elements.moduleLayer.style.width = "";
+  elements.moduleLayer.style.height = "";
+  elements.edgeLayer.style.width = "";
+  elements.edgeLayer.style.height = "";
+  window.requestAnimationFrame(() => {
+    if (!state.isTransitioning && !state.userMovedViewport) fitToContent();
+    renderEdges();
+  });
+}
+
+function applyElkLayout(layout) {
+  const width = Math.ceil(layout.width || 0);
+  const height = Math.ceil(layout.height || 0);
+  elements.canvas.classList.add("is-elk-layout");
+  elements.moduleLayer.style.width = `${width}px`;
+  elements.moduleLayer.style.height = `${height}px`;
+  elements.edgeLayer.style.width = `${width}px`;
+  elements.edgeLayer.style.height = `${height}px`;
+
+  for (const child of layout.children || []) {
+    const el = elements.moduleLayer.querySelector(`[data-node-id="${child.id}"]`);
+    if (!el) continue;
+    el.style.left = `${Math.round(child.x || 0)}px`;
+    el.style.top = `${Math.round(child.y || 0)}px`;
+  }
+
+  state.layoutEdges = new Map();
+  for (const edge of layout.edges || []) {
+    const section = edge.sections?.[0];
+    if (!section) continue;
+    const points = [section.startPoint, ...(section.bendPoints || []), section.endPoint];
+    state.layoutEdges.set(Number(edge.id.replace("edge_", "")), points);
+  }
+
+  fitViewport(width, height);
+  renderEdges();
+}
+
+function fitViewport(width, height) {
+  const canvasRect = elements.canvas.getBoundingClientRect();
+  const baseX = elements.moduleLayer.offsetLeft;
+  const baseY = elements.moduleLayer.offsetTop;
+  const availableW = Math.max(120, canvasRect.width - baseX * 2);
+  const availableH = Math.max(120, canvasRect.height - baseY - 26);
+  const fit = Math.min(1, availableW / width, availableH / height);
+  viewport.scale = clamp(fit, viewport.minScale, viewport.maxScale);
+  viewport.x = Math.max(0, (availableW - width * viewport.scale) / 2);
+  viewport.y = Math.max(0, (availableH - height * viewport.scale) / 2);
+  applyViewport();
+}
+
+function boardContentBounds() {
+  const nodes = elements.moduleLayer.querySelectorAll("[data-node-id]");
+  if (!nodes.length) return null;
+  let minX = Infinity;
+  let minY = Infinity;
+  let maxX = -Infinity;
+  let maxY = -Infinity;
+  for (const el of nodes) {
+    minX = Math.min(minX, el.offsetLeft);
+    minY = Math.min(minY, el.offsetTop);
+    maxX = Math.max(maxX, el.offsetLeft + el.offsetWidth);
+    maxY = Math.max(maxY, el.offsetTop + el.offsetHeight);
+  }
+  return { minX, minY, width: maxX - minX, height: maxY - minY };
+}
+
+function fitToContent() {
+  const bounds = boardContentBounds();
+  if (!bounds || bounds.width <= 0 || bounds.height <= 0) {
+    resetViewport();
+    return;
+  }
+  const canvasRect = elements.canvas.getBoundingClientRect();
+  const baseX = elements.moduleLayer.offsetLeft;
+  const baseY = elements.moduleLayer.offsetTop;
+  const availableW = Math.max(120, canvasRect.width - baseX * 2);
+  const availableH = Math.max(120, canvasRect.height - baseY - 26);
+  const margin = 12;
+  const fit = Math.min(
+    1,
+    (availableW - margin) / bounds.width,
+    (availableH - margin) / bounds.height,
+  );
+  viewport.scale = clamp(fit, viewport.minScale, 1);
+  viewport.x = (availableW - bounds.width * viewport.scale) / 2 - bounds.minX * viewport.scale;
+  viewport.y = (availableH - bounds.height * viewport.scale) / 2 - bounds.minY * viewport.scale;
+  applyViewport();
 }
 
 function renderBreadcrumbs() {
@@ -163,13 +456,27 @@ function renderBreadcrumbs() {
   state.boardStack.forEach((boardId, index) => {
     const board = boardsById.get(boardId);
     if (!board) return;
-    const button = document.createElement("button");
-    button.type = "button";
-    button.className = "breadcrumb-node";
-    button.textContent = board.title;
-    button.disabled = index === state.boardStack.length - 1;
-    button.addEventListener("click", () => popToBoard(index));
-    breadcrumbs.appendChild(button);
+    if (index > 0) {
+      const sep = document.createElement("span");
+      sep.className = "breadcrumb-sep";
+      sep.textContent = "›";
+      sep.setAttribute("aria-hidden", "true");
+      breadcrumbs.appendChild(sep);
+    }
+    if (index === state.boardStack.length - 1) {
+      const current = document.createElement("span");
+      current.className = "breadcrumb-current";
+      current.textContent = board.title;
+      current.setAttribute("aria-current", "page");
+      breadcrumbs.appendChild(current);
+    } else {
+      const button = document.createElement("button");
+      button.type = "button";
+      button.className = "breadcrumb-node";
+      button.textContent = board.title;
+      button.addEventListener("click", () => popToBoard(index));
+      breadcrumbs.appendChild(button);
+    }
   });
 }
 
@@ -219,7 +526,7 @@ for (const program of Object.values(manifest.pseudocode || {})) {
 }
 
 function symbolMarkup(symbol, fallback) {
-  if (symbol?.tex) return `\\(${symbol.tex}\\)`;
+  if (symbol?.tex) return `\\(${escapeHtml(symbol.tex)}\\)`;
   const name = symbol?.name || fallback;
   if (/^[A-Za-zͰ-Ͽ]$/.test(name)) return `\\(${name}\\)`;
   const subscripted = name.match(/^([A-Za-zͰ-Ͽ])_([A-Za-z0-9]+)$/);
@@ -258,22 +565,51 @@ function renderRepresentationNode(node) {
   const fullLabel = node.label || rep?.id || node.id;
   const symbol = symbolMarkup(repSymbolById.get(rep?.id), fullLabel);
   const dims = kind === "scalar" ? "" : shapeDimsLabel(shape);
+  const displayMeaning = representationDisplayMeaning(node, rep, fullLabel);
   const card = document.createElement("article");
   card.className = `arch-rep tensor-${kind} scale-${scale} prominence-${prominence}`;
   card.dataset.nodeId = node.id;
-  card.title = shape ? `${fullLabel} — ${shape}` : fullLabel;
+  card.setAttribute("aria-label", [fullLabel, displayMeaning, shape].filter(Boolean).join(" — "));
   placeNode(card, node);
   const symbolHtml = `<strong class="tensor-symbol">${symbol}</strong>`;
   const box = (inner) => `<span class="tensor-box">${tensorCellsSvg(kind)}${inner}</span>`;
-  card.innerHTML = kind === "scalar"
-    ? box(symbolHtml)
-    : `${symbolHtml}${box(dims ? `<small class="tensor-dims">${dims}</small>` : "")}`;
-  card.addEventListener("mouseenter", () => showRepPeek(node, rep));
-  card.addEventListener("mouseleave", () => {
-    if (!state.focusedId) focusOverview();
+  card.innerHTML = `
+    ${symbolHtml}
+    ${box(dims ? `<small class="tensor-dims">${dims}</small>` : "")}
+    ${displayMeaning ? `<span class="tensor-meaning">${escapeHtml(displayMeaning)}</span>` : ""}
+  `;
+  card.addEventListener("pointerenter", (event) => showRepPeek(event, node, rep));
+  card.addEventListener("pointermove", moveRepPeek);
+  card.addEventListener("pointerleave", hideRepPeek);
+  card.addEventListener("click", () => {
+    if (state.dragMoved) {
+      state.dragMoved = false;
+      return;
+    }
+    hideRepPeek();
+    focusRepresentation(node, rep);
   });
-  card.addEventListener("click", () => focusRepresentation(node, rep));
   return card;
+}
+
+function representationDisplayMeaning(node, rep, fallback) {
+  const label = node.label || rep?.display_label || rep?.id || fallback;
+  return String(label || "")
+    .replaceAll("_", " ")
+    .replace(/\btimestep\b/gi, "time step")
+    .trim();
+}
+
+function representationScaleLabel(scale) {
+  const labels = {
+    sample: "per sample",
+    token: "per token",
+    spatial: "spatial grid",
+    item: "per item",
+    item_pair: "per pair",
+    group: "per group",
+  };
+  return labels[scale] || String(scale || "unknown").replaceAll("_", " ");
 }
 
 function repFocusHtml(node, rep) {
@@ -293,15 +629,67 @@ function repFocusHtml(node, rep) {
       </dl>
       ${semantics?.notes?.length ? semantics.notes.map((note) => `<p>${note}</p>`).join("") : ""}
       ${carries.length ? `<h3>Carries</h3><ul class="claim-list">${carries.map((item) => `<li>${item}</li>`).join("")}</ul>` : ""}
-      ${rep?.evidence ? renderEvidence(rep) : ""}
+      ${rep?.evidence ? renderReferences(rep) : ""}
     </div>
   `;
 }
 
-function showRepPeek(node, rep) {
-  if (state.focusedId) return;
-  elements.focusTitle.textContent = node.label || rep?.id || node.id;
-  setFocusBody(repFocusHtml(node, rep));
+function ensureRepresentationTooltip() {
+  if (representationTooltip) return;
+  representationTooltip = document.createElement("aside");
+  representationTooltip.className = "representation-tooltip hover-panel";
+  representationTooltip.setAttribute("role", "note");
+  representationTooltip.setAttribute("aria-live", "polite");
+  elements.canvas.appendChild(representationTooltip);
+}
+
+function showHoverPanel(html) {
+  ensureRepresentationTooltip();
+  representationTooltip.innerHTML = html;
+  representationTooltip.classList.add("is-visible");
+  typesetHoverPanelMath();
+}
+
+function hideHoverPanel() {
+  representationTooltip?.classList.remove("is-visible");
+}
+
+function showRepPeek(event, node, rep) {
+  showHoverPanel(repTooltipHtml(node, rep));
+}
+
+function moveRepPeek() {}
+
+function hideRepPeek() {
+  hideHoverPanel();
+}
+
+function typesetHoverPanelMath() {
+  const mathJax = window.MathJax;
+  if (!mathJax?.typesetPromise || !representationTooltip?.innerHTML.includes("\\(")) return;
+  mathJax.typesetClear?.([representationTooltip]);
+  mathJax.typesetPromise([representationTooltip]).catch((error) => {
+    console.warn("MathJax hover panel typesetting failed", error);
+  });
+}
+
+function repTooltipHtml(node, rep) {
+  const shape = node.shape || rep?.shape || "";
+  const semantics = rep ? manifest.architecture.stateSemantics?.[rep.id] : null;
+  const label = node.label || rep?.id || node.id;
+  const scale = node.scale || rep?.scale || "unknown";
+  const scaleLabel = representationScaleLabel(scale);
+  const stateRole = semantics?.role ? String(semantics.role).replaceAll("_", " ") : "";
+  const symbol = symbolMarkup(repSymbolById.get(rep?.id), label);
+  return `
+    <span class="rep-tooltip-meta">${escapeHtml(scaleLabel)}${stateRole ? ` · ${escapeHtml(stateRole)}` : ""}</span>
+    <strong class="rep-tooltip-title"><i class="rep-tooltip-symbol">${symbol}</i>${escapeHtml(label)}</strong>
+    ${node.role || rep?.semantic_role ? `<p>${escapeHtml(node.role || rep?.semantic_role)}</p>` : ""}
+    <dl>
+      ${shape ? `<dt>shape</dt><dd><code>${escapeHtml(shape)}</code></dd>` : ""}
+      ${semantics?.produced_by ? `<dt>produced by</dt><dd>${escapeHtml(semantics.produced_by)}</dd>` : ""}
+    </dl>
+  `;
 }
 
 function focusRepresentation(node, rep) {
@@ -312,6 +700,16 @@ function focusRepresentation(node, rep) {
   setFocusBody(repFocusHtml(node, rep));
 }
 
+const OPERATOR_KINDS = {
+  elementwise_sum: "+",
+  elementwise_product: "×",
+  concatenation: "∥",
+};
+
+function operatorSymbolFor(node, module) {
+  return node.operator || OPERATOR_KINDS[module?.kind] || null;
+}
+
 function renderBlockNode(node) {
   const module = node.module_ref ? modulesById.get(node.module_ref) : null;
   const scale = node.scale || module?.scale || "item";
@@ -319,22 +717,32 @@ function renderBlockNode(node) {
   const prominence = node.prominence || "secondary";
   const treatment = node.treatment || "block";
   const density = node.density || "normal";
+  const operator = operatorSymbolFor(node, module);
   const card = document.createElement("button");
   card.type = "button";
-  card.className = `arch-node scale-${scale} prominence-${prominence} treatment-${treatment} density-${density}`;
+  card.className = operator
+    ? `arch-node arch-op-node scale-${scale}`
+    : `arch-node scale-${scale} prominence-${prominence} treatment-${treatment} density-${density}`;
   if (node.kind === "operation") card.classList.add("is-operation");
   if (expandable) card.classList.add("is-expandable");
   card.dataset.nodeId = node.id;
   if (module) card.dataset.moduleId = module.id;
   placeNode(card, node);
-  card.innerHTML = blockCardHtml(node, module, expandable);
+  card.innerHTML = operator
+    ? `
+      <span class="op-circle">${escapeHtml(operator)}</span>
+      <span class="op-label">${escapeHtml(node.label || module?.label || node.id)}</span>
+    `
+    : blockCardHtml(node, module, expandable);
   card.addEventListener("mouseenter", () => showNodePeek(node, module, expandable));
-  card.addEventListener("mouseleave", () => {
-    if (!state.focusedId) focusOverview();
-  });
+  card.addEventListener("mouseleave", () => hideHoverPanel());
   card.addEventListener("click", () => {
+    if (state.dragMoved) {
+      state.dragMoved = false;
+      return;
+    }
     if (expandable) {
-      pushBoard(node.module_ref || node.id);
+      pushBoard(node.module_ref || node.id, node.id);
     } else if (module) {
       focusModule(module);
     } else {
@@ -361,6 +769,19 @@ function blockCardHtml(node, module, expandable) {
     return `
       <strong>${label}</strong>
       <span class="arch-chip-meta">${node.scale || module?.scale || kind}</span>
+    `;
+  }
+
+  if (node.treatment === "compact" || node.density === "compact") {
+    return `
+      <span class="arch-node-top">
+        <span class="arch-kind">${kind}</span>
+        ${repeat}
+      </span>
+      <strong>${label}</strong>
+      <span class="arch-badges">
+        ${badges.map((badge) => `<i>${badge}</i>`).join("")}
+      </span>
     `;
   }
 
@@ -399,28 +820,153 @@ function moduleDetail(module) {
   return module.kind;
 }
 
-function pushBoard(boardId) {
-  if (!boardsById.has(boardId)) return;
-  state.boardStack.push(boardId);
-  state.focusedId = null;
-  state.pinnedEdge = null;
-  resetViewport();
-  hideConnection(true);
-  renderBoard();
-  focusOverview();
+const prefersReducedMotion = Boolean(window.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches);
+const BOARD_TRANSITION_MS = 340;
+
+function setBoardTransition(on) {
+  elements.canvas.classList.toggle("is-board-transition", on);
+}
+
+function animateDiveIn(originNodeId, done) {
+  const box = originNodeId ? nodeBox(originNodeId) : null;
+  if (prefersReducedMotion || !box) {
+    done();
+    return;
+  }
+  state.isTransitioning = true;
+  const canvasRect = elements.canvas.getBoundingClientRect();
+  const baseX = elements.moduleLayer.offsetLeft;
+  const baseY = elements.moduleLayer.offsetTop;
+  const targetScale = Math.max(viewport.scale * 2.2, 2.2);
+  setBoardTransition(true);
+  elements.canvas.classList.add("is-board-fading");
+  viewport.x = canvasRect.width / 2 - baseX - box.cx * targetScale;
+  viewport.y = canvasRect.height / 2 - baseY - box.cy * targetScale;
+  viewport.scale = targetScale;
+  applyViewport();
+  window.setTimeout(() => {
+    setBoardTransition(false);
+    elements.canvas.classList.remove("is-board-fading");
+    state.isTransitioning = false;
+    done();
+  }, BOARD_TRANSITION_MS);
+}
+
+function animateFadeOut(done) {
+  if (prefersReducedMotion) {
+    done();
+    return;
+  }
+  state.isTransitioning = true;
+  const canvasRect = elements.canvas.getBoundingClientRect();
+  const baseX = elements.moduleLayer.offsetLeft;
+  const baseY = elements.moduleLayer.offsetTop;
+  const px = canvasRect.width / 2 - baseX;
+  const py = canvasRect.height / 2 - baseY;
+  const nextScale = viewport.scale * 0.82;
+  const localX = (px - viewport.x) / viewport.scale;
+  const localY = (py - viewport.y) / viewport.scale;
+  setBoardTransition(true);
+  elements.canvas.classList.add("is-board-fading");
+  viewport.x = px - localX * nextScale;
+  viewport.y = py - localY * nextScale;
+  viewport.scale = nextScale;
+  applyViewport();
+  window.setTimeout(() => {
+    setBoardTransition(false);
+    elements.canvas.classList.remove("is-board-fading");
+    state.isTransitioning = false;
+    done();
+  }, BOARD_TRANSITION_MS);
+}
+
+function animateArriveFrom(originNodeId) {
+  if (prefersReducedMotion) return;
+  let start = null;
+  if (originNodeId) {
+    const box = nodeBox(originNodeId);
+    if (box) {
+      const canvasRect = elements.canvas.getBoundingClientRect();
+      const baseX = elements.moduleLayer.offsetLeft;
+      const baseY = elements.moduleLayer.offsetTop;
+      const scale = 2.2;
+      start = {
+        scale,
+        x: canvasRect.width / 2 - baseX - box.cx * scale,
+        y: canvasRect.height / 2 - baseY - box.cy * scale,
+      };
+    }
+  }
+  if (!start) {
+    const scale = 0.92;
+    start = {
+      scale,
+      x: (elements.moduleLayer.offsetWidth * (1 - scale)) / 2,
+      y: (elements.moduleLayer.offsetHeight * (1 - scale)) / 2,
+    };
+  }
+  state.isTransitioning = true;
+  elements.canvas.classList.add("is-board-fading");
+  viewport.x = start.x;
+  viewport.y = start.y;
+  viewport.scale = start.scale;
+  applyViewport();
+  window.requestAnimationFrame(() => {
+    window.requestAnimationFrame(() => {
+      setBoardTransition(true);
+      elements.canvas.classList.remove("is-board-fading");
+      fitToContent();
+      window.setTimeout(() => {
+        setBoardTransition(false);
+        state.isTransitioning = false;
+      }, BOARD_TRANSITION_MS);
+    });
+  });
+}
+
+function pushBoard(boardId, originNodeId) {
+  if (!boardsById.has(boardId) || state.isTransitioning) return;
+  const commit = () => {
+    state.boardStack.push(boardId);
+    state.focusedId = null;
+    state.pinnedEdge = null;
+    state.userMovedViewport = false;
+    resetViewport();
+    hideConnection(true);
+    renderBoard();
+    focusOverview();
+    animateArriveFrom(null);
+  };
+  animateDiveIn(originNodeId, commit);
 }
 
 function popToBoard(index) {
-  state.boardStack = state.boardStack.slice(0, index + 1);
-  state.focusedId = null;
-  state.pinnedEdge = null;
-  resetViewport();
-  hideConnection(true);
-  renderBoard();
-  focusOverview();
+  if (state.isTransitioning) return;
+  const leavingBoardId = state.boardStack.at(-1);
+  const commit = () => {
+    state.boardStack = state.boardStack.slice(0, index + 1);
+    state.focusedId = null;
+    state.pinnedEdge = null;
+    state.userMovedViewport = false;
+    resetViewport();
+    hideConnection(true);
+    renderBoard();
+    focusOverview();
+    const origin = (currentBoard().nodes || []).find(
+      (node) => node.expandable && (node.module_ref || node.id) === leavingBoardId,
+    );
+    animateArriveFrom(origin?.id || null);
+  };
+  animateFadeOut(commit);
 }
 
 function displayGraph(board) {
+  if (editMode) {
+    return {
+      nodes: board.nodes || [],
+      edges: (board.edges || []).map((edge) => ({ ...edge, segments: [edge] })),
+    };
+  }
   const nodes = (board.nodes || []).filter((node) => !node.elide);
   const elided = (board.nodes || []).filter((node) => node.elide);
   let edges = (board.edges || []).map((edge) => ({ ...edge, segments: [edge] }));
@@ -459,58 +1005,214 @@ function derivedConditioning(board, edge) {
   return conditioningByPair.get(`${fromRef}->${toRef}`) || null;
 }
 
+function roundedOrthPath(points, radius = 9) {
+  if (!points || points.length < 2) return "";
+  let d = `M ${points[0].x} ${points[0].y}`;
+  for (let i = 1; i < points.length - 1; i += 1) {
+    const prev = points[i - 1];
+    const corner = points[i];
+    const next = points[i + 1];
+    const inLen = Math.hypot(corner.x - prev.x, corner.y - prev.y);
+    const outLen = Math.hypot(next.x - corner.x, next.y - corner.y);
+    const r = Math.min(radius, inLen / 2, outLen / 2);
+    const inX = corner.x - ((corner.x - prev.x) / (inLen || 1)) * r;
+    const inY = corner.y - ((corner.y - prev.y) / (inLen || 1)) * r;
+    const outX = corner.x + ((next.x - corner.x) / (outLen || 1)) * r;
+    const outY = corner.y + ((next.y - corner.y) / (outLen || 1)) * r;
+    d += ` L ${inX} ${inY} Q ${corner.x} ${corner.y} ${outX} ${outY}`;
+  }
+  const last = points.at(-1);
+  d += ` L ${last.x} ${last.y}`;
+  return d;
+}
+
+function polylineMidpoint(points) {
+  const lengths = [];
+  let total = 0;
+  for (let i = 1; i < points.length; i += 1) {
+    const len = Math.hypot(points[i].x - points[i - 1].x, points[i].y - points[i - 1].y);
+    lengths.push(len);
+    total += len;
+  }
+  let target = total / 2;
+  for (let i = 1; i < points.length; i += 1) {
+    const len = lengths[i - 1];
+    if (target <= len) {
+      const t = len ? target / len : 0;
+      return {
+        x: points[i - 1].x + (points[i].x - points[i - 1].x) * t,
+        y: points[i - 1].y + (points[i].y - points[i - 1].y) * t,
+      };
+    }
+    target -= len;
+  }
+  return points.at(-1);
+}
+
 function renderEdges() {
   const board = currentBoard();
   const width = elements.moduleLayer.offsetWidth;
   const height = elements.moduleLayer.offsetHeight;
   elements.edgeLayer.setAttribute("viewBox", `0 0 ${width} ${height}`);
   elements.edgeLayer.innerHTML = "";
+  elements.edgeLayer.appendChild(renderEdgeMarkers());
 
-  for (const edge of displayGraph(board).edges) {
+  const edges = state.displayEdges || displayGraph(board).edges;
+  edges.forEach((edge, index) => {
     const conditioning = derivedConditioning(board, edge);
     if (conditioning && !edge.tone) edge.tone = "conditioning";
     const contracted = (edge.segments || []).length > 1;
 
-    const dockedEdge = edgeDocking(edge);
-    if (!dockedEdge) continue;
-    const { from, to } = dockedEdge;
-    const midX = (from.x + to.x) / 2;
+    let pathD;
+    let labelPoint;
+    let edgeSpan = Number.POSITIVE_INFINITY;
+    const routed = state.layoutEdges?.get(index);
+    if (routed && routed.length >= 2) {
+      pathD = roundedOrthPath(routed);
+      labelPoint = polylineMidpoint(routed);
+      edgeSpan = Math.hypot(routed.at(-1).x - routed[0].x, routed.at(-1).y - routed[0].y);
+    } else {
+      const manualRoute = manualEdgeRoute(edge);
+      if (manualRoute) {
+        pathD = roundedOrthPath(manualRoute);
+        labelPoint = polylineMidpoint(manualRoute);
+        edgeSpan = Math.hypot(
+          manualRoute.at(-1).x - manualRoute[0].x,
+          manualRoute.at(-1).y - manualRoute[0].y,
+        );
+      } else {
+        const dockedEdge = edgeDocking(edge);
+        if (!dockedEdge) return;
+        const { from, to, fromNormal, toNormal } = dockedEdge;
+        const reach = clamp(Math.hypot(to.x - from.x, to.y - from.y) * 0.4, 24, 90);
+        const c1x = from.x + fromNormal.x * reach;
+        const c1y = from.y + fromNormal.y * reach;
+        const c2x = to.x + toNormal.x * reach;
+        const c2y = to.y + toNormal.y * reach;
+        pathD = `M ${from.x} ${from.y} C ${c1x} ${c1y}, ${c2x} ${c2y}, ${to.x} ${to.y}`;
+        labelPoint = {
+          x: (from.x + to.x) / 2 + (fromNormal.x + toNormal.x) * reach * 0.18,
+          y: (from.y + to.y) / 2 + (fromNormal.y + toNormal.y) * reach * 0.18,
+        };
+        edgeSpan = Math.hypot(to.x - from.x, to.y - from.y);
+      }
+    }
+    const tooltipPoint = { x: labelPoint.x, y: labelPoint.y - 12 };
     const path = document.createElementNS("http://www.w3.org/2000/svg", "path");
-    path.setAttribute("d", `M ${from.x} ${from.y} C ${midX} ${from.y}, ${midX} ${to.y}, ${to.x} ${to.y}`);
+    path.setAttribute("d", pathD);
     path.setAttribute("class", "arch-edge");
+    path.setAttribute("marker-end", `url(#${edgeMarkerId(edge)})`);
     if (contracted) path.classList.add("is-contracted");
     applyEdgeTone(path, edge);
     elements.edgeLayer.appendChild(path);
 
-    const label = document.createElementNS("http://www.w3.org/2000/svg", "text");
-    label.setAttribute("x", String(midX));
-    label.setAttribute("y", String((from.y + to.y) / 2 - 12));
-    label.setAttribute("class", "arch-edge-label");
-    applyEdgeTone(label, edge);
-    label.textContent = contracted ? `${edge.label} +${edge.segments.length - 1}` : edge.label;
-    elements.edgeLayer.appendChild(label);
+    const showLabel = edge.label && (edgeSpan >= 130 || contracted || edge.tone === "conditioning");
+    if (showLabel) {
+      const label = document.createElementNS("http://www.w3.org/2000/svg", "text");
+      label.setAttribute("x", String(labelPoint.x));
+      label.setAttribute("y", String(tooltipPoint.y));
+      label.setAttribute("class", "arch-edge-label");
+      applyEdgeTone(label, edge);
+      label.textContent = edge.label;
+      elements.edgeLayer.appendChild(label);
+    }
 
     if (conditioning) {
       const badge = document.createElementNS("http://www.w3.org/2000/svg", "text");
-      badge.setAttribute("x", String(midX));
-      badge.setAttribute("y", String((from.y + to.y) / 2 + 4));
+      badge.setAttribute("x", String(labelPoint.x));
+      badge.setAttribute("y", String(labelPoint.y + 4));
       badge.setAttribute("class", "arch-edge-badge");
       badge.textContent = String(conditioning.mode || "").replaceAll("_", " ");
       elements.edgeLayer.appendChild(badge);
     }
 
-    elements.edgeLayer.appendChild(renderConnectionPort(edge, to));
+    elements.edgeLayer.appendChild(renderEdgeHitTarget(edge, pathD, tooltipPoint));
+  });
+}
+
+function renderEdgeMarkers() {
+  const defs = document.createElementNS("http://www.w3.org/2000/svg", "defs");
+  [
+    ["edge-arrow-default", "rgba(92, 150, 152, 0.78)"],
+    ["edge-arrow-conditioning", "rgba(139, 111, 195, 0.78)"],
+    ["edge-arrow-skip", "rgba(207, 93, 69, 0.75)"],
+  ].forEach(([id, fill]) => {
+    const marker = document.createElementNS("http://www.w3.org/2000/svg", "marker");
+    marker.setAttribute("id", id);
+    marker.setAttribute("viewBox", "0 0 10 10");
+    marker.setAttribute("refX", "9");
+    marker.setAttribute("refY", "5");
+    marker.setAttribute("markerWidth", "4.5");
+    marker.setAttribute("markerHeight", "4.5");
+    marker.setAttribute("orient", "auto");
+    marker.setAttribute("markerUnits", "strokeWidth");
+
+    const arrow = document.createElementNS("http://www.w3.org/2000/svg", "path");
+    arrow.setAttribute("d", "M 0 0 L 10 5 L 0 10 z");
+    arrow.setAttribute("fill", fill);
+    marker.appendChild(arrow);
+    defs.appendChild(marker);
+  });
+  return defs;
+}
+
+function edgeMarkerId(edge) {
+  if (edge.tone === "conditioning") return "edge-arrow-conditioning";
+  if (edge.tone === "skip") return "edge-arrow-skip";
+  return "edge-arrow-default";
+}
+
+function manualEdgeRoute(edge) {
+  if (edge.tone !== "skip") return null;
+  const fromBox = nodeBox(edge.from);
+  const toBox = nodeBox(edge.to);
+  if (!fromBox || !toBox) return null;
+  const vertical = Math.abs(toBox.cy - fromBox.cy) > Math.abs(toBox.cx - fromBox.cx);
+  if (vertical) {
+    const clearance = Number(edge.route_clearance || 54);
+    const laneX = Math.max(12, Math.min(fromBox.x, toBox.x) - clearance);
+    const from = { x: fromBox.x, y: fromBox.cy };
+    const to = { x: toBox.x, y: toBox.cy };
+    return [
+      from,
+      { x: laneX, y: from.y },
+      { x: laneX, y: to.y },
+      to,
+    ];
   }
+  const clearance = Number(edge.route_clearance || 42);
+  const laneY = Math.max(12, Math.min(fromBox.y, toBox.y) - clearance);
+  const from = { x: fromBox.cx, y: fromBox.y };
+  const to = { x: toBox.cx, y: toBox.y };
+  return [
+    from,
+    { x: from.x, y: laneY },
+    { x: to.x, y: laneY },
+    to,
+  ];
 }
 
 function edgeDocking(edge) {
   const fromBox = nodeBox(edge.from);
   const toBox = nodeBox(edge.to);
   if (!fromBox || !toBox) return null;
+  const from = dockPoint(fromBox, toBox);
+  const to = dockPoint(toBox, fromBox);
   return {
-    from: dockPoint(fromBox, toBox),
-    to: dockPoint(toBox, fromBox),
+    from,
+    to,
+    fromNormal: dockSideNormal(fromBox, from),
+    toNormal: dockSideNormal(toBox, to),
   };
+}
+
+function dockSideNormal(box, point) {
+  const dx = point.x - box.cx;
+  const dy = point.y - box.cy;
+  if (Math.abs(dx) * box.height > Math.abs(dy) * box.width) {
+    return { x: Math.sign(dx) || 1, y: 0 };
+  }
+  return { x: 0, y: Math.sign(dy) || 1 };
 }
 
 function nodeBox(id) {
@@ -541,30 +1243,18 @@ function dockPoint(box, towardBox) {
   };
 }
 
-function renderConnectionPort(edge, point) {
-  const group = document.createElementNS("http://www.w3.org/2000/svg", "g");
-  group.setAttribute("class", "edge-port");
-  applyEdgeTone(group, edge);
-  group.setAttribute("transform", `translate(${point.x} ${point.y})`);
-  group.setAttribute("tabindex", "0");
-  group.setAttribute("role", "note");
-  group.setAttribute("aria-label", edge.connection.title);
-
-  const hit = document.createElementNS("http://www.w3.org/2000/svg", "circle");
-  hit.setAttribute("class", "edge-port-hit");
-  hit.setAttribute("r", "15");
-  group.appendChild(hit);
-
-  const dot = document.createElementNS("http://www.w3.org/2000/svg", "circle");
-  dot.setAttribute("class", "edge-port-dot");
-  dot.setAttribute("r", "5");
-  group.appendChild(dot);
-
-  group.addEventListener("mouseenter", () => showConnection(edge, point));
-  group.addEventListener("mouseleave", () => hideConnection());
-  group.addEventListener("focus", () => showConnection(edge, point));
-  group.addEventListener("blur", () => hideConnection());
-  group.addEventListener("click", (event) => {
+function renderEdgeHitTarget(edge, pathD, point) {
+  const hit = document.createElementNS("http://www.w3.org/2000/svg", "path");
+  hit.setAttribute("d", pathD);
+  hit.setAttribute("class", "edge-hit");
+  hit.setAttribute("tabindex", "0");
+  hit.setAttribute("role", "note");
+  hit.setAttribute("aria-label", edge.connection.title);
+  hit.addEventListener("mouseenter", () => showConnection(edge, point));
+  hit.addEventListener("mouseleave", () => hideConnection());
+  hit.addEventListener("focus", () => showConnection(edge, point));
+  hit.addEventListener("blur", () => hideConnection());
+  hit.addEventListener("click", (event) => {
     event.stopPropagation();
     if (state.pinnedEdge === edge) {
       state.pinnedEdge = null;
@@ -574,7 +1264,7 @@ function renderConnectionPort(edge, point) {
       showConnection(edge, point);
     }
   });
-  return group;
+  return hit;
 }
 
 function applyEdgeTone(element, edge) {
@@ -599,24 +1289,37 @@ function showConnection(edge, point) {
   const x = layerRect.left - canvasRect.left + point.x * viewport.scale;
   const y = layerRect.top - canvasRect.top + point.y * viewport.scale;
   const shouldFlip = x > canvasRect.width - 320;
+  const contracted = (edge.segments || []).length > 1;
+  const pinned = state.pinnedEdge === edge;
+  const hasStandardBlocks = contracted && pinned && hiddenChainStandardBlocks(edge).length > 0;
 
   connectionTooltip.classList.toggle("is-left", shouldFlip);
-  connectionTooltip.classList.toggle("is-pinned", state.pinnedEdge === edge);
+  connectionTooltip.classList.toggle("is-pinned", pinned);
+  connectionTooltip.classList.toggle("has-standard-blocks", hasStandardBlocks);
   connectionTooltip.classList.add("is-visible");
   connectionTooltip.style.left = `${x}px`;
   connectionTooltip.style.top = `${y}px`;
-  const contracted = (edge.segments || []).length > 1;
   connectionTooltip.innerHTML = contracted
-    ? contractedTooltipHtml(edge)
+    ? contractedTooltipHtml(edge, pinned)
     : `
       <span>${edge.connection.role}</span>
       <strong>${edge.connection.title}</strong>
       <p>${edge.connection.inside}</p>
     `;
+  typesetConnectionTooltipMath();
 
-  if (!state.focusedId) {
+  if (pinned && !state.focusedId) {
     focusConnection(edge);
   }
+}
+
+function typesetConnectionTooltipMath() {
+  const mathJax = window.MathJax;
+  if (!mathJax?.typesetPromise || !connectionTooltip?.innerHTML.includes("math-step")) return;
+  mathJax.typesetClear?.([connectionTooltip]);
+  mathJax
+    .typesetPromise([connectionTooltip])
+    .catch((error) => console.warn("MathJax connection tooltip typesetting failed", error));
 }
 
 function nodeLabelById(id) {
@@ -625,9 +1328,41 @@ function nodeLabelById(id) {
   return node.label || modulesById.get(node.module_ref)?.label || node.rep_ref || node.id;
 }
 
-function contractedTooltipHtml(edge) {
-  const hops = edge.segments.slice(0, -1).map((segment) => nodeLabelById(segment.to));
-  const steps = edge.segments
+function chainChipLabel(id) {
+  const node = (currentBoard().nodes || []).find((candidate) => candidate.id === id);
+  if (node?.rep_ref) {
+    const symbol = repSymbolById.get(node.rep_ref);
+    if (symbol?.name) return symbol.name;
+  }
+  if (node) {
+    const operator = operatorSymbolFor(node, node.module_ref ? modulesById.get(node.module_ref) : null);
+    if (operator) return operator;
+  }
+  return nodeLabelById(id);
+}
+
+function contractedChainHtml(edge) {
+  const ids = [edge.from, ...edge.segments.slice(0, -1).map((segment) => segment.to), edge.to];
+  const nodes = new Map((currentBoard().nodes || []).map((node) => [node.id, node]));
+  const parts = ids.map((id, index) => {
+    const node = nodes.get(id);
+    const kind = node?.kind === "representation" ? "rep" : node?.kind === "operation" ? "op" : "module";
+    const hidden = index > 0 && index < ids.length - 1;
+    const chip = `<span class="chain-chip is-${kind} ${hidden ? "is-hidden-hop" : "is-endpoint"}">${escapeHtml(chainChipLabel(id))}</span>`;
+    if (index === 0) return chip;
+    const segLabel = edge.segments[index - 1]?.label || "";
+    return `
+      <span class="chain-arrow" aria-hidden="true">
+        <span>↓</span>
+        ${segLabel ? `<em>${escapeHtml(segLabel)}</em>` : ""}
+      </span>${chip}`;
+  });
+  return `<div class="connection-chain-canvas">${parts.join("")}</div>`;
+}
+
+function contractedTooltipHtml(edge, pinned) {
+  const hiddenCount = edge.segments.length - 1;
+  const details = edge.segments
     .map(
       (segment) => `
         <li>
@@ -637,17 +1372,58 @@ function contractedTooltipHtml(edge) {
       `,
     )
     .join("");
+  const standardBlocks = pinned ? hiddenChainStandardBlocks(edge) : [];
   return `
-    <span>elided path · ${hops.length} hidden</span>
-    <strong>via ${hops.join(" → ")}</strong>
-    <ol class="connection-chain">${steps}</ol>
+    <span>${hiddenCount} hidden step${hiddenCount === 1 ? "" : "s"} on this path</span>
+    ${contractedChainHtml(edge)}
+    ${pinned
+      ? `<ol class="connection-chain">${details}</ol>`
+      : '<p class="chain-hint">click edge to pin details</p>'}
+    ${standardBlocks.length ? renderInlineStandardBlocks(standardBlocks) : ""}
+  `;
+}
+
+function hiddenChainStandardBlocks(edge) {
+  const boardNodes = new Map((currentBoard().nodes || []).map((node) => [node.id, node]));
+  const hiddenNodeIds = new Set(
+    (edge.segments || [])
+      .flatMap((segment) => [segment.from, segment.to])
+      .filter((id) => id !== edge.from && id !== edge.to),
+  );
+  const blocks = [];
+  for (const id of hiddenNodeIds) {
+    const node = boardNodes.get(id);
+    const module = node?.module_ref ? modulesById.get(node.module_ref) : null;
+    for (const ref of standardBlockRefsForModule(module)) {
+      const block = standardBlockFromRef(ref);
+      if (block && !blocks.some((existing) => existing.id === block.id)) {
+        blocks.push(block);
+      }
+    }
+  }
+  return blocks;
+}
+
+function standardBlockRefsForModule(module) {
+  if (!module) return [];
+  return [
+    module.attention?.standard_block_ref,
+    ...(module.contains || []).map((child) => child.standard_block_ref),
+  ].filter(Boolean);
+}
+
+function renderInlineStandardBlocks(blocks) {
+  return `
+    <div class="connection-standard-blocks">
+      ${blocks.map(renderStandardBlock).join("")}
+    </div>
   `;
 }
 
 function hideConnection(force = false) {
   if (state.pinnedEdge && !force) return;
-  connectionTooltip?.classList.remove("is-visible", "is-pinned");
-  if (!state.focusedId) focusOverview();
+  connectionTooltip?.classList.remove("is-visible", "is-pinned", "has-standard-blocks");
+  if (force && !state.focusedId) focusOverview();
 }
 
 function focusConnection(edge) {
@@ -671,16 +1447,17 @@ function focusConnection(edge) {
 }
 
 function showNodePeek(node, module, expandable) {
-  if (state.focusedId) return;
   const label = node.label || module?.label || node.id;
-  elements.focusTitle.textContent = label;
-  setFocusBody(`
+  const kind = node.kind === "operation" ? "operation" : module?.kind || node.kind || "module";
+  showHoverPanel(`
+    <span class="rep-tooltip-meta">${escapeHtml(String(kind).replaceAll("_", " "))}</span>
+    <strong class="rep-tooltip-title">${escapeHtml(label)}</strong>
     <div class="focus-section">
       <p>${node.role || module?.role || ""}</p>
       ${expandable ? renderNestedBoardSummary(node.module_ref || node.id) : ""}
       ${module?.contains?.length ? renderContains(module.contains) : ""}
       ${module ? renderAttentionSummary(module) : ""}
-      ${module ? renderEvidence(module) : ""}
+      ${module ? renderReferences(module) : ""}
     </div>
   `);
 }
@@ -701,12 +1478,15 @@ function focusOverview() {
   clearActiveNodes();
   const board = currentBoard();
   elements.focusTitle.textContent = board.title;
+  const drillTargets = visibleNodes(board).filter(
+    (node) => node.expandable && boardsById.has(node.module_ref || node.id),
+  );
   setFocusBody(`
     <div class="focus-section">
       <p>${board.summary}</p>
-      <div class="summary-grid">
-        ${visibleNodes(board).map(renderBoardSummaryNode).join("")}
-      </div>
+      ${drillTargets.length
+        ? `<h3>Open</h3><div class="summary-grid">${drillTargets.map(renderBoardSummaryNode).join("")}</div>`
+        : ""}
       ${board.id === manifest.boards.rootBoard ? renderLanguageSummary() : ""}
       ${board.id === manifest.boards.rootBoard ? renderClaims() : ""}
     </div>
@@ -729,6 +1509,7 @@ function renderBoardSummaryNode(node) {
 }
 
 function visibleNodes(board) {
+  if (editMode) return board.nodes || [];
   return (board.nodes || []).filter(
     (node) => !node.elide && node.prominence !== "hidden" && node.treatment !== "hidden",
   );
@@ -792,7 +1573,7 @@ function focusModule(module) {
       ${renderContains(module.contains || [])}
       ${blockHtml}
       ${pseudocodeHtml}
-      ${renderEvidence(module)}
+      ${renderReferences(module)}
       ${renderFocusLinks(module)}
     </div>
   `);
@@ -866,10 +1647,7 @@ function renderUnusedInputs(inputs) {
 }
 
 function renderStandardBlocks(module) {
-  const refs = [
-    module.attention?.standard_block_ref,
-    ...(module.contains || []).map((child) => child.standard_block_ref),
-  ].filter(Boolean);
+  const refs = standardBlockRefsForModule(module);
   const blocks = refs
     .map((ref) => standardBlockFromRef(ref))
     .filter(Boolean)
@@ -879,7 +1657,9 @@ function renderStandardBlocks(module) {
 }
 
 function standardBlockFromRef(ref) {
-  return Object.values(manifest.standardBlocks).find((block) => block.sourceYaml === ref);
+  return Object.values(manifest.standardBlocks).find(
+    (block) => block.sourceYaml === ref || block.id === ref,
+  );
 }
 
 function renderStandardBlock(block) {
@@ -921,11 +1701,11 @@ function renderPseudocode(module) {
   `;
 }
 
-function renderEvidence(module) {
+function renderReferences(module) {
   const refs = module.evidence?.refs || [];
   if (!refs.length) return "";
   return `
-    <h3>Evidence</h3>
+    <h3>References</h3>
     <div class="evidence-list">
       <span class="evidence-badge">${module.evidence.status.replaceAll("_", " ")}</span>
       ${refs.map((ref) => `<code>${shortPath(ref.path)}${ref.lines ? `:${ref.lines}` : ""}</code>`).join("")}
@@ -954,7 +1734,8 @@ function ensurePanZoom() {
     canvasControls.className = "canvas-controls";
     canvasControls.innerHTML = `
       <button type="button" data-zoom="out" aria-label="Zoom out" title="Zoom out">-</button>
-      <button type="button" data-zoom="reset" aria-label="Reset view" title="Reset view">1:1</button>
+      <button type="button" data-zoom="fit" aria-label="Fit board to view" title="Fit board to view">&rarr;&larr;</button>
+      <button type="button" data-zoom="reset" aria-label="Actual size" title="Actual size (1:1)">1:1</button>
       <button type="button" data-zoom="in" aria-label="Zoom in" title="Zoom in">+</button>
     `;
     canvasControls.addEventListener("click", onCanvasControlClick);
@@ -974,27 +1755,38 @@ function onCanvasControlClick(event) {
   const action = event.target.closest("button")?.dataset.zoom;
   if (!action) return;
   if (action === "reset") {
+    state.userMovedViewport = true;
     resetViewport();
     return;
   }
+  if (action === "fit") {
+    state.userMovedViewport = false;
+    fitToContent();
+    return;
+  }
+  state.userMovedViewport = true;
   zoomAtCanvasCenter(action === "in" ? 1.18 : 1 / 1.18);
 }
 
 function onCanvasWheel(event) {
   if (event.target.closest(".board-breadcrumbs, .canvas-controls")) return;
   event.preventDefault();
+  hideRepPeek();
+  state.userMovedViewport = true;
   const factor = Math.exp(-event.deltaY * 0.001);
   zoomAt(event.clientX, event.clientY, factor);
 }
 
 function onCanvasPointerDown(event) {
   if (event.button !== 0 && event.button !== 1) return;
-  if (event.target.closest(".arch-node, .arch-rep, .edge-port, .board-breadcrumbs, .canvas-controls")) return;
+  if (event.target.closest(".arch-node, .arch-rep, .edge-hit, .board-breadcrumbs, .canvas-controls")) return;
   if (state.pinnedEdge) {
     state.pinnedEdge = null;
     hideConnection(true);
   }
+  hideRepPeek();
   viewport.isPanning = true;
+  state.userMovedViewport = true;
   viewport.startClientX = event.clientX;
   viewport.startClientY = event.clientY;
   viewport.startX = viewport.x;

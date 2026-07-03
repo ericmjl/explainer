@@ -22,13 +22,18 @@ Exit criteria are "architecture X renders legibly", not "feature Y exists".
   function): DiT (arXiv:2212.09748) source set, evidence-graded against the
   paper and `facebookresearch/DiT/models.py`; exercises elision, badges, and
   block drilldown.
+- **Stage 3 — layout, first attempt** (2026-07): ELK.js layered layout with
+  orthogonal rounded edge routing and auto-fit viewport, now behind
+  `?layout=elk` — the geometric invariants verify headlessly (no node
+  overlaps, no edge crosses a module) but the rendered result looked broken
+  in practice, and the hand-authored `col`/`row` grid reads better, so grid
+  stays the default. Before retrying: debug the visual breakage in-browser,
+  and consider using ELK only for edge routing over grid-fixed node
+  positions (`elk.algorithm: fixed` + libavoid-style routing), which keeps
+  the row/col flexibility the grid gives. Decision stands: no React Flow.
 
 ## Next
 
-- **Stage 3 — layout**: replace manual `col`/`row` with ELK.js layout
-  (compound nodes map onto boards). Do this when hand-layout starts hurting,
-  not before. Decision: no React Flow — the hard part is the data model, not
-  the canvas; a layout engine is the dependency worth taking.
 - **Stage 4 — more architectures**: port RFD3 / Genie3 slices from the
   earlier branch into registry sets. Expect fan-in cases that stress the
   elision rules.

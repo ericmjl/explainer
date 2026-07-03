@@ -267,6 +267,10 @@ modules:
     kind: feature_adapter
     role: encode the scalar timestep with a 256-dim sinusoidal embedding followed by a two-layer SiLU MLP
     scale: sample
+    contains:
+      - id: sinusoidal_embedding
+        label: Sinusoidal embedding + MLP
+        standard_block_ref: standard_blocks/sinusoidal-timestep-embedding.yaml
     inputs:
       - timestep
     outputs:
@@ -294,7 +298,7 @@ modules:
           lines: LabelEmbedder
   - id: cond_combiner
     label: Conditioning Combiner
-    kind: feature_adapter
+    kind: elementwise_sum
     role: sum timestep and label embeddings into one per-sample conditioning vector
     scale: sample
     inputs:

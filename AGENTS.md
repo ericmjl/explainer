@@ -47,8 +47,10 @@ Use `views/generic-semantic-zoom.view.yaml` as the current reference pattern.
   preferable to exposing all internals immediately.
 - A child board expands exactly one conceptual unit.
 - Use `expandable: true` only when a matching board ID exists.
-- Keep `col`/`row` layout declarative in the view YAML. Avoid hardcoding
-  module positions in renderer JavaScript.
+- Keep `col`/`row` layout declarative in the view YAML — it is the primary
+  layout. Avoid hardcoding module positions in renderer JavaScript. An
+  experimental ELK layered layout exists behind `?layout=elk` (needs visual
+  polish before becoming default).
 - Edges should describe information flow. Each edge should include:
   - `from`
   - `to`
@@ -57,24 +59,46 @@ Use `views/generic-semantic-zoom.view.yaml` as the current reference pattern.
   - `connection.title`, `connection.role`, `connection.inside`
 - Connection text should explain how the source is used inside the target, not
   merely restate the edge label.
+- Every board edge whose endpoints both resolve to architecture objects must
+  match an architecture edge or a module input/output; the linter enforces
+  this. Author boards as projections of the architecture graph, not as a
+  second copy.
+- Do not write conditioning modes into edge labels; the renderer derives
+  badges from the architecture `conditioning` entries.
+- `elide: true` hides a pass-through node and contracts its edges into
+  dashed through-edges with a peek/pin popover. Elided nodes must have at
+  least one incoming and one outgoing edge and must not have both fan-in and
+  fan-out. See `protocol/visualization-language.md`.
+- Representation nodes render as tensor-shaped boxes (scalar/vector/matrix/
+  pair/volume) derived from the representation's `shape`. All ranks place the
+  math symbol above the box; non-scalars place dims inside, and a short
+  human-readable variable name below. Override only via `glyph:` when the
+  shape parses wrong. See
+  `protocol/visualization-language.md`.
 
 ## Current Source Map
 
-The generic branch keeps one neutral source set:
+`architectures/index.yaml` is the registry of source sets. Both the manifest
+builder and the linter read it; register new architectures there, never by
+editing the scripts. Current sets:
 
-- Architecture: `architectures/generic-feature-refinement.yaml`
-- Semantic zoom board: `views/generic-semantic-zoom.view.yaml`
-- Pseudocode trace: `pseudocode/generic-feature-refinement.yaml`
-- Standard blocks:
-  - `standard_blocks/pair-biased-attention.yaml`
-  - `standard_blocks/per-item-adaln-conditioning.yaml`
-  - `standard_blocks/additive-conditioning.yaml`
+- `generic`: the intentionally domain-neutral feature-refinement pipeline
+  (`architectures/generic-feature-refinement.yaml` and friends). It
+  demonstrates source layout, semantic zoom, evidence fields, state
+  semantics, conditioning, and scale transitions.
+- `dit`: the Diffusion Transformer (Peebles & Xie, arXiv:2212.09748) in
+  `architectures/diffusion-transformer.yaml`,
+  `views/dit-semantic-zoom.view.yaml`,
+  `pseudocode/diffusion-transformer.yaml`, and
+  `standard_blocks/adaln-zero-conditioning.yaml`. Its view demonstrates edge
+  elision (`elide: true`) and derived conditioning badges.
+
+Shared infrastructure:
+
 - Renderer manifest builder: `renderer/architecture/build-manifest.rb`
-- Browser renderer: `renderer/architecture/renderer.js`
-
-The example is intentionally domain-neutral. It demonstrates source layout,
-semantic zoom, evidence fields, state semantics, conditioning, and scale
-transitions without encoding a specific published architecture.
+  (emits one `manifest-<id>.js` per registry entry plus `manifest-index.js`).
+- Browser renderer: `renderer/architecture/renderer.js` (architecture chosen
+  via `?arch=<id>`, default is the first registry entry).
 
 ## Update Workflow
 
@@ -99,10 +123,13 @@ Useful validation:
 
 ```bash
 ruby scripts/lint_sources.rb
-node --check renderer/architecture/renderer.js
-node --check renderer/architecture/manifest.js
 ruby -c renderer/architecture/build-manifest.rb
 ```
+
+If a JS runtime is available (`node` is not installed in every environment
+this repo is edited in), also syntax-check `renderer/architecture/*.js` as ES
+modules — they use `export` and top-level `await`, so `node --check` needs an
+`.mjs` copy.
 
 ## Renderer Discipline
 

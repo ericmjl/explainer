@@ -67,6 +67,15 @@
       };
     </script>
     <script async src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-chtml.js"></script>
+    <script>
+      if (new URLSearchParams(window.location.search).get("layout") === "elk") {
+        const elkScript = document.createElement("script");
+        elkScript.src = "https://cdn.jsdelivr.net/npm/elkjs@0.9.3/lib/elk.bundled.js";
+        elkScript.defer = true;
+        elkScript.onload = () => window.dispatchEvent(new Event("elk-ready"));
+        document.head.appendChild(elkScript);
+      }
+    </script>
     <script type="module" src="./renderer.js"></script>
   </body>
 </html>

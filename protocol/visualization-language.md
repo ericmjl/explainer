@@ -25,6 +25,15 @@ boards:
     edges: []
 ```
 
+## Grid Density
+
+`grid.columns`/`grid.rows` size the board. Columns default to a 164px
+minimum width (sized for module cards); a dense board made mostly of chips
+and operator circles can override with `grid.min_col` (px) and
+`grid.col_gap` (px) so many columns still fit one canvas width. The renderer
+also fits each board to the view on entry, so overflow degrades to a zoomed
+fit rather than clipping.
+
 ## Nodes
 
 Nodes can point to architecture modules or representations:
@@ -101,30 +110,41 @@ that can be derived. Two consequences:
 
 Representations (variables) must read differently from modules (functions).
 A representation node is not a card describing a tensor — the node IS the
-tensor, in the style of paper figures: the box shape encodes rank, the math
-symbol sits inside, and the dimensions are annotated on non-scalars. Full
-name, meaning, state semantics, and evidence live in the hover/focus panel.
+tensor, in the style of paper figures: the box shape encodes rank. All ranks
+show the math symbol above the box. Non-scalars show tensor dimensions inside
+the box. A short human-readable variable name appears below the box; richer
+meaning, state semantics, and evidence live in the hover/focus panel.
 
 Shape classes, derived from the architecture representation's `shape` string
 (parse up to the first comma, split on ` x `, drop a leading batch axis `B`):
 
-- 0 remaining axes -> `scalar`: a small square with only the symbol
+- 0 remaining axes -> `scalar`: a small square with symbol above
   (timestep `t`, class label `y`). No dims shown.
-- 1 axis -> `vector`: a flat wide box; symbol plus dims (`d`).
-- 2 axes -> `matrix`: a rectangle; symbol plus dims (`T × d`).
+- 1 axis -> `vector`: a flat wide box; symbol above, dims inside (`d`).
+- 2 axes -> `matrix`: a rectangle; symbol above, dims inside (`T × d`).
 - 3+ axes with the first two equal -> `pair`: a square with a drawn
-  diagonal; symbol plus dims (`N × N × d`).
+  diagonal; symbol above, dims inside (`N × N × d`).
 - 3+ axes otherwise -> `volume`: a rectangle with a stacked offset outline
-  suggesting depth; symbol plus dims (`C × H × W`).
+  suggesting depth; symbol above, dims inside (`C × H × W`).
 
 The heuristic can be overridden with `glyph: scalar|vector|matrix|pair|volume`
 on the architecture representation or on the view node (node wins).
 
-The symbol inside the box is derived from the pseudocode source: the
-pseudocode symbol whose `architecture_ref` points at the representation
-provides its `name` (`x`, `c`, `t`). Falls back to the view node label, then
-the representation id. Give pseudocode symbols paper notation — that is what
-boards display.
+The displayed symbol is derived from the pseudocode source: the pseudocode
+symbol whose `architecture_ref` points at the representation provides its
+`name` (`x`, `c`, `t`) or optional `tex`. It falls back to the view node label,
+then the representation id. Give pseudocode symbols paper notation — that is
+what boards display.
+
+## Operator Nodes
+
+Elementwise combination modules render as small circuit-style circles (⊕ for
+sum) instead of module cards, so a cheap arithmetic op never carries the same
+visual weight as a computation stack. Derived from the architecture module's
+`kind`: `elementwise_sum` → `+`, `elementwise_product` → `×`,
+`concatenation` → `∥`. A view node may override with `operator: "<glyph>"`
+for one-off cases. Hover/click behave like any module (peek, focus panel,
+evidence).
 
 ## Elision and Edge Contraction
 
@@ -147,9 +167,9 @@ Rules:
 
 - Author boards as the full graph; elision is a rendering projection. This is
   what keeps hidden featurization consistent with the architecture source.
-- Contracted edges render dashed with a `+N` hop count. Hovering the edge port
-  peeks at the hidden chain (each hop's label and `connection.inside`);
-  clicking the port pins the popover, clicking again or panning unpins.
+- Contracted edges render dashed. Hovering the edge itself peeks at the hidden
+  chain (each hop's label and `connection.inside`); clicking the edge pins the
+  popover, clicking again or panning unpins.
 - An elided node must have at least one incoming and one outgoing edge, and
   must not have both fan-in and fan-out (in-degree and out-degree both above
   one), because the contraction would be ambiguous. The linter enforces both
