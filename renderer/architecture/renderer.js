@@ -829,8 +829,14 @@ const RULES = {
   // is a contracted (elided) edge, or carries conditioning tone;
   // shorter edges communicate by shape alone and reveal text on hover
   edgeLabelMinSpan: 130,
-  // bezier control-point reach: fraction of edge length, clamped
-  edgeReach: { factor: 0.4, min: 24, max: 90 },
+  // orthogonal edge routing: all edges are horizontal/vertical polylines
+  route: {
+    margin: 14, // clearance kept around node boxes when dodging them
+    snap: 12, // dock misalignment (px) below which edges straighten
+    channelStep: 18, // search step for a clear channel between boxes
+    laneClearance: 28, // distance of detour lanes outside the boxes
+    nudge: 10, // separation applied to overlapping parallel segments
+  },
   // board dive-in/emerge transition
   diveScale: 2.2,
   arriveScale: 0.92,
@@ -1075,6 +1081,7 @@ function renderEdges() {
   elements.edgeLayer.appendChild(renderEdgeMarkers());
 
   const edges = state.displayEdges || displayGraph(board).edges;
+  const orthoRoutes = buildOrthoRoutes(edges);
   edges.forEach((edge, index) => {
     const conditioning = derivedConditioning(board, edge);
     if (conditioning && !edge.tone) edge.tone = "conditioning";
@@ -1089,30 +1096,11 @@ function renderEdges() {
       labelPoint = polylineMidpoint(routed);
       edgeSpan = Math.hypot(routed.at(-1).x - routed[0].x, routed.at(-1).y - routed[0].y);
     } else {
-      const manualRoute = manualEdgeRoute(edge);
-      if (manualRoute) {
-        pathD = roundedOrthPath(manualRoute);
-        labelPoint = polylineMidpoint(manualRoute);
-        edgeSpan = Math.hypot(
-          manualRoute.at(-1).x - manualRoute[0].x,
-          manualRoute.at(-1).y - manualRoute[0].y,
-        );
-      } else {
-        const dockedEdge = edgeDocking(edge);
-        if (!dockedEdge) return;
-        const { from, to, fromNormal, toNormal } = dockedEdge;
-        const reach = clamp(Math.hypot(to.x - from.x, to.y - from.y) * RULES.edgeReach.factor, RULES.edgeReach.min, RULES.edgeReach.max);
-        const c1x = from.x + fromNormal.x * reach;
-        const c1y = from.y + fromNormal.y * reach;
-        const c2x = to.x + toNormal.x * reach;
-        const c2y = to.y + toNormal.y * reach;
-        pathD = `M ${from.x} ${from.y} C ${c1x} ${c1y}, ${c2x} ${c2y}, ${to.x} ${to.y}`;
-        labelPoint = {
-          x: (from.x + to.x) / 2 + (fromNormal.x + toNormal.x) * reach * 0.18,
-          y: (from.y + to.y) / 2 + (fromNormal.y + toNormal.y) * reach * 0.18,
-        };
-        edgeSpan = Math.hypot(to.x - from.x, to.y - from.y);
-      }
+      const route = manualEdgeRoute(edge) || orthoRoutes.get(index);
+      if (!route) return;
+      pathD = roundedOrthPath(route);
+      labelPoint = polylineMidpoint(route);
+      edgeSpan = Math.hypot(route.at(-1).x - route[0].x, route.at(-1).y - route[0].y);
     }
     const tooltipPoint = { x: labelPoint.x, y: labelPoint.y - 12 };
     const path = document.createElementNS("http://www.w3.org/2000/svg", "path");
@@ -1209,27 +1197,238 @@ function manualEdgeRoute(edge) {
   ];
 }
 
-function edgeDocking(edge) {
-  const fromBox = nodeBox(edge.from);
-  const toBox = nodeBox(edge.to);
-  if (!fromBox || !toBox) return null;
-  const from = dockPoint(fromBox, toBox);
-  const to = dockPoint(toBox, fromBox);
-  return {
-    from,
-    to,
-    fromNormal: dockSideNormal(fromBox, from),
-    toNormal: dockSideNormal(toBox, to),
+const OPPOSITE_SIDE = { left: "right", right: "left", top: "bottom", bottom: "top" };
+
+// Route every board edge as an orthogonal polyline: dock on the facing box
+// sides, then pick the cheapest horizontal/vertical route that crosses no
+// node box. Candidates per edge: straight, a Z-bend through the channel
+// between the boxes, or a detour lane around them.
+function buildOrthoRoutes(edges) {
+  const routes = new Map();
+  const boxes = new Map();
+  const boxFor = (id) => {
+    if (!boxes.has(id)) boxes.set(id, nodeBox(id));
+    return boxes.get(id);
   };
+
+  const plans = [];
+  edges.forEach((edge, index) => {
+    if (state.layoutEdges?.get(index)) return;
+    if (edge.tone === "skip") return; // manualEdgeRoute lanes skips around the flow
+    const fromBox = boxFor(edge.from);
+    const toBox = boxFor(edge.to);
+    if (!fromBox || !toBox || fromBox === toBox) return;
+    const dx = toBox.cx - fromBox.cx;
+    const dy = toBox.cy - fromBox.cy;
+    const horizontal = Math.abs(dx) >= Math.abs(dy);
+    const exitSide = horizontal ? (dx >= 0 ? "right" : "left") : (dy >= 0 ? "bottom" : "top");
+    plans.push({ edge, index, fromBox, toBox, horizontal, exitSide, enterSide: OPPOSITE_SIDE[exitSide] });
+  });
+
+  spreadDockPoints(plans);
+
+  plans.forEach((plan) => {
+    const obstacles = [];
+    boxes.forEach((box, id) => {
+      if (!box || id === plan.edge.from || id === plan.edge.to) return;
+      obstacles.push(inflateBox(box, RULES.route.margin));
+    });
+    const route = routeOrthogonal(plan, obstacles);
+    if (route) routes.set(plan.index, route);
+  });
+
+  separateParallelSegments(routes);
+  return routes;
 }
 
-function dockSideNormal(box, point) {
-  const dx = point.x - box.cx;
-  const dy = point.y - box.cy;
-  if (Math.abs(dx) * box.height > Math.abs(dy) * box.width) {
-    return { x: Math.sign(dx) || 1, y: 0 };
+function sidePoint(box, side, t) {
+  if (side === "left") return { x: box.x, y: box.y + box.height * t };
+  if (side === "right") return { x: box.x + box.width, y: box.y + box.height * t };
+  if (side === "top") return { x: box.x + box.width * t, y: box.y };
+  return { x: box.x + box.width * t, y: box.y + box.height };
+}
+
+// Edges sharing a box side dock at distinct evenly spaced points, ordered by
+// where their other endpoint sits, so they never stack at the box border.
+function spreadDockPoints(plans) {
+  const groups = new Map();
+  const add = (key, entry) => {
+    if (!groups.has(key)) groups.set(key, []);
+    groups.get(key).push(entry);
+  };
+  plans.forEach((plan) => {
+    add(`${plan.edge.from}|${plan.exitSide}`, { plan, end: "start", box: plan.fromBox, side: plan.exitSide, other: plan.toBox });
+    add(`${plan.edge.to}|${plan.enterSide}`, { plan, end: "end", box: plan.toBox, side: plan.enterSide, other: plan.fromBox });
+  });
+  groups.forEach((entries) => {
+    const alongY = entries[0].side === "left" || entries[0].side === "right";
+    entries.sort((a, b) => (alongY ? a.other.cy - b.other.cy : a.other.cx - b.other.cx));
+    entries.forEach((entry, i) => {
+      entry.plan[entry.end] = sidePoint(entry.box, entry.side, (i + 1) / (entries.length + 1));
+    });
+  });
+  // A few px of dock misalignment would read as a pointless jog; snap both
+  // docks to the shared coordinate so grid-aligned neighbors get a straight line.
+  plans.forEach((plan) => {
+    const axis = plan.horizontal ? "y" : "x";
+    const delta = plan.end[axis] - plan.start[axis];
+    if (delta === 0 || Math.abs(delta) > RULES.route.snap) return;
+    const mid = (plan.start[axis] + plan.end[axis]) / 2;
+    if (dockWithinSide(plan.fromBox, plan.exitSide, mid) && dockWithinSide(plan.toBox, plan.enterSide, mid)) {
+      plan.start[axis] = mid;
+      plan.end[axis] = mid;
+    }
+  });
+}
+
+function dockWithinSide(box, side, coord) {
+  const pad = 6;
+  if (side === "left" || side === "right") return coord >= box.y + pad && coord <= box.y + box.height - pad;
+  return coord >= box.x + pad && coord <= box.x + box.width - pad;
+}
+
+function inflateBox(box, margin) {
+  return { x: box.x - margin, y: box.y - margin, width: box.width + margin * 2, height: box.height + margin * 2 };
+}
+
+function routeOrthogonal(plan, obstacles) {
+  const { start, end, horizontal } = plan;
+  const candidates = [];
+  const stub = RULES.route.margin + 6;
+  if (horizontal) {
+    if (start.y === end.y) candidates.push([start, end]);
+    channelPositions(start.x, end.x).forEach((cx) => {
+      candidates.push([start, { x: cx, y: start.y }, { x: cx, y: end.y }, end]);
+    });
+    const outX = start.x + (plan.exitSide === "right" ? stub : -stub);
+    const inX = end.x + (plan.enterSide === "left" ? -stub : stub);
+    const top = Math.min(plan.fromBox.y, plan.toBox.y) - RULES.route.laneClearance;
+    const bottom = Math.max(plan.fromBox.y + plan.fromBox.height, plan.toBox.y + plan.toBox.height) + RULES.route.laneClearance;
+    [top, bottom].forEach((laneY) => {
+      candidates.push([start, { x: outX, y: start.y }, { x: outX, y: laneY }, { x: inX, y: laneY }, { x: inX, y: end.y }, end]);
+    });
+  } else {
+    if (start.x === end.x) candidates.push([start, end]);
+    channelPositions(start.y, end.y).forEach((cy) => {
+      candidates.push([start, { x: start.x, y: cy }, { x: end.x, y: cy }, end]);
+    });
+    const outY = start.y + (plan.exitSide === "bottom" ? stub : -stub);
+    const inY = end.y + (plan.enterSide === "top" ? -stub : stub);
+    const left = Math.min(plan.fromBox.x, plan.toBox.x) - RULES.route.laneClearance;
+    const right = Math.max(plan.fromBox.x + plan.fromBox.width, plan.toBox.x + plan.toBox.width) + RULES.route.laneClearance;
+    [left, right].forEach((laneX) => {
+      candidates.push([start, { x: start.x, y: outY }, { x: laneX, y: outY }, { x: laneX, y: inY }, { x: end.x, y: inY }, end]);
+    });
   }
-  return { x: 0, y: Math.sign(dy) || 1 };
+  return pickBestRoute(candidates, obstacles);
+}
+
+// Candidate positions for the bend between two docks: the midpoint first,
+// then steps outward, all strictly between the boxes.
+function channelPositions(a, b) {
+  if (b - a < 12) return [];
+  const lo = a + 6;
+  const hi = b - 6;
+  const mid = (a + b) / 2;
+  const positions = [mid];
+  for (let step = RULES.route.channelStep; positions.length < 9; step += RULES.route.channelStep) {
+    let extended = false;
+    if (mid - step >= lo) {
+      positions.push(mid - step);
+      extended = true;
+    }
+    if (mid + step <= hi) {
+      positions.push(mid + step);
+      extended = true;
+    }
+    if (!extended) break;
+  }
+  return positions;
+}
+
+function pickBestRoute(candidates, obstacles) {
+  let best = null;
+  let bestScore = Number.POSITIVE_INFINITY;
+  candidates.forEach((raw) => {
+    const points = cleanRoute(raw);
+    if (points.length < 2) return;
+    let length = 0;
+    let hits = 0;
+    for (let i = 1; i < points.length; i += 1) {
+      length += Math.abs(points[i].x - points[i - 1].x) + Math.abs(points[i].y - points[i - 1].y);
+      obstacles.forEach((box) => {
+        if (segmentHitsBox(points[i - 1], points[i], box)) hits += 1;
+      });
+    }
+    const score = hits * 10000 + length + (points.length - 2) * 30;
+    if (score < bestScore) {
+      bestScore = score;
+      best = points;
+    }
+  });
+  return best;
+}
+
+// Copy the polyline, dropping zero-length segments and collinear midpoints.
+function cleanRoute(raw) {
+  const points = [];
+  raw.forEach((p) => {
+    const last = points.at(-1);
+    if (last && last.x === p.x && last.y === p.y) return;
+    points.push({ x: p.x, y: p.y });
+  });
+  for (let i = points.length - 2; i > 0; i -= 1) {
+    const a = points[i - 1];
+    const b = points[i];
+    const c = points[i + 1];
+    if ((a.x === b.x && b.x === c.x) || (a.y === b.y && b.y === c.y)) points.splice(i, 1);
+  }
+  return points;
+}
+
+// Axis-aligned segment vs box overlap.
+function segmentHitsBox(a, b, box) {
+  return Math.min(a.x, b.x) <= box.x + box.width
+    && Math.max(a.x, b.x) >= box.x
+    && Math.min(a.y, b.y) <= box.y + box.height
+    && Math.max(a.y, b.y) >= box.y;
+}
+
+// Two edges sharing a channel would draw on top of each other; shift the
+// later edge's interior segment sideways until it has its own lane.
+function separateParallelSegments(routes) {
+  const used = [];
+  routes.forEach((points) => {
+    if (!points || points.length < 4) return;
+    for (let i = 1; i < points.length - 2; i += 1) {
+      const a = points[i];
+      const b = points[i + 1];
+      const vertical = a.x === b.x;
+      const coord = vertical ? a.x : a.y;
+      const lo = vertical ? Math.min(a.y, b.y) : Math.min(a.x, b.x);
+      const hi = vertical ? Math.max(a.y, b.y) : Math.max(a.x, b.x);
+      if (hi - lo < 1) continue;
+      let shifted = coord;
+      for (let attempt = 1; attempt <= 8; attempt += 1) {
+        const blocked = used.some((seg) => seg.vertical === vertical
+          && Math.abs(seg.coord - shifted) < RULES.route.nudge
+          && seg.lo < hi && seg.hi > lo);
+        if (!blocked) break;
+        const dir = attempt % 2 === 1 ? 1 : -1;
+        shifted = coord + dir * Math.ceil(attempt / 2) * RULES.route.nudge;
+      }
+      if (shifted !== coord) {
+        if (vertical) {
+          a.x = shifted;
+          b.x = shifted;
+        } else {
+          a.y = shifted;
+          b.y = shifted;
+        }
+      }
+      used.push({ vertical, coord: shifted, lo, hi });
+    }
+  });
 }
 
 function nodeBox(id) {
@@ -1244,19 +1443,6 @@ function nodeBox(id) {
     height: node.offsetHeight,
     cx: x + node.offsetWidth / 2,
     cy: y + node.offsetHeight / 2,
-  };
-}
-
-function dockPoint(box, towardBox) {
-  const dx = towardBox.cx - box.cx;
-  const dy = towardBox.cy - box.cy;
-  if (dx === 0 && dy === 0) return { x: box.cx, y: box.cy };
-  const xScale = dx === 0 ? Number.POSITIVE_INFINITY : box.width / 2 / Math.abs(dx);
-  const yScale = dy === 0 ? Number.POSITIVE_INFINITY : box.height / 2 / Math.abs(dy);
-  const scale = Math.min(xScale, yScale);
-  return {
-    x: box.cx + dx * scale,
-    y: box.cy + dy * scale,
   };
 }
 

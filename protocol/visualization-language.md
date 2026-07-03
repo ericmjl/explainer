@@ -40,6 +40,26 @@ override (to be added when first needed), not a renderer tweak.
 - The board overview panel lists only drillable (expandable) nodes, plus
   root-board claims and coverage.
 
+## Edge Routing
+
+All edges draw as orthogonal polylines — horizontal/vertical segments with
+rounded corners — never diagonals or curves, so every board reads in one
+visual register. The renderer routes automatically:
+
+- Edges dock on the facing sides of the two boxes; several edges sharing a
+  side dock at distinct, evenly spaced points ordered by where their other
+  endpoint sits.
+- Near-aligned docks snap to a shared coordinate, so grid-aligned neighbors
+  connect with a straight line instead of a two-pixel jog.
+- Each edge picks the cheapest route (straight, a Z-bend through the channel
+  between the boxes, or a detour lane around them) that crosses no node box.
+- Parallel segments that would draw on top of each other are nudged apart
+  into separate lanes.
+
+Skip-toned edges keep their authored clearance lanes (`route_clearance` on
+the view edge). Routing knobs live in the renderer `RULES.route` block;
+they are presentational, so views do not configure them.
+
 ## Grid Density
 
 `grid.columns`/`grid.rows` size the board. Columns default to a 164px
