@@ -1219,10 +1219,10 @@ function renderEdges() {
 function renderEdgeMarkers() {
   const defs = document.createElementNS("http://www.w3.org/2000/svg", "defs");
   [
-    ["edge-arrow-default", "rgba(92, 150, 152, 0.78)"],
-    ["edge-arrow-conditioning", "rgba(139, 111, 195, 0.78)"],
-    ["edge-arrow-skip", "rgba(207, 93, 69, 0.75)"],
-  ].forEach(([id, fill]) => {
+    ["edge-arrow-default", "edge-marker-default"],
+    ["edge-arrow-conditioning", "edge-marker-conditioning"],
+    ["edge-arrow-skip", "edge-marker-skip"],
+  ].forEach(([id, markerClass]) => {
     const marker = document.createElementNS("http://www.w3.org/2000/svg", "marker");
     marker.setAttribute("id", id);
     marker.setAttribute("viewBox", "0 0 10 10");
@@ -1235,7 +1235,7 @@ function renderEdgeMarkers() {
 
     const arrow = document.createElementNS("http://www.w3.org/2000/svg", "path");
     arrow.setAttribute("d", "M 0 0 L 10 5 L 0 10 z");
-    arrow.setAttribute("fill", fill);
+    arrow.setAttribute("class", markerClass);
     marker.appendChild(arrow);
     defs.appendChild(marker);
   });

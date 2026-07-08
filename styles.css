@@ -1,4 +1,5 @@
 :root {
+  color-scheme: light;
   --bg: #f4f6f4;
   --ink: #202727;
   --muted: #66726f;
@@ -11,7 +12,82 @@
   --green: #18805f;
   --amber: #b87a22;
   --violet: #8b6fc3;
+  --copy: #40504d;
+  --copy-soft: #5a6763;
+  --copy-strong: #34423f;
+  --surface-link: rgba(255, 255, 255, 0.66);
+  --surface-link-hover: #ffffff;
+  --surface-card: rgba(255, 255, 255, 0.72);
+  --surface-card-hover: #ffffff;
+  --surface-control: rgba(255, 255, 255, 0.9);
+  --surface-popover: rgba(255, 255, 255, 0.97);
+  --surface-chip: rgba(255, 255, 255, 0.7);
+  --surface-node: rgba(255, 255, 255, 0.9);
+  --surface-node-hover: #ffffff;
+  --surface-tensor: rgba(255, 255, 255, 0.72);
+  --surface-tensor-label: rgba(255, 255, 255, 0.85);
+  --canvas-bg: linear-gradient(180deg, #f7f7fa 0%, #f7f4ef 56%, #eef6f4 100%);
+  --lane-line: rgba(50, 63, 59, 0.08);
+  --lane-label-line: rgba(95, 108, 103, 0.18);
+  --chip-line: rgba(111, 122, 118, 0.16);
+  --edge-default: rgba(92, 150, 152, 0.78);
+  --edge-conditioning: rgba(139, 111, 195, 0.78);
+  --edge-skip: rgba(207, 93, 69, 0.75);
+  --edge-label: #6d7a76;
+  --edge-label-stroke: rgba(255, 255, 255, 0.86);
+  --glyph-border-base: #ffffff;
+  --tensor-volume-stack: rgba(255, 255, 255, 0.94);
   --shadow: 0 18px 50px rgba(31, 37, 35, 0.14);
+  --shadow-soft: 0 10px 28px rgba(43, 51, 48, 0.07);
+  --node-shadow: 0 14px 34px rgba(35, 43, 40, 0.1);
+  --toast-bg: rgba(32, 39, 39, 0.92);
+  --toast-ink: #ffffff;
+}
+
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --bg: #0c1112;
+  --ink: #e8eeee;
+  --muted: #96a8a5;
+  --panel: #121a1c;
+  --panel-strong: #1a2427;
+  --line: #2b3b3e;
+  --accent: #4fc3c7;
+  --accent-2: #f08a70;
+  --blue: #78aef0;
+  --green: #63d19d;
+  --amber: #e9b85f;
+  --violet: #b6a0f2;
+  --copy: #c7d3d0;
+  --copy-soft: #a8b8b5;
+  --copy-strong: #dde7e5;
+  --surface-link: rgba(24, 34, 37, 0.82);
+  --surface-link-hover: rgba(32, 47, 50, 0.98);
+  --surface-card: rgba(20, 30, 33, 0.84);
+  --surface-card-hover: rgba(28, 42, 45, 0.98);
+  --surface-control: rgba(19, 29, 32, 0.9);
+  --surface-popover: rgba(20, 30, 33, 0.97);
+  --surface-chip: rgba(25, 37, 40, 0.76);
+  --surface-node: rgba(21, 32, 35, 0.92);
+  --surface-node-hover: rgba(31, 47, 50, 0.98);
+  --surface-tensor: rgba(22, 34, 37, 0.78);
+  --surface-tensor-label: rgba(8, 14, 16, 0.86);
+  --canvas-bg: linear-gradient(180deg, #10161a 0%, #151c1f 56%, #0f1b1d 100%);
+  --lane-line: rgba(190, 211, 207, 0.12);
+  --lane-label-line: rgba(190, 211, 207, 0.18);
+  --chip-line: rgba(190, 211, 207, 0.17);
+  --edge-default: rgba(79, 195, 199, 0.78);
+  --edge-conditioning: rgba(182, 160, 242, 0.78);
+  --edge-skip: rgba(240, 138, 112, 0.76);
+  --edge-label: #c5d5d1;
+  --edge-label-stroke: rgba(8, 13, 14, 0.88);
+  --glyph-border-base: #0d1517;
+  --tensor-volume-stack: rgba(10, 16, 18, 0.95);
+  --shadow: 0 22px 60px rgba(0, 0, 0, 0.45);
+  --shadow-soft: 0 10px 28px rgba(0, 0, 0, 0.24);
+  --node-shadow: 0 14px 34px rgba(0, 0, 0, 0.32);
+  --toast-bg: rgba(232, 238, 238, 0.94);
+  --toast-ink: #101718;
 }
 
 * {
@@ -96,7 +172,7 @@ code {
 
 .landing-header p:not(.eyebrow) {
   max-width: 76ch;
-  color: #40504d;
+  color: var(--copy);
   font-size: 1.1rem;
   line-height: 1.5;
 }
@@ -115,7 +191,7 @@ code {
   padding: 6px 10px;
   border: 1px solid var(--line);
   border-radius: 8px;
-  background: rgba(255, 255, 255, 0.66);
+  background: var(--surface-link);
   color: var(--accent);
   font-size: 0.78rem;
   font-weight: 900;
@@ -124,7 +200,7 @@ code {
 
 .story-home-link:hover {
   border-color: var(--accent);
-  background: white;
+  background: var(--surface-link-hover);
 }
 
 .story-grid {
@@ -140,15 +216,15 @@ code {
   padding: 18px;
   border: 1px solid var(--line);
   border-radius: 8px;
-  background: rgba(255, 255, 255, 0.72);
+  background: var(--surface-card);
   color: inherit;
   text-decoration: none;
-  box-shadow: 0 10px 28px rgba(43, 51, 48, 0.07);
+  box-shadow: var(--shadow-soft);
 }
 
 .story-card:hover {
-  border-color: rgba(29, 115, 120, 0.55);
-  background: white;
+  border-color: color-mix(in srgb, var(--accent) 55%, transparent);
+  background: var(--surface-card-hover);
 }
 
 .story-status,
@@ -165,7 +241,7 @@ code {
 }
 
 .story-card p:not(.eyebrow) {
-  color: #4b5855;
+  color: var(--copy);
   line-height: 1.45;
 }
 
@@ -205,7 +281,7 @@ code {
 .renderer-header p:not(.eyebrow) {
   max-width: 78ch;
   margin-bottom: 0;
-  color: #5a6763;
+  color: var(--copy-soft);
   font-size: 0.8rem;
   line-height: 1.35;
 }
@@ -227,7 +303,7 @@ code {
   overflow: hidden;
   border: 1px solid var(--line);
   border-radius: 8px;
-  background: linear-gradient(180deg, #f7f7fa 0%, #f7f4ef 56%, #eef6f4 100%);
+  background: var(--canvas-bg);
   cursor: grab;
   flex: 1;
   min-height: 0;
@@ -266,7 +342,7 @@ code {
   position: absolute;
   left: 0;
   right: 0;
-  border-top: 1px solid rgba(50, 63, 59, 0.08);
+  border-top: 1px solid var(--lane-line);
   pointer-events: none;
 }
 
@@ -275,10 +351,10 @@ code {
   left: 20px;
   top: 10px;
   padding: 4px 9px;
-  border: 1px solid rgba(95, 108, 103, 0.18);
+  border: 1px solid var(--lane-label-line);
   border-radius: 8px;
-  background: rgba(255, 255, 255, 0.72);
-  color: #7a8581;
+  background: var(--surface-chip);
+  color: var(--muted);
   font-size: 0.78rem;
   font-weight: 900;
   letter-spacing: 0.05em;
@@ -321,9 +397,9 @@ code {
   border: 1px solid var(--line);
   border-top: 5px solid var(--accent);
   border-radius: 8px;
-  background: rgba(255, 255, 255, 0.9);
+  background: var(--surface-node);
   color: var(--ink);
-  box-shadow: 0 14px 34px rgba(35, 43, 40, 0.1);
+  box-shadow: var(--node-shadow);
   text-align: left;
 }
 
@@ -333,8 +409,8 @@ code {
 
 .arch-node:hover,
 .arch-node.is-focused {
-  border-color: rgba(29, 115, 120, 0.5);
-  background: white;
+  border-color: color-mix(in srgb, var(--accent) 50%, transparent);
+  background: var(--surface-node-hover);
 }
 
 .arch-node strong,
@@ -350,7 +426,7 @@ code {
 .arch-spec,
 .arch-rep em {
   display: block;
-  color: #4d5c59;
+  color: var(--copy-soft);
   font-size: 0.82rem;
   line-height: 1.3;
 }
@@ -370,10 +446,10 @@ code {
   display: inline-flex;
   align-items: center;
   padding: 3px 6px;
-  border: 1px solid rgba(111, 122, 118, 0.16);
+  border: 1px solid var(--chip-line);
   border-radius: 7px;
-  background: rgba(255, 255, 255, 0.7);
-  color: #71807b;
+  background: var(--surface-chip);
+  color: var(--muted);
   font-size: 0.66rem;
   font-style: normal;
   font-weight: 900;
@@ -477,29 +553,41 @@ code {
 
 .arch-edge {
   fill: none;
-  stroke: rgba(92, 150, 152, 0.78);
+  stroke: var(--edge-default);
   stroke-width: 3;
   stroke-dasharray: 8 8;
 }
 
 .arch-edge.is-conditioning {
-  stroke: rgba(139, 111, 195, 0.78);
+  stroke: var(--edge-conditioning);
 }
 
 .arch-edge.is-skip {
-  stroke: rgba(207, 93, 69, 0.75);
+  stroke: var(--edge-skip);
 }
 
 .arch-edge-label {
-  fill: #6d7a76;
+  fill: var(--edge-label);
   font-size: 12px;
   font-weight: 900;
   letter-spacing: 0.04em;
   text-anchor: middle;
   text-transform: uppercase;
   paint-order: stroke;
-  stroke: rgba(255, 255, 255, 0.86);
+  stroke: var(--edge-label-stroke);
   stroke-width: 5px;
+}
+
+.edge-marker-default {
+  fill: var(--edge-default);
+}
+
+.edge-marker-conditioning {
+  fill: var(--edge-conditioning);
+}
+
+.edge-marker-skip {
+  fill: var(--edge-skip);
 }
 
 .edge-hit {
@@ -517,7 +605,7 @@ code {
   padding: 12px;
   border: 1px solid var(--line);
   border-radius: 8px;
-  background: rgba(255, 255, 255, 0.96);
+  background: var(--surface-popover);
   box-shadow: var(--shadow);
   opacity: 0;
   pointer-events: none;
@@ -546,7 +634,7 @@ code {
 
 .connection-tooltip p {
   margin: 0;
-  color: #4c5a57;
+  color: var(--copy);
   font-size: 0.88rem;
   line-height: 1.4;
 }
@@ -558,7 +646,7 @@ code {
   padding: 11px 12px;
   border: 1px solid color-mix(in srgb, var(--accent) 34%, var(--line));
   border-radius: 8px;
-  background: rgba(255, 255, 255, 0.97);
+  background: var(--surface-popover);
   box-shadow: var(--shadow);
   color: var(--ink);
   opacity: 0;
@@ -591,16 +679,16 @@ code {
   min-width: 24px;
   justify-content: center;
   padding: 1px 5px;
-  border: 1px solid rgba(92, 150, 152, 0.22);
+  border: 1px solid color-mix(in srgb, var(--accent) 28%, var(--line));
   border-radius: 5px;
-  background: rgba(92, 150, 152, 0.08);
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
   font-family: "STIX Two Math", "Cambria Math", Georgia, serif;
   font-style: italic;
 }
 
 .representation-tooltip p {
   margin: 0 0 8px;
-  color: #4c5a57;
+  color: var(--copy);
   font-size: 0.82rem;
   line-height: 1.35;
 }
@@ -622,7 +710,7 @@ code {
 .representation-tooltip dd {
   min-width: 0;
   margin: 0;
-  color: #3f4c49;
+  color: var(--copy);
   font-size: 0.76rem;
   overflow-wrap: anywhere;
 }
@@ -650,7 +738,7 @@ code {
   min-height: 30px;
   border: 1px solid var(--line);
   border-radius: 7px;
-  background: rgba(255, 255, 255, 0.82);
+  background: var(--surface-control);
   color: var(--ink);
   cursor: pointer;
   font-weight: 900;
@@ -682,8 +770,8 @@ code {
   overflow: hidden;
   border: 1px solid var(--line);
   border-radius: 8px;
-  background: rgba(255, 255, 255, 0.78);
-  box-shadow: 0 10px 28px rgba(43, 51, 48, 0.07);
+  background: var(--surface-card);
+  box-shadow: var(--shadow-soft);
 }
 
 .focus-panel-header {
@@ -691,7 +779,7 @@ code {
   width: 220px;
   padding: 12px 14px;
   border-right: 1px solid var(--line);
-  background: rgba(255, 255, 255, 0.78);
+  background: var(--surface-control);
 }
 
 .focus-panel-header .eyebrow {
@@ -712,7 +800,7 @@ code {
   padding: 12px 16px;
   columns: 320px;
   column-gap: 28px;
-  column-rule: 1px solid rgba(210, 220, 215, 0.6);
+  column-rule: 1px solid color-mix(in srgb, var(--line) 60%, transparent);
 }
 
 .focus-body .focus-section > h3:first-child {
@@ -729,7 +817,7 @@ code {
 }
 
 .focus-section > p {
-  color: #3f4c49;
+  color: var(--copy);
   font-size: 0.92rem;
   line-height: 1.45;
 }
@@ -746,7 +834,7 @@ code {
   padding: 11px 12px;
   border: 1px solid var(--line);
   border-radius: 8px;
-  background: rgba(255, 255, 255, 0.68);
+  background: var(--surface-card);
   color: inherit;
   text-align: left;
 }
@@ -768,7 +856,7 @@ code {
 
 .mini-summary em {
   display: block;
-  color: #60706c;
+  color: var(--copy-soft);
   font-size: 0.8rem;
   font-style: normal;
 }
@@ -804,7 +892,7 @@ code {
 .math-list li,
 .pseudo-lines li {
   margin-bottom: 8px;
-  color: #3f4c49;
+  color: var(--copy);
   line-height: 1.42;
 }
 
@@ -849,14 +937,14 @@ code {
   gap: 4px;
   margin: 12px 0;
   padding: 12px;
-  border: 1px solid rgba(139, 111, 195, 0.3);
+  border: 1px solid color-mix(in srgb, var(--violet) 30%, transparent);
   border-radius: 8px;
-  background: rgba(139, 111, 195, 0.08);
+  background: color-mix(in srgb, var(--violet) 12%, transparent);
 }
 
 .warning-note {
-  border-color: rgba(207, 93, 69, 0.32);
-  background: rgba(207, 93, 69, 0.08);
+  border-color: color-mix(in srgb, var(--accent-2) 32%, transparent);
+  background: color-mix(in srgb, var(--accent-2) 12%, transparent);
 }
 
 .pair-block {
@@ -873,8 +961,8 @@ code {
   place-items: center;
   border: 1px solid var(--line);
   border-radius: 8px;
-  background: rgba(255, 255, 255, 0.78);
-  color: #34423f;
+  background: var(--surface-card);
+  color: var(--copy-strong);
   font-size: 0.76rem;
   font-weight: 900;
   text-align: center;
@@ -958,7 +1046,7 @@ code {
   text-anchor: middle;
   text-transform: uppercase;
   paint-order: stroke;
-  stroke: rgba(255, 255, 255, 0.86);
+  stroke: var(--edge-label-stroke);
   stroke-width: 4px;
 }
 
@@ -988,7 +1076,7 @@ code {
 
 .connection-chain p {
   margin: 2px 0 0;
-  color: #4c5a57;
+  color: var(--copy);
   font-size: 0.8rem;
   line-height: 1.35;
 }
@@ -1044,7 +1132,7 @@ code {
   padding: 5px 9px;
   border: 1px solid var(--line);
   border-radius: 8px;
-  background: rgba(255, 255, 255, 0.9);
+  background: var(--surface-control);
   color: inherit;
   font: inherit;
   font-size: 0.85rem;
@@ -1057,7 +1145,7 @@ code {
    dimensions inside it. */
 
 .arch-rep {
-  --glyph-color: #5c9698;
+  --glyph-color: var(--accent);
   position: relative;
   display: flex;
   flex-direction: column;
@@ -1069,7 +1157,7 @@ code {
   padding: 6px 10px;
   border: none;
   border-radius: 0;
-  background: rgba(255, 255, 255, 0.6);
+  background: color-mix(in srgb, var(--surface-tensor) 72%, transparent);
   box-shadow: none;
   text-align: center;
   cursor: pointer;
@@ -1085,7 +1173,7 @@ code {
 
 .arch-rep:hover,
 .arch-rep.is-focused {
-  background: white;
+  background: var(--surface-node-hover);
   outline: 3px solid color-mix(in srgb, var(--glyph-color) 30%, transparent);
 }
 
@@ -1131,8 +1219,8 @@ code {
   display: grid;
   place-items: center;
   overflow: hidden;
-  border: 1.5px solid color-mix(in srgb, var(--glyph-color) 58%, white);
-  background: rgba(255, 255, 255, 0.72);
+  border: 1.5px solid color-mix(in srgb, var(--glyph-color) 58%, var(--glyph-border-base));
+  background: var(--surface-tensor);
 }
 
 .arch-rep.tensor-vector {
@@ -1191,7 +1279,7 @@ code {
   width: 104px;
   height: 70px;
   box-shadow:
-    7px -7px 0 -1.5px rgba(255, 255, 255, 0.94),
+    7px -7px 0 -1.5px var(--tensor-volume-stack),
     7px -7px 0 0 var(--glyph-color);
 }
 
@@ -1202,7 +1290,7 @@ code {
   max-width: 100%;
   margin: 0;
   padding: 1px 6px;
-  background: rgba(255, 255, 255, 0.85);
+  background: var(--surface-tensor-label);
   border-radius: 3px;
   font-family: "STIX Two Math", "Cambria Math", Georgia, serif;
   font-style: italic;
@@ -1216,7 +1304,7 @@ code {
   position: relative;
   z-index: 2;
   padding: 1px 5px;
-  background: rgba(255, 255, 255, 0.85);
+  background: var(--surface-tensor-label);
   border-radius: 3px;
   color: var(--muted);
   font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
@@ -1233,7 +1321,7 @@ code {
   border: 0;
   background: transparent;
   overflow: hidden;
-  color: #4d5c59;
+  color: var(--copy-soft);
   font-size: 0.68rem;
   font-weight: 800;
   letter-spacing: 0;
@@ -1293,9 +1381,9 @@ code {
   padding: 5px 12px;
   border: 1px solid var(--line);
   border-radius: 8px;
-  background: rgba(255, 255, 255, 0.9);
+  background: var(--surface-control);
   backdrop-filter: blur(6px);
-  box-shadow: 0 8px 22px rgba(35, 43, 40, 0.08);
+  box-shadow: var(--shadow-soft);
   overflow: hidden;
 }
 
@@ -1309,7 +1397,7 @@ code {
 }
 
 .breadcrumb-node:hover {
-  background: rgba(29, 115, 120, 0.1);
+  background: color-mix(in srgb, var(--accent) 14%, transparent);
 }
 
 .breadcrumb-sep {
@@ -1351,7 +1439,7 @@ code {
   padding: 3px 8px;
   border: 1px solid var(--line);
   border-radius: 6px;
-  background: white;
+  background: var(--surface-control);
   font-size: 0.72rem;
   font-weight: 800;
   white-space: nowrap;
@@ -1374,7 +1462,7 @@ code {
 }
 
 .chain-chip.is-hidden-hop {
-  background: rgba(139, 111, 195, 0.09);
+  background: color-mix(in srgb, var(--violet) 13%, transparent);
 }
 
 .chain-arrow {
@@ -1429,8 +1517,8 @@ code {
   height: 46px;
   border: 2px solid var(--accent);
   border-radius: 50%;
-  background: white;
-  box-shadow: 0 8px 20px rgba(35, 43, 40, 0.1);
+  background: var(--surface-control);
+  box-shadow: var(--node-shadow);
   color: var(--accent);
   font-size: 1.45rem;
   font-weight: 700;
@@ -1439,7 +1527,7 @@ code {
 
 .arch-op-node:hover .op-circle,
 .arch-op-node.is-focused .op-circle {
-  background: rgba(29, 115, 120, 0.08);
+  background: color-mix(in srgb, var(--accent) 13%, transparent);
   border-color: var(--accent);
 }
 
@@ -1460,18 +1548,18 @@ code {
 /* Chain endpoints are visible on the board; ghost them so hidden steps pop */
 
 .chain-chip.is-endpoint {
-  border: 1.5px dashed rgba(111, 122, 118, 0.55);
+  border: 1.5px dashed color-mix(in srgb, var(--muted) 56%, transparent);
   border-radius: 6px;
   background: transparent;
   color: var(--muted);
 }
 
 .chain-chip.is-endpoint.is-module {
-  border-top: 1.5px dashed rgba(111, 122, 118, 0.55);
+  border-top: 1.5px dashed color-mix(in srgb, var(--muted) 56%, transparent);
 }
 
 .chain-chip.is-hidden-hop {
-  box-shadow: 0 3px 10px rgba(139, 111, 195, 0.16);
+  box-shadow: 0 3px 10px color-mix(in srgb, var(--violet) 22%, transparent);
 }
 
 /* Compact/micro cards: prose lives in hover, not on the card */
@@ -1520,8 +1608,8 @@ code {
   padding: 7px 12px;
   border: 1px solid var(--violet);
   border-radius: 8px;
-  background: rgba(255, 255, 255, 0.94);
-  box-shadow: 0 8px 22px rgba(35, 43, 40, 0.1);
+  background: var(--surface-popover);
+  box-shadow: var(--shadow-soft);
   font-size: 0.72rem;
 }
 
@@ -1539,7 +1627,7 @@ code {
   padding: 4px 9px;
   border: 1px solid var(--violet);
   border-radius: 6px;
-  background: white;
+  background: var(--surface-control);
   color: var(--violet);
   cursor: pointer;
   font-size: 0.72rem;
@@ -1547,7 +1635,7 @@ code {
 }
 
 .edit-export-button:hover {
-  background: rgba(139, 111, 195, 0.1);
+  background: color-mix(in srgb, var(--violet) 14%, transparent);
 }
 
 /* Tuning panel (?tune=1): live sliders for the renderer RULES knobs.
@@ -1562,8 +1650,8 @@ code {
   padding: 9px 12px 11px;
   border: 1px solid var(--violet);
   border-radius: 8px;
-  background: rgba(255, 255, 255, 0.94);
-  box-shadow: 0 8px 22px rgba(35, 43, 40, 0.1);
+  background: var(--surface-popover);
+  box-shadow: var(--shadow-soft);
   font-size: 0.72rem;
 }
 
@@ -1584,7 +1672,7 @@ code {
   padding: 4px 9px;
   border: 1px solid var(--violet);
   border-radius: 6px;
-  background: white;
+  background: var(--surface-control);
   color: var(--violet);
   cursor: pointer;
   font-size: 0.72rem;
@@ -1592,7 +1680,7 @@ code {
 }
 
 .tune-copy-button:hover {
-  background: rgba(139, 111, 195, 0.1);
+  background: color-mix(in srgb, var(--violet) 14%, transparent);
 }
 
 .tune-row {
@@ -1634,8 +1722,8 @@ code {
   transform: translateX(-50%);
   padding: 8px 14px;
   border-radius: 8px;
-  background: rgba(32, 39, 39, 0.92);
-  color: white;
+  background: var(--toast-bg);
+  color: var(--toast-ink);
   font-size: 0.78rem;
   opacity: 0;
   pointer-events: none;
