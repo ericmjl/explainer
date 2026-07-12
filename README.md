@@ -12,7 +12,7 @@ focus panels, evidence summaries, and reusable standard-block views.
 Source layers:
 
 - `protocol/architecture-language.md`: YAML vocabulary for methods, modules,
-  representations, attention patterns, edges, claims, and evidence.
+  representations, attention patterns, relations, claims, and evidence.
 - `protocol/architecture-comparison-protocol.md`: comparison workflow and axes.
 - `protocol/pseudocode-language.md`: YAML vocabulary for algorithm lines,
   symbols, source refs, claims, and visual scenes.
@@ -28,9 +28,21 @@ Source layers:
 Stories should increasingly be rendered from these source files instead of
 hardcoding every module diagram in HTML or JavaScript.
 
-For architecture-aware editing, read `AGENTS.md` first. It defines the
+The current source contracts move toward a one-fact/one-owner rule.
+Architecture-v0.2 gives board-projected information flow stable top-level
+`relations`, and visualization-v0.3 projects those relations with
+`relation_ref`. Board edges retain local `from`/`to` node IDs for layout;
+board-local decompositions declare `view_only: true`. Drilldown is explicit
+through `board_ref`. View connection prose is presentation, while relation
+identity and evidence remain owned by the architecture source. Module
+`inputs`/`outputs` remain separately authored interface declarations during
+this migration; they are not yet derived from relations.
+
+For architecture-aware authoring, read `AGENTS.md` first. It defines the
 source-first update order, evidence rules, semantic-zoom board conventions,
-and renderer validation commands.
+and renderer validation commands. The browser is the canonical audience
+experience, not an authoring surface: update YAML or Markdown sources and
+regenerate the manifests instead of editing a board in the page.
 
 ## Current Demo
 
@@ -45,6 +57,13 @@ dropdown or a `?arch=<id>` query parameter:
   rendered from evidence-graded sources. Its board demonstrates edge elision:
   featurization modules (patchify, embedders) are contracted into dashed
   edges; hover the edge port to peek at the hidden chain, click to pin.
+
+There is one renderer interface: the audience view. Navigation, location,
+hover explanations, focus details, pan, and zoom all belong to that same
+experience. The former legacy, edit, and tuning UI variants are retired;
+`?arch=` remains the normal way to deep-link to an architecture, while
+`?layout=elk` remains an experimental layout implementation rather than a
+separate interface.
 
 Conditioning badges on edges (adaLN-Zero, pair bias, per-item AdaLN) are
 derived from the architecture `conditioning` section, never hand-authored in

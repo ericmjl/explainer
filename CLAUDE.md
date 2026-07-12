@@ -10,7 +10,7 @@ operational summary.
 When updating an architecture, edit declarative sources first, renderer code
 last:
 
-1. `architectures/*.yaml` — modules, representations, edges, claims, evidence.
+1. `architectures/*.yaml` — modules, representations, relations, claims, evidence.
 2. `views/*.view.yaml` — semantic-zoom boards and layout.
 3. `pseudocode/*.yaml` — code/algorithm traces.
 4. `standard_blocks/*.yaml` — reusable motifs (attention, conditioning).
@@ -28,15 +28,22 @@ last:
   `inferred`, `open_question`.
 - Keep unresolved questions in `open_questions` — they are part of the
   artifact.
-- Don't duplicate architecture facts (module order, names, edges) in renderer
+- Don't duplicate architecture facts (module order, names, relations) in renderer
   JS if they can live in YAML. New visual concepts go into the view language
   first unless purely presentational.
-- In views: root board is the most abstract; each child board expands exactly
-  one conceptual unit; `expandable: true` only when a matching board ID
-  exists; layout via `col`/`row` in view YAML, not renderer JS.
+- Keep one canonical audience renderer. Do not add query-driven edit, tuning,
+  or alternate UI modes; author durable changes in source files or generic
+  renderer rules.
+- In views: the root board shows task-native inputs through the highest-level
+  system units to task-native outputs; a surrounded core model is a drillable
+  child, not a one-box root. Each child board expands exactly one conceptual
+  unit; drilldown uses an explicit valid `board_ref`; layout uses `col`/`row`
+  in view YAML, not renderer JS.
 - Edges describe information flow: `from`, `to`, `label`, optional `tone`
   (`conditioning`, `skip`), and `connection.title/role/inside` explaining how
-  the source is used inside the target.
+  the source is used inside the target. Every edge must use either
+  `relation_ref` or, for a board-local decomposition involving a view-local
+  node, `view_only: true`.
 
 ## After any YAML/view change
 
@@ -63,9 +70,9 @@ it; register new architectures there, never in the scripts. Sets:
   badges.
 
 Renderer: `renderer/architecture/renderer.js`, architecture selected via
-`?arch=<id>`. View edges must match architecture edges or module
-inputs/outputs (linted); conditioning badges derive from `conditioning`
-entries — don't write modes into edge labels.
+`?arch=<id>`. Architecture-backed view edges must reference canonical
+architecture `relations` (linted); conditioning badges derive from linked
+`conditioning` entries — don't write modes into edge labels.
 
 ## Writing style
 

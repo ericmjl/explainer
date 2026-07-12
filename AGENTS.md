@@ -8,7 +8,7 @@ HTML and JavaScript should mostly render those sources.
 
 When updating an architecture, prefer editing the declarative sources first:
 
-1. `architectures/*.yaml`: modules, representations, edges, claims, evidence.
+1. `architectures/*.yaml`: modules, representations, relations, claims, evidence.
 2. `views/*.view.yaml`: semantic-zoom boards and visual layout.
 3. `pseudocode/*.yaml`: code or algorithm traces.
 4. `standard_blocks/*.yaml`: reusable motifs such as attention and conditioning.
@@ -19,6 +19,14 @@ When updating an architecture, prefer editing the declarative sources first:
 
 - Use stable IDs in snake_case. Keep IDs semantic, not visual:
   `input_adapter`, `context_memory`, `refinement_stack`, not `left_box_1`.
+- Give every architectural fact one owner. Reference that fact from other
+  sections and views instead of copying it. In architecture-v0.2, top-level
+  `relations` own information-flow identity, semantics, and evidence.
+- Give every relation a stable semantic snake_case `id`; do not author
+  anonymous architecture `edges`.
+- In the current v0.2 migration, module `inputs`/`outputs` remain separately
+  authored interface declarations. A flow shown on a v0.3 board still requires
+  its own canonical relation; module IO alone is not view provenance.
 - Every nontrivial claim should have `evidence.status` and `evidence.refs`.
 - Mark certainty explicitly:
   - `confirmed_from_code`: directly checked in source code.
@@ -43,26 +51,43 @@ When updating an architecture, prefer editing the declarative sources first:
 
 Use `views/generic-semantic-zoom.view.yaml` as the current reference pattern.
 
-- The root board should be the most abstract view. One coarse module block is
-  preferable to exposing all internals immediately.
+- The root board should show the complete task boundary: task-native inputs,
+  the highest-level system units, and task-native outputs. A core model or
+  backbone becomes a drillable child when preprocessing, execution loops, or
+  decoding surround it; do not spend the root on a one-box wrapper.
 - A child board expands exactly one conceptual unit.
-- Use `expandable: true` only when a matching board ID exists.
+- Use an explicit `board_ref` for every drillable node, and ensure the matching
+  board exists. Do not infer drilldown from `module_ref` or node ID, and do not
+  author `expandable` in visualization-v0.3.
 - Keep `col`/`row` layout declarative in the view YAML — it is the primary
   layout. Avoid hardcoding module positions in renderer JavaScript. An
   experimental ELK layered layout exists behind `?layout=elk` (needs visual
   polish before becoming default).
+- Keep the browser renderer as one canonical audience view. Do not add
+  query-driven edit, tuning, or alternate UI modes; make durable authoring
+  changes in the sources or generic renderer rules and validate them normally.
+- Use `grid.column_sizing: content` when authored columns should define visible
+  order/alignment without reserving full-width holes for empty or elided
+  columns. Keep the uniform grid when blank ranks intentionally define lanes.
 - Edges should describe information flow. Each edge should include:
   - `from`
   - `to`
+  - `relation_ref` for architecture-backed flow, or `view_only: true` for a
+    board-local decomposition involving at least one view-local node
   - `label`
   - optional `tone`: `conditioning`, `skip`, or plain/default
+  - optional `route_side`: `top`, `bottom`, `left`, or `right`, with optional
+    `route_clearance`, only when the automatic router cannot preserve a
+    meaningful feedback or bypass lane
   - `connection.title`, `connection.role`, `connection.inside`
 - Connection text should explain how the source is used inside the target, not
-  merely restate the edge label.
-- Every board edge whose endpoints both resolve to architecture objects must
-  match an architecture edge or a module input/output; the linter enforces
-  this. Author boards as projections of the architecture graph, not as a
-  second copy.
+  merely restate the edge label. This prose is presentation; relation identity,
+  architectural semantics, and evidence remain owned by the architecture.
+- Every architecture-backed board edge must use `relation_ref`, even though it
+  retains local `from`/`to` node IDs for routing. Edges without an architecture
+  relation must declare `view_only: true` and involve at least one view-local
+  node; the linter enforces this. Author boards as projections of the
+  architecture graph, not as a second copy.
 - Do not write conditioning modes into edge labels; the renderer derives
   badges from the architecture `conditioning` entries.
 - `elide: true` hides a pass-through node and contracts its edges into
@@ -105,7 +130,7 @@ Shared infrastructure:
 When the user provides architecture knowledge:
 
 1. Translate the statement into architecture/view language.
-2. Decide whether it changes a module, representation, edge, claim, or board.
+2. Decide whether it changes a module, representation, relation, claim, or board.
 3. Update the YAML source before touching renderer code.
 4. Add evidence references if code, paper, or spec lines are known.
 5. If evidence is not known, keep the scaffold but mark details as inferred or
@@ -138,7 +163,7 @@ modules — they use `export` and top-level `await`, so `node --check` needs an
 - Renderer code may define interaction behavior, styling hooks, and generic
   rendering rules.
 - Renderer code should not be the only place where module order, module names,
-  or internal architecture edges are defined.
+  or internal architecture relations are defined.
 - If a visual needs a new concept, add it to the view language first unless it
   is purely presentational.
 

@@ -10,9 +10,13 @@ Exit criteria are "architecture X renders legibly", not "feature Y exists".
   syntactically invalid JS); documented that `node` may be unavailable.
 - **Stage 1 — derivation** (2026-07): `architectures/index.yaml` registry
   consumed by both scripts; one `manifest-<id>.js` per source set plus
-  `manifest-index.js`; renderer switches via `?arch=`. Linter enforces view
-  edge ↔ architecture edge/module-IO consistency. Conditioning badges on
-  edges derive from architecture `conditioning` entries.
+  `manifest-index.js`; renderer switches via `?arch=`. The initial linter
+  enforced view edge ↔ legacy architecture edge/module-IO consistency.
+  Conditioning badges derive from architecture `conditioning` entries.
+- **Source contract v0.2/v0.3** (2026-07): architecture flow uses stable,
+  named `relations`; board projections use `relation_ref` or explicit
+  `view_only: true`; semantic drilldown uses `board_ref`. The linter verifies
+  relation endpoints, conditioning links, edge provenance, and board targets.
 - **Stage 2 — folding** (2026-07): `elide: true` in the view language;
   renderer contracts edges through elided nodes (dashed, `+N` hop count,
   hover-peek / click-pin popover showing the hidden chain). Linter rejects
@@ -31,6 +35,15 @@ Exit criteria are "architecture X renders legibly", not "feature Y exists".
   and consider using ELK only for edge routing over grid-fixed node
   positions (`elk.algorithm: fixed` + libavoid-style routing), which keeps
   the row/col flexibility the grid gives. Decision stands: no React Flow.
+- **Stage 3b — measured grid and wiring** (2026-07): the default renderer now
+  supports content-sized visible-column compaction with measured node tracks,
+  label-aware gutters, compact model-map topology, and orthogonal routing with
+  reusable outer-lane hints. Authored `col` remains the semantic rank; wide
+  viewports no longer stretch internal graph spacing.
+- **Stage 3c — one audience interface** (2026-07): consolidated the legacy,
+  edit, tuning, and audience variants into one canonical audience renderer.
+  Board authoring remains source-first in YAML; `?arch=` selects content and
+  `?layout=elk` remains a layout experiment, not a UI mode.
 
 ## Next
 
