@@ -10,12 +10,12 @@
     <main class="renderer-shell">
       <header class="renderer-header">
         <div>
-          <p class="eyebrow">Generated architecture view</p>
+          <p class="eyebrow" id="rendererEyebrow">Interactive architecture</p>
           <h1 id="archTitle">Architecture</h1>
-          <p>
-            A semantic-zoom board driven by architecture, view, pseudocode,
-            and standard-block source files. All facts render from YAML
-            sources; the renderer only decides presentation.
+          <p id="rendererIntro">
+            Open a part of the system to move from the overview into its
+            internal mechanism. The location guide keeps each level connected
+            to the whole.
           </p>
         </div>
         <nav class="note-nav" aria-label="Renderer navigation">
@@ -44,12 +44,26 @@
           <svg id="edgeLayer" class="edge-layer" aria-hidden="true"></svg>
         </section>
 
-        <aside class="focus-panel" aria-label="Focused module">
-          <div class="focus-panel-header">
-            <p class="eyebrow">main focus</p>
+        <section id="boardTakeaway" class="board-takeaway" aria-label="What to notice" hidden>
+          <p class="eyebrow">What to notice</p>
+          <div>
+            <strong id="takeawayTitle"></strong>
+            <p id="takeawaySummary"></p>
+          </div>
+        </section>
+
+        <aside class="focus-panel" aria-label="Architecture details">
+          <div class="focus-panel-header" id="focusHeader">
+            <p class="eyebrow" id="focusEyebrow">Details at this level</p>
             <h2 id="focusTitle">Architecture overview</h2>
           </div>
           <div id="focusBody" class="focus-body"></div>
+
+          <div class="focus-panel-header focus-preview-header" id="focusPreviewHeader" hidden>
+            <p class="eyebrow">Preview · select to keep</p>
+            <h2 id="focusPreviewTitle">Preview</h2>
+          </div>
+          <div id="focusPreviewBody" class="focus-body focus-preview-body" hidden></div>
         </aside>
       </section>
     </main>

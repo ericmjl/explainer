@@ -3,8 +3,16 @@ import { manifestIndex } from "./manifest-index.js";
 const pageParams = new URLSearchParams(window.location.search);
 const archParam = pageParams.get("arch");
 const useElkLayout = pageParams.get("layout") === "elk";
-const editMode = pageParams.get("edit") === "1";
-const tuneMode = pageParams.get("tune") === "1";
+const retiredUiParams = ["ui", "edit", "tune"];
+if (retiredUiParams.some((name) => pageParams.has(name))) {
+  retiredUiParams.forEach((name) => pageParams.delete(name));
+  const query = pageParams.toString();
+  window.history.replaceState(
+    null,
+    "",
+    `${window.location.pathname}${query ? `?${query}` : ""}${window.location.hash}`,
+  );
+}
 const activeManifestEntry = manifestIndex.find((entry) => entry.id === archParam) || manifestIndex[0];
 const { manifest } = await import(`./${activeManifestEntry.file}`);
 
@@ -12,8 +20,17 @@ const elements = {
   canvas: document.querySelector(".architecture-canvas"),
   moduleLayer: document.getElementById("moduleLayer"),
   edgeLayer: document.getElementById("edgeLayer"),
+  focusPanel: document.querySelector(".focus-panel"),
+  focusHeader: document.getElementById("focusHeader"),
+  focusEyebrow: document.getElementById("focusEyebrow"),
   focusTitle: document.getElementById("focusTitle"),
   focusBody: document.getElementById("focusBody"),
+  focusPreviewHeader: document.getElementById("focusPreviewHeader"),
+  focusPreviewTitle: document.getElementById("focusPreviewTitle"),
+  focusPreviewBody: document.getElementById("focusPreviewBody"),
+  boardTakeaway: document.getElementById("boardTakeaway"),
+  takeawayTitle: document.getElementById("takeawayTitle"),
+  takeawaySummary: document.getElementById("takeawaySummary"),
 };
 
 const modulesById = new Map(manifest.architecture.modules.map((module) => [module.id, module]));
@@ -25,24 +42,40 @@ const conditioningByPair = new Map(
     cond,
   ]),
 );
+const conditioningByRelation = new Map(
+  (manifest.architecture.conditioning || [])
+    .filter((cond) => cond.relation_ref)
+    .map((cond) => [cond.relation_ref, cond]),
+);
 
-let connectionTooltip = null;
-let representationTooltip = null;
-let breadcrumbs = null;
+let boardActions = null;
+let canvasContextRail = null;
+let semanticLocation = null;
+let semanticLocationStatus = null;
 let canvasControls = null;
+let canvasZoomValue = null;
+let modelMap = null;
+let modelMapSvg = null;
+let modelMapA11y = null;
+let modelMapContext = null;
+let edgeLabelMeasureContext = null;
+const inspectorPreviews = new Map();
+let inspectorPreviewSequence = 0;
 
 const state = {
   focusedId: null,
   focusHasMath: false,
   boardStack: [manifest.boards.rootBoard],
+  boardOrigins: [null],
   pinnedEdge: null,
+  edgeRoutes: new Map(),
 };
 
 const viewport = {
   x: 0,
   y: 0,
   scale: 1,
-  minScale: 0.55,
+  minScale: 0.48,
   maxScale: 2.2,
   isPanning: false,
   startClientX: 0,
@@ -54,6 +87,7 @@ const viewport = {
 function render() {
   renderPageChrome();
   ensureBoardChrome();
+  elements.focusBody.addEventListener("click", onFocusBodyClick);
   renderBoard();
   focusOverview();
 }
@@ -62,6 +96,16 @@ function renderPageChrome() {
   document.title = `${manifest.architecture.name} — Architecture Renderer`;
   const title = document.getElementById("archTitle");
   if (title) title.textContent = manifest.architecture.name;
+  const eyebrow = document.getElementById("rendererEyebrow");
+  if (eyebrow) eyebrow.textContent = "Interactive architecture";
+  const intro = document.getElementById("rendererIntro");
+  if (intro) {
+    intro.textContent =
+      "Open a part of the system to move from the overview into its internal mechanism. " +
+      "The location guide keeps each level connected to the whole.";
+  }
+  const focusEyebrow = document.getElementById("focusEyebrow");
+  if (focusEyebrow) focusEyebrow.textContent = "Details at this level";
   const sourceLink = document.getElementById("archSourceLink");
   if (sourceLink) sourceLink.href = manifest.architecture.sourceYaml;
   const switcher = document.getElementById("archSwitcher");
@@ -100,10 +144,79 @@ function typesetBoardMathAsync() {
     .catch((error) => console.warn("MathJax board typesetting failed", error));
 }
 
-function setFocusBody(html) {
+function setFocusBody(html, { selected = false } = {}) {
+  clearInspectorPreviews();
+  elements.focusEyebrow.textContent = selected ? "Selected details" : "Details at this level";
+  elements.focusPanel.classList.toggle("is-selected", selected);
   elements.focusBody.innerHTML = html;
   state.focusHasMath = html.includes("math-step");
   typesetMath();
+  renderModelMap();
+}
+
+function beginInspectorPreview(sourceKey, { title, html }) {
+  const key = sourceKey || "transient-preview";
+  inspectorPreviews.set(key, {
+    title,
+    html,
+    sequence: ++inspectorPreviewSequence,
+  });
+  renderLatestInspectorPreview();
+}
+
+function endInspectorPreview(sourceKey) {
+  if (!sourceKey) {
+    clearInspectorPreviews();
+    return;
+  }
+  inspectorPreviews.delete(sourceKey);
+  renderLatestInspectorPreview();
+}
+
+function clearInspectorPreviews() {
+  inspectorPreviews.clear();
+  hideInspectorPreviewSurface();
+}
+
+function renderLatestInspectorPreview() {
+  const latest = Array.from(inspectorPreviews.values()).reduce(
+    (current, preview) => (!current || preview.sequence > current.sequence ? preview : current),
+    null,
+  );
+  if (!latest) {
+    hideInspectorPreviewSurface();
+    return;
+  }
+
+  elements.focusHeader.hidden = true;
+  elements.focusBody.hidden = true;
+  elements.focusPreviewHeader.hidden = false;
+  elements.focusPreviewBody.hidden = false;
+  elements.focusPreviewTitle.textContent = latest.title;
+  elements.focusPreviewBody.innerHTML = latest.html;
+  elements.focusPanel.classList.add("is-preview");
+  typesetInspectorPreview(latest.html);
+}
+
+function hideInspectorPreviewSurface() {
+  const mathJax = window.MathJax;
+  mathJax?.typesetClear?.([elements.focusPreviewBody]);
+  elements.focusPreviewBody.innerHTML = "";
+  elements.focusPreviewHeader.hidden = true;
+  elements.focusPreviewBody.hidden = true;
+  elements.focusHeader.hidden = false;
+  elements.focusBody.hidden = false;
+  elements.focusPanel.classList.remove("is-preview");
+}
+
+function typesetInspectorPreview(html) {
+  if (!html.includes("math-step") && !html.includes("\\(")) return;
+  const mathJax = window.MathJax;
+  if (!mathJax?.typesetPromise) return;
+  mathJax.typesetClear?.([elements.focusPreviewBody]);
+  mathJax.typesetPromise([elements.focusPreviewBody]).catch((error) => {
+    console.warn("MathJax inspector preview typesetting failed", error);
+  });
 }
 
 function typesetMath() {
@@ -133,19 +246,148 @@ function renderMathStep(step) {
 }
 
 function ensureBoardChrome() {
-  if (!breadcrumbs) {
-    breadcrumbs = document.createElement("nav");
-    breadcrumbs.className = "board-breadcrumbs";
-    breadcrumbs.setAttribute("aria-label", "Board breadcrumbs");
-    elements.canvas.appendChild(breadcrumbs);
+  if (!boardActions) {
+    boardActions = document.createElement("nav");
+    boardActions.className = "board-actions board-chrome";
+    boardActions.setAttribute("aria-label", "Board navigation");
+    boardActions.addEventListener("click", onBoardActionClick);
+    elements.canvas.appendChild(boardActions);
   }
-  ensureConnectionTooltip();
-  ensureRepresentationTooltip();
+  if (!canvasContextRail) {
+    canvasContextRail = document.createElement("div");
+    canvasContextRail.className = "canvas-context-rail board-chrome";
+    elements.canvas.appendChild(canvasContextRail);
+
+    semanticLocation = document.createElement("nav");
+    semanticLocation.className = "semantic-location";
+    semanticLocation.setAttribute("aria-label", "Semantic location");
+    semanticLocation.addEventListener("click", onSemanticLocationClick);
+    canvasContextRail.appendChild(semanticLocation);
+
+    semanticLocationStatus = document.createElement("p");
+    semanticLocationStatus.className = "semantic-location-status";
+    semanticLocationStatus.setAttribute("role", "status");
+    semanticLocationStatus.setAttribute("aria-live", "polite");
+    semanticLocationStatus.setAttribute("aria-atomic", "true");
+    canvasContextRail.appendChild(semanticLocationStatus);
+  }
   ensurePanZoom();
+  ensureModelMap();
+  if (!elements.focusPanel.classList.contains("is-canvas-inspector")) {
+    elements.focusPanel.classList.add("is-canvas-inspector", "board-chrome");
+    elements.canvas.appendChild(elements.focusPanel);
+  }
+  elements.canvas.tabIndex = -1;
 }
 
 function currentBoard() {
   return boardsById.get(state.boardStack.at(-1)) || boardsById.get(manifest.boards.rootBoard);
+}
+
+function compactColumnTopology(board, nodes) {
+  if (board.grid?.column_sizing !== "content") return null;
+  const authoredColumns = [...new Set(
+    nodes.map((node) => Math.max(1, Number(node.col) || 1)),
+  )].sort((a, b) => a - b);
+  return {
+    authoredColumns,
+    rankByAuthored: new Map(authoredColumns.map((column, index) => [column, index])),
+  };
+}
+
+function resetGridColumnSizing() {
+  elements.moduleLayer.classList.remove("is-content-grid");
+  elements.moduleLayer.style.gridTemplateColumns = "";
+  elements.moduleLayer.style.justifyContent = "";
+  elements.moduleLayer.style.columnGap = "";
+}
+
+function measureEdgeText(text) {
+  const normalized = String(text || "").replaceAll("_", " ").toUpperCase();
+  if (!normalized) return 0;
+  if (!edgeLabelMeasureContext) {
+    edgeLabelMeasureContext = document.createElement("canvas").getContext("2d");
+  }
+  if (!edgeLabelMeasureContext) return normalized.length * 7.5;
+  edgeLabelMeasureContext.font = '900 12px system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif';
+  const letterSpacing = normalized.length * 0.48;
+  return edgeLabelMeasureContext.measureText(normalized).width + letterSpacing;
+}
+
+function alwaysVisibleEdgeTextWidth(board, edge) {
+  const conditioning = derivedConditioning(board, edge);
+  const contracted = (edge.segments || []).length > 1;
+  if (!contracted && edge.tone !== "conditioning" && !conditioning.length) return 0;
+  const texts = [];
+  if (edge.label) texts.push(edge.label);
+  if (conditioning.length) {
+    texts.push(conditioning
+      .map((entry) => String(entry.mode || "").replaceAll("_", " "))
+      .filter(Boolean)
+      .join(" · "));
+  }
+  return Math.max(0, ...texts.map(measureEdgeText));
+}
+
+function applyGridColumnSizing(board, graph) {
+  const nodes = visibleNodes(board);
+  const nodeById = new Map(nodes.map((node) => [node.id, node]));
+
+  // Measure from the neutral authored grid every time. This avoids carrying a
+  // previous compact board's constraints into a new board or resize.
+  resetGridColumnSizing();
+  nodes.forEach((node) => {
+    const element = elements.moduleLayer.querySelector(`[data-node-id="${node.id}"]`);
+    if (element) element.style.gridColumn = String(node.col || 1);
+  });
+
+  if (useElkLayout || board.grid?.column_sizing !== "content") return null;
+  const topology = compactColumnTopology(board, nodes);
+  if (!topology?.authoredColumns.length) return null;
+
+  const minimum = Number(board.grid?.min_col) || RULES.layout.contentMinColumn;
+  const widths = topology.authoredColumns.map(() => minimum);
+  nodes.forEach((node) => {
+    const rank = topology.rankByAuthored.get(Math.max(1, Number(node.col) || 1));
+    const element = elements.moduleLayer.querySelector(`[data-node-id="${node.id}"]`);
+    if (rank == null || !element) return;
+    widths[rank] = Math.max(widths[rank], Math.ceil(element.offsetWidth));
+  });
+
+  const baseGap = Number(board.grid?.col_gap) || RULES.layout.contentColumnGap;
+  const gutters = Array(Math.max(0, widths.length - 1)).fill(baseGap);
+  for (const edge of graph.edges || []) {
+    const fromNode = nodeById.get(edge.from);
+    const toNode = nodeById.get(edge.to);
+    if (!fromNode || !toNode) continue;
+    const fromRank = topology.rankByAuthored.get(Math.max(1, Number(fromNode.col) || 1));
+    const toRank = topology.rankByAuthored.get(Math.max(1, Number(toNode.col) || 1));
+    if (fromRank == null || toRank == null || Math.abs(fromRank - toRank) !== 1) continue;
+    const textWidth = alwaysVisibleEdgeTextWidth(board, edge);
+    if (!textWidth) continue;
+    const gutterIndex = Math.min(fromRank, toRank);
+    gutters[gutterIndex] = Math.max(
+      gutters[gutterIndex],
+      Math.ceil(textWidth + RULES.layout.edgeTextPadding),
+    );
+  }
+
+  const tracks = [];
+  widths.forEach((width, index) => {
+    tracks.push(`${width}px`);
+    if (index < gutters.length) tracks.push(`${gutters[index]}px`);
+  });
+  elements.moduleLayer.classList.add("is-content-grid");
+  elements.moduleLayer.style.gridTemplateColumns = tracks.join(" ");
+  elements.moduleLayer.style.justifyContent = "center";
+  elements.moduleLayer.style.columnGap = "0px";
+  nodes.forEach((node) => {
+    const rank = topology.rankByAuthored.get(Math.max(1, Number(node.col) || 1));
+    const element = elements.moduleLayer.querySelector(`[data-node-id="${node.id}"]`);
+    if (rank != null && element) element.style.gridColumn = String(rank * 2 + 1);
+  });
+
+  return { topology, widths, gutters };
 }
 
 function renderBoard() {
@@ -153,6 +395,8 @@ function renderBoard() {
   hideRepPeek();
   state.displayEdges = null;
   state.layoutEdges = null;
+  state.edgeRoutes = new Map();
+  resetGridColumnSizing();
   elements.moduleLayer.innerHTML = "";
   elements.edgeLayer.innerHTML = "";
   elements.moduleLayer.style.setProperty("--board-columns", String(board.grid?.columns || 5));
@@ -166,201 +410,23 @@ function renderBoard() {
     board.grid?.col_gap ? `${board.grid.col_gap}px` : "",
   );
   elements.canvas.dataset.boardId = board.id;
+  elements.canvas.setAttribute("aria-label", `${board.title} architecture map`);
   elements.canvas.classList.toggle("is-abstract-board", board.scale_lanes === false);
+  elements.canvas.classList.toggle("is-root-board", state.boardStack.length === 1);
 
-  renderBreadcrumbs();
+  renderAudienceNavigation();
+  renderBoardTakeaway();
+  renderModelMap();
 
   const graph = displayGraph(board);
   state.displayEdges = graph.edges;
   for (const node of visibleNodes(board)) {
     const el = renderNode(node);
-    if (editMode) {
-      if (node.elide) el.classList.add("is-elide-ghost");
-      makeDraggable(el, node, board);
-    }
     elements.moduleLayer.appendChild(el);
   }
-  elements.canvas.classList.toggle("is-edit-mode", editMode);
-  if (editMode) ensureEditChrome();
-  if (tuneMode) ensureTuneChrome();
+  applyGridColumnSizing(board, graph);
   applyViewport();
   layoutBoard(graph);
-}
-
-function makeDraggable(card, node, board) {
-  card.addEventListener("pointerdown", (event) => {
-    if (event.button !== 0) return;
-    event.stopPropagation();
-    state.dragMoved = false;
-    card.setPointerCapture(event.pointerId);
-    const onMove = (ev) => {
-      const cell = cellFromPointer(ev, board);
-      if (!cell) return;
-      if (cell.col !== (node.col || 1) || cell.row !== (node.row || 1)) {
-        state.dragMoved = true;
-        node.col = cell.col;
-        node.row = cell.row;
-        placeNode(card, node);
-        renderEdges();
-      }
-    };
-    const onUp = () => {
-      card.removeEventListener("pointermove", onMove);
-      card.removeEventListener("pointerup", onUp);
-      card.removeEventListener("pointercancel", onUp);
-    };
-    card.addEventListener("pointermove", onMove);
-    card.addEventListener("pointerup", onUp);
-    card.addEventListener("pointercancel", onUp);
-  });
-}
-
-function cellFromPointer(event, board) {
-  const rect = elements.moduleLayer.getBoundingClientRect();
-  if (!rect.width || !rect.height) return null;
-  const cols = board.grid?.columns || 5;
-  const rows = board.grid?.rows || 4;
-  const fx = (event.clientX - rect.left) / rect.width;
-  const fy = (event.clientY - rect.top) / rect.height;
-  return {
-    col: clamp(Math.ceil(fx * cols), 1, cols),
-    row: clamp(Math.ceil(fy * rows), 1, rows),
-  };
-}
-
-function ensureEditChrome() {
-  if (document.querySelector(".edit-mode-badge")) return;
-  const badge = document.createElement("div");
-  badge.className = "edit-mode-badge";
-  badge.innerHTML = `
-    <strong>edit mode</strong>
-    <span>drag nodes to reposition · elided nodes shown dashed</span>
-    <button type="button" class="edit-export-button">Copy nodes: YAML</button>
-  `;
-  badge.querySelector(".edit-export-button").addEventListener("click", exportBoardYaml);
-  elements.canvas.appendChild(badge);
-}
-
-function yamlValue(value) {
-  if (typeof value === "number" || typeof value === "boolean") return String(value);
-  const text = String(value);
-  const plain = /^[A-Za-z0-9_][A-Za-z0-9_.\/+*() -]*$/.test(text)
-    && !/^(true|false|null|yes|no|on|off)$/i.test(text)
-    && !text.includes(": ");
-  return plain ? text : JSON.stringify(text);
-}
-
-function serializeBoardNodes(board) {
-  const lines = ["    nodes:"];
-  for (const node of board.nodes || []) {
-    Object.entries(node).forEach(([key, value], index) => {
-      lines.push(`${index === 0 ? "      - " : "        "}${key}: ${yamlValue(value)}`);
-    });
-  }
-  return lines.join("\n");
-}
-
-async function exportBoardYaml() {
-  const board = currentBoard();
-  const yaml = serializeBoardNodes(board);
-  try {
-    await navigator.clipboard.writeText(yaml);
-    showCanvasToast(`nodes: block for board "${board.id}" copied — paste into the view YAML`);
-  } catch (error) {
-    console.log(yaml);
-    showCanvasToast("clipboard unavailable — YAML printed to the browser console");
-  }
-}
-
-let canvasToastTimer = null;
-
-function showCanvasToast(message) {
-  let toast = document.querySelector(".canvas-toast");
-  if (!toast) {
-    toast = document.createElement("div");
-    toast.className = "canvas-toast";
-    elements.canvas.appendChild(toast);
-  }
-  toast.textContent = message;
-  toast.classList.add("is-visible");
-  window.clearTimeout(canvasToastTimer);
-  canvasToastTimer = window.setTimeout(() => toast.classList.remove("is-visible"), 2600);
-}
-
-// Tuning mode (?tune=1): live sliders for the RULES presentation knobs.
-// Values are session-only by design — experiment, then "Copy RULES" and
-// commit the literal back into this file (and the protocol where specced).
-const TUNE_SPEC = [
-  ["edgeLabelMinSpan", 0, 300, 5],
-  ["route.margin", 0, 40, 1],
-  ["route.snap", 0, 40, 1],
-  ["route.channelStep", 6, 48, 2],
-  ["route.laneClearance", 8, 80, 2],
-  ["route.nudge", 4, 24, 1],
-  ["diveScale", 1, 4, 0.1],
-  ["arriveScale", 0.5, 1, 0.01],
-  ["transitionMs", 0, 800, 20],
-  ["fitMargin", 0, 48, 2],
-];
-
-function getRule(path) {
-  return path.split(".").reduce((obj, key) => obj[key], RULES);
-}
-
-function setRule(path, value) {
-  const keys = path.split(".");
-  const last = keys.pop();
-  keys.reduce((obj, key) => obj[key], RULES)[last] = value;
-}
-
-function ensureTuneChrome() {
-  if (document.querySelector(".tune-panel")) return;
-  const panel = document.createElement("div");
-  panel.className = "tune-panel";
-  const rows = TUNE_SPEC.map(([path, min, max, step]) => `
-    <label class="tune-row">
-      <span>${path}</span>
-      <input type="range" min="${min}" max="${max}" step="${step}" value="${getRule(path)}" data-rule="${path}" />
-      <output>${getRule(path)}</output>
-    </label>`).join("");
-  panel.innerHTML = `
-    <div class="tune-head">
-      <strong>tuning</strong>
-      <button type="button" class="tune-copy-button">Copy RULES</button>
-    </div>
-    ${rows}
-  `;
-  panel.addEventListener("input", (event) => {
-    const path = event.target.dataset?.rule;
-    if (!path) return;
-    const value = Number(event.target.value);
-    setRule(path, value);
-    event.target.parentElement.querySelector("output").textContent = String(value);
-    applyTransitionDuration();
-    renderEdges();
-  });
-  panel.querySelector(".tune-copy-button").addEventListener("click", exportRules);
-  panel.addEventListener("pointerdown", (event) => event.stopPropagation());
-  elements.canvas.appendChild(panel);
-}
-
-function serializeRules(value = RULES, indent = "") {
-  if (typeof value !== "object" || value === null) return String(value);
-  const inner = Object.entries(value)
-    .map(([key, child]) => `${indent}  ${key}: ${serializeRules(child, `${indent}  `)},`)
-    .join("\n");
-  return `{\n${inner}\n${indent}}`;
-}
-
-async function exportRules() {
-  const text = `const RULES = ${serializeRules()};`;
-  try {
-    await navigator.clipboard.writeText(text);
-    showCanvasToast("RULES literal copied — paste into renderer.js and commit");
-  } catch (error) {
-    console.log(text);
-    showCanvasToast("clipboard unavailable — RULES printed to the browser console");
-  }
 }
 
 let elkInstance = null;
@@ -413,7 +479,7 @@ async function layoutBoard(graph) {
 
   const elk = useElkLayout ? getElk() : null;
   if (!elk || graph.nodes.length < 2) {
-    useGridLayout();
+    useGridLayout(graph);
     return;
   }
 
@@ -429,13 +495,13 @@ async function layoutBoard(graph) {
     applyElkLayout(layout);
   } catch (error) {
     console.warn("ELK layout failed; falling back to grid", error);
-    useGridLayout();
+    useGridLayout(graph);
   } finally {
     elements.moduleLayer.classList.remove("is-layouting");
   }
 }
 
-function useGridLayout() {
+function useGridLayout(graph) {
   state.layoutEdges = null;
   elements.moduleLayer.classList.remove("is-elk-layout", "is-layouting");
   elements.canvas.classList.remove("is-elk-layout");
@@ -443,9 +509,10 @@ function useGridLayout() {
   elements.moduleLayer.style.height = "";
   elements.edgeLayer.style.width = "";
   elements.edgeLayer.style.height = "";
+  applyGridColumnSizing(currentBoard(), graph || displayGraph(currentBoard()));
   window.requestAnimationFrame(() => {
-    if (!state.isTransitioning && !state.userMovedViewport) fitToContent();
     renderEdges();
+    if (!state.isTransitioning && !state.userMovedViewport) fitToContent();
   });
 }
 
@@ -481,13 +548,31 @@ function fitViewport(width, height) {
   const canvasRect = elements.canvas.getBoundingClientRect();
   const baseX = elements.moduleLayer.offsetLeft;
   const baseY = elements.moduleLayer.offsetTop;
-  const availableW = Math.max(120, canvasRect.width - baseX * 2);
-  const availableH = Math.max(120, canvasRect.height - baseY - 26);
+  const { availableW, availableH } = boardViewportAvailableSize(canvasRect, baseX, baseY);
   const fit = Math.min(1, availableW / width, availableH / height);
   viewport.scale = clamp(fit, viewport.minScale, viewport.maxScale);
   viewport.x = Math.max(0, (availableW - width * viewport.scale) / 2);
   viewport.y = Math.max(0, (availableH - height * viewport.scale) / 2);
   applyViewport();
+}
+
+function boardViewportAvailableSize(canvasRect, baseX, baseY) {
+  const lowerChromeReserve = modelMap?.offsetParent ? modelMap.offsetHeight + 42 : 74;
+  const bottomInset = elements.focusPanel.classList.contains("is-canvas-inspector")
+    ? elements.focusPanel.offsetHeight + lowerChromeReserve
+    : 26;
+  return {
+    availableW: Math.max(120, canvasRect.width - baseX * 2),
+    availableH: Math.max(120, canvasRect.height - baseY - bottomInset),
+  };
+}
+
+function boardViewportCenter(canvasRect, baseX, baseY) {
+  const { availableW, availableH } = boardViewportAvailableSize(canvasRect, baseX, baseY);
+  return {
+    x: baseX + availableW / 2,
+    y: baseY + availableH / 2,
+  };
 }
 
 function boardContentBounds() {
@@ -503,7 +588,21 @@ function boardContentBounds() {
     maxX = Math.max(maxX, el.offsetLeft + el.offsetWidth);
     maxY = Math.max(maxY, el.offsetTop + el.offsetHeight);
   }
-  return { minX, minY, width: maxX - minX, height: maxY - minY };
+  for (const points of state.edgeRoutes?.values() || []) {
+    for (const point of points || []) {
+      minX = Math.min(minX, point.x);
+      minY = Math.min(minY, point.y);
+      maxX = Math.max(maxX, point.x);
+      maxY = Math.max(maxY, point.y);
+    }
+  }
+  const wirePadding = state.edgeRoutes?.size ? 18 : 0;
+  return {
+    minX: minX - wirePadding,
+    minY: minY - wirePadding,
+    width: maxX - minX + wirePadding * 2,
+    height: maxY - minY + wirePadding * 2,
+  };
 }
 
 function fitToContent() {
@@ -515,8 +614,7 @@ function fitToContent() {
   const canvasRect = elements.canvas.getBoundingClientRect();
   const baseX = elements.moduleLayer.offsetLeft;
   const baseY = elements.moduleLayer.offsetTop;
-  const availableW = Math.max(120, canvasRect.width - baseX * 2);
-  const availableH = Math.max(120, canvasRect.height - baseY - 26);
+  const { availableW, availableH } = boardViewportAvailableSize(canvasRect, baseX, baseY);
   const margin = RULES.fitMargin;
   const fit = Math.min(
     1,
@@ -529,33 +627,337 @@ function fitToContent() {
   applyViewport();
 }
 
-function renderBreadcrumbs() {
-  breadcrumbs.innerHTML = "";
+function renderAudienceNavigation() {
+  const depth = state.boardStack.length;
+  const parent = depth > 1 ? boardsById.get(state.boardStack[depth - 2]) : null;
+
+  boardActions.innerHTML = "";
+  boardActions.hidden = depth === 1;
+  if (depth > 1) {
+    const up = document.createElement("button");
+    up.type = "button";
+    up.className = "board-action board-action-up";
+    up.dataset.boardAction = "up";
+    up.title = `Go up to ${parent?.title || "the parent view"}`;
+    up.innerHTML = `
+      <span aria-hidden="true">←</span>
+      <span>Up</span>
+      <strong>${escapeHtml(parent?.title || "Parent view")}</strong>
+    `;
+    boardActions.appendChild(up);
+
+    const overview = document.createElement("button");
+    overview.type = "button";
+    overview.className = "board-action board-action-overview";
+    overview.dataset.boardAction = "overview";
+    overview.textContent = "Overview";
+    overview.title = `Return to ${boardsById.get(state.boardStack[0])?.title || "the overview"}`;
+    boardActions.appendChild(overview);
+  }
+
+  const heading = document.createElement("div");
+  heading.className = "semantic-location-heading";
+  const label = document.createElement("span");
+  label.textContent = "You are here";
+  const level = document.createElement("span");
+  const maximumDepth = semanticDepthFrom(manifest.boards.rootBoard);
+  level.className = "semantic-location-level";
+  level.textContent = `Level ${depth} of ${maximumDepth}`;
+  level.title = `Semantic depth ${depth} of ${maximumDepth}; geometric zoom is shown at the bottom left`;
+  heading.append(label, level);
+
+  const path = document.createElement("ol");
+  path.className = "semantic-location-path";
   state.boardStack.forEach((boardId, index) => {
     const board = boardsById.get(boardId);
     if (!board) return;
-    if (index > 0) {
-      const sep = document.createElement("span");
-      sep.className = "breadcrumb-sep";
-      sep.textContent = "›";
-      sep.setAttribute("aria-hidden", "true");
-      breadcrumbs.appendChild(sep);
-    }
-    if (index === state.boardStack.length - 1) {
-      const current = document.createElement("span");
-      current.className = "breadcrumb-current";
-      current.textContent = board.title;
-      current.setAttribute("aria-current", "page");
-      breadcrumbs.appendChild(current);
+    const item = document.createElement("li");
+    const isCurrent = index === depth - 1;
+    item.className = `semantic-location-step${isCurrent ? " is-current" : ""}`;
+
+    const control = document.createElement(isCurrent ? "span" : "button");
+    if (!isCurrent) {
+      control.type = "button";
+      control.dataset.boardIndex = String(index);
+      control.title = `Return to ${board.title}`;
     } else {
-      const button = document.createElement("button");
-      button.type = "button";
-      button.className = "breadcrumb-node";
-      button.textContent = board.title;
-      button.addEventListener("click", () => popToBoard(index));
-      breadcrumbs.appendChild(button);
+      control.setAttribute("aria-current", "page");
     }
+    const marker = document.createElement("span");
+    marker.className = "semantic-location-marker";
+    marker.textContent = String(index + 1);
+    marker.setAttribute("aria-hidden", "true");
+    const title = document.createElement("span");
+    title.className = "semantic-location-title";
+    title.textContent = board.title;
+    control.append(marker, title);
+    item.appendChild(control);
+    path.appendChild(item);
   });
+
+  semanticLocation.replaceChildren(heading, path);
+  semanticLocationStatus.textContent =
+    `Now viewing ${currentBoard().title}, semantic level ${depth} of ${maximumDepth}.`;
+}
+
+function semanticDepthFrom(boardId, visiting = new Set()) {
+  if (!boardId || visiting.has(boardId)) return 0;
+  const board = boardsById.get(boardId);
+  if (!board) return 0;
+  const nextVisiting = new Set(visiting);
+  nextVisiting.add(boardId);
+  const childIds = new Set(
+    (board.nodes || [])
+      .map((node) => targetBoardForNode(node)?.id)
+      .filter((childId) => childId && !nextVisiting.has(childId)),
+  );
+  const childDepths = Array.from(childIds, (childId) => semanticDepthFrom(childId, nextVisiting));
+  return 1 + Math.max(0, ...childDepths);
+}
+
+function onBoardActionClick(event) {
+  const action = event.target.closest("button")?.dataset.boardAction;
+  if (action === "up") popToBoard(state.boardStack.length - 2);
+  if (action === "overview") popToBoard(0);
+}
+
+function onSemanticLocationClick(event) {
+  const index = Number(event.target.closest("button")?.dataset.boardIndex);
+  if (Number.isInteger(index)) popToBoard(index);
+}
+
+function renderBoardTakeaway() {
+  const board = currentBoard();
+  const summary = String(board?.summary || "").trim();
+  elements.boardTakeaway.hidden = !summary;
+  if (!summary) return;
+  elements.takeawayTitle.textContent = board.title;
+  elements.takeawaySummary.textContent = summary;
+}
+
+function ensureModelMap() {
+  if (modelMap) return;
+  modelMap = document.createElement("aside");
+  modelMap.className = "model-map board-chrome is-empty";
+
+  const heading = document.createElement("div");
+  heading.className = "model-map-heading";
+  const label = document.createElement("span");
+  label.textContent = "Model map";
+  modelMapContext = document.createElement("span");
+  modelMapContext.className = "model-map-context";
+  heading.append(label, modelMapContext);
+
+  modelMapSvg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+  modelMapSvg.setAttribute("class", "model-map-board");
+  modelMapSvg.setAttribute("aria-hidden", "true");
+  modelMapSvg.setAttribute("preserveAspectRatio", "xMidYMid meet");
+
+  modelMapA11y = document.createElement("ol");
+  modelMapA11y.className = "model-map-a11y";
+  modelMap.append(heading, modelMapSvg, modelMapA11y);
+  elements.canvas.appendChild(modelMap);
+}
+
+function modelMapBoard() {
+  return boardsById.get(manifest.boards.rootBoard) || null;
+}
+
+function modelMapGraph(board) {
+  if (!board) return { nodes: [], edges: [] };
+  const graph = displayGraph(board);
+  const nodes = graph.nodes.filter(
+    (node) => node.prominence !== "hidden" && node.treatment !== "hidden",
+  );
+  const nodeIds = new Set(nodes.map((node) => node.id));
+  const edges = graph.edges.filter(
+    (edge) => nodeIds.has(edge.from) && nodeIds.has(edge.to),
+  );
+  return { nodes, edges };
+}
+
+function activeModelMapNode(mapBoard, nodes) {
+  if (!mapBoard || state.boardStack.length <= 1) return null;
+  const originNodeId = state.boardOrigins[1];
+  const originNode = nodes.find((node) => node.id === originNodeId);
+  if (originNode) return originNode;
+
+  const firstChildBoardId = state.boardStack[1];
+  const matches = nodes.filter(
+    (node) => targetBoardForNode(node)?.id === firstChildBoardId,
+  );
+  return matches.length === 1 ? matches[0] : null;
+}
+
+function modelMapNodeLabel(node) {
+  const module = node.module_ref ? modulesById.get(node.module_ref) : null;
+  const rep = node.rep_ref ? repsById.get(node.rep_ref) : null;
+  return module?.label || node.label || rep?.id?.replaceAll("_", " ") || node.id;
+}
+
+function modelMapNodeGeometry(board, nodes) {
+  const cellWidth = 100;
+  const cellHeight = 68;
+  const padding = 18;
+  const compactColumns = compactColumnTopology(board, nodes);
+  const observedColumns = Math.max(1, ...nodes.map((node) => Number(node.col) || 1));
+  const observedRows = Math.max(1, ...nodes.map((node) => Number(node.row) || 1));
+  const columns = compactColumns
+    ? compactColumns.authoredColumns.length
+    : Math.max(Number(board.grid?.columns) || 1, observedColumns);
+  const rows = Math.max(Number(board.grid?.rows) || 1, observedRows);
+  const layout = new Map();
+
+  nodes.forEach((node) => {
+    const authoredColumn = Math.max(1, Number(node.col) || 1);
+    const column = compactColumns
+      ? (compactColumns.rankByAuthored.get(authoredColumn) ?? 0) + 1
+      : authoredColumn;
+    const row = Math.max(1, Number(node.row) || 1);
+    const x = padding + (column - 0.5) * cellWidth;
+    const y = padding + (row - 0.5) * cellHeight;
+    const module = node.module_ref ? modulesById.get(node.module_ref) : null;
+    const rep = node.rep_ref ? repsById.get(node.rep_ref) : null;
+    const kind = node.kind === "operation"
+      ? "operation"
+      : node.kind === "representation"
+        ? "representation"
+        : "module";
+    const glyph = kind === "representation"
+      ? node.glyph || glyphKindForShape(rep?.shape || "") || "vector"
+      : null;
+
+    let width = node.prominence === "primary" ? 76 : 64;
+    let height = node.treatment === "chip" || node.density === "micro" ? 22 : 32;
+    if (kind === "operation") width = height = 24;
+    if (kind === "representation") {
+      const dimensions = {
+        scalar: [20, 20],
+        vector: [44, 18],
+        matrix: [48, 28],
+        pair: [32, 32],
+        volume: [48, 30],
+      };
+      [width, height] = dimensions[glyph] || dimensions.vector;
+    }
+
+    layout.set(node.id, {
+      node,
+      module,
+      rep,
+      kind,
+      glyph,
+      x,
+      y,
+      width,
+      height,
+    });
+  });
+
+  return {
+    width: padding * 2 + columns * cellWidth,
+    height: padding * 2 + rows * cellHeight,
+    nodes: layout,
+  };
+}
+
+function modelMapEdgePath(from, to) {
+  if (Math.abs(from.y - to.y) < 1) return `M ${from.x} ${from.y} H ${to.x}`;
+  if (Math.abs(from.x - to.x) < 1) return `M ${from.x} ${from.y} V ${to.y}`;
+  const middleX = (from.x + to.x) / 2;
+  return `M ${from.x} ${from.y} H ${middleX} V ${to.y} H ${to.x}`;
+}
+
+function renderModelMapEdge(edge, geometry) {
+  const from = geometry.nodes.get(edge.from);
+  const to = geometry.nodes.get(edge.to);
+  if (!from || !to) return null;
+  const path = document.createElementNS("http://www.w3.org/2000/svg", "path");
+  const tone = edge.tone === "conditioning" || edge.tone === "skip" ? edge.tone : "default";
+  path.setAttribute("d", modelMapEdgePath(from, to));
+  path.setAttribute(
+    "class",
+    `model-map-edge tone-${tone}${(edge.segments || []).length > 1 ? " is-contracted" : ""}`,
+  );
+  path.setAttribute("vector-effect", "non-scaling-stroke");
+  return path;
+}
+
+function renderModelMapNode(entry, activeNode) {
+  const group = document.createElementNS("http://www.w3.org/2000/svg", "g");
+  group.setAttribute(
+    "class",
+    `model-map-node is-${entry.kind}${entry.glyph ? ` is-${entry.glyph}` : ""}${entry.node === activeNode ? " is-current" : ""}`,
+  );
+  group.setAttribute("data-model-node-id", entry.node.id);
+
+  const shape = document.createElementNS(
+    "http://www.w3.org/2000/svg",
+    entry.kind === "operation" ? "circle" : "rect",
+  );
+  shape.setAttribute("class", "model-map-node-shape");
+  shape.setAttribute("vector-effect", "non-scaling-stroke");
+  if (entry.kind === "operation") {
+    shape.setAttribute("cx", String(entry.x));
+    shape.setAttribute("cy", String(entry.y));
+    shape.setAttribute("r", String(entry.width / 2));
+  } else {
+    shape.setAttribute("x", String(entry.x - entry.width / 2));
+    shape.setAttribute("y", String(entry.y - entry.height / 2));
+    shape.setAttribute("width", String(entry.width));
+    shape.setAttribute("height", String(entry.height));
+    shape.setAttribute("rx", entry.kind === "module" ? "7" : "3");
+  }
+
+  const title = document.createElementNS("http://www.w3.org/2000/svg", "title");
+  title.textContent = modelMapNodeLabel(entry.node);
+  group.append(title, shape);
+  return group;
+}
+
+function renderModelMap() {
+  if (!modelMap) return;
+  const mapBoard = modelMapBoard();
+  const { nodes, edges } = modelMapGraph(mapBoard);
+  if (!mapBoard || !nodes.length) {
+    modelMap.classList.add("is-empty");
+    modelMapSvg.replaceChildren();
+    modelMapA11y.replaceChildren();
+    return;
+  }
+
+  const activeNode = activeModelMapNode(mapBoard, nodes);
+  const activeLabel = activeNode ? modelMapNodeLabel(activeNode) : null;
+  const contextLabel = activeLabel ? `Inside: ${activeLabel}` : "Overview";
+  modelMapContext.textContent = contextLabel;
+  modelMapContext.title = contextLabel;
+
+  const geometry = modelMapNodeGeometry(mapBoard, nodes);
+  modelMapSvg.setAttribute("viewBox", `0 0 ${geometry.width} ${geometry.height}`);
+  const edgeLayer = document.createElementNS("http://www.w3.org/2000/svg", "g");
+  edgeLayer.setAttribute("class", "model-map-edges");
+  edges.forEach((edge) => {
+    const path = renderModelMapEdge(edge, geometry);
+    if (path) edgeLayer.appendChild(path);
+  });
+  const nodeLayer = document.createElementNS("http://www.w3.org/2000/svg", "g");
+  nodeLayer.setAttribute("class", "model-map-nodes");
+  geometry.nodes.forEach((entry) => nodeLayer.appendChild(renderModelMapNode(entry, activeNode)));
+  modelMapSvg.replaceChildren(edgeLayer, nodeLayer);
+
+  modelMapA11y.replaceChildren(
+    ...nodes.map((node) => {
+      const item = document.createElement("li");
+      item.textContent = modelMapNodeLabel(node);
+      if (node === activeNode) item.setAttribute("aria-current", "location");
+      return item;
+    }),
+  );
+  modelMap.classList.remove("is-empty");
+  modelMap.setAttribute(
+    "aria-label",
+    `Overview map for ${mapBoard.title}. Current region: ${activeLabel || "overview"}.`,
+  );
 }
 
 function renderNode(node) {
@@ -656,14 +1058,10 @@ function renderRepresentationNode(node) {
     ${box(dims ? `<small class="tensor-dims">${dims}</small>` : "")}
     ${displayMeaning ? `<span class="tensor-meaning">${escapeHtml(displayMeaning)}</span>` : ""}
   `;
-  card.addEventListener("pointerenter", (event) => showRepPeek(event, node, rep));
-  card.addEventListener("pointermove", moveRepPeek);
-  card.addEventListener("pointerleave", hideRepPeek);
+  const pointerPreviewKey = `pointer:representation:${node.id}`;
+  card.addEventListener("pointerenter", (event) => showRepPeek(event, node, rep, pointerPreviewKey));
+  card.addEventListener("pointerleave", () => hideRepPeek(pointerPreviewKey));
   card.addEventListener("click", () => {
-    if (state.dragMoved) {
-      state.dragMoved = false;
-      return;
-    }
     hideRepPeek();
     focusRepresentation(node, rep);
   });
@@ -712,43 +1110,21 @@ function repFocusHtml(node, rep) {
   `;
 }
 
-function ensureRepresentationTooltip() {
-  if (representationTooltip) return;
-  representationTooltip = document.createElement("aside");
-  representationTooltip.className = "representation-tooltip hover-panel";
-  representationTooltip.setAttribute("role", "note");
-  representationTooltip.setAttribute("aria-live", "polite");
-  elements.canvas.appendChild(representationTooltip);
+function showHoverPanel(html, title, sourceKey) {
+  beginInspectorPreview(sourceKey, { title, html });
 }
 
-function showHoverPanel(html) {
-  ensureRepresentationTooltip();
-  representationTooltip.innerHTML = html;
-  representationTooltip.classList.add("is-visible");
-  typesetHoverPanelMath();
+function hideHoverPanel(sourceKey) {
+  endInspectorPreview(sourceKey);
 }
 
-function hideHoverPanel() {
-  representationTooltip?.classList.remove("is-visible");
+function showRepPeek(event, node, rep, sourceKey) {
+  const title = node.label || rep?.display_label || rep?.id || node.id;
+  showHoverPanel(repTooltipHtml(node, rep), title, sourceKey);
 }
 
-function showRepPeek(event, node, rep) {
-  showHoverPanel(repTooltipHtml(node, rep));
-}
-
-function moveRepPeek() {}
-
-function hideRepPeek() {
-  hideHoverPanel();
-}
-
-function typesetHoverPanelMath() {
-  const mathJax = window.MathJax;
-  if (!mathJax?.typesetPromise || !representationTooltip?.innerHTML.includes("\\(")) return;
-  mathJax.typesetClear?.([representationTooltip]);
-  mathJax.typesetPromise([representationTooltip]).catch((error) => {
-    console.warn("MathJax hover panel typesetting failed", error);
-  });
+function hideRepPeek(sourceKey) {
+  hideHoverPanel(sourceKey);
 }
 
 function repTooltipHtml(node, rep) {
@@ -762,11 +1138,13 @@ function repTooltipHtml(node, rep) {
   return `
     <span class="rep-tooltip-meta">${escapeHtml(scaleLabel)}${stateRole ? ` · ${escapeHtml(stateRole)}` : ""}</span>
     <strong class="rep-tooltip-title"><i class="rep-tooltip-symbol">${symbol}</i>${escapeHtml(label)}</strong>
-    ${node.role || rep?.semantic_role ? `<p>${escapeHtml(node.role || rep?.semantic_role)}</p>` : ""}
-    <dl>
-      ${shape ? `<dt>shape</dt><dd><code>${escapeHtml(shape)}</code></dd>` : ""}
-      ${semantics?.produced_by ? `<dt>produced by</dt><dd>${escapeHtml(semantics.produced_by)}</dd>` : ""}
-    </dl>
+    <div class="focus-section">
+      ${node.role || rep?.semantic_role ? `<p>${escapeHtml(node.role || rep?.semantic_role)}</p>` : ""}
+      <dl class="focus-dl">
+        ${shape ? `<dt>shape</dt><dd><code>${escapeHtml(shape)}</code></dd>` : ""}
+        ${semantics?.produced_by ? `<dt>produced by</dt><dd>${escapeHtml(semantics.produced_by)}</dd>` : ""}
+      </dl>
+    </div>
   `;
 }
 
@@ -775,7 +1153,7 @@ function focusRepresentation(node, rep) {
   clearActiveNodes();
   elements.moduleLayer.querySelector(`[data-node-id="${node.id}"]`)?.classList.add("is-focused");
   elements.focusTitle.textContent = node.label || rep?.id || node.id;
-  setFocusBody(repFocusHtml(node, rep));
+  setFocusBody(repFocusHtml(node, rep), { selected: true });
 }
 
 const OPERATOR_KINDS = {
@@ -788,10 +1166,16 @@ function operatorSymbolFor(node, module) {
   return node.operator || OPERATOR_KINDS[module?.kind] || null;
 }
 
+function targetBoardForNode(node) {
+  const boardId = node.board_ref || (node.expandable ? node.module_ref || node.id : null);
+  return boardId ? boardsById.get(boardId) || null : null;
+}
+
 function renderBlockNode(node) {
   const module = node.module_ref ? modulesById.get(node.module_ref) : null;
   const scale = node.scale || module?.scale || "item";
-  const expandable = Boolean(node.expandable && boardsById.has(node.module_ref || node.id));
+  const targetBoard = targetBoardForNode(node);
+  const expandable = Boolean(targetBoard);
   const prominence = node.prominence || "secondary";
   const treatment = node.treatment || "block";
   const density = node.density || "normal";
@@ -812,15 +1196,20 @@ function renderBlockNode(node) {
       <span class="op-label">${escapeHtml(node.label || module?.label || node.id)}</span>
     `
     : blockCardHtml(node, module, expandable);
-  card.addEventListener("mouseenter", () => showNodePeek(node, module, expandable));
-  card.addEventListener("mouseleave", () => hideHoverPanel());
+  if (targetBoard) {
+    card.setAttribute("aria-label", `Open ${targetBoard.title}`);
+    card.title = `Open ${targetBoard.title}`;
+  }
+  const pointerPreviewKey = `pointer:node:${node.id}`;
+  const focusPreviewKey = `focus:node:${node.id}`;
+  card.addEventListener("mouseenter", () => showNodePeek(node, module, targetBoard, pointerPreviewKey));
+  card.addEventListener("mouseleave", () => hideHoverPanel(pointerPreviewKey));
+  card.addEventListener("focus", () => showNodePeek(node, module, targetBoard, focusPreviewKey));
+  card.addEventListener("blur", () => hideHoverPanel(focusPreviewKey));
   card.addEventListener("click", () => {
-    if (state.dragMoved) {
-      state.dragMoved = false;
-      return;
-    }
-    if (expandable) {
-      pushBoard(node.module_ref || node.id, node.id);
+    hideHoverPanel();
+    if (targetBoard) {
+      pushBoard(targetBoard.id, node.id);
     } else if (module) {
       focusModule(module);
     } else {
@@ -841,12 +1230,16 @@ function blockCardHtml(node, module, expandable) {
   const role = node.role || module?.role || "";
   const detail = node.detail || moduleDetail(module) || kind;
   const repeat = module?.repeats ? `<span class="arch-repeat">x${module.repeats}</span>` : "";
-  const badges = blockBadges(node, module, expandable);
+  const badges = blockBadges(node, module);
+  const drillCue = expandable
+    ? '<span class="arch-drill-cue" aria-hidden="true">Open detail <b>›</b></span>'
+    : "";
 
   if (node.treatment === "chip" || node.density === "micro") {
     return `
       <strong>${label}</strong>
       <span class="arch-chip-meta">${node.scale || module?.scale || kind}</span>
+      ${drillCue}
     `;
   }
 
@@ -860,6 +1253,7 @@ function blockCardHtml(node, module, expandable) {
       <span class="arch-badges">
         ${badges.map((badge) => `<i>${badge}</i>`).join("")}
       </span>
+      ${drillCue}
     `;
   }
 
@@ -874,10 +1268,11 @@ function blockCardHtml(node, module, expandable) {
     <span class="arch-badges">
       ${badges.map((badge) => `<i>${badge}</i>`).join("")}
     </span>
+    ${drillCue}
   `;
 }
 
-function blockBadges(node, module, expandable) {
+function blockBadges(node, module) {
   const pairBias = module?.attention?.pair_bias === true
     ? "pair bias"
     : module?.attention?.pair_bias === false
@@ -907,6 +1302,11 @@ const RULES = {
   // is a contracted (elided) edge, or carries conditioning tone;
   // shorter edges communicate by shape alone and reveal text on hover
   edgeLabelMinSpan: 130,
+  layout: {
+    contentMinColumn: 96,
+    contentColumnGap: 64,
+    edgeTextPadding: 24,
+  },
   // orthogonal edge routing: all edges are horizontal/vertical polylines
   route: {
     margin: 14, // clearance kept around node boxes when dodging them
@@ -941,11 +1341,12 @@ function animateDiveIn(originNodeId, done) {
   const canvasRect = elements.canvas.getBoundingClientRect();
   const baseX = elements.moduleLayer.offsetLeft;
   const baseY = elements.moduleLayer.offsetTop;
+  const center = boardViewportCenter(canvasRect, baseX, baseY);
   const targetScale = Math.max(viewport.scale * RULES.diveScale, RULES.diveScale);
   setBoardTransition(true);
   elements.canvas.classList.add("is-board-fading");
-  viewport.x = canvasRect.width / 2 - baseX - box.cx * targetScale;
-  viewport.y = canvasRect.height / 2 - baseY - box.cy * targetScale;
+  viewport.x = center.x - baseX - box.cx * targetScale;
+  viewport.y = center.y - baseY - box.cy * targetScale;
   viewport.scale = targetScale;
   applyViewport();
   window.setTimeout(() => {
@@ -965,8 +1366,9 @@ function animateFadeOut(done) {
   const canvasRect = elements.canvas.getBoundingClientRect();
   const baseX = elements.moduleLayer.offsetLeft;
   const baseY = elements.moduleLayer.offsetTop;
-  const px = canvasRect.width / 2 - baseX;
-  const py = canvasRect.height / 2 - baseY;
+  const center = boardViewportCenter(canvasRect, baseX, baseY);
+  const px = center.x - baseX;
+  const py = center.y - baseY;
   const nextScale = viewport.scale * 0.82;
   const localX = (px - viewport.x) / viewport.scale;
   const localY = (py - viewport.y) / viewport.scale;
@@ -993,11 +1395,12 @@ function animateArriveFrom(originNodeId) {
       const canvasRect = elements.canvas.getBoundingClientRect();
       const baseX = elements.moduleLayer.offsetLeft;
       const baseY = elements.moduleLayer.offsetTop;
+      const center = boardViewportCenter(canvasRect, baseX, baseY);
       const scale = RULES.diveScale;
       start = {
         scale,
-        x: canvasRect.width / 2 - baseX - box.cx * scale,
-        y: canvasRect.height / 2 - baseY - box.cy * scale,
+        x: center.x - baseX - box.cx * scale,
+        y: center.y - baseY - box.cy * scale,
       };
     }
   }
@@ -1032,6 +1435,7 @@ function pushBoard(boardId, originNodeId) {
   if (!boardsById.has(boardId) || state.isTransitioning) return;
   const commit = () => {
     state.boardStack.push(boardId);
+    state.boardOrigins.push(originNodeId || null);
     state.focusedId = null;
     state.pinnedEdge = null;
     state.userMovedViewport = false;
@@ -1040,15 +1444,18 @@ function pushBoard(boardId, originNodeId) {
     renderBoard();
     focusOverview();
     animateArriveFrom(null);
+    focusBoardNavigationTarget();
   };
   animateDiveIn(originNodeId, commit);
 }
 
 function popToBoard(index) {
   if (state.isTransitioning) return;
-  const leavingBoardId = state.boardStack.at(-1);
+  const returningFromBoardId = state.boardStack[index + 1];
+  const returningToOriginId = state.boardOrigins[index + 1];
   const commit = () => {
     state.boardStack = state.boardStack.slice(0, index + 1);
+    state.boardOrigins = state.boardOrigins.slice(0, index + 1);
     state.focusedId = null;
     state.pinnedEdge = null;
     state.userMovedViewport = false;
@@ -1056,21 +1463,28 @@ function popToBoard(index) {
     hideConnection(true);
     renderBoard();
     focusOverview();
-    const origin = (currentBoard().nodes || []).find(
-      (node) => node.expandable && (node.module_ref || node.id) === leavingBoardId,
+    const origin = (currentBoard().nodes || []).find((node) =>
+      returningToOriginId
+        ? node.id === returningToOriginId
+        : targetBoardForNode(node)?.id === returningFromBoardId,
     );
     animateArriveFrom(origin?.id || null);
+    focusBoardNavigationTarget(origin?.id || null);
   };
   animateFadeOut(commit);
 }
 
+function focusBoardNavigationTarget(originNodeId = null) {
+  const origin = originNodeId
+    ? Array.from(elements.moduleLayer.querySelectorAll("[data-node-id]")).find(
+        (element) => element.dataset.nodeId === originNodeId,
+      )
+    : null;
+  const navigationTarget = boardActions?.querySelector('[data-board-action="up"]');
+  (origin || navigationTarget || elements.canvas).focus({ preventScroll: true });
+}
+
 function displayGraph(board) {
-  if (editMode) {
-    return {
-      nodes: board.nodes || [],
-      edges: (board.edges || []).map((edge) => ({ ...edge, segments: [edge] })),
-    };
-  }
   const nodes = (board.nodes || []).filter((node) => !node.elide);
   const elided = (board.nodes || []).filter((node) => node.elide);
   let edges = (board.edges || []).map((edge) => ({ ...edge, segments: [edge] }));
@@ -1100,13 +1514,21 @@ function displayGraph(board) {
 }
 
 function derivedConditioning(board, edge) {
+  const relationConditioning = [edge, ...(edge.segments || [])]
+    .map((segment) => conditioningByRelation.get(segment.relation_ref))
+    .filter(Boolean)
+    .filter((conditioning, index, all) =>
+      all.findIndex((candidate) => candidate.id === conditioning.id) === index,
+    );
+  if (relationConditioning.length) return relationConditioning;
   const nodes = new Map((board.nodes || []).map((node) => [node.id, node]));
   const from = nodes.get(edge.from);
   const to = nodes.get(edge.to);
   const fromRef = from?.rep_ref || from?.module_ref;
   const toRef = to?.module_ref || to?.rep_ref;
-  if (!fromRef || !toRef) return null;
-  return conditioningByPair.get(`${fromRef}->${toRef}`) || null;
+  if (!fromRef || !toRef) return [];
+  const fallback = conditioningByPair.get(`${fromRef}->${toRef}`);
+  return fallback ? [fallback] : [];
 }
 
 function roundedOrthPath(points, radius = 9) {
@@ -1163,26 +1585,28 @@ function renderEdges() {
 
   const edges = state.displayEdges || displayGraph(board).edges;
   const orthoRoutes = buildOrthoRoutes(edges);
+  const renderedRoutes = new Map();
   edges.forEach((edge, index) => {
     const conditioning = derivedConditioning(board, edge);
-    if (conditioning && !edge.tone) edge.tone = "conditioning";
+    if (conditioning.length && !edge.tone) edge.tone = "conditioning";
     const contracted = (edge.segments || []).length > 1;
 
-    let pathD;
-    let labelPoint;
-    let edgeSpan = Number.POSITIVE_INFINITY;
+    let routePoints;
     const routed = state.layoutEdges?.get(index);
     if (routed && routed.length >= 2) {
-      pathD = roundedOrthPath(routed);
-      labelPoint = polylineMidpoint(routed);
-      edgeSpan = Math.hypot(routed.at(-1).x - routed[0].x, routed.at(-1).y - routed[0].y);
+      routePoints = routed;
     } else {
-      const route = manualEdgeRoute(edge) || orthoRoutes.get(index);
+      const route = orthoRoutes.get(index);
       if (!route) return;
-      pathD = roundedOrthPath(route);
-      labelPoint = polylineMidpoint(route);
-      edgeSpan = Math.hypot(route.at(-1).x - route[0].x, route.at(-1).y - route[0].y);
+      routePoints = route;
     }
+    renderedRoutes.set(index, routePoints);
+    const pathD = roundedOrthPath(routePoints);
+    const labelPoint = polylineMidpoint(routePoints);
+    const edgeSpan = Math.hypot(
+      routePoints.at(-1).x - routePoints[0].x,
+      routePoints.at(-1).y - routePoints[0].y,
+    );
     const tooltipPoint = { x: labelPoint.x, y: labelPoint.y - 12 };
     const path = document.createElementNS("http://www.w3.org/2000/svg", "path");
     path.setAttribute("d", pathD);
@@ -1203,17 +1627,21 @@ function renderEdges() {
       elements.edgeLayer.appendChild(label);
     }
 
-    if (conditioning) {
+    if (conditioning.length) {
       const badge = document.createElementNS("http://www.w3.org/2000/svg", "text");
       badge.setAttribute("x", String(labelPoint.x));
       badge.setAttribute("y", String(labelPoint.y + 4));
       badge.setAttribute("class", "arch-edge-badge");
-      badge.textContent = String(conditioning.mode || "").replaceAll("_", " ");
+      badge.textContent = conditioning
+        .map((entry) => String(entry.mode || "").replaceAll("_", " "))
+        .filter(Boolean)
+        .join(" · ");
       elements.edgeLayer.appendChild(badge);
     }
 
-    elements.edgeLayer.appendChild(renderEdgeHitTarget(edge, pathD, tooltipPoint));
+    elements.edgeLayer.appendChild(renderEdgeHitTarget(edge, pathD));
   });
+  state.edgeRoutes = renderedRoutes;
 }
 
 function renderEdgeMarkers() {
@@ -1248,34 +1676,38 @@ function edgeMarkerId(edge) {
   return "edge-arrow-default";
 }
 
-function manualEdgeRoute(edge) {
-  if (edge.tone !== "skip") return null;
-  const fromBox = nodeBox(edge.from);
-  const toBox = nodeBox(edge.to);
-  if (!fromBox || !toBox) return null;
-  const vertical = Math.abs(toBox.cy - fromBox.cy) > Math.abs(toBox.cx - fromBox.cx);
-  if (vertical) {
-    const clearance = Number(edge.route_clearance || 54);
-    const laneX = Math.max(12, Math.min(fromBox.x, toBox.x) - clearance);
-    const from = { x: fromBox.x, y: fromBox.cy };
-    const to = { x: toBox.x, y: toBox.cy };
-    return [
-      from,
-      { x: laneX, y: from.y },
-      { x: laneX, y: to.y },
-      to,
-    ];
-  }
+function explicitLaneRoute(edge, fromBox, toBox, allBoxes) {
+  const side = edge.route_side;
+  if (!["top", "bottom", "left", "right"].includes(side)) return null;
+
   const clearance = Number(edge.route_clearance || 42);
-  const laneY = Math.max(12, Math.min(fromBox.y, toBox.y) - clearance);
-  const from = { x: fromBox.cx, y: fromBox.y };
-  const to = { x: toBox.cx, y: toBox.y };
-  return [
-    from,
-    { x: from.x, y: laneY },
-    { x: to.x, y: laneY },
-    to,
-  ];
+  if (side === "top" || side === "bottom") {
+    const lo = Math.min(fromBox.cx, toBox.cx);
+    const hi = Math.max(fromBox.cx, toBox.cx);
+    const relevant = allBoxes.filter((box) => box.x <= hi && box.x + box.width >= lo);
+    const boundary = side === "top"
+      ? Math.min(...relevant.map((box) => box.y))
+      : Math.max(...relevant.map((box) => box.y + box.height));
+    const laneY = side === "top"
+      ? Math.min(boundary - 6, Math.max(12, boundary - clearance))
+      : Math.max(boundary + 6, Math.min(elements.moduleLayer.offsetHeight - 12, boundary + clearance));
+    const from = sidePoint(fromBox, side, 0.5);
+    const to = sidePoint(toBox, side, 0.5);
+    return cleanRoute([from, { x: from.x, y: laneY }, { x: to.x, y: laneY }, to]);
+  }
+
+  const lo = Math.min(fromBox.cy, toBox.cy);
+  const hi = Math.max(fromBox.cy, toBox.cy);
+  const relevant = allBoxes.filter((box) => box.y <= hi && box.y + box.height >= lo);
+  const boundary = side === "left"
+    ? Math.min(...relevant.map((box) => box.x))
+    : Math.max(...relevant.map((box) => box.x + box.width));
+  const laneX = side === "left"
+    ? Math.min(boundary - 6, Math.max(12, boundary - clearance))
+    : Math.max(boundary + 6, Math.min(elements.moduleLayer.offsetWidth - 12, boundary + clearance));
+  const from = sidePoint(fromBox, side, 0.5);
+  const to = sidePoint(toBox, side, 0.5);
+  return cleanRoute([from, { x: laneX, y: from.y }, { x: laneX, y: to.y }, to]);
 }
 
 const OPPOSITE_SIDE = { left: "right", right: "left", top: "bottom", bottom: "top" };
@@ -1292,13 +1724,23 @@ function buildOrthoRoutes(edges) {
     return boxes.get(id);
   };
 
+  edges.forEach((edge) => {
+    boxFor(edge.from);
+    boxFor(edge.to);
+  });
+  const allBoxes = [...boxes.values()].filter(Boolean);
+
   const plans = [];
   edges.forEach((edge, index) => {
     if (state.layoutEdges?.get(index)) return;
-    if (edge.tone === "skip") return; // manualEdgeRoute lanes skips around the flow
     const fromBox = boxFor(edge.from);
     const toBox = boxFor(edge.to);
     if (!fromBox || !toBox || fromBox === toBox) return;
+    const explicitRoute = explicitLaneRoute(edge, fromBox, toBox, allBoxes);
+    if (explicitRoute) {
+      routes.set(index, explicitRoute);
+      return;
+    }
     const dx = toBox.cx - fromBox.cx;
     const dy = toBox.cy - fromBox.cy;
     const horizontal = Math.abs(dx) >= Math.abs(dy);
@@ -1407,10 +1849,10 @@ function routeOrthogonal(plan, obstacles) {
 // Candidate positions for the bend between two docks: the midpoint first,
 // then steps outward, all strictly between the boxes.
 function channelPositions(a, b) {
-  if (b - a < 12) return [];
-  const lo = a + 6;
-  const hi = b - 6;
-  const mid = (a + b) / 2;
+  if (Math.abs(b - a) < 12) return [];
+  const lo = Math.min(a, b) + 6;
+  const hi = Math.max(a, b) - 6;
+  const mid = (lo + hi) / 2;
   const positions = [mid];
   for (let step = RULES.route.channelStep; positions.length < 9; step += RULES.route.channelStep) {
     let extended = false;
@@ -1527,25 +1969,29 @@ function nodeBox(id) {
   };
 }
 
-function renderEdgeHitTarget(edge, pathD, point) {
+function renderEdgeHitTarget(edge, pathD) {
   const hit = document.createElementNS("http://www.w3.org/2000/svg", "path");
+  const previewId = edge.relation_ref || edge.id || `${edge.from}->${edge.to}:${edge.label || "flow"}`;
+  const pointerPreviewKey = `pointer:edge:${previewId}`;
+  const focusPreviewKey = `focus:edge:${previewId}`;
   hit.setAttribute("d", pathD);
   hit.setAttribute("class", "edge-hit");
   hit.setAttribute("tabindex", "0");
   hit.setAttribute("role", "note");
   hit.setAttribute("aria-label", edge.connection.title);
-  hit.addEventListener("mouseenter", () => showConnection(edge, point));
-  hit.addEventListener("mouseleave", () => hideConnection());
-  hit.addEventListener("focus", () => showConnection(edge, point));
-  hit.addEventListener("blur", () => hideConnection());
+  hit.addEventListener("mouseenter", () => showConnection(edge, pointerPreviewKey));
+  hit.addEventListener("mouseleave", () => hideConnection(false, pointerPreviewKey));
+  hit.addEventListener("focus", () => showConnection(edge, focusPreviewKey));
+  hit.addEventListener("blur", () => hideConnection(false, focusPreviewKey));
   hit.addEventListener("click", (event) => {
     event.stopPropagation();
+    clearInspectorPreviews();
     if (state.pinnedEdge === edge) {
       state.pinnedEdge = null;
       hideConnection(true);
     } else {
       state.pinnedEdge = edge;
-      showConnection(edge, point);
+      showConnection(edge);
     }
   });
   return hit;
@@ -1560,50 +2006,37 @@ function applyEdgeTone(element, edge) {
   }
 }
 
-function ensureConnectionTooltip() {
-  if (connectionTooltip) return;
-  connectionTooltip = document.createElement("div");
-  connectionTooltip.className = "connection-tooltip";
-  elements.canvas.appendChild(connectionTooltip);
-}
-
-function showConnection(edge, point) {
-  const canvasRect = elements.canvas.getBoundingClientRect();
-  const layerRect = elements.moduleLayer.getBoundingClientRect();
-  const x = layerRect.left - canvasRect.left + point.x * viewport.scale;
-  const y = layerRect.top - canvasRect.top + point.y * viewport.scale;
-  const shouldFlip = x > canvasRect.width - 320;
-  const contracted = (edge.segments || []).length > 1;
+function showConnection(edge, previewSourceKey = null) {
   const pinned = state.pinnedEdge === edge;
-  const hasStandardBlocks = contracted && pinned && hiddenChainStandardBlocks(edge).length > 0;
-
-  connectionTooltip.classList.toggle("is-left", shouldFlip);
-  connectionTooltip.classList.toggle("is-pinned", pinned);
-  connectionTooltip.classList.toggle("has-standard-blocks", hasStandardBlocks);
-  connectionTooltip.classList.add("is-visible");
-  connectionTooltip.style.left = `${x}px`;
-  connectionTooltip.style.top = `${y}px`;
-  connectionTooltip.innerHTML = contracted
-    ? contractedTooltipHtml(edge, pinned)
-    : `
-      <span>${edge.connection.role}</span>
-      <strong>${edge.connection.title}</strong>
-      <p>${edge.connection.inside}</p>
-    `;
-  typesetConnectionTooltipMath();
-
-  if (pinned && !state.focusedId) {
+  if (pinned) {
+    clearInspectorPreviews();
     focusConnection(edge);
+  } else if (previewSourceKey) {
+    beginInspectorPreview(previewSourceKey, {
+      title: edge.connection.title,
+      html: connectionInspectorHtml(edge, { expanded: false }),
+    });
   }
 }
 
-function typesetConnectionTooltipMath() {
-  const mathJax = window.MathJax;
-  if (!mathJax?.typesetPromise || !connectionTooltip?.innerHTML.includes("math-step")) return;
-  mathJax.typesetClear?.([connectionTooltip]);
-  mathJax
-    .typesetPromise([connectionTooltip])
-    .catch((error) => console.warn("MathJax connection tooltip typesetting failed", error));
+function connectionInspectorHtml(edge, { expanded = false } = {}) {
+  const contracted = (edge.segments || []).length > 1;
+  const hops = contracted
+    ? edge.segments.slice(0, -1).map((segment) => nodeLabelById(segment.to)).join(" → ")
+    : null;
+  return `
+    <div class="focus-section">
+      <p>${edge.connection.inside}</p>
+      ${contracted
+        ? contractedTooltipHtml(edge, expanded, "Select to keep details")
+        : `<dl class="focus-dl">
+            <dt>from</dt><dd>${edge.from}</dd>
+            <dt>to</dt><dd>${edge.to}</dd>
+            <dt>role</dt><dd>${edge.connection.role}</dd>
+            ${hops ? `<dt>via</dt><dd>${hops}</dd>` : ""}
+          </dl>`}
+    </div>
+  `;
 }
 
 function nodeLabelById(id) {
@@ -1644,7 +2077,7 @@ function contractedChainHtml(edge) {
   return `<div class="connection-chain-canvas">${parts.join("")}</div>`;
 }
 
-function contractedTooltipHtml(edge, pinned) {
+function contractedTooltipHtml(edge, pinned, hint = "click edge to pin details") {
   const hiddenCount = edge.segments.length - 1;
   const details = edge.segments
     .map(
@@ -1662,7 +2095,7 @@ function contractedTooltipHtml(edge, pinned) {
     ${contractedChainHtml(edge)}
     ${pinned
       ? `<ol class="connection-chain">${details}</ol>`
-      : '<p class="chain-hint">click edge to pin details</p>'}
+      : `<p class="chain-hint">${escapeHtml(hint)}</p>`}
     ${standardBlocks.length ? renderInlineStandardBlocks(standardBlocks) : ""}
   `;
 }
@@ -1704,33 +2137,24 @@ function renderInlineStandardBlocks(blocks) {
   `;
 }
 
-function hideConnection(force = false) {
-  if (state.pinnedEdge && !force) return;
-  connectionTooltip?.classList.remove("is-visible", "is-pinned", "has-standard-blocks");
-  if (force && !state.focusedId) focusOverview();
+function hideConnection(force = false, previewSourceKey = null) {
+  if (force) {
+    clearInspectorPreviews();
+    if (!state.focusedId && !state.pinnedEdge) focusOverview();
+  } else {
+    endInspectorPreview(previewSourceKey);
+  }
 }
 
 function focusConnection(edge) {
+  state.focusedId = null;
   clearActiveNodes();
   elements.moduleLayer.querySelector(`[data-node-id="${edge.to}"]`)?.classList.add("is-focused");
   elements.focusTitle.textContent = edge.connection.title;
-  const hops = (edge.segments || []).length > 1
-    ? edge.segments.slice(0, -1).map((segment) => nodeLabelById(segment.to)).join(" → ")
-    : null;
-  setFocusBody(`
-    <div class="focus-section">
-      <p>${edge.connection.inside}</p>
-      <dl class="focus-dl">
-        <dt>from</dt><dd>${edge.from}</dd>
-        <dt>to</dt><dd>${edge.to}</dd>
-        <dt>role</dt><dd>${edge.connection.role}</dd>
-        ${hops ? `<dt>via</dt><dd>${hops}</dd>` : ""}
-      </dl>
-    </div>
-  `);
+  setFocusBody(connectionInspectorHtml(edge, { expanded: true }), { selected: true });
 }
 
-function showNodePeek(node, module, expandable) {
+function showNodePeek(node, module, targetBoard, sourceKey) {
   const label = node.label || module?.label || node.id;
   const kind = node.kind === "operation" ? "operation" : module?.kind || node.kind || "module";
   showHoverPanel(`
@@ -1738,12 +2162,12 @@ function showNodePeek(node, module, expandable) {
     <strong class="rep-tooltip-title">${escapeHtml(label)}</strong>
     <div class="focus-section">
       <p>${node.role || module?.role || ""}</p>
-      ${expandable ? renderNestedBoardSummary(node.module_ref || node.id) : ""}
+      ${targetBoard ? renderNestedBoardSummary(targetBoard.id) : ""}
       ${module?.contains?.length ? renderContains(module.contains) : ""}
       ${module ? renderAttentionSummary(module) : ""}
       ${module ? renderReferences(module) : ""}
     </div>
-  `);
+  `, label, sourceKey);
 }
 
 function renderNestedBoardSummary(boardId) {
@@ -1762,12 +2186,13 @@ function focusOverview() {
   clearActiveNodes();
   const board = currentBoard();
   elements.focusTitle.textContent = board.title;
-  const drillTargets = visibleNodes(board).filter(
-    (node) => node.expandable && boardsById.has(node.module_ref || node.id),
-  );
+  const drillTargets = visibleNodes(board).filter((node) => targetBoardForNode(node));
+  const selectionHint = !drillTargets.length && board.id !== manifest.boards.rootBoard
+    ? '<p class="focus-empty-hint">Hover to preview a module, tensor, operation, or connection. Select it to keep the details here.</p>'
+    : "";
   setFocusBody(`
     <div class="focus-section">
-      <p>${board.summary}</p>
+      ${selectionHint}
       ${drillTargets.length
         ? `<h3>Open</h3><div class="summary-grid">${drillTargets.map(renderBoardSummaryNode).join("")}</div>`
         : ""}
@@ -1777,23 +2202,38 @@ function focusOverview() {
   `);
 }
 
+function onFocusBodyClick(event) {
+  const trigger = event.target.closest("[data-open-board]");
+  if (!trigger || !elements.focusBody.contains(trigger)) return;
+  pushBoard(trigger.dataset.openBoard, trigger.dataset.originNode);
+}
+
 function renderBoardSummaryNode(node) {
   const module = node.module_ref ? modulesById.get(node.module_ref) : null;
   const rep = node.rep_ref ? repsById.get(node.rep_ref) : null;
   const label = node.label || module?.label || rep?.id || node.id;
   const scale = node.scale || module?.scale || rep?.scale || node.kind;
   const detail = module?.kind || node.role || rep?.shape || node.kind;
+  const targetBoard = targetBoardForNode(node);
+  const boardId = targetBoard?.id || node.board_ref || node.module_ref || node.id;
   return `
-    <article class="mini-summary">
-      <span>${scale}</span>
-      <strong>${label}</strong>
-      <em>${detail}</em>
-    </article>
+    <button
+      type="button"
+      class="mini-summary is-drilldown"
+      data-open-board="${escapeHtml(boardId)}"
+      data-origin-node="${escapeHtml(node.id)}"
+      aria-label="Open ${escapeHtml(targetBoard?.title || label)}"
+      title="Open ${escapeHtml(targetBoard?.title || label)}"
+    >
+      <span>${escapeHtml(scale)}</span>
+      <strong>${escapeHtml(label)}</strong>
+      <em>${escapeHtml(detail)}</em>
+      <span class="arch-drill-cue" aria-hidden="true">Open detail <b>›</b></span>
+    </button>
   `;
 }
 
 function visibleNodes(board) {
-  if (editMode) return board.nodes || [];
   return (board.nodes || []).filter(
     (node) => !node.elide && node.prominence !== "hidden" && node.treatment !== "hidden",
   );
@@ -1860,7 +2300,7 @@ function focusModule(module) {
       ${renderReferences(module)}
       ${renderFocusLinks(module)}
     </div>
-  `);
+  `, { selected: true });
 }
 
 function focusOperation(node) {
@@ -1876,7 +2316,7 @@ function focusOperation(node) {
         <dt>node</dt><dd>${node.id}</dd>
       </dl>
     </div>
-  `);
+  `, { selected: true });
 }
 
 function clearActiveNodes() {
@@ -2015,13 +2455,14 @@ function shortPath(path = "") {
 function ensurePanZoom() {
   if (!canvasControls) {
     canvasControls = document.createElement("div");
-    canvasControls.className = "canvas-controls";
+    canvasControls.className = "canvas-controls board-chrome";
     canvasControls.innerHTML = `
-      <button type="button" data-zoom="out" aria-label="Zoom out" title="Zoom out">-</button>
-      <button type="button" data-zoom="fit" aria-label="Fit board to view" title="Fit board to view">&rarr;&larr;</button>
-      <button type="button" data-zoom="reset" aria-label="Actual size" title="Actual size (1:1)">1:1</button>
+      <button type="button" data-zoom="out" aria-label="Zoom out" title="Zoom out">−</button>
+      <button type="button" class="canvas-zoom-value" data-zoom="reset" aria-label="Reset geometric zoom to 100 percent" title="Reset geometric zoom to 100%">100%</button>
       <button type="button" data-zoom="in" aria-label="Zoom in" title="Zoom in">+</button>
+      <button type="button" class="canvas-fit-button" data-zoom="fit" aria-label="Fit board to view" title="Fit board to view">Fit</button>
     `;
+    canvasZoomValue = canvasControls.querySelector(".canvas-zoom-value");
     canvasControls.addEventListener("click", onCanvasControlClick);
     elements.canvas.appendChild(canvasControls);
   }
@@ -2053,7 +2494,7 @@ function onCanvasControlClick(event) {
 }
 
 function onCanvasWheel(event) {
-  if (event.target.closest(".board-breadcrumbs, .canvas-controls")) return;
+  if (event.target.closest(".board-chrome")) return;
   event.preventDefault();
   hideRepPeek();
   state.userMovedViewport = true;
@@ -2063,7 +2504,7 @@ function onCanvasWheel(event) {
 
 function onCanvasPointerDown(event) {
   if (event.button !== 0 && event.button !== 1) return;
-  if (event.target.closest(".arch-node, .arch-rep, .edge-hit, .board-breadcrumbs, .canvas-controls")) return;
+  if (event.target.closest(".arch-node, .arch-rep, .edge-hit, .board-chrome")) return;
   if (state.pinnedEdge) {
     state.pinnedEdge = null;
     hideConnection(true);
@@ -2098,7 +2539,10 @@ function endPan(event) {
 
 function zoomAtCanvasCenter(factor) {
   const rect = elements.canvas.getBoundingClientRect();
-  zoomAt(rect.left + rect.width / 2, rect.top + rect.height / 2, factor);
+  const baseX = elements.moduleLayer.offsetLeft;
+  const baseY = elements.moduleLayer.offsetTop;
+  const center = boardViewportCenter(rect, baseX, baseY);
+  zoomAt(rect.left + center.x, rect.top + center.y, factor);
 }
 
 function zoomAt(clientX, clientY, factor) {
@@ -2127,11 +2571,23 @@ function applyViewport() {
   const transform = `translate(${viewport.x}px, ${viewport.y}px) scale(${viewport.scale})`;
   elements.moduleLayer.style.transform = transform;
   elements.edgeLayer.style.transform = transform;
+  if (canvasZoomValue) canvasZoomValue.textContent = `${Math.round(viewport.scale * 100)}%`;
 }
 
 function clamp(value, min, max) {
   return Math.min(max, Math.max(min, value));
 }
 
-window.addEventListener("resize", renderEdges);
+window.addEventListener("resize", () => {
+  window.requestAnimationFrame(() => {
+    if (!state.userMovedViewport && !useElkLayout) {
+      const board = currentBoard();
+      const graph = displayGraph(board);
+      state.displayEdges = graph.edges;
+      applyGridColumnSizing(board, graph);
+    }
+    if (!state.isTransitioning && !state.userMovedViewport) fitToContent();
+    renderEdges();
+  });
+});
 render();
