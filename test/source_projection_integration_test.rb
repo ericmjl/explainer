@@ -1,6 +1,7 @@
 # frozen_string_literal: true
 
 require "minitest/autorun"
+require "json"
 require "yaml"
 require_relative "../lib/architecture_projection"
 
@@ -14,11 +15,33 @@ class SourceProjectionIntegrationTest < Minitest::Test
       architecture = load_yaml(source_set.fetch("architecture"))
       view = load_yaml(source_set.fetch("view"))
 
-      assert_equal "architecture-v0.3", architecture.fetch("schema_version"), source_set.fetch("id")
+      assert_equal "architecture-v0.4", architecture.fetch("schema_version"), source_set.fetch("id")
       assert_equal "visualization-v0.4", view.fetch("schema_version"), source_set.fetch("id")
+      assert_compiled_interfaces(source_set.fetch("id"), architecture)
+
+      Array(architecture["modules"]).each do |mod|
+        refute mod.key?("inputs"), "#{source_set.fetch('id')}/#{mod.fetch('id')} duplicates relation-owned inputs"
+        refute mod.key?("outputs"), "#{source_set.fetch('id')}/#{mod.fetch('id')} duplicates relation-owned outputs"
+      end
+      Array(architecture["conditioning"]).each do |conditioning|
+        refute conditioning.key?("source"), "#{source_set.fetch('id')}/#{conditioning.fetch('id')} duplicates its relation source"
+        refute conditioning.key?("target"), "#{source_set.fetch('id')}/#{conditioning.fetch('id')} duplicates its relation target"
+      end
+      Array(architecture["scale_transitions"]).each do |transition|
+        %w[source target from_scale to_scale projection projection_refs index_map].each do |field|
+          refute transition.key?(field), "#{source_set.fetch('id')}/#{transition.fetch('id')} duplicates derived #{field}"
+        end
+        refute_empty transition.fetch("relation_path")
+      end
+      Hash(architecture["state_semantics"]).each do |group_id, semantics|
+        %w[role produced_by consumed_by updated_by].each do |field|
+          refute semantics.key?(field), "#{source_set.fetch('id')}/#{group_id} duplicates #{field}"
+        end
+      end
 
       projector = ArchitectureProjection::Projector.new(architecture)
       projections = view.fetch("boards").to_h do |board|
+        refute board.key?("scale_lanes"), "#{source_set.fetch('id')}/#{board.fetch('id')} uses legacy renderer lanes"
         refute board.key?("edges"), "#{source_set.fetch('id')}/#{board.fetch('id')} re-authors semantic edges"
         projection = projector.project(board)
         refute_empty projection.fetch("edges"), "#{source_set.fetch('id')}/#{board.fetch('id')} has no projected flow"
@@ -37,6 +60,53 @@ class SourceProjectionIntegrationTest < Minitest::Test
   end
 
   private
+
+  def assert_compiled_interfaces(source_set_id, architecture)
+    manifest = load_manifest(source_set_id)
+    compiled = manifest.fetch("architecture")
+    assert_equal "architecture-manifest-v0.4", manifest.fetch("schemaVersion")
+    coverage = compiled.fetch("coverage")
+    assert_equal "declared_decomposition_closure", coverage.fetch("method")
+    assert_equal architecture.fetch("modules").length + 1,
+      coverage.fetch("summary").fetch("scopeCount")
+    refute coverage.fetch("summary").key?("percentage")
+    relations = architecture.fetch("relations").to_h do |relation|
+      ["relations.#{relation.fetch('id')}", relation]
+    end
+
+    compiled.fetch("conditioning").each do |conditioning|
+      relation = relations.fetch(conditioning.fetch("relation_ref"))
+      assert_equal relation.fetch("from"), conditioning.fetch("source")
+      assert_equal relation.fetch("to"), conditioning.fetch("target")
+    end
+
+    architecture.fetch("value_sites").each do |site|
+      site_ref = "value_sites.#{site.fetch('id')}"
+      interface = compiled.fetch("valueSiteInterfaces").fetch(site.fetch("id"))
+      expected_producers = architecture.fetch("relations").filter_map do |relation|
+        relation.fetch("from") if relation.fetch("to") == site_ref
+      end
+      expected_consumers = architecture.fetch("relations").filter_map do |relation|
+        relation.fetch("to") if relation.fetch("from") == site_ref
+      end
+      assert_equal expected_producers.uniq, interface.fetch("producerRefs")
+      assert_equal expected_consumers.uniq, interface.fetch("consumerRefs")
+    end
+
+    compiled_transitions = compiled.fetch("scaleTransitions").to_h { |item| [item.fetch("id"), item] }
+    architecture.fetch("scale_transitions").each do |transition|
+      first_relation = relations.fetch(transition.fetch("relation_path").first)
+      last_relation = relations.fetch(transition.fetch("relation_path").last)
+      compiled_transition = compiled_transitions.fetch(transition.fetch("id"))
+      assert_equal first_relation.fetch("from"), compiled_transition.fetch("source")
+      assert_equal last_relation.fetch("to"), compiled_transition.fetch("target")
+    end
+  end
+
+  def load_manifest(source_set_id)
+    source = File.read(File.join(ROOT, "renderer/architecture/manifest-#{source_set_id}.js"))
+    JSON.parse(source.sub(/\Aexport const manifest = /, "").sub(/;\s*\z/, ""))
+  end
 
   def load_yaml(path)
     YAML.load_file(File.join(ROOT, path), aliases: true)

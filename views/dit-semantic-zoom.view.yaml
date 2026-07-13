@@ -10,7 +10,6 @@ boards:
   summary: DiT generates an image by iteratively denoising a random four-channel latent under a class label, undoing the latent scaling used during training, and decoding the final latent with a frozen VAE.
   subject_ref: architecture
   expansion_depth: 1
-  scale_lanes: false
   grid:
     columns: 8
     rows: 4
@@ -103,7 +102,6 @@ boards:
   parent: generation_overview
   subject_ref: modules.ddpm_sampler
   expansion_depth: 1
-  scale_lanes: false
   grid:
     columns: 9
     rows: 5
@@ -262,7 +260,6 @@ boards:
   parent: sampling_loop
   subject_ref: modules.dit_denoiser
   expansion_depth: 1
-  scale_lanes: false
   grid:
     columns: 8
     rows: 5
@@ -471,7 +468,6 @@ boards:
   parent: dit_pipeline
   subject_ref: modules.dit_blocks
   expansion_depth: 1
-  scale_lanes: false
   grid:
     columns: 12
     rows: 4

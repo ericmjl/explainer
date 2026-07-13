@@ -3,11 +3,14 @@
 
 require "set"
 require "yaml"
+require_relative "../lib/architecture_coverage"
 require_relative "../lib/architecture_projection"
+require_relative "../lib/architecture_ownership"
 
 ROOT = File.expand_path("..", __dir__)
 REGISTRY = "architectures/index.yaml"
-ARCHITECTURE_SCHEMA_VERSIONS = Set["architecture-v0.1", "architecture-v0.2", "architecture-v0.3"].freeze
+BIBLIOGRAPHY_SCHEMA_VERSIONS = Set["bibliography-v0.1"].freeze
+ARCHITECTURE_SCHEMA_VERSIONS = Set["architecture-v0.1", "architecture-v0.2", "architecture-v0.3", "architecture-v0.4"].freeze
 VIEW_SCHEMA_VERSIONS = Set["visualization-v0.1", "visualization-v0.2", "visualization-v0.3", "visualization-v0.4"].freeze
 SNAKE_CASE_ID = /\A[a-z][a-z0-9_]*\z/
 
@@ -44,6 +47,56 @@ def require_unique_ids(label, items)
   seen
 end
 
+def lint_source_ref(label, ref, require_role: false)
+  unless ref.is_a?(Hash)
+    @errors << "#{label} must be an object"
+    return
+  end
+  source_ref = ref["source_ref"]
+  @errors << "#{label} missing source_ref" unless source_ref
+  role = ref["role"]
+  @errors << "#{label} missing role" if require_role && !role
+  @errors << "#{label} role #{role.inspect} is not snake_case" if role && !SNAKE_CASE_ID.match?(role)
+end
+
+def lint_source_ref_targets(value, label)
+  case value
+  when Hash
+    source_ref = value["source_ref"]
+    if source_ref && !@bibliography_ids.include?(source_ref)
+      @errors << "#{label} references unknown bibliography source #{source_ref}"
+    end
+    value.each do |key, child|
+      lint_source_ref_targets(child, "#{label}.#{key}")
+    end
+  when Array
+    value.each_with_index do |child, index|
+      lint_source_ref_targets(child, "#{label}[#{index}]")
+    end
+  end
+end
+
+def lint_bibliography(bibliography)
+  schema_version = bibliography["schema_version"]
+  unless BIBLIOGRAPHY_SCHEMA_VERSIONS.include?(schema_version)
+    @errors << "unsupported bibliography schema_version #{schema_version.inspect}"
+  end
+  sources = Array(bibliography["sources"])
+  source_ids = require_unique_ids("bibliography source", sources)
+  sources.each_with_index do |source, index|
+    id = source["id"] || "at index #{index}"
+    @errors << "bibliography source #{id} is not snake_case" if source["id"] && !SNAKE_CASE_ID.match?(source["id"])
+    @errors << "bibliography source #{id} missing kind" unless source["kind"]
+    @errors << "bibliography source #{id} missing title" unless source["title"]
+    @errors << "bibliography source #{id} needs url or path" unless source["url"] || source["path"]
+    next unless source["kind"] == "paper"
+
+    @errors << "paper source #{id} missing authors" if Array(source["authors"]).empty?
+    @errors << "paper source #{id} missing year" unless source["year"]
+  end
+  source_ids
+end
+
 def require_evidence(label, item)
   evidence = item["evidence"]
   unless evidence.is_a?(Hash)
@@ -53,6 +106,9 @@ def require_evidence(label, item)
   @errors << "#{label} missing evidence.status" unless evidence["status"]
   refs = evidence["refs"]
   @errors << "#{label} missing evidence.refs" if !refs.is_a?(Array) || refs.empty?
+  Array(refs).each_with_index do |ref, index|
+    lint_source_ref("#{label} evidence ref #{index}", ref, require_role: true)
+  end
 end
 
 def architecture_ref_exists?(ref, module_ids, rep_ids, value_site_ids, claim_ids, relation_ids = Set.new)
@@ -98,26 +154,34 @@ def collect_standard_blocks
 end
 
 def lint_architecture(arch, standard_blocks)
+  lint_source_ref_targets(arch, "architecture #{arch['id'] || 'unknown'}")
   schema_version = arch["schema_version"]
   unless ARCHITECTURE_SCHEMA_VERSIONS.include?(schema_version)
     @errors << "unsupported architecture schema_version #{schema_version.inspect}"
   end
+  ArchitectureOwnership.errors(arch).each { |error| @errors << "architecture ownership: #{error}" }
+  ArchitectureCoverage.errors(arch).each { |error| @errors << "architecture coverage: #{error}" }
   if schema_version == "architecture-v0.2"
     @errors << "architecture-v0.2 source missing relations" unless arch.key?("relations")
     @errors << "architecture-v0.2 source still uses legacy edges" if arch.key?("edges")
   end
-  if schema_version == "architecture-v0.3"
-    @errors << "architecture-v0.3 source missing value_sites" unless arch.key?("value_sites")
-    @errors << "architecture-v0.3 source missing relations" unless arch.key?("relations")
-    @errors << "architecture-v0.3 source still uses legacy edges" if arch.key?("edges")
+  if %w[architecture-v0.3 architecture-v0.4].include?(schema_version)
+    @errors << "#{schema_version} source missing value_sites" unless arch.key?("value_sites")
+    @errors << "#{schema_version} source missing relations" unless arch.key?("relations")
+    @errors << "#{schema_version} source still uses legacy edges" if arch.key?("edges")
   end
+
+  Array(arch["sources"]).each_with_index do |ref, index|
+    lint_source_ref("architecture source ref #{index}", ref, require_role: true)
+  end
+  require_evidence("architecture decomposition", arch["decomposition"]) if schema_version == "architecture-v0.4"
 
   module_ids = require_unique_ids("architecture module", arch["modules"])
   rep_ids = require_unique_ids("architecture representation", arch["representations"])
   value_site_ids = require_unique_ids("architecture value site", arch["value_sites"])
   claim_ids = require_unique_ids("architecture claim", arch["claims"])
   relations = architecture_relations(arch)
-  relation_ids = if %w[architecture-v0.2 architecture-v0.3].include?(schema_version)
+  relation_ids = if %w[architecture-v0.2 architecture-v0.3 architecture-v0.4].include?(schema_version)
     require_unique_ids("architecture relation", relations)
   else
     Set.new(ids(relations))
@@ -126,13 +190,13 @@ def lint_architecture(arch, standard_blocks)
     relation_id = relation["id"]
     acc[relation_id] = relation if relation_id
   end
-  known_nodes = if schema_version == "architecture-v0.3"
+  known_nodes = if %w[architecture-v0.3 architecture-v0.4].include?(schema_version)
     Set.new(module_ids.map { |id| "modules.#{id}" } + value_site_ids.map { |id| "value_sites.#{id}" })
   else
     module_ids | rep_ids
   end
 
-  if %w[architecture-v0.2 architecture-v0.3].include?(schema_version)
+  if %w[architecture-v0.2 architecture-v0.3 architecture-v0.4].include?(schema_version)
     relations.each_with_index do |relation, index|
       relation_id = relation["id"]
       @errors << "architecture relation at index #{index} missing id" unless relation_id
@@ -167,7 +231,7 @@ def lint_architecture(arch, standard_blocks)
     to = relation["to"]
     @errors << "architecture relation #{relation_id} has unknown from node #{from}" unless known_nodes.include?(from)
     @errors << "architecture relation #{relation_id} has unknown to node #{to}" unless known_nodes.include?(to)
-    if schema_version == "architecture-v0.3"
+    if %w[architecture-v0.3 architecture-v0.4].include?(schema_version)
       @errors << "architecture relation #{relation_id} missing kind" unless relation["kind"]
       Array(relation["carries"]).each do |carry|
         @errors << "architecture relation #{relation_id} carries unknown representation #{carry}" unless rep_ids.include?(untyped_ref(carry, "representations"))
@@ -178,10 +242,17 @@ def lint_architecture(arch, standard_blocks)
 
   Array(arch["claims"]).each { |claim| require_evidence("claim #{claim['id']}", claim) }
 
-  Hash(arch["state_semantics"]).each_key do |rep_id|
-    valid_state_ref = rep_ids.include?(rep_id) || value_site_ids.include?(rep_id) ||
-                      (rep_id.start_with?("value_sites.") && value_site_ids.include?(untyped_ref(rep_id, "value_sites")))
-    @errors << "state_semantics references unknown representation/value site #{rep_id}" unless valid_state_ref
+  unless schema_version == "architecture-v0.4"
+    Hash(arch["state_semantics"]).each_key do |rep_id|
+      valid_state_ref = rep_ids.include?(rep_id) || value_site_ids.include?(rep_id) ||
+                        (rep_id.start_with?("value_sites.") && value_site_ids.include?(untyped_ref(rep_id, "value_sites")))
+      @errors << "state_semantics references unknown representation/value site #{rep_id}" unless valid_state_ref
+    end
+  end
+  if schema_version == "architecture-v0.4"
+    Hash(arch["state_semantics"]).each do |group_id, semantics|
+      require_evidence("state_semantics #{group_id}", semantics)
+    end
   end
 
   Array(arch["conditioning"]).each do |conditioning|
@@ -189,25 +260,27 @@ def lint_architecture(arch, standard_blocks)
     @errors << "conditioning #{conditioning['id']} references missing standard block #{ref}" if ref && !standard_blocks.key?(ref)
     source = conditioning["source"]
     target = conditioning["target"]
-    if source && !rep_ids.include?(source) && !source.include?(".")
-      @errors << "conditioning #{conditioning['id']} has unknown source #{source}"
-    end
-    relation_ref = conditioning["relation_ref"]
-    relation_id = untyped_ref(relation_ref, "relations")
-    if schema_version == "architecture-v0.2" && !relation_ref
-      @errors << "conditioning #{conditioning['id']} missing relation_ref"
-    elsif relation_ref
-      relation = relations_by_id[relation_id]
-      unless relation
-        @errors << "conditioning #{conditioning['id']} references unknown relation #{relation_ref}"
-      else
-        unless relation["kind"] == "conditioning"
-          @errors << "conditioning #{conditioning['id']} relation #{relation_ref} must have kind conditioning"
-        end
-        source_node = schema_version == "architecture-v0.3" ? source : source.to_s.split(".", 2).first
-        target_node = schema_version == "architecture-v0.3" ? target : target.to_s.split(".", 2).first
-        unless relation["from"] == source_node && relation["to"] == target_node
-          @errors << "conditioning #{conditioning['id']} resolves to #{source_node}->#{target_node}, but relation #{relation_ref} is #{relation['from']}->#{relation['to']}"
+    unless schema_version == "architecture-v0.4"
+      if source && !rep_ids.include?(source) && !source.include?(".")
+        @errors << "conditioning #{conditioning['id']} has unknown source #{source}"
+      end
+      relation_ref = conditioning["relation_ref"]
+      relation_id = untyped_ref(relation_ref, "relations")
+      if schema_version == "architecture-v0.2" && !relation_ref
+        @errors << "conditioning #{conditioning['id']} missing relation_ref"
+      elsif relation_ref
+        relation = relations_by_id[relation_id]
+        unless relation
+          @errors << "conditioning #{conditioning['id']} references unknown relation #{relation_ref}"
+        else
+          unless relation["kind"] == "conditioning"
+            @errors << "conditioning #{conditioning['id']} relation #{relation_ref} must have kind conditioning"
+          end
+          source_node = schema_version == "architecture-v0.3" ? source : source.to_s.split(".", 2).first
+          target_node = schema_version == "architecture-v0.3" ? target : target.to_s.split(".", 2).first
+          unless relation["from"] == source_node && relation["to"] == target_node
+            @errors << "conditioning #{conditioning['id']} resolves to #{source_node}->#{target_node}, but relation #{relation_ref} is #{relation['from']}->#{relation['to']}"
+          end
         end
       end
     end
@@ -217,15 +290,17 @@ def lint_architecture(arch, standard_blocks)
   Array(arch["scale_transitions"]).each do |transition|
     ref = transition["standard_block_ref"]
     @errors << "scale transition #{transition['id']} references missing standard block #{ref}" if ref && !standard_blocks.key?(ref)
-    %w[source target index_map].each do |field|
-      value = transition[field]
-      next unless value
-      valid_transition_ref = if schema_version == "architecture-v0.3" && %w[source target index_map].include?(field)
-        value_site_ids.include?(untyped_ref(value, "value_sites"))
-      else
-        rep_ids.include?(untyped_ref(value, "representations"))
+    unless schema_version == "architecture-v0.4"
+      %w[source target index_map].each do |field|
+        value = transition[field]
+        next unless value
+        valid_transition_ref = if schema_version == "architecture-v0.3" && %w[source target index_map].include?(field)
+          value_site_ids.include?(untyped_ref(value, "value_sites"))
+        else
+          rep_ids.include?(untyped_ref(value, "representations"))
+        end
+        @errors << "scale transition #{transition['id']} has unknown #{field} #{value}" unless valid_transition_ref
       end
-      @errors << "scale transition #{transition['id']} has unknown #{field} #{value}" unless valid_transition_ref
     end
     require_evidence("scale transition #{transition['id']}", transition)
   end
@@ -264,9 +339,36 @@ def lint_board_elision(board)
   end
 end
 
+def lint_board_lanes(board)
+  board_id = board["id"]
+  if board.key?("scale_lanes")
+    @errors << "board #{board_id} uses legacy scale_lanes; omit lanes for the default or declare explicit lanes"
+  end
+  lanes = board["lanes"]
+  return unless lanes
+  unless lanes.is_a?(Array)
+    @errors << "board #{board_id} lanes must be an array"
+    return
+  end
+
+  lane_ids = require_unique_ids("lane on board #{board_id}", lanes)
+  lane_ids.each do |id|
+    @errors << "board #{board_id} lane id #{id} is not snake_case" unless SNAKE_CASE_ID.match?(id)
+  end
+  lanes.each_with_index do |lane, index|
+    @errors << "board #{board_id} lane at index #{index} missing id" unless lane["id"]
+    label = lane["label"]
+    position = lane["position"]
+    @errors << "board #{board_id} lane #{lane['id'] || index} missing label" unless label.is_a?(String) && !label.empty?
+    unless position.is_a?(Numeric) && position.between?(0, 100)
+      @errors << "board #{board_id} lane #{lane['id'] || index} position must be between 0 and 100"
+    end
+  end
+end
+
 def lint_projected_view(view, arch)
-  unless arch["schema_version"] == "architecture-v0.3"
-    @errors << "visualization-v0.4 requires architecture-v0.3"
+  unless %w[architecture-v0.3 architecture-v0.4].include?(arch["schema_version"])
+    @errors << "visualization-v0.4 requires architecture-v0.3 or architecture-v0.4"
     return
   end
 
@@ -277,11 +379,19 @@ def lint_projected_view(view, arch)
   @errors << "view root_board #{root} is not a board id" unless board_ids.include?(root)
 
   projector = ArchitectureProjection::Projector.new(arch)
+  modules_by_ref = Array(arch["modules"]).to_h { |mod| ["modules.#{mod['id']}", mod] }
   boards.each do |board|
     board_id = board["id"]
+    lint_board_lanes(board)
     parent = board["parent"]
     @errors << "board #{board_id} references unknown parent #{parent}" if parent && !board_ids.include?(parent)
     @errors << "board #{board_id} cannot be its own parent" if parent == board_id
+    subject_ref = board["subject_ref"]
+    subject = subject_ref == "architecture" ? arch : modules_by_ref[subject_ref]
+    subject_status = subject&.dig("decomposition", "status")
+    if %w[leaf opaque].include?(subject_status)
+      @errors << "board #{board_id} expands #{subject_ref}, but its decomposition status is #{subject_status}"
+    end
 
     Array(board["nodes"]).each do |node|
       board_ref = node["board_ref"]
@@ -335,8 +445,8 @@ def lint_view(view, arch, module_ids, rep_ids, relations_by_id)
     lint_projected_view(view, arch)
     return
   end
-  if arch["schema_version"] == "architecture-v0.3"
-    @errors << "architecture-v0.3 requires visualization-v0.4, got #{schema_version.inspect}"
+  if %w[architecture-v0.3 architecture-v0.4].include?(arch["schema_version"])
+    @errors << "#{arch['schema_version']} requires visualization-v0.4, got #{schema_version.inspect}"
     return
   end
   strict_provenance = schema_version == "visualization-v0.3"
@@ -349,6 +459,7 @@ def lint_view(view, arch, module_ids, rep_ids, relations_by_id)
 
   boards.each do |board|
     board_id = board["id"]
+    lint_board_lanes(board)
     parent = board["parent"]
     @errors << "board #{board_id} references unknown parent #{parent}" if parent && !board_ids.include?(parent)
     @errors << "board #{board_id} cannot be its own parent" if parent == board_id
@@ -454,9 +565,14 @@ def lint_view(view, arch, module_ids, rep_ids, relations_by_id)
 end
 
 def lint_pseudocode(program, module_ids, rep_ids, value_site_ids, claim_ids, relation_ids, standard_blocks)
+  lint_source_ref_targets(program, "pseudocode #{program['id'] || 'unknown'}")
   source_ids = require_unique_ids("pseudocode source", program["sources"])
   symbol_ids = require_unique_ids("pseudocode symbol", program["symbols"])
   line_ids = require_unique_ids("pseudocode line", program["lines"])
+
+  Array(program["sources"]).each_with_index do |ref, index|
+    lint_source_ref("pseudocode source #{ref['id'] || index}", ref)
+  end
 
   Array(program["symbols"]).each do |symbol|
     ref = symbol["architecture_ref"]
@@ -508,6 +624,13 @@ end
 
 standard_blocks = collect_standard_blocks
 registry = load_yaml(REGISTRY)
+bibliography_path = registry["bibliography"]
+if bibliography_path
+  @bibliography_ids = lint_bibliography(load_yaml(bibliography_path))
+else
+  @errors << "registry missing bibliography"
+  @bibliography_ids = Set.new
+end
 
 Array(registry["source_sets"]).each do |source_set|
   arch = load_yaml(source_set.fetch("architecture"))

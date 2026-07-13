@@ -1,15 +1,157 @@
 export const manifest = {
-  "schemaVersion": "architecture-manifest-v0.3",
+  "schemaVersion": "architecture-manifest-v0.4",
   "architecture": {
-    "schemaVersion": "architecture-v0.3",
+    "schemaVersion": "architecture-v0.4",
     "id": "generic_feature_refinement",
     "name": "Generic Feature Refinement Pipeline",
     "status": "draft",
     "sourceYaml": "../../architectures/generic-feature-refinement.yaml",
+    "sources": [
+      {
+        "source_ref": "generic_feature_refinement_source",
+        "role": "architecture_source"
+      },
+      {
+        "source_ref": "architecture_language_protocol",
+        "role": "specification"
+      }
+    ],
+    "decomposition": {
+      "status": "complete",
+      "evidence": {
+        "status": "inferred",
+        "refs": [
+          {
+            "source_ref": "generic_feature_refinement_source",
+            "role": "scaffold_evidence",
+            "note": "The root child set is exhaustive for this intentionally bounded demonstration architecture."
+          }
+        ]
+      }
+    },
+    "coverage": {
+      "method": "declared_decomposition_closure",
+      "scopes": {
+        "architecture": {
+          "status": "complete",
+          "depth": 0,
+          "immediateModuleCount": 7,
+          "immediateModuleRefs": [
+            "modules.input_adapter",
+            "modules.context_builder",
+            "modules.item_encoder",
+            "modules.item_to_group_pool",
+            "modules.group_refiner",
+            "modules.output_decoder",
+            "modules.output_heads"
+          ]
+        },
+        "modules.input_adapter": {
+          "status": "leaf",
+          "depth": 1,
+          "immediateModuleCount": 0,
+          "immediateModuleRefs": [
+
+          ]
+        },
+        "modules.context_builder": {
+          "status": "leaf",
+          "depth": 1,
+          "immediateModuleCount": 0,
+          "immediateModuleRefs": [
+
+          ]
+        },
+        "modules.item_encoder": {
+          "status": "complete",
+          "depth": 1,
+          "immediateModuleCount": 2,
+          "immediateModuleRefs": [
+            "modules.item_adaln",
+            "modules.local_attention_stack"
+          ]
+        },
+        "modules.item_adaln": {
+          "status": "leaf",
+          "depth": 2,
+          "immediateModuleCount": 0,
+          "immediateModuleRefs": [
+
+          ]
+        },
+        "modules.local_attention_stack": {
+          "status": "leaf",
+          "depth": 2,
+          "immediateModuleCount": 0,
+          "immediateModuleRefs": [
+
+          ]
+        },
+        "modules.item_to_group_pool": {
+          "status": "leaf",
+          "depth": 1,
+          "immediateModuleCount": 0,
+          "immediateModuleRefs": [
+
+          ]
+        },
+        "modules.group_refiner": {
+          "status": "complete",
+          "depth": 1,
+          "immediateModuleCount": 1,
+          "immediateModuleRefs": [
+            "modules.pair_biased_attention"
+          ]
+        },
+        "modules.pair_biased_attention": {
+          "status": "leaf",
+          "depth": 2,
+          "immediateModuleCount": 0,
+          "immediateModuleRefs": [
+
+          ]
+        },
+        "modules.output_decoder": {
+          "status": "leaf",
+          "depth": 1,
+          "immediateModuleCount": 0,
+          "immediateModuleRefs": [
+
+          ]
+        },
+        "modules.output_heads": {
+          "status": "leaf",
+          "depth": 1,
+          "immediateModuleCount": 0,
+          "immediateModuleRefs": [
+
+          ]
+        }
+      },
+      "summary": {
+        "scopeCount": 11,
+        "expandedScopeCount": 3,
+        "completeExpandedScopeCount": 3,
+        "partialScopeCount": 0,
+        "leafFrontierCount": 8,
+        "opaqueFrontierCount": 0,
+        "partialFrontierCount": 0,
+        "maximumAuthoredDepth": 2
+      },
+      "opaqueFrontierRefs": [
+
+      ],
+      "partialScopeRefs": [
+
+      ]
+    },
     "modules": [
       {
         "id": "input_adapter",
         "parent_ref": "architecture",
+        "decomposition": {
+          "status": "leaf"
+        },
         "label": "Input Adapter",
         "kind": "feature_adapter",
         "role": "embed raw records and build initial item state, conditioning signal, masks, and grouping indices",
@@ -18,8 +160,8 @@ export const manifest = {
           "status": "inferred",
           "refs": [
             {
-              "kind": "source",
-              "path": "architectures/generic-feature-refinement.yaml"
+              "source_ref": "generic_feature_refinement_source",
+              "role": "scaffold_evidence"
             }
           ]
         }
@@ -27,6 +169,9 @@ export const manifest = {
       {
         "id": "context_builder",
         "parent_ref": "architecture",
+        "decomposition": {
+          "status": "leaf"
+        },
         "label": "Context Builder",
         "kind": "pair_context_builder",
         "role": "construct pair/context features used later as attention bias",
@@ -35,8 +180,8 @@ export const manifest = {
           "status": "inferred",
           "refs": [
             {
-              "kind": "source",
-              "path": "architectures/generic-feature-refinement.yaml"
+              "source_ref": "generic_feature_refinement_source",
+              "role": "scaffold_evidence"
             }
           ]
         }
@@ -44,6 +189,9 @@ export const manifest = {
       {
         "id": "item_encoder",
         "parent_ref": "architecture",
+        "decomposition": {
+          "status": "complete"
+        },
         "label": "Item Encoder",
         "kind": "attention_stack",
         "role": "update fine-scale item state with local attention and per-item conditioning",
@@ -58,8 +206,8 @@ export const manifest = {
           "status": "inferred",
           "refs": [
             {
-              "kind": "source",
-              "path": "architectures/generic-feature-refinement.yaml"
+              "source_ref": "generic_feature_refinement_source",
+              "role": "scaffold_evidence"
             }
           ]
         }
@@ -67,6 +215,9 @@ export const manifest = {
       {
         "id": "item_adaln",
         "parent_ref": "modules.item_encoder",
+        "decomposition": {
+          "status": "leaf"
+        },
         "label": "Per-item AdaLN",
         "kind": "adaptive_normalization",
         "role": "produce shift, scale, and gate for each item update",
@@ -76,8 +227,8 @@ export const manifest = {
           "status": "inferred",
           "refs": [
             {
-              "kind": "source",
-              "path": "architectures/generic-feature-refinement.yaml"
+              "source_ref": "generic_feature_refinement_source",
+              "role": "scaffold_evidence"
             }
           ]
         }
@@ -85,6 +236,9 @@ export const manifest = {
       {
         "id": "local_attention_stack",
         "parent_ref": "modules.item_encoder",
+        "decomposition": {
+          "status": "leaf"
+        },
         "label": "Local Attention Stack",
         "kind": "attention_update",
         "role": "apply local attention and feedforward updates to the modulated item stream",
@@ -104,8 +258,8 @@ export const manifest = {
           "status": "inferred",
           "refs": [
             {
-              "kind": "source",
-              "path": "architectures/generic-feature-refinement.yaml"
+              "source_ref": "generic_feature_refinement_source",
+              "role": "scaffold_evidence"
             }
           ]
         }
@@ -113,6 +267,9 @@ export const manifest = {
       {
         "id": "item_to_group_pool",
         "parent_ref": "architecture",
+        "decomposition": {
+          "status": "leaf"
+        },
         "label": "Item-to-Group Pool",
         "kind": "scale_transition",
         "role": "compress item states into group states using an ownership index",
@@ -121,8 +278,8 @@ export const manifest = {
           "status": "inferred",
           "refs": [
             {
-              "kind": "source",
-              "path": "architectures/generic-feature-refinement.yaml"
+              "source_ref": "generic_feature_refinement_source",
+              "role": "scaffold_evidence"
             }
           ]
         }
@@ -130,6 +287,9 @@ export const manifest = {
       {
         "id": "group_refiner",
         "parent_ref": "architecture",
+        "decomposition": {
+          "status": "complete"
+        },
         "label": "Group Refiner",
         "kind": "attention_stack",
         "role": "update compressed group state with full attention and pair/context bias",
@@ -144,8 +304,8 @@ export const manifest = {
           "status": "inferred",
           "refs": [
             {
-              "kind": "source",
-              "path": "architectures/generic-feature-refinement.yaml"
+              "source_ref": "generic_feature_refinement_source",
+              "role": "scaffold_evidence"
             }
           ]
         }
@@ -153,6 +313,9 @@ export const manifest = {
       {
         "id": "pair_biased_attention",
         "parent_ref": "modules.group_refiner",
+        "decomposition": {
+          "status": "leaf"
+        },
         "label": "Pair-biased Attention",
         "kind": "attention_update",
         "role": "update group state with full attention and pair/context logit bias",
@@ -174,8 +337,8 @@ export const manifest = {
           "status": "inferred",
           "refs": [
             {
-              "kind": "source",
-              "path": "architectures/generic-feature-refinement.yaml"
+              "source_ref": "generic_feature_refinement_source",
+              "role": "scaffold_evidence"
             }
           ]
         }
@@ -183,6 +346,9 @@ export const manifest = {
       {
         "id": "output_decoder",
         "parent_ref": "architecture",
+        "decomposition": {
+          "status": "leaf"
+        },
         "label": "Output Decoder",
         "kind": "decoder",
         "role": "broadcast group output back to item resolution and fuse the item skip state",
@@ -191,8 +357,8 @@ export const manifest = {
           "status": "inferred",
           "refs": [
             {
-              "kind": "source",
-              "path": "architectures/generic-feature-refinement.yaml"
+              "source_ref": "generic_feature_refinement_source",
+              "role": "scaffold_evidence"
             }
           ]
         }
@@ -200,6 +366,9 @@ export const manifest = {
       {
         "id": "output_heads",
         "parent_ref": "architecture",
+        "decomposition": {
+          "status": "leaf"
+        },
         "label": "Output Heads",
         "kind": "prediction_heads",
         "role": "project decoded item state to task-specific predictions",
@@ -208,8 +377,8 @@ export const manifest = {
           "status": "inferred",
           "refs": [
             {
-              "kind": "source",
-              "path": "architectures/generic-feature-refinement.yaml"
+              "source_ref": "generic_feature_refinement_source",
+              "role": "scaffold_evidence"
             }
           ]
         }
@@ -229,8 +398,8 @@ export const manifest = {
           "status": "inferred",
           "refs": [
             {
-              "kind": "source",
-              "path": "architectures/generic-feature-refinement.yaml"
+              "source_ref": "generic_feature_refinement_source",
+              "role": "scaffold_evidence"
             }
           ]
         }
@@ -248,8 +417,8 @@ export const manifest = {
           "status": "inferred",
           "refs": [
             {
-              "kind": "source",
-              "path": "architectures/generic-feature-refinement.yaml"
+              "source_ref": "generic_feature_refinement_source",
+              "role": "scaffold_evidence"
             }
           ]
         }
@@ -266,8 +435,8 @@ export const manifest = {
           "status": "inferred",
           "refs": [
             {
-              "kind": "source",
-              "path": "architectures/generic-feature-refinement.yaml"
+              "source_ref": "generic_feature_refinement_source",
+              "role": "scaffold_evidence"
             }
           ]
         }
@@ -285,8 +454,8 @@ export const manifest = {
           "status": "inferred",
           "refs": [
             {
-              "kind": "source",
-              "path": "architectures/generic-feature-refinement.yaml"
+              "source_ref": "generic_feature_refinement_source",
+              "role": "scaffold_evidence"
             }
           ]
         }
@@ -303,8 +472,8 @@ export const manifest = {
           "status": "inferred",
           "refs": [
             {
-              "kind": "source",
-              "path": "architectures/generic-feature-refinement.yaml"
+              "source_ref": "generic_feature_refinement_source",
+              "role": "scaffold_evidence"
             }
           ]
         }
@@ -322,8 +491,8 @@ export const manifest = {
           "status": "inferred",
           "refs": [
             {
-              "kind": "source",
-              "path": "architectures/generic-feature-refinement.yaml"
+              "source_ref": "generic_feature_refinement_source",
+              "role": "scaffold_evidence"
             }
           ]
         }
@@ -341,8 +510,8 @@ export const manifest = {
           "status": "inferred",
           "refs": [
             {
-              "kind": "source",
-              "path": "architectures/generic-feature-refinement.yaml"
+              "source_ref": "generic_feature_refinement_source",
+              "role": "scaffold_evidence"
             }
           ]
         }
@@ -359,8 +528,8 @@ export const manifest = {
           "status": "inferred",
           "refs": [
             {
-              "kind": "source",
-              "path": "architectures/generic-feature-refinement.yaml"
+              "source_ref": "generic_feature_refinement_source",
+              "role": "scaffold_evidence"
             }
           ]
         }
@@ -377,8 +546,8 @@ export const manifest = {
           "status": "inferred",
           "refs": [
             {
-              "kind": "source",
-              "path": "architectures/generic-feature-refinement.yaml"
+              "source_ref": "generic_feature_refinement_source",
+              "role": "scaffold_evidence"
             }
           ]
         }
@@ -392,8 +561,8 @@ export const manifest = {
           "status": "inferred",
           "refs": [
             {
-              "kind": "source",
-              "path": "architectures/generic-feature-refinement.yaml"
+              "source_ref": "generic_feature_refinement_source",
+              "role": "scaffold_evidence"
             }
           ]
         }
@@ -407,8 +576,8 @@ export const manifest = {
           "status": "inferred",
           "refs": [
             {
-              "kind": "source",
-              "path": "architectures/generic-feature-refinement.yaml"
+              "source_ref": "generic_feature_refinement_source",
+              "role": "scaffold_evidence"
             }
           ]
         }
@@ -422,8 +591,8 @@ export const manifest = {
           "status": "inferred",
           "refs": [
             {
-              "kind": "source",
-              "path": "architectures/generic-feature-refinement.yaml"
+              "source_ref": "generic_feature_refinement_source",
+              "role": "scaffold_evidence"
             }
           ]
         }
@@ -437,8 +606,8 @@ export const manifest = {
           "status": "inferred",
           "refs": [
             {
-              "kind": "source",
-              "path": "architectures/generic-feature-refinement.yaml"
+              "source_ref": "generic_feature_refinement_source",
+              "role": "scaffold_evidence"
             }
           ]
         }
@@ -452,8 +621,8 @@ export const manifest = {
           "status": "inferred",
           "refs": [
             {
-              "kind": "source",
-              "path": "architectures/generic-feature-refinement.yaml"
+              "source_ref": "generic_feature_refinement_source",
+              "role": "scaffold_evidence"
             }
           ]
         }
@@ -467,8 +636,8 @@ export const manifest = {
           "status": "inferred",
           "refs": [
             {
-              "kind": "source",
-              "path": "architectures/generic-feature-refinement.yaml"
+              "source_ref": "generic_feature_refinement_source",
+              "role": "scaffold_evidence"
             }
           ]
         }
@@ -482,8 +651,8 @@ export const manifest = {
           "status": "inferred",
           "refs": [
             {
-              "kind": "source",
-              "path": "architectures/generic-feature-refinement.yaml"
+              "source_ref": "generic_feature_refinement_source",
+              "role": "scaffold_evidence"
             }
           ]
         }
@@ -497,8 +666,8 @@ export const manifest = {
           "status": "inferred",
           "refs": [
             {
-              "kind": "source",
-              "path": "architectures/generic-feature-refinement.yaml"
+              "source_ref": "generic_feature_refinement_source",
+              "role": "scaffold_evidence"
             }
           ]
         }
@@ -513,13 +682,163 @@ export const manifest = {
           "status": "inferred",
           "refs": [
             {
-              "kind": "source",
-              "path": "architectures/generic-feature-refinement.yaml"
+              "source_ref": "generic_feature_refinement_source",
+              "role": "scaffold_evidence"
             }
           ]
         }
       }
     ],
+    "valueSiteInterfaces": {
+      "raw_records_input": {
+        "incomingRelationRefs": [
+
+        ],
+        "outgoingRelationRefs": [
+          "relations.raw_records_enter_input_adapter"
+        ],
+        "producerRefs": [
+
+        ],
+        "consumerRefs": [
+          "modules.input_adapter"
+        ]
+      },
+      "item_state_before_encoder": {
+        "incomingRelationRefs": [
+          "relations.input_adapter_initializes_item_state"
+        ],
+        "outgoingRelationRefs": [
+          "relations.item_state_feeds_context_builder",
+          "relations.item_state_enters_item_adaln"
+        ],
+        "producerRefs": [
+          "modules.input_adapter"
+        ],
+        "consumerRefs": [
+          "modules.context_builder",
+          "modules.item_adaln"
+        ]
+      },
+      "conditioning_signal": {
+        "incomingRelationRefs": [
+          "relations.input_adapter_initializes_conditioning_signal"
+        ],
+        "outgoingRelationRefs": [
+          "relations.conditioning_signal_modulates_item_adaln"
+        ],
+        "producerRefs": [
+          "modules.input_adapter"
+        ],
+        "consumerRefs": [
+          "modules.item_adaln"
+        ]
+      },
+      "item_to_group_index": {
+        "incomingRelationRefs": [
+          "relations.input_adapter_produces_item_to_group_index"
+        ],
+        "outgoingRelationRefs": [
+          "relations.item_to_group_index_guides_context_builder",
+          "relations.item_to_group_index_guides_pooling",
+          "relations.item_to_group_index_guides_output_decoder"
+        ],
+        "producerRefs": [
+          "modules.input_adapter"
+        ],
+        "consumerRefs": [
+          "modules.context_builder",
+          "modules.item_to_group_pool",
+          "modules.output_decoder"
+        ]
+      },
+      "pair_context": {
+        "incomingRelationRefs": [
+          "relations.context_builder_produces_pair_context"
+        ],
+        "outgoingRelationRefs": [
+          "relations.pair_context_biases_pair_attention"
+        ],
+        "producerRefs": [
+          "modules.context_builder"
+        ],
+        "consumerRefs": [
+          "modules.pair_biased_attention"
+        ]
+      },
+      "item_state_after_encoder": {
+        "incomingRelationRefs": [
+          "relations.local_attention_updates_item_state"
+        ],
+        "outgoingRelationRefs": [
+          "relations.encoded_item_state_enters_group_pool",
+          "relations.encoded_item_state_skips_to_output_decoder"
+        ],
+        "producerRefs": [
+          "modules.local_attention_stack"
+        ],
+        "consumerRefs": [
+          "modules.item_to_group_pool",
+          "modules.output_decoder"
+        ]
+      },
+      "group_state_before_refiner": {
+        "incomingRelationRefs": [
+          "relations.item_to_group_pool_produces_group_state"
+        ],
+        "outgoingRelationRefs": [
+          "relations.group_state_enters_pair_attention"
+        ],
+        "producerRefs": [
+          "modules.item_to_group_pool"
+        ],
+        "consumerRefs": [
+          "modules.pair_biased_attention"
+        ]
+      },
+      "group_state_after_refiner": {
+        "incomingRelationRefs": [
+          "relations.pair_attention_updates_group_state"
+        ],
+        "outgoingRelationRefs": [
+          "relations.refined_group_state_enters_output_decoder"
+        ],
+        "producerRefs": [
+          "modules.pair_biased_attention"
+        ],
+        "consumerRefs": [
+          "modules.output_decoder"
+        ]
+      },
+      "item_output_state": {
+        "incomingRelationRefs": [
+          "relations.output_decoder_produces_item_output_state"
+        ],
+        "outgoingRelationRefs": [
+          "relations.item_output_state_feeds_output_heads"
+        ],
+        "producerRefs": [
+          "modules.output_decoder"
+        ],
+        "consumerRefs": [
+          "modules.output_heads"
+        ]
+      },
+      "predictions_output": {
+        "incomingRelationRefs": [
+          "relations.output_heads_produce_predictions"
+        ],
+        "outgoingRelationRefs": [
+
+        ],
+        "producerRefs": [
+          "modules.output_heads"
+        ],
+        "consumerRefs": [
+
+        ]
+      }
+    },
     "execution": {
       "loops": [
         {
@@ -542,8 +861,8 @@ export const manifest = {
             "status": "inferred",
             "refs": [
               {
-                "kind": "protocol",
-                "path": "protocol/architecture-language.md",
+                "source_ref": "architecture_language_protocol",
+                "role": "specification",
                 "note": "Demonstrates how loops are represented."
               }
             ]
@@ -554,43 +873,174 @@ export const manifest = {
     "stateSemantics": {
       "item_state": {
         "representation_ref": "representations.item_state",
-        "role": "mutable_state",
         "value_site_refs": [
           "value_sites.item_state_before_encoder",
           "value_sites.item_state_after_encoder"
         ],
+        "lifecycle": "transformed_within_refinement_loop",
         "notes": [
           "The before and after sites make the fine-scale state update explicit without conflating two temporal values."
-        ]
+        ],
+        "evidence": {
+          "status": "inferred",
+          "refs": [
+            {
+              "source_ref": "generic_feature_refinement_source",
+              "role": "scaffold_evidence"
+            }
+          ]
+        }
       },
       "pair_context": {
         "representation_ref": "representations.pair_context",
-        "role": "read_only_conditioning",
         "value_site_refs": [
           "value_sites.pair_context"
         ],
+        "lifecycle": "cached_read_only_context",
         "notes": [
           "It is projected to attention-logit bias but is not updated by the refiner in this demo."
-        ]
+        ],
+        "evidence": {
+          "status": "inferred",
+          "refs": [
+            {
+              "source_ref": "generic_feature_refinement_source",
+              "role": "scaffold_evidence"
+            }
+          ]
+        }
       },
       "group_state": {
         "representation_ref": "representations.group_state",
-        "role": "mutable_state",
         "value_site_refs": [
           "value_sites.group_state_before_refiner",
           "value_sites.group_state_after_refiner"
         ],
+        "lifecycle": "transformed_within_refinement_loop",
         "notes": [
           "The before and after sites distinguish pooled group state from refined group state."
-        ]
+        ],
+        "evidence": {
+          "status": "inferred",
+          "refs": [
+            {
+              "source_ref": "generic_feature_refinement_source",
+              "role": "scaffold_evidence"
+            }
+          ]
+        }
+      }
+    },
+    "stateSemanticsBySite": {
+      "item_state_before_encoder": {
+        "representation_ref": "representations.item_state",
+        "value_site_refs": [
+          "value_sites.item_state_before_encoder",
+          "value_sites.item_state_after_encoder"
+        ],
+        "lifecycle": "transformed_within_refinement_loop",
+        "notes": [
+          "The before and after sites make the fine-scale state update explicit without conflating two temporal values."
+        ],
+        "evidence": {
+          "status": "inferred",
+          "refs": [
+            {
+              "source_ref": "generic_feature_refinement_source",
+              "role": "scaffold_evidence"
+            }
+          ]
+        },
+        "groupId": "item_state"
+      },
+      "item_state_after_encoder": {
+        "representation_ref": "representations.item_state",
+        "value_site_refs": [
+          "value_sites.item_state_before_encoder",
+          "value_sites.item_state_after_encoder"
+        ],
+        "lifecycle": "transformed_within_refinement_loop",
+        "notes": [
+          "The before and after sites make the fine-scale state update explicit without conflating two temporal values."
+        ],
+        "evidence": {
+          "status": "inferred",
+          "refs": [
+            {
+              "source_ref": "generic_feature_refinement_source",
+              "role": "scaffold_evidence"
+            }
+          ]
+        },
+        "groupId": "item_state"
+      },
+      "pair_context": {
+        "representation_ref": "representations.pair_context",
+        "value_site_refs": [
+          "value_sites.pair_context"
+        ],
+        "lifecycle": "cached_read_only_context",
+        "notes": [
+          "It is projected to attention-logit bias but is not updated by the refiner in this demo."
+        ],
+        "evidence": {
+          "status": "inferred",
+          "refs": [
+            {
+              "source_ref": "generic_feature_refinement_source",
+              "role": "scaffold_evidence"
+            }
+          ]
+        },
+        "groupId": "pair_context"
+      },
+      "group_state_before_refiner": {
+        "representation_ref": "representations.group_state",
+        "value_site_refs": [
+          "value_sites.group_state_before_refiner",
+          "value_sites.group_state_after_refiner"
+        ],
+        "lifecycle": "transformed_within_refinement_loop",
+        "notes": [
+          "The before and after sites distinguish pooled group state from refined group state."
+        ],
+        "evidence": {
+          "status": "inferred",
+          "refs": [
+            {
+              "source_ref": "generic_feature_refinement_source",
+              "role": "scaffold_evidence"
+            }
+          ]
+        },
+        "groupId": "group_state"
+      },
+      "group_state_after_refiner": {
+        "representation_ref": "representations.group_state",
+        "value_site_refs": [
+          "value_sites.group_state_before_refiner",
+          "value_sites.group_state_after_refiner"
+        ],
+        "lifecycle": "transformed_within_refinement_loop",
+        "notes": [
+          "The before and after sites distinguish pooled group state from refined group state."
+        ],
+        "evidence": {
+          "status": "inferred",
+          "refs": [
+            {
+              "source_ref": "generic_feature_refinement_source",
+              "role": "scaffold_evidence"
+            }
+          ]
+        },
+        "groupId": "group_state"
       }
     },
     "conditioning": [
       {
         "id": "item_adaln",
         "relation_ref": "relations.conditioning_signal_modulates_item_adaln",
-        "source": "value_sites.conditioning_signal",
-        "target": "modules.item_adaln",
         "mode": "per_item_adaln",
         "standard_block_ref": "standard_blocks/per-item-adaln-conditioning.yaml",
         "updates_source": false,
@@ -598,18 +1048,18 @@ export const manifest = {
           "status": "inferred",
           "refs": [
             {
-              "kind": "source",
-              "path": "architectures/generic-feature-refinement.yaml",
+              "source_ref": "generic_feature_refinement_source",
+              "role": "scaffold_evidence",
               "note": "Neutral demo conditioning path."
             }
           ]
-        }
+        },
+        "source": "value_sites.conditioning_signal",
+        "target": "modules.item_adaln"
       },
       {
         "id": "group_pair_bias",
         "relation_ref": "relations.pair_context_biases_pair_attention",
-        "source": "value_sites.pair_context",
-        "target": "modules.pair_biased_attention",
         "mode": "pair_bias",
         "standard_block_ref": "standard_blocks/pair-biased-attention.yaml",
         "updates_source": false,
@@ -617,56 +1067,72 @@ export const manifest = {
           "status": "inferred",
           "refs": [
             {
-              "kind": "source",
-              "path": "architectures/generic-feature-refinement.yaml",
+              "source_ref": "generic_feature_refinement_source",
+              "role": "scaffold_evidence",
               "note": "Neutral demo pair/context bias path."
             }
           ]
-        }
+        },
+        "source": "value_sites.pair_context",
+        "target": "modules.pair_biased_attention"
       }
     ],
     "scaleTransitions": [
       {
         "id": "item_to_group_pool",
-        "from_scale": "item",
-        "to_scale": "group",
-        "source": "value_sites.item_state_after_encoder",
-        "target": "value_sites.group_state_before_refiner",
-        "projection": "modules.item_to_group_pool",
-        "index_map": "value_sites.item_to_group_index",
+        "relation_path": [
+          "relations.encoded_item_state_enters_group_pool",
+          "relations.item_to_group_pool_produces_group_state"
+        ],
+        "index_relation_ref": "relations.item_to_group_index_guides_pooling",
         "aggregation": "scatter_mean",
         "copy_vs_pool": "pool",
         "evidence": {
           "status": "inferred",
           "refs": [
             {
-              "kind": "source",
-              "path": "architectures/generic-feature-refinement.yaml",
+              "source_ref": "generic_feature_refinement_source",
+              "role": "scaffold_evidence",
               "note": "Neutral demo compression path."
             }
           ]
-        }
+        },
+        "source": "value_sites.item_state_after_encoder",
+        "target": "value_sites.group_state_before_refiner",
+        "from_scale": "item",
+        "to_scale": "group",
+        "projection_refs": [
+          "modules.item_to_group_pool"
+        ],
+        "index_map": "value_sites.item_to_group_index"
       },
       {
         "id": "group_to_item_broadcast",
-        "from_scale": "group",
-        "to_scale": "item",
-        "source": "value_sites.group_state_after_refiner",
-        "target": "value_sites.item_output_state",
-        "projection": "modules.output_decoder",
-        "index_map": "value_sites.item_to_group_index",
+        "relation_path": [
+          "relations.refined_group_state_enters_output_decoder",
+          "relations.output_decoder_produces_item_output_state"
+        ],
+        "index_relation_ref": "relations.item_to_group_index_guides_output_decoder",
         "aggregation": "gather",
         "copy_vs_pool": "copy",
         "evidence": {
           "status": "inferred",
           "refs": [
             {
-              "kind": "source",
-              "path": "architectures/generic-feature-refinement.yaml",
+              "source_ref": "generic_feature_refinement_source",
+              "role": "scaffold_evidence",
               "note": "Neutral demo broadcast path."
             }
           ]
-        }
+        },
+        "source": "value_sites.group_state_after_refiner",
+        "target": "value_sites.item_output_state",
+        "from_scale": "group",
+        "to_scale": "item",
+        "projection_refs": [
+          "modules.output_decoder"
+        ],
+        "index_map": "value_sites.item_to_group_index"
       }
     ],
     "trainingInference": {
@@ -699,8 +1165,8 @@ export const manifest = {
           "status": "inferred",
           "refs": [
             {
-              "kind": "source",
-              "path": "architectures/generic-feature-refinement.yaml"
+              "source_ref": "generic_feature_refinement_source",
+              "role": "scaffold_evidence"
             }
           ]
         }
@@ -718,8 +1184,8 @@ export const manifest = {
           "status": "inferred",
           "refs": [
             {
-              "kind": "source",
-              "path": "architectures/generic-feature-refinement.yaml"
+              "source_ref": "generic_feature_refinement_source",
+              "role": "scaffold_evidence"
             }
           ]
         }
@@ -737,8 +1203,8 @@ export const manifest = {
           "status": "inferred",
           "refs": [
             {
-              "kind": "source",
-              "path": "architectures/generic-feature-refinement.yaml"
+              "source_ref": "generic_feature_refinement_source",
+              "role": "scaffold_evidence"
             }
           ]
         }
@@ -756,8 +1222,8 @@ export const manifest = {
           "status": "inferred",
           "refs": [
             {
-              "kind": "source",
-              "path": "architectures/generic-feature-refinement.yaml"
+              "source_ref": "generic_feature_refinement_source",
+              "role": "scaffold_evidence"
             }
           ]
         }
@@ -775,8 +1241,8 @@ export const manifest = {
           "status": "inferred",
           "refs": [
             {
-              "kind": "source",
-              "path": "architectures/generic-feature-refinement.yaml"
+              "source_ref": "generic_feature_refinement_source",
+              "role": "scaffold_evidence"
             }
           ]
         }
@@ -794,8 +1260,8 @@ export const manifest = {
           "status": "inferred",
           "refs": [
             {
-              "kind": "source",
-              "path": "architectures/generic-feature-refinement.yaml"
+              "source_ref": "generic_feature_refinement_source",
+              "role": "scaffold_evidence"
             }
           ]
         }
@@ -813,8 +1279,8 @@ export const manifest = {
           "status": "inferred",
           "refs": [
             {
-              "kind": "source",
-              "path": "architectures/generic-feature-refinement.yaml"
+              "source_ref": "generic_feature_refinement_source",
+              "role": "scaffold_evidence"
             }
           ]
         }
@@ -832,8 +1298,8 @@ export const manifest = {
           "status": "inferred",
           "refs": [
             {
-              "kind": "source",
-              "path": "architectures/generic-feature-refinement.yaml"
+              "source_ref": "generic_feature_refinement_source",
+              "role": "scaffold_evidence"
             }
           ]
         }
@@ -851,8 +1317,8 @@ export const manifest = {
           "status": "inferred",
           "refs": [
             {
-              "kind": "source",
-              "path": "architectures/generic-feature-refinement.yaml"
+              "source_ref": "generic_feature_refinement_source",
+              "role": "scaffold_evidence"
             }
           ]
         }
@@ -870,8 +1336,8 @@ export const manifest = {
           "status": "inferred",
           "refs": [
             {
-              "kind": "source",
-              "path": "architectures/generic-feature-refinement.yaml"
+              "source_ref": "generic_feature_refinement_source",
+              "role": "scaffold_evidence"
             }
           ]
         }
@@ -889,8 +1355,8 @@ export const manifest = {
           "status": "inferred",
           "refs": [
             {
-              "kind": "source",
-              "path": "architectures/generic-feature-refinement.yaml"
+              "source_ref": "generic_feature_refinement_source",
+              "role": "scaffold_evidence"
             }
           ]
         }
@@ -908,8 +1374,8 @@ export const manifest = {
           "status": "inferred",
           "refs": [
             {
-              "kind": "source",
-              "path": "architectures/generic-feature-refinement.yaml"
+              "source_ref": "generic_feature_refinement_source",
+              "role": "scaffold_evidence"
             }
           ]
         }
@@ -927,8 +1393,8 @@ export const manifest = {
           "status": "inferred",
           "refs": [
             {
-              "kind": "source",
-              "path": "architectures/generic-feature-refinement.yaml"
+              "source_ref": "generic_feature_refinement_source",
+              "role": "scaffold_evidence"
             }
           ]
         }
@@ -946,8 +1412,8 @@ export const manifest = {
           "status": "inferred",
           "refs": [
             {
-              "kind": "source",
-              "path": "architectures/generic-feature-refinement.yaml"
+              "source_ref": "generic_feature_refinement_source",
+              "role": "scaffold_evidence"
             }
           ]
         }
@@ -965,8 +1431,8 @@ export const manifest = {
           "status": "inferred",
           "refs": [
             {
-              "kind": "source",
-              "path": "architectures/generic-feature-refinement.yaml"
+              "source_ref": "generic_feature_refinement_source",
+              "role": "scaffold_evidence"
             }
           ]
         }
@@ -984,8 +1450,8 @@ export const manifest = {
           "status": "inferred",
           "refs": [
             {
-              "kind": "source",
-              "path": "architectures/generic-feature-refinement.yaml"
+              "source_ref": "generic_feature_refinement_source",
+              "role": "scaffold_evidence"
             }
           ]
         }
@@ -1003,8 +1469,8 @@ export const manifest = {
           "status": "inferred",
           "refs": [
             {
-              "kind": "source",
-              "path": "architectures/generic-feature-refinement.yaml"
+              "source_ref": "generic_feature_refinement_source",
+              "role": "scaffold_evidence"
             }
           ]
         }
@@ -1022,8 +1488,8 @@ export const manifest = {
           "status": "inferred",
           "refs": [
             {
-              "kind": "source",
-              "path": "architectures/generic-feature-refinement.yaml"
+              "source_ref": "generic_feature_refinement_source",
+              "role": "scaffold_evidence"
             }
           ]
         }
@@ -1041,8 +1507,8 @@ export const manifest = {
           "status": "inferred",
           "refs": [
             {
-              "kind": "source",
-              "path": "architectures/generic-feature-refinement.yaml"
+              "source_ref": "generic_feature_refinement_source",
+              "role": "scaffold_evidence"
             }
           ]
         }
@@ -1060,8 +1526,8 @@ export const manifest = {
           "status": "inferred",
           "refs": [
             {
-              "kind": "source",
-              "path": "architectures/generic-feature-refinement.yaml"
+              "source_ref": "generic_feature_refinement_source",
+              "role": "scaffold_evidence"
             }
           ]
         }
@@ -1079,8 +1545,8 @@ export const manifest = {
           "status": "inferred",
           "refs": [
             {
-              "kind": "source",
-              "path": "architectures/generic-feature-refinement.yaml"
+              "source_ref": "generic_feature_refinement_source",
+              "role": "scaffold_evidence"
             }
           ]
         }
@@ -1098,8 +1564,8 @@ export const manifest = {
           "status": "inferred",
           "refs": [
             {
-              "kind": "source",
-              "path": "architectures/generic-feature-refinement.yaml"
+              "source_ref": "generic_feature_refinement_source",
+              "role": "scaffold_evidence"
             }
           ]
         }
@@ -1117,16 +1583,121 @@ export const manifest = {
           "status": "inferred",
           "refs": [
             {
-              "kind": "source",
-              "path": "architectures/generic-feature-refinement.yaml"
+              "source_ref": "generic_feature_refinement_source",
+              "role": "scaffold_evidence"
             }
           ]
         }
       }
     ],
     "claims": [
-      "The pair/context stream is used as attention-logit conditioning in the group refiner and is not updated there.",
-      "The item-to-group transition is modeled as pooling, while the group-to-item transition is modeled as broadcast/gather."
+      {
+        "id": "context_bias_is_read_only",
+        "statement": "The pair/context stream is used as attention-logit conditioning in the group refiner and is not updated there.",
+        "scope": {
+          "module_ref": "modules.group_refiner"
+        },
+        "evidence": {
+          "status": "inferred",
+          "refs": [
+            {
+              "source_ref": "generic_feature_refinement_source",
+              "role": "scaffold_evidence"
+            }
+          ]
+        }
+      },
+      {
+        "id": "compression_is_explicit",
+        "statement": "The item-to-group transition is modeled as pooling, while the group-to-item transition is modeled as broadcast/gather.",
+        "scope": {
+          "scale_transition": "item_to_group_pool"
+        },
+        "evidence": {
+          "status": "inferred",
+          "refs": [
+            {
+              "source_ref": "generic_feature_refinement_source",
+              "role": "scaffold_evidence"
+            }
+          ]
+        }
+      }
+    ]
+  },
+  "bibliography": {
+    "schemaVersion": "bibliography-v0.1",
+    "sourceYaml": "../../references/bibliography.yaml",
+    "sources": [
+      {
+        "id": "dit_2022",
+        "kind": "paper",
+        "title": "Scalable Diffusion Models with Transformers",
+        "authors": [
+          "William Peebles",
+          "Saining Xie"
+        ],
+        "year": 2022,
+        "identifiers": {
+          "arxiv": "2212.09748"
+        },
+        "url": "https://arxiv.org/abs/2212.09748",
+        "href": "https://arxiv.org/abs/2212.09748"
+      },
+      {
+        "id": "dit_models_code",
+        "kind": "code",
+        "title": "DiT model implementation",
+        "organization": "facebookresearch",
+        "repository": "facebookresearch/DiT",
+        "path": "facebookresearch/DiT/models.py",
+        "url": "https://github.com/facebookresearch/DiT/blob/main/models.py",
+        "href": "https://github.com/facebookresearch/DiT/blob/main/models.py"
+      },
+      {
+        "id": "dit_sample_code",
+        "kind": "code",
+        "title": "DiT sampling entry point",
+        "organization": "facebookresearch",
+        "repository": "facebookresearch/DiT",
+        "path": "facebookresearch/DiT/sample.py",
+        "url": "https://github.com/facebookresearch/DiT/blob/main/sample.py",
+        "href": "https://github.com/facebookresearch/DiT/blob/main/sample.py"
+      },
+      {
+        "id": "dit_gaussian_diffusion_code",
+        "kind": "code",
+        "title": "DiT Gaussian diffusion implementation",
+        "organization": "facebookresearch",
+        "repository": "facebookresearch/DiT",
+        "path": "facebookresearch/DiT/diffusion/gaussian_diffusion.py",
+        "url": "https://github.com/facebookresearch/DiT/blob/main/diffusion/gaussian_diffusion.py",
+        "href": "https://github.com/facebookresearch/DiT/blob/main/diffusion/gaussian_diffusion.py"
+      },
+      {
+        "id": "dit_train_code",
+        "kind": "code",
+        "title": "DiT training entry point",
+        "organization": "facebookresearch",
+        "repository": "facebookresearch/DiT",
+        "path": "facebookresearch/DiT/train.py",
+        "url": "https://github.com/facebookresearch/DiT/blob/main/train.py",
+        "href": "https://github.com/facebookresearch/DiT/blob/main/train.py"
+      },
+      {
+        "id": "generic_feature_refinement_source",
+        "kind": "source",
+        "title": "Generic Feature Refinement architecture source",
+        "path": "architectures/generic-feature-refinement.yaml",
+        "href": "../../architectures/generic-feature-refinement.yaml"
+      },
+      {
+        "id": "architecture_language_protocol",
+        "kind": "protocol",
+        "title": "Architecture language protocol",
+        "path": "protocol/architecture-language.md",
+        "href": "../../protocol/architecture-language.md"
+      }
     ]
   },
   "standardBlocks": {
@@ -1224,6 +1795,12 @@ export const manifest = {
   "pseudocode": {
     "generic_feature_refinement": {
       "sourceYaml": "../../pseudocode/generic-feature-refinement.yaml",
+      "sources": [
+        {
+          "id": "demo_source",
+          "source_ref": "generic_feature_refinement_source"
+        }
+      ],
       "symbols": [
         {
           "id": "raw_records",
@@ -1323,6 +1900,41 @@ export const manifest = {
           "architectureRefs": [
             "modules.output_heads"
           ]
+        }
+      ],
+      "claims": [
+        {
+          "id": "pair_context_read_only_in_refiner",
+          "statement": "The pair/context tensor is used as pair bias inside the refiner and is not returned as updated state.",
+          "line_refs": [
+            "pair_bias_refine"
+          ],
+          "evidence": {
+            "status": "inferred",
+            "refs": [
+              {
+                "source_ref": "generic_feature_refinement_source",
+                "role": "scaffold_evidence"
+              }
+            ]
+          }
+        },
+        {
+          "id": "pool_then_broadcast",
+          "statement": "Compression and broadcast are separate transitions; they should not be described as a reshape.",
+          "line_refs": [
+            "pool_groups",
+            "broadcast_groups"
+          ],
+          "evidence": {
+            "status": "inferred",
+            "refs": [
+              {
+                "source_ref": "generic_feature_refinement_source",
+                "role": "scaffold_evidence"
+              }
+            ]
+          }
         }
       ]
     }

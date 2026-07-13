@@ -3,13 +3,9 @@ id: diffusion_transformer
 title: DiT Forward Pass Trace
 sources:
   - id: dit_paper
-    kind: paper
-    path: arXiv:2212.09748
-    note: Peebles & Xie, Scalable Diffusion Models with Transformers.
+    source_ref: dit_2022
   - id: dit_code
-    kind: code
-    path: facebookresearch/DiT/models.py
-    note: Official reference implementation.
+    source_ref: dit_models_code
 symbols:
   - id: initial_noise
     name: x_T
@@ -175,7 +171,7 @@ claims:
     evidence:
       status: confirmed_from_code
       refs:
-        - kind: code
-          path: facebookresearch/DiT/models.py
+        - source_ref: dit_models_code
+          role: implementation_evidence
           lines: DiTBlock
           note: chunk(6, dim=1) on a B x d conditioning vector.

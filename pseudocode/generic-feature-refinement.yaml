@@ -3,9 +3,7 @@ id: generic_feature_refinement
 title: Generic Feature Refinement Trace
 sources:
   - id: demo_source
-    kind: source
-    path: architectures/generic-feature-refinement.yaml
-    note: Neutral demo source.
+    source_ref: generic_feature_refinement_source
 symbols:
   - id: raw_records
     name: raw_records
@@ -138,13 +136,13 @@ claims:
     evidence:
       status: inferred
       refs:
-        - kind: source
-          path: architectures/generic-feature-refinement.yaml
+        - source_ref: generic_feature_refinement_source
+          role: scaffold_evidence
   - id: pool_then_broadcast
     statement: Compression and broadcast are separate transitions; they should not be described as a reshape.
     line_refs: [pool_groups, broadcast_groups]
     evidence:
       status: inferred
       refs:
-        - kind: source
-          path: architectures/generic-feature-refinement.yaml
+        - source_ref: generic_feature_refinement_source
+          role: scaffold_evidence

@@ -1,6 +1,7 @@
 schema_version: registry-v0.1
 # Single source of truth for which source sets exist. build-manifest.rb and
 # scripts/lint_sources.rb both read this file; do not duplicate the lists there.
+bibliography: references/bibliography.yaml
 source_sets:
   - id: generic
     label: Generic Feature Refinement

@@ -1,4 +1,4 @@
-schema_version: architecture-v0.3
+schema_version: architecture-v0.4
 id: diffusion_transformer
 name: Diffusion Transformer (DiT)
 family: transformer
@@ -15,21 +15,25 @@ reference_configuration:
   heads: 16
   learn_sigma: true
 sources:
-  - kind: paper
-    path: arXiv:2212.09748
-    note: Peebles & Xie, Scalable Diffusion Models with Transformers.
-  - kind: code
-    path: facebookresearch/DiT/models.py
-    note: Official reference implementation; embedder and block details checked here.
-  - kind: code
-    path: facebookresearch/DiT/sample.py
-    note: Official single-process generation entry point; sampler and VAE boundary checked here.
-  - kind: code
-    path: facebookresearch/DiT/diffusion/gaussian_diffusion.py
-    note: Official DDPM update and learned-range variance interpretation.
-  - kind: code
-    path: facebookresearch/DiT/train.py
-    note: Official VAE encoding boundary and 1000-step training schedule.
+  - source_ref: dit_2022
+    role: architecture_description
+  - source_ref: dit_models_code
+    role: reference_implementation
+  - source_ref: dit_sample_code
+    role: reference_implementation
+  - source_ref: dit_gaussian_diffusion_code
+    role: reference_implementation
+  - source_ref: dit_train_code
+    role: reference_implementation
+decomposition:
+  status: complete
+  evidence:
+    status: confirmed_from_code
+    refs:
+      - source_ref: dit_sample_code
+        role: implementation_evidence
+        lines: main
+        note: Sampling, inverse latent scaling, and frozen VAE decoding form the complete generation path represented at the task boundary.
 execution:
   loops:
     - id: denoising_loop
@@ -52,157 +56,158 @@ execution:
       evidence:
         status: confirmed_from_code
         refs:
-          - kind: code
-            path: facebookresearch/DiT/diffusion/gaussian_diffusion.py
+          - source_ref: dit_gaussian_diffusion_code
+            role: implementation_evidence
             lines: p_sample_loop_progressive
             note: Each reverse step replaces x_t with a newly sampled x_(t-1); nonzero timesteps add fresh Gaussian noise.
-          - kind: code
-            path: facebookresearch/DiT/models.py
+          - source_ref: dit_models_code
+            role: implementation_evidence
             lines: DiT.forward_with_cfg
             note: Conditional and null-label branches are batched; the reproducibility path guides the first three channels.
-          - kind: paper
-            path: arXiv:2212.09748
+          - source_ref: dit_2022
+            role: supporting_evidence
             lines: "Sec. 3.1, Sec. 4"
             note: DDPM sampling with classifier-free guidance; 250 sampling steps for reported results.
 state_semantics:
-  latent_before_step:
-    role: state_read
-    produced_by: initial_noise_or_previous_iteration
-    updated_by: []
-    consumed_by:
-      - modules.patchify
-      - modules.reverse_diffusion_step
+  sampling_latent:
+    representation_ref: representations.input_latent
+    value_site_refs:
+      - value_sites.latent_before_step
+      - value_sites.latent_after_step
+    lifecycle: iterative_loop_state
     notes:
-      - This value site is x_t at the beginning of one reverse step.
-  latent_after_step:
-    role: state_write
-    produced_by: modules.reverse_diffusion_step
-    updated_by: []
-    consumed_by:
-      - next_sampling_iteration_or_final_output
-    notes:
-      - This distinct value site is x_(t-1), avoiding an ambiguous self-edge for mutable loop state.
+      - The before and after sites distinguish x_t from x_(t-1), avoiding an ambiguous self-edge for mutable loop state.
+    evidence:
+      status: confirmed_from_code
+      refs:
+        - source_ref: dit_gaussian_diffusion_code
+          role: implementation_evidence
+          lines: p_sample_loop_progressive and p_sample
   final_latent:
-    role: output_state
-    produced_by: ddpm_sampler
-    updated_by: []
-    consumed_by:
-      - inverse_latent_scaling
+    representation_ref: representations.final_latent
+    value_site_refs:
+      - value_sites.final_latent
+    lifecycle: terminal_sampler_output
     notes:
       - This is x_0 after the last reverse-diffusion update, before undoing the VAE latent scale.
+    evidence:
+      status: confirmed_from_code
+      refs:
+        - source_ref: dit_sample_code
+          role: implementation_evidence
+          lines: main
   generated_image:
-    role: output_state
-    produced_by: frozen_vae_decoder
-    updated_by: []
-    consumed_by: []
-  tokens_after_patchify:
-    role: state_read
-    produced_by: modules.patchify
-    updated_by: []
-    consumed_by:
-      - modules.dit_blocks
-  tokens_after_blocks:
-    role: state_write
-    produced_by: modules.dit_blocks
-    updated_by: []
-    consumed_by:
-      - modules.final_layer
+    representation_ref: representations.generated_image
+    value_site_refs:
+      - value_sites.generated_image
+    lifecycle: task_output
+    evidence:
+      status: confirmed_from_code
+      refs:
+        - source_ref: dit_sample_code
+          role: implementation_evidence
+          lines: main
+  denoiser_token_state:
+    representation_ref: representations.token_state
+    value_site_refs:
+      - value_sites.tokens_after_patchify
+      - value_sites.block_input_tokens
+      - value_sites.tokens_after_blocks
+    lifecycle: transformed_within_forward_pass
     notes:
       - The token stream is the only mutable state inside one forward pass.
-  cond_vector:
-    role: read_only_conditioning
-    produced_by: cond_combiner
-    updated_by: []
-    consumed_by:
-      - dit_blocks
-      - final_layer
+    evidence:
+      status: confirmed_from_code
+      refs:
+        - source_ref: dit_models_code
+          role: implementation_evidence
+          lines: DiT.forward and DiTBlock
+  conditioning_vector:
+    representation_ref: representations.cond_vector
+    value_site_refs:
+      - value_sites.cond_vector
+    lifecycle: read_only_within_forward_pass
     notes:
       - Per-sample vector; every token in a sample shares the same modulation parameters.
+    evidence:
+      status: confirmed_from_code
+      refs:
+        - source_ref: dit_models_code
+          role: implementation_evidence
+          lines: DiT.forward and DiTBlock
 conditioning:
   - id: sampling_class_guidance
     relation_ref: relations.class_label_featurization
-    source: value_sites.class_label
-    target: modules.label_embedder
     mode: classifier_free_guidance
     updates_source: false
     evidence:
       status: confirmed_from_code
       refs:
-        - kind: code
-          path: facebookresearch/DiT/sample.py
+        - source_ref: dit_sample_code
+          role: implementation_evidence
           lines: main
           note: Conditional labels are paired with null labels and passed through forward_with_cfg.
   - id: block_adaln_zero
     relation_ref: relations.cond_vector_enters_adaln_mlp
-    source: value_sites.cond_vector
-    target: modules.adaln_mlp
     mode: adaln_zero
     standard_block_ref: standard_blocks/adaln-zero-conditioning.yaml
     updates_source: false
     evidence:
       status: confirmed_from_code
       refs:
-        - kind: code
-          path: facebookresearch/DiT/models.py
+        - source_ref: dit_models_code
+          role: implementation_evidence
           lines: DiTBlock
           note: adaLN_modulation(c).chunk(6) yields shift/scale/gate for both branches; the weights and bias of the entire six-output modulation linear are zero-initialized.
   - id: final_layer_adaln
     relation_ref: relations.final_layer_adaln_conditioning
-    source: value_sites.cond_vector
-    target: modules.final_layer
     mode: adaln
     updates_source: false
     evidence:
       status: confirmed_from_code
       refs:
-        - kind: code
-          path: facebookresearch/DiT/models.py
+        - source_ref: dit_models_code
+          role: implementation_evidence
           lines: FinalLayer
           note: adaLN_modulation(c).chunk(2) yields shift/scale before the linear decode; no gate in the final layer.
 scale_transitions:
   - id: patchify_tokens
-    from_scale: spatial
-    to_scale: token
-    source: value_sites.latent_before_step
-    target: value_sites.tokens_after_patchify
-    projection: patch_embedding
+    relation_path:
+      - relations.input_latent_patch_embedding
+      - relations.token_state_initialization
     aggregation: flatten_patches
     copy_vs_pool: pool
     evidence:
       status: confirmed_from_paper
       refs:
-        - kind: paper
-          path: arXiv:2212.09748
+        - source_ref: dit_2022
+          role: supporting_evidence
           lines: "Sec. 3.2 (Patchify)"
           note: p x p patches are linearly embedded into T = (I/p)^2 tokens.
   - id: unpatchify_output
-    from_scale: token
-    to_scale: spatial
-    source: value_sites.output_tokens
-    target: value_sites.noise_prediction
-    projection: none
+    relation_path:
+      - relations.output_token_layout_restoration
+      - relations.spatial_noise_prediction
     aggregation: reshape
     copy_vs_pool: copy
     evidence:
       status: confirmed_from_paper
       refs:
-        - kind: paper
-          path: arXiv:2212.09748
+        - source_ref: dit_2022
+          role: supporting_evidence
           lines: "Sec. 3.2 (Transformer decoder)"
           note: Decoded tokens are rearranged back to the spatial latent layout; lossless reshape.
   - id: vae_decode_pixels
-    from_scale: spatial
-    to_scale: output
-    source: value_sites.vae_decode_latent
-    target: value_sites.generated_image
-    projection: frozen_vae_decode
+    relation_path:
+      - relations.vae_decode_latent_enters_frozen_decoder
+      - relations.frozen_decoder_produces_generated_image
     aggregation: learned_upsampling
     copy_vs_pool: expand
     evidence:
       status: confirmed_from_code
       refs:
-        - kind: code
-          path: facebookresearch/DiT/sample.py
+        - source_ref: dit_sample_code
+          role: implementation_evidence
           lines: main
           note: The pretrained VAE decoder maps the four-channel latent at one-eighth resolution to RGB pixels.
 training_inference:
@@ -244,8 +249,8 @@ representations:
     evidence:
       status: confirmed_from_code
       refs:
-        - kind: code
-          path: facebookresearch/DiT/sample.py
+        - source_ref: dit_sample_code
+          role: implementation_evidence
           lines: main
           note: Sampling starts with torch.randn at four latent channels and one-eighth image resolution.
   - id: step_noise
@@ -257,8 +262,8 @@ representations:
     evidence:
       status: confirmed_from_code
       refs:
-        - kind: code
-          path: facebookresearch/DiT/diffusion/gaussian_diffusion.py
+        - source_ref: dit_gaussian_diffusion_code
+          role: implementation_evidence
           lines: p_sample
           note: A fresh randn_like tensor contributes when t is nonzero.
   - id: input_latent
@@ -270,8 +275,8 @@ representations:
     evidence:
       status: confirmed_from_paper
       refs:
-        - kind: paper
-          path: arXiv:2212.09748
+        - source_ref: dit_2022
+          role: supporting_evidence
           lines: "Sec. 3 (Latent diffusion), Sec. 3.2"
   - id: timestep
     scale: sample
@@ -282,8 +287,8 @@ representations:
     evidence:
       status: confirmed_from_paper
       refs:
-        - kind: paper
-          path: arXiv:2212.09748
+        - source_ref: dit_2022
+          role: supporting_evidence
           lines: "Sec. 3.2"
   - id: class_label
     scale: sample
@@ -294,8 +299,8 @@ representations:
     evidence:
       status: confirmed_from_code
       refs:
-        - kind: code
-          path: facebookresearch/DiT/models.py
+        - source_ref: dit_models_code
+          role: implementation_evidence
           lines: LabelEmbedder
           note: Dropped labels are mapped to an extra embedding index num_classes.
   - id: t_embedding
@@ -307,8 +312,8 @@ representations:
     evidence:
       status: confirmed_from_code
       refs:
-        - kind: code
-          path: facebookresearch/DiT/models.py
+        - source_ref: dit_models_code
+          role: implementation_evidence
           lines: TimestepEmbedder
   - id: y_embedding
     scale: sample
@@ -319,8 +324,8 @@ representations:
     evidence:
       status: confirmed_from_code
       refs:
-        - kind: code
-          path: facebookresearch/DiT/models.py
+        - source_ref: dit_models_code
+          role: implementation_evidence
           lines: LabelEmbedder
   - id: cond_vector
     scale: sample
@@ -331,8 +336,8 @@ representations:
     evidence:
       status: confirmed_from_code
       refs:
-        - kind: code
-          path: facebookresearch/DiT/models.py
+        - source_ref: dit_models_code
+          role: implementation_evidence
           lines: DiT.forward
           note: c = t + y before the block stack.
   - id: token_state
@@ -345,8 +350,8 @@ representations:
     evidence:
       status: confirmed_from_paper
       refs:
-        - kind: paper
-          path: arXiv:2212.09748
+        - source_ref: dit_2022
+          role: supporting_evidence
           lines: "Sec. 3.2 (Patchify)"
   - id: output_tokens
     scale: token
@@ -358,8 +363,8 @@ representations:
     evidence:
       status: confirmed_from_code
       refs:
-        - kind: code
-          path: facebookresearch/DiT/models.py
+        - source_ref: dit_models_code
+          role: implementation_evidence
           lines: FinalLayer
           note: Linear(hidden_size, patch_size * patch_size * out_channels).
   - id: noise_prediction
@@ -372,12 +377,12 @@ representations:
     evidence:
       status: confirmed_from_code
       refs:
-        - kind: code
-          path: facebookresearch/DiT/models.py
+        - source_ref: dit_models_code
+          role: implementation_evidence
           lines: DiT.__init__
           note: out_channels is 2C only when learn_sigma is enabled.
-        - kind: code
-          path: facebookresearch/DiT/diffusion/gaussian_diffusion.py
+        - source_ref: dit_gaussian_diffusion_code
+          role: implementation_evidence
           lines: p_mean_variance
           note: The second C channels interpolate between minimum and maximum log variance.
   - id: final_latent
@@ -389,8 +394,8 @@ representations:
     evidence:
       status: confirmed_from_code
       refs:
-        - kind: code
-          path: facebookresearch/DiT/sample.py
+        - source_ref: dit_sample_code
+          role: implementation_evidence
           lines: main
           note: p_sample_loop returns the generated latent before VAE decoding.
   - id: vae_decode_latent
@@ -402,8 +407,8 @@ representations:
     evidence:
       status: confirmed_from_code
       refs:
-        - kind: code
-          path: facebookresearch/DiT/sample.py
+        - source_ref: dit_sample_code
+          role: implementation_evidence
           lines: main
           note: The sampler output is divided by 0.18215 immediately before vae.decode.
   - id: generated_image
@@ -415,8 +420,8 @@ representations:
     evidence:
       status: confirmed_from_code
       refs:
-        - kind: code
-          path: facebookresearch/DiT/sample.py
+        - source_ref: dit_sample_code
+          role: implementation_evidence
           lines: main
           note: The frozen Stable Diffusion VAE decodes the final latent to an image tensor.
   - id: adaln_parameter_triplet
@@ -429,8 +434,8 @@ representations:
     evidence:
       status: confirmed_from_code
       refs:
-        - kind: code
-          path: facebookresearch/DiT/models.py
+        - source_ref: dit_models_code
+          role: implementation_evidence
           lines: DiTBlock
           note: The six-way modulation output is split into shift, scale, and gate triplets for attention and MLP branches.
 value_sites:
@@ -465,6 +470,7 @@ value_sites:
   - id: cond_vector
     representation_ref: representations.cond_vector
     scope_ref: modules.cond_combiner
+    role: read_only_conditioning
   - id: tokens_after_patchify
     representation_ref: representations.token_state
     scope_ref: modules.patchify
@@ -492,6 +498,7 @@ value_sites:
   - id: final_latent
     representation_ref: representations.final_latent
     scope_ref: modules.ddpm_sampler
+    role: output_state
   - id: vae_decode_latent
     representation_ref: representations.vae_decode_latent
     scope_ref: modules.inverse_latent_scaling
@@ -499,9 +506,12 @@ value_sites:
     representation_ref: representations.generated_image
     scope_ref: architecture
     boundary: output
+    role: task_output
 modules:
   - id: ddpm_sampler
     parent_ref: architecture
+    decomposition:
+      status: complete
     label: DDPM Sampling Loop
     kind: iterative_sampler
     role: repeatedly call the classifier-free-guided DiT denoiser and apply stochastic reverse-diffusion updates
@@ -510,16 +520,18 @@ modules:
     evidence:
       status: confirmed_from_code
       refs:
-        - kind: code
-          path: facebookresearch/DiT/sample.py
+        - source_ref: dit_sample_code
+          role: implementation_evidence
           lines: main
           note: p_sample_loop starts from Gaussian latent noise and invokes forward_with_cfg over the reverse chain.
-        - kind: code
-          path: facebookresearch/DiT/diffusion/gaussian_diffusion.py
+        - source_ref: dit_gaussian_diffusion_code
+          role: implementation_evidence
           lines: p_sample_loop_progressive
           note: The reverse loop repeatedly samples x_(t-1) from the current state.
   - id: dit_denoiser
     parent_ref: modules.ddpm_sampler
+    decomposition:
+      status: complete
     label: DiT Noise Predictor
     kind: denoiser
     role: evaluate the class- and timestep-conditioned Diffusion Transformer once to predict epsilon and learned-range variance parameters
@@ -527,12 +539,14 @@ modules:
     evidence:
       status: confirmed_from_code
       refs:
-        - kind: code
-          path: facebookresearch/DiT/models.py
+        - source_ref: dit_models_code
+          role: implementation_evidence
           lines: DiT.forward and DiT.forward_with_cfg
           note: One denoiser call patchifies x_t, runs the conditioned block stack, and returns spatial model predictions.
   - id: reverse_diffusion_step
     parent_ref: modules.ddpm_sampler
+    decomposition:
+      status: leaf
     label: DDPM Sampling Formula
     kind: sampling_formula
     role: use fixed diffusion-schedule math to combine x_t, timestep, predicted epsilon, learned-range variance parameters, and fresh noise into x_(t-1); this module has no learned weights
@@ -540,12 +554,14 @@ modules:
     evidence:
       status: confirmed_from_code
       refs:
-        - kind: code
-          path: facebookresearch/DiT/diffusion/gaussian_diffusion.py
+        - source_ref: dit_gaussian_diffusion_code
+          role: implementation_evidence
           lines: p_mean_variance and p_sample
           note: The model output parameterizes the reverse mean and learned-range variance before fresh noise is added for nonzero timesteps.
   - id: inverse_latent_scaling
     parent_ref: architecture
+    decomposition:
+      status: leaf
     label: Undo Latent Scaling
     kind: feature_adapter
     role: divide the generated latent by 0.18215 to restore the frozen VAE decoder convention
@@ -553,12 +569,15 @@ modules:
     evidence:
       status: confirmed_from_code
       refs:
-        - kind: code
-          path: facebookresearch/DiT/sample.py
+        - source_ref: dit_sample_code
+          role: implementation_evidence
           lines: main
           note: The final latent is divided by 0.18215 immediately before VAE decoding.
   - id: frozen_vae_decoder
     parent_ref: architecture
+    decomposition:
+      status: opaque
+      reason: external_pretrained_component
     label: Frozen VAE Decoder
     kind: decoder
     role: decode the four-channel latent at one-eighth spatial resolution into RGB pixels
@@ -567,12 +586,14 @@ modules:
     evidence:
       status: confirmed_from_code
       refs:
-        - kind: code
-          path: facebookresearch/DiT/sample.py
+        - source_ref: dit_sample_code
+          role: implementation_evidence
           lines: main
           note: A pretrained stabilityai/sd-vae-ft decoder maps the rescaled latent to the output image.
   - id: patchify
     parent_ref: modules.dit_denoiser
+    decomposition:
+      status: leaf
     label: Patchify
     kind: feature_adapter
     role: embed p x p latent patches into tokens and add fixed 2D sin-cos positional embeddings
@@ -580,15 +601,17 @@ modules:
     evidence:
       status: confirmed_from_paper
       refs:
-        - kind: paper
-          path: arXiv:2212.09748
+        - source_ref: dit_2022
+          role: supporting_evidence
           lines: "Sec. 3.2 (Patchify)"
-        - kind: code
-          path: facebookresearch/DiT/models.py
+        - source_ref: dit_models_code
+          role: implementation_evidence
           lines: "DiT.__init__ (x_embedder, pos_embed)"
           note: PatchEmbed plus non-learned sin-cos positional table.
   - id: timestep_embedder
     parent_ref: modules.dit_denoiser
+    decomposition:
+      status: complete
     label: Timestep Embedder
     kind: feature_adapter
     role: encode the scalar timestep with a 256-dim sinusoidal embedding followed by a two-layer SiLU MLP
@@ -596,11 +619,13 @@ modules:
     evidence:
       status: confirmed_from_code
       refs:
-        - kind: code
-          path: facebookresearch/DiT/models.py
+        - source_ref: dit_models_code
+          role: implementation_evidence
           lines: TimestepEmbedder
   - id: label_embedder
     parent_ref: modules.dit_denoiser
+    decomposition:
+      status: leaf
     label: Label Embedder
     kind: feature_adapter
     role: look up the class embedding; randomly drop labels to the null class during training for classifier-free guidance
@@ -608,11 +633,13 @@ modules:
     evidence:
       status: confirmed_from_code
       refs:
-        - kind: code
-          path: facebookresearch/DiT/models.py
+        - source_ref: dit_models_code
+          role: implementation_evidence
           lines: LabelEmbedder
   - id: cond_combiner
     parent_ref: modules.dit_denoiser
+    decomposition:
+      status: leaf
     label: Conditioning Combiner
     kind: elementwise_sum
     role: sum timestep and label embeddings into one per-sample conditioning vector
@@ -620,12 +647,14 @@ modules:
     evidence:
       status: confirmed_from_code
       refs:
-        - kind: code
-          path: facebookresearch/DiT/models.py
+        - source_ref: dit_models_code
+          role: implementation_evidence
           lines: DiT.forward
           note: c = t + y.
   - id: dit_blocks
     parent_ref: modules.dit_denoiser
+    decomposition:
+      status: complete
     label: DiT-XL Block Stack
     kind: attention_stack
     role: update patch tokens through 28 full-attention blocks with 16 heads, each using MLP and adaLN-Zero-gated residual branches
@@ -647,12 +676,14 @@ modules:
     evidence:
       status: confirmed_from_paper
       refs:
-        - kind: paper
-          path: arXiv:2212.09748
+        - source_ref: dit_2022
+          role: supporting_evidence
           lines: "Sec. 3.2 (DiT block design), Table 1"
           note: Depth 28 / 16 heads is the DiT-XL configuration; other sizes exist.
   - id: final_layer
     parent_ref: modules.dit_denoiser
+    decomposition:
+      status: leaf
     label: Final Layer
     kind: decoder
     role: apply adaLN-modulated LayerNorm, then linearly decode each token to a p x p x C_out patch prediction
@@ -660,11 +691,13 @@ modules:
     evidence:
       status: confirmed_from_code
       refs:
-        - kind: code
-          path: facebookresearch/DiT/models.py
+        - source_ref: dit_models_code
+          role: implementation_evidence
           lines: FinalLayer
   - id: unpatchify
     parent_ref: modules.dit_denoiser
+    decomposition:
+      status: leaf
     label: Unpatchify
     kind: scale_transition
     role: rearrange per-token patch predictions back to the spatial latent layout
@@ -672,11 +705,13 @@ modules:
     evidence:
       status: confirmed_from_code
       refs:
-        - kind: code
-          path: facebookresearch/DiT/models.py
+        - source_ref: dit_models_code
+          role: implementation_evidence
           lines: DiT.unpatchify
   - id: sinusoidal_embedding
     parent_ref: modules.timestep_embedder
+    decomposition:
+      status: leaf
     label: Sinusoidal Embedding + MLP
     kind: standard_block_occurrence
     role: reusable timestep embedding mechanism
@@ -685,11 +720,13 @@ modules:
     evidence:
       status: confirmed_from_code
       refs:
-        - kind: code
-          path: facebookresearch/DiT/models.py
+        - source_ref: dit_models_code
+          role: implementation_evidence
           lines: TimestepEmbedder
   - id: adaln_zero
     parent_ref: modules.dit_blocks
+    decomposition:
+      status: leaf
     label: adaLN-Zero
     kind: standard_block_occurrence
     role: reusable adaptive-normalization and gated-residual mechanism
@@ -698,11 +735,13 @@ modules:
     evidence:
       status: confirmed_from_code
       refs:
-        - kind: code
-          path: facebookresearch/DiT/models.py
+        - source_ref: dit_models_code
+          role: implementation_evidence
           lines: DiTBlock
   - id: adaln_mlp
     parent_ref: modules.dit_blocks
+    decomposition:
+      status: leaf
     label: adaLN Modulation MLP
     kind: conditioning_projection
     role: produce shift, scale, and gate parameters for the attention and MLP residual branches
@@ -710,12 +749,14 @@ modules:
     evidence: &dit_block_code_evidence
       status: confirmed_from_code
       refs:
-        - kind: code
-          path: facebookresearch/DiT/models.py
+        - source_ref: dit_models_code
+          role: implementation_evidence
           lines: DiTBlock
           note: The modulation MLP output is chunked into six parameter vectors.
   - id: norm1
     parent_ref: modules.dit_blocks
+    decomposition:
+      status: leaf
     label: LayerNorm 1
     kind: normalization
     role: normalize the token stream before attention modulation
@@ -723,6 +764,8 @@ modules:
     evidence: *dit_block_code_evidence
   - id: adaln_mod
     parent_ref: modules.dit_blocks
+    decomposition:
+      status: leaf
     label: Attention Shift + Scale
     kind: adaptive_normalization
     role: modulate normalized tokens with the attention branch shift and scale
@@ -730,6 +773,8 @@ modules:
     evidence: *dit_block_code_evidence
   - id: self_attention
     parent_ref: modules.dit_blocks
+    decomposition:
+      status: leaf
     label: Multi-Head Self-Attention
     kind: attention
     role: apply full self-attention over latent patch tokens
@@ -737,6 +782,8 @@ modules:
     evidence: *dit_block_code_evidence
   - id: gate1
     parent_ref: modules.dit_blocks
+    decomposition:
+      status: leaf
     label: Attention Gate
     kind: gated_residual
     role: multiply the attention update by its zero-initialized conditioning gate
@@ -744,6 +791,8 @@ modules:
     evidence: *dit_block_code_evidence
   - id: add1
     parent_ref: modules.dit_blocks
+    decomposition:
+      status: leaf
     label: Attention Residual Add
     kind: residual_add
     role: add the gated attention branch to the incoming token state
@@ -751,6 +800,8 @@ modules:
     evidence: *dit_block_code_evidence
   - id: norm2
     parent_ref: modules.dit_blocks
+    decomposition:
+      status: leaf
     label: LayerNorm 2
     kind: normalization
     role: normalize the post-attention token state before MLP modulation
@@ -758,6 +809,8 @@ modules:
     evidence: *dit_block_code_evidence
   - id: scale_shift2
     parent_ref: modules.dit_blocks
+    decomposition:
+      status: leaf
     label: MLP Shift + Scale
     kind: adaptive_normalization
     role: modulate normalized tokens with the MLP branch shift and scale
@@ -765,6 +818,8 @@ modules:
     evidence: *dit_block_code_evidence
   - id: mlp_branch
     parent_ref: modules.dit_blocks
+    decomposition:
+      status: leaf
     label: Feed-Forward MLP
     kind: feed_forward
     role: apply the token-wise MLP residual branch
@@ -772,6 +827,8 @@ modules:
     evidence: *dit_block_code_evidence
   - id: gate2
     parent_ref: modules.dit_blocks
+    decomposition:
+      status: leaf
     label: MLP Gate
     kind: gated_residual
     role: multiply the MLP update by its zero-initialized conditioning gate
@@ -779,6 +836,8 @@ modules:
     evidence: *dit_block_code_evidence
   - id: add2
     parent_ref: modules.dit_blocks
+    decomposition:
+      status: leaf
     label: MLP Residual Add
     kind: residual_add
     role: add the gated MLP branch to the post-attention token state
@@ -794,8 +853,8 @@ relations:
     evidence: &dit_block_relation_evidence
       status: confirmed_from_code
       refs:
-        - kind: code
-          path: facebookresearch/DiT/models.py
+        - source_ref: dit_models_code
+          role: implementation_evidence
           lines: DiTBlock
   - id: adaln_mlp_produces_mlp_params
     from: modules.adaln_mlp
@@ -820,8 +879,8 @@ relations:
     evidence:
       status: confirmed_from_code
       refs:
-        - kind: code
-          path: facebookresearch/DiT/sample.py
+        - source_ref: dit_sample_code
+          role: implementation_evidence
           lines: main
   - id: inverse_scaling_produces_vae_decode_latent
     from: modules.inverse_latent_scaling
@@ -832,8 +891,8 @@ relations:
     evidence:
       status: confirmed_from_code
       refs:
-        - kind: code
-          path: facebookresearch/DiT/sample.py
+        - source_ref: dit_sample_code
+          role: implementation_evidence
           lines: main
   - id: vae_decode_latent_enters_frozen_decoder
     from: value_sites.vae_decode_latent
@@ -844,8 +903,8 @@ relations:
     evidence:
       status: confirmed_from_code
       refs:
-        - kind: code
-          path: facebookresearch/DiT/sample.py
+        - source_ref: dit_sample_code
+          role: implementation_evidence
           lines: main
   - id: frozen_decoder_produces_generated_image
     from: modules.frozen_vae_decoder
@@ -856,8 +915,8 @@ relations:
     evidence:
       status: confirmed_from_code
       refs:
-        - kind: code
-          path: facebookresearch/DiT/sample.py
+        - source_ref: dit_sample_code
+          role: implementation_evidence
           lines: main
   - id: initial_noise_initializes_current_latent
     from: value_sites.initial_noise
@@ -868,8 +927,8 @@ relations:
     evidence:
       status: confirmed_from_code
       refs:
-        - kind: code
-          path: facebookresearch/DiT/diffusion/gaussian_diffusion.py
+        - source_ref: dit_gaussian_diffusion_code
+          role: implementation_evidence
           lines: p_sample_loop_progressive
   - id: current_latent_enters_reverse_diffusion_step
     from: value_sites.latent_before_step
@@ -880,8 +939,8 @@ relations:
     evidence:
       status: confirmed_from_code
       refs:
-        - kind: code
-          path: facebookresearch/DiT/diffusion/gaussian_diffusion.py
+        - source_ref: dit_gaussian_diffusion_code
+          role: implementation_evidence
           lines: p_mean_variance and p_sample
   - id: noise_prediction_enters_reverse_diffusion_step
     from: value_sites.noise_prediction
@@ -892,8 +951,8 @@ relations:
     evidence:
       status: confirmed_from_code
       refs:
-        - kind: code
-          path: facebookresearch/DiT/diffusion/gaussian_diffusion.py
+        - source_ref: dit_gaussian_diffusion_code
+          role: implementation_evidence
           lines: p_mean_variance
   - id: timestep_enters_reverse_diffusion_step
     from: value_sites.timestep
@@ -904,8 +963,8 @@ relations:
     evidence:
       status: confirmed_from_code
       refs:
-        - kind: code
-          path: facebookresearch/DiT/diffusion/gaussian_diffusion.py
+        - source_ref: dit_gaussian_diffusion_code
+          role: implementation_evidence
           lines: p_mean_variance and p_sample
   - id: step_noise_enters_reverse_diffusion_step
     from: value_sites.step_noise
@@ -916,8 +975,8 @@ relations:
     evidence:
       status: confirmed_from_code
       refs:
-        - kind: code
-          path: facebookresearch/DiT/diffusion/gaussian_diffusion.py
+        - source_ref: dit_gaussian_diffusion_code
+          role: implementation_evidence
           lines: p_sample
   - id: reverse_diffusion_step_updates_current_latent
     from: modules.reverse_diffusion_step
@@ -928,8 +987,8 @@ relations:
     evidence:
       status: confirmed_from_code
       refs:
-        - kind: code
-          path: facebookresearch/DiT/diffusion/gaussian_diffusion.py
+        - source_ref: dit_gaussian_diffusion_code
+          role: implementation_evidence
           lines: p_sample
   - id: updated_latent_reenters_sampling_iteration
     from: value_sites.latent_after_step
@@ -940,8 +999,8 @@ relations:
     evidence:
       status: confirmed_from_code
       refs:
-        - kind: code
-          path: facebookresearch/DiT/diffusion/gaussian_diffusion.py
+        - source_ref: dit_gaussian_diffusion_code
+          role: implementation_evidence
           lines: p_sample_loop_progressive
           note: Each yielded sample replaces the current image tensor for the next scheduled reverse step.
   - id: current_latent_becomes_final_latent
@@ -953,8 +1012,8 @@ relations:
     evidence:
       status: confirmed_from_code
       refs:
-        - kind: code
-          path: facebookresearch/DiT/diffusion/gaussian_diffusion.py
+        - source_ref: dit_gaussian_diffusion_code
+          role: implementation_evidence
           lines: p_sample_loop_progressive
   - id: input_latent_patch_embedding
     from: value_sites.latent_before_step
@@ -965,8 +1024,8 @@ relations:
     evidence:
       status: confirmed_from_paper
       refs:
-        - kind: paper
-          path: arXiv:2212.09748
+        - source_ref: dit_2022
+          role: supporting_evidence
           lines: "Sec. 3.2 (Patchify)"
   - id: token_state_initialization
     from: modules.patchify
@@ -977,8 +1036,8 @@ relations:
     evidence:
       status: confirmed_from_code
       refs:
-        - kind: code
-          path: facebookresearch/DiT/models.py
+        - source_ref: dit_models_code
+          role: implementation_evidence
           lines: DiT.forward
   - id: timestep_featurization
     from: value_sites.timestep
@@ -989,8 +1048,8 @@ relations:
     evidence:
       status: confirmed_from_code
       refs:
-        - kind: code
-          path: facebookresearch/DiT/models.py
+        - source_ref: dit_models_code
+          role: implementation_evidence
           lines: TimestepEmbedder
   - id: timestep_embedding_projection
     from: modules.timestep_embedder
@@ -1001,8 +1060,8 @@ relations:
     evidence:
       status: confirmed_from_code
       refs:
-        - kind: code
-          path: facebookresearch/DiT/models.py
+        - source_ref: dit_models_code
+          role: implementation_evidence
           lines: TimestepEmbedder
   - id: class_label_featurization
     from: value_sites.class_label
@@ -1013,8 +1072,8 @@ relations:
     evidence:
       status: confirmed_from_code
       refs:
-        - kind: code
-          path: facebookresearch/DiT/models.py
+        - source_ref: dit_models_code
+          role: implementation_evidence
           lines: LabelEmbedder
   - id: class_embedding_lookup
     from: modules.label_embedder
@@ -1025,8 +1084,8 @@ relations:
     evidence:
       status: confirmed_from_code
       refs:
-        - kind: code
-          path: facebookresearch/DiT/models.py
+        - source_ref: dit_models_code
+          role: implementation_evidence
           lines: LabelEmbedder
   - id: timestep_conditioning_sum
     from: value_sites.t_embedding
@@ -1037,8 +1096,8 @@ relations:
     evidence:
       status: confirmed_from_code
       refs:
-        - kind: code
-          path: facebookresearch/DiT/models.py
+        - source_ref: dit_models_code
+          role: implementation_evidence
           lines: DiT.forward
   - id: class_conditioning_sum
     from: value_sites.y_embedding
@@ -1049,8 +1108,8 @@ relations:
     evidence:
       status: confirmed_from_code
       refs:
-        - kind: code
-          path: facebookresearch/DiT/models.py
+        - source_ref: dit_models_code
+          role: implementation_evidence
           lines: DiT.forward
   - id: conditioning_vector_initialization
     from: modules.cond_combiner
@@ -1061,8 +1120,8 @@ relations:
     evidence:
       status: confirmed_from_code
       refs:
-        - kind: code
-          path: facebookresearch/DiT/models.py
+        - source_ref: dit_models_code
+          role: implementation_evidence
           lines: DiT.forward
   - id: tokens_enter_block_stack
     from: value_sites.tokens_after_patchify
@@ -1073,8 +1132,8 @@ relations:
     evidence:
       status: confirmed_from_paper
       refs:
-        - kind: paper
-          path: arXiv:2212.09748
+        - source_ref: dit_2022
+          role: supporting_evidence
           lines: "Sec. 3.2"
   - id: tokens_enter_block_norm1
     from: value_sites.block_input_tokens
@@ -1085,8 +1144,8 @@ relations:
     evidence:
       status: confirmed_from_paper
       refs:
-        - kind: paper
-          path: arXiv:2212.09748
+        - source_ref: dit_2022
+          role: supporting_evidence
           lines: "Sec. 3.2"
   - id: cond_vector_enters_adaln_mlp
     from: value_sites.cond_vector
@@ -1097,8 +1156,8 @@ relations:
     evidence:
       status: confirmed_from_code
       refs:
-        - kind: code
-          path: facebookresearch/DiT/models.py
+        - source_ref: dit_models_code
+          role: implementation_evidence
           lines: DiTBlock
   - id: refined_tokens_to_final_layer
     from: value_sites.tokens_after_blocks
@@ -1109,8 +1168,8 @@ relations:
     evidence:
       status: confirmed_from_code
       refs:
-        - kind: code
-          path: facebookresearch/DiT/models.py
+        - source_ref: dit_models_code
+          role: implementation_evidence
           lines: DiT.forward
   - id: final_layer_adaln_conditioning
     from: value_sites.cond_vector
@@ -1121,8 +1180,8 @@ relations:
     evidence:
       status: confirmed_from_code
       refs:
-        - kind: code
-          path: facebookresearch/DiT/models.py
+        - source_ref: dit_models_code
+          role: implementation_evidence
           lines: FinalLayer
   - id: output_token_linear_decode
     from: modules.final_layer
@@ -1133,8 +1192,8 @@ relations:
     evidence:
       status: confirmed_from_code
       refs:
-        - kind: code
-          path: facebookresearch/DiT/models.py
+        - source_ref: dit_models_code
+          role: implementation_evidence
           lines: FinalLayer
   - id: output_token_layout_restoration
     from: value_sites.output_tokens
@@ -1145,8 +1204,8 @@ relations:
     evidence:
       status: confirmed_from_code
       refs:
-        - kind: code
-          path: facebookresearch/DiT/models.py
+        - source_ref: dit_models_code
+          role: implementation_evidence
           lines: DiT.unpatchify
   - id: spatial_noise_prediction
     from: modules.unpatchify
@@ -1157,11 +1216,11 @@ relations:
     evidence:
       status: confirmed_from_code
       refs:
-        - kind: code
-          path: facebookresearch/DiT/models.py
+        - source_ref: dit_models_code
+          role: implementation_evidence
           lines: DiT.forward
-        - kind: code
-          path: facebookresearch/DiT/diffusion/gaussian_diffusion.py
+        - source_ref: dit_gaussian_diffusion_code
+          role: implementation_evidence
           lines: p_mean_variance
   - id: attn_params_enter_adaln_mod
     from: value_sites.attn_params
@@ -1276,8 +1335,8 @@ claims:
     evidence:
       status: confirmed_from_paper
       refs:
-        - kind: paper
-          path: arXiv:2212.09748
+        - source_ref: dit_2022
+          role: supporting_evidence
           lines: "Sec. 3.2, Fig. 5"
   - id: identity_initialization_helps
     statement: Zero-initializing each block's entire six-output adaLN modulation linear makes all shifts, scale offsets, and gates initially zero; the zero gates make each block the identity at initialization, which accelerated training.
@@ -1286,11 +1345,11 @@ claims:
     evidence:
       status: confirmed_from_paper
       refs:
-        - kind: paper
-          path: arXiv:2212.09748
+        - source_ref: dit_2022
+          role: supporting_evidence
           lines: "Sec. 3.2"
-        - kind: code
-          path: facebookresearch/DiT/models.py
+        - source_ref: dit_models_code
+          role: implementation_evidence
           lines: DiT.initialize_weights
   - id: conditioning_is_per_sample
     statement: The conditioning vector is per-sample, not per-token; all tokens of a sample share the same modulation parameters, unlike per-item AdaLN.
@@ -1299,8 +1358,8 @@ claims:
     evidence:
       status: confirmed_from_code
       refs:
-        - kind: code
-          path: facebookresearch/DiT/models.py
+        - source_ref: dit_models_code
+          role: implementation_evidence
           lines: DiTBlock
           note: chunk(6, dim=1) on a B x d vector broadcasts over tokens.
 open_questions:

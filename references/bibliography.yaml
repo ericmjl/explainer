@@ -1,0 +1,54 @@
+schema_version: bibliography-v0.1
+sources:
+  - id: dit_2022
+    kind: paper
+    title: Scalable Diffusion Models with Transformers
+    authors:
+      - William Peebles
+      - Saining Xie
+    year: 2022
+    identifiers:
+      arxiv: "2212.09748"
+    url: https://arxiv.org/abs/2212.09748
+
+  - id: dit_models_code
+    kind: code
+    title: DiT model implementation
+    organization: facebookresearch
+    repository: facebookresearch/DiT
+    path: facebookresearch/DiT/models.py
+    url: https://github.com/facebookresearch/DiT/blob/main/models.py
+
+  - id: dit_sample_code
+    kind: code
+    title: DiT sampling entry point
+    organization: facebookresearch
+    repository: facebookresearch/DiT
+    path: facebookresearch/DiT/sample.py
+    url: https://github.com/facebookresearch/DiT/blob/main/sample.py
+
+  - id: dit_gaussian_diffusion_code
+    kind: code
+    title: DiT Gaussian diffusion implementation
+    organization: facebookresearch
+    repository: facebookresearch/DiT
+    path: facebookresearch/DiT/diffusion/gaussian_diffusion.py
+    url: https://github.com/facebookresearch/DiT/blob/main/diffusion/gaussian_diffusion.py
+
+  - id: dit_train_code
+    kind: code
+    title: DiT training entry point
+    organization: facebookresearch
+    repository: facebookresearch/DiT
+    path: facebookresearch/DiT/train.py
+    url: https://github.com/facebookresearch/DiT/blob/main/train.py
+
+  - id: generic_feature_refinement_source
+    kind: source
+    title: Generic Feature Refinement architecture source
+    path: architectures/generic-feature-refinement.yaml
+
+  - id: architecture_language_protocol
+    kind: protocol
+    title: Architecture language protocol
+    path: protocol/architecture-language.md

@@ -1,15 +1,304 @@
 export const manifest = {
-  "schemaVersion": "architecture-manifest-v0.3",
+  "schemaVersion": "architecture-manifest-v0.4",
   "architecture": {
-    "schemaVersion": "architecture-v0.3",
+    "schemaVersion": "architecture-v0.4",
     "id": "diffusion_transformer",
     "name": "Diffusion Transformer (DiT)",
     "status": "draft",
     "sourceYaml": "../../architectures/diffusion-transformer.yaml",
+    "sources": [
+      {
+        "source_ref": "dit_2022",
+        "role": "architecture_description"
+      },
+      {
+        "source_ref": "dit_models_code",
+        "role": "reference_implementation"
+      },
+      {
+        "source_ref": "dit_sample_code",
+        "role": "reference_implementation"
+      },
+      {
+        "source_ref": "dit_gaussian_diffusion_code",
+        "role": "reference_implementation"
+      },
+      {
+        "source_ref": "dit_train_code",
+        "role": "reference_implementation"
+      }
+    ],
+    "decomposition": {
+      "status": "complete",
+      "evidence": {
+        "status": "confirmed_from_code",
+        "refs": [
+          {
+            "source_ref": "dit_sample_code",
+            "role": "implementation_evidence",
+            "lines": "main",
+            "note": "Sampling, inverse latent scaling, and frozen VAE decoding form the complete generation path represented at the task boundary."
+          }
+        ]
+      }
+    },
+    "coverage": {
+      "method": "declared_decomposition_closure",
+      "scopes": {
+        "architecture": {
+          "status": "complete",
+          "depth": 0,
+          "immediateModuleCount": 3,
+          "immediateModuleRefs": [
+            "modules.ddpm_sampler",
+            "modules.inverse_latent_scaling",
+            "modules.frozen_vae_decoder"
+          ]
+        },
+        "modules.ddpm_sampler": {
+          "status": "complete",
+          "depth": 1,
+          "immediateModuleCount": 2,
+          "immediateModuleRefs": [
+            "modules.dit_denoiser",
+            "modules.reverse_diffusion_step"
+          ]
+        },
+        "modules.dit_denoiser": {
+          "status": "complete",
+          "depth": 2,
+          "immediateModuleCount": 7,
+          "immediateModuleRefs": [
+            "modules.patchify",
+            "modules.timestep_embedder",
+            "modules.label_embedder",
+            "modules.cond_combiner",
+            "modules.dit_blocks",
+            "modules.final_layer",
+            "modules.unpatchify"
+          ]
+        },
+        "modules.reverse_diffusion_step": {
+          "status": "leaf",
+          "depth": 2,
+          "immediateModuleCount": 0,
+          "immediateModuleRefs": [
+
+          ]
+        },
+        "modules.inverse_latent_scaling": {
+          "status": "leaf",
+          "depth": 1,
+          "immediateModuleCount": 0,
+          "immediateModuleRefs": [
+
+          ]
+        },
+        "modules.frozen_vae_decoder": {
+          "status": "opaque",
+          "reason": "external_pretrained_component",
+          "depth": 1,
+          "immediateModuleCount": 0,
+          "immediateModuleRefs": [
+
+          ]
+        },
+        "modules.patchify": {
+          "status": "leaf",
+          "depth": 3,
+          "immediateModuleCount": 0,
+          "immediateModuleRefs": [
+
+          ]
+        },
+        "modules.timestep_embedder": {
+          "status": "complete",
+          "depth": 3,
+          "immediateModuleCount": 1,
+          "immediateModuleRefs": [
+            "modules.sinusoidal_embedding"
+          ]
+        },
+        "modules.label_embedder": {
+          "status": "leaf",
+          "depth": 3,
+          "immediateModuleCount": 0,
+          "immediateModuleRefs": [
+
+          ]
+        },
+        "modules.cond_combiner": {
+          "status": "leaf",
+          "depth": 3,
+          "immediateModuleCount": 0,
+          "immediateModuleRefs": [
+
+          ]
+        },
+        "modules.dit_blocks": {
+          "status": "complete",
+          "depth": 3,
+          "immediateModuleCount": 12,
+          "immediateModuleRefs": [
+            "modules.adaln_zero",
+            "modules.adaln_mlp",
+            "modules.norm1",
+            "modules.adaln_mod",
+            "modules.self_attention",
+            "modules.gate1",
+            "modules.add1",
+            "modules.norm2",
+            "modules.scale_shift2",
+            "modules.mlp_branch",
+            "modules.gate2",
+            "modules.add2"
+          ]
+        },
+        "modules.final_layer": {
+          "status": "leaf",
+          "depth": 3,
+          "immediateModuleCount": 0,
+          "immediateModuleRefs": [
+
+          ]
+        },
+        "modules.unpatchify": {
+          "status": "leaf",
+          "depth": 3,
+          "immediateModuleCount": 0,
+          "immediateModuleRefs": [
+
+          ]
+        },
+        "modules.sinusoidal_embedding": {
+          "status": "leaf",
+          "depth": 4,
+          "immediateModuleCount": 0,
+          "immediateModuleRefs": [
+
+          ]
+        },
+        "modules.adaln_zero": {
+          "status": "leaf",
+          "depth": 4,
+          "immediateModuleCount": 0,
+          "immediateModuleRefs": [
+
+          ]
+        },
+        "modules.adaln_mlp": {
+          "status": "leaf",
+          "depth": 4,
+          "immediateModuleCount": 0,
+          "immediateModuleRefs": [
+
+          ]
+        },
+        "modules.norm1": {
+          "status": "leaf",
+          "depth": 4,
+          "immediateModuleCount": 0,
+          "immediateModuleRefs": [
+
+          ]
+        },
+        "modules.adaln_mod": {
+          "status": "leaf",
+          "depth": 4,
+          "immediateModuleCount": 0,
+          "immediateModuleRefs": [
+
+          ]
+        },
+        "modules.self_attention": {
+          "status": "leaf",
+          "depth": 4,
+          "immediateModuleCount": 0,
+          "immediateModuleRefs": [
+
+          ]
+        },
+        "modules.gate1": {
+          "status": "leaf",
+          "depth": 4,
+          "immediateModuleCount": 0,
+          "immediateModuleRefs": [
+
+          ]
+        },
+        "modules.add1": {
+          "status": "leaf",
+          "depth": 4,
+          "immediateModuleCount": 0,
+          "immediateModuleRefs": [
+
+          ]
+        },
+        "modules.norm2": {
+          "status": "leaf",
+          "depth": 4,
+          "immediateModuleCount": 0,
+          "immediateModuleRefs": [
+
+          ]
+        },
+        "modules.scale_shift2": {
+          "status": "leaf",
+          "depth": 4,
+          "immediateModuleCount": 0,
+          "immediateModuleRefs": [
+
+          ]
+        },
+        "modules.mlp_branch": {
+          "status": "leaf",
+          "depth": 4,
+          "immediateModuleCount": 0,
+          "immediateModuleRefs": [
+
+          ]
+        },
+        "modules.gate2": {
+          "status": "leaf",
+          "depth": 4,
+          "immediateModuleCount": 0,
+          "immediateModuleRefs": [
+
+          ]
+        },
+        "modules.add2": {
+          "status": "leaf",
+          "depth": 4,
+          "immediateModuleCount": 0,
+          "immediateModuleRefs": [
+
+          ]
+        }
+      },
+      "summary": {
+        "scopeCount": 26,
+        "expandedScopeCount": 5,
+        "completeExpandedScopeCount": 5,
+        "partialScopeCount": 0,
+        "leafFrontierCount": 20,
+        "opaqueFrontierCount": 1,
+        "partialFrontierCount": 0,
+        "maximumAuthoredDepth": 4
+      },
+      "opaqueFrontierRefs": [
+        "modules.frozen_vae_decoder"
+      ],
+      "partialScopeRefs": [
+
+      ]
+    },
     "modules": [
       {
         "id": "ddpm_sampler",
         "parent_ref": "architecture",
+        "decomposition": {
+          "status": "complete"
+        },
         "label": "DDPM Sampling Loop",
         "kind": "iterative_sampler",
         "role": "repeatedly call the classifier-free-guided DiT denoiser and apply stochastic reverse-diffusion updates",
@@ -19,14 +308,14 @@ export const manifest = {
           "status": "confirmed_from_code",
           "refs": [
             {
-              "kind": "code",
-              "path": "facebookresearch/DiT/sample.py",
+              "source_ref": "dit_sample_code",
+              "role": "implementation_evidence",
               "lines": "main",
               "note": "p_sample_loop starts from Gaussian latent noise and invokes forward_with_cfg over the reverse chain."
             },
             {
-              "kind": "code",
-              "path": "facebookresearch/DiT/diffusion/gaussian_diffusion.py",
+              "source_ref": "dit_gaussian_diffusion_code",
+              "role": "implementation_evidence",
               "lines": "p_sample_loop_progressive",
               "note": "The reverse loop repeatedly samples x_(t-1) from the current state."
             }
@@ -36,6 +325,9 @@ export const manifest = {
       {
         "id": "dit_denoiser",
         "parent_ref": "modules.ddpm_sampler",
+        "decomposition": {
+          "status": "complete"
+        },
         "label": "DiT Noise Predictor",
         "kind": "denoiser",
         "role": "evaluate the class- and timestep-conditioned Diffusion Transformer once to predict epsilon and learned-range variance parameters",
@@ -44,8 +336,8 @@ export const manifest = {
           "status": "confirmed_from_code",
           "refs": [
             {
-              "kind": "code",
-              "path": "facebookresearch/DiT/models.py",
+              "source_ref": "dit_models_code",
+              "role": "implementation_evidence",
               "lines": "DiT.forward and DiT.forward_with_cfg",
               "note": "One denoiser call patchifies x_t, runs the conditioned block stack, and returns spatial model predictions."
             }
@@ -55,6 +347,9 @@ export const manifest = {
       {
         "id": "reverse_diffusion_step",
         "parent_ref": "modules.ddpm_sampler",
+        "decomposition": {
+          "status": "leaf"
+        },
         "label": "DDPM Sampling Formula",
         "kind": "sampling_formula",
         "role": "use fixed diffusion-schedule math to combine x_t, timestep, predicted epsilon, learned-range variance parameters, and fresh noise into x_(t-1); this module has no learned weights",
@@ -63,8 +358,8 @@ export const manifest = {
           "status": "confirmed_from_code",
           "refs": [
             {
-              "kind": "code",
-              "path": "facebookresearch/DiT/diffusion/gaussian_diffusion.py",
+              "source_ref": "dit_gaussian_diffusion_code",
+              "role": "implementation_evidence",
               "lines": "p_mean_variance and p_sample",
               "note": "The model output parameterizes the reverse mean and learned-range variance before fresh noise is added for nonzero timesteps."
             }
@@ -74,6 +369,9 @@ export const manifest = {
       {
         "id": "inverse_latent_scaling",
         "parent_ref": "architecture",
+        "decomposition": {
+          "status": "leaf"
+        },
         "label": "Undo Latent Scaling",
         "kind": "feature_adapter",
         "role": "divide the generated latent by 0.18215 to restore the frozen VAE decoder convention",
@@ -82,8 +380,8 @@ export const manifest = {
           "status": "confirmed_from_code",
           "refs": [
             {
-              "kind": "code",
-              "path": "facebookresearch/DiT/sample.py",
+              "source_ref": "dit_sample_code",
+              "role": "implementation_evidence",
               "lines": "main",
               "note": "The final latent is divided by 0.18215 immediately before VAE decoding."
             }
@@ -93,6 +391,10 @@ export const manifest = {
       {
         "id": "frozen_vae_decoder",
         "parent_ref": "architecture",
+        "decomposition": {
+          "status": "opaque",
+          "reason": "external_pretrained_component"
+        },
         "label": "Frozen VAE Decoder",
         "kind": "decoder",
         "role": "decode the four-channel latent at one-eighth spatial resolution into RGB pixels",
@@ -102,8 +404,8 @@ export const manifest = {
           "status": "confirmed_from_code",
           "refs": [
             {
-              "kind": "code",
-              "path": "facebookresearch/DiT/sample.py",
+              "source_ref": "dit_sample_code",
+              "role": "implementation_evidence",
               "lines": "main",
               "note": "A pretrained stabilityai/sd-vae-ft decoder maps the rescaled latent to the output image."
             }
@@ -113,6 +415,9 @@ export const manifest = {
       {
         "id": "patchify",
         "parent_ref": "modules.dit_denoiser",
+        "decomposition": {
+          "status": "leaf"
+        },
         "label": "Patchify",
         "kind": "feature_adapter",
         "role": "embed p x p latent patches into tokens and add fixed 2D sin-cos positional embeddings",
@@ -121,13 +426,13 @@ export const manifest = {
           "status": "confirmed_from_paper",
           "refs": [
             {
-              "kind": "paper",
-              "path": "arXiv:2212.09748",
+              "source_ref": "dit_2022",
+              "role": "supporting_evidence",
               "lines": "Sec. 3.2 (Patchify)"
             },
             {
-              "kind": "code",
-              "path": "facebookresearch/DiT/models.py",
+              "source_ref": "dit_models_code",
+              "role": "implementation_evidence",
               "lines": "DiT.__init__ (x_embedder, pos_embed)",
               "note": "PatchEmbed plus non-learned sin-cos positional table."
             }
@@ -137,6 +442,9 @@ export const manifest = {
       {
         "id": "timestep_embedder",
         "parent_ref": "modules.dit_denoiser",
+        "decomposition": {
+          "status": "complete"
+        },
         "label": "Timestep Embedder",
         "kind": "feature_adapter",
         "role": "encode the scalar timestep with a 256-dim sinusoidal embedding followed by a two-layer SiLU MLP",
@@ -145,8 +453,8 @@ export const manifest = {
           "status": "confirmed_from_code",
           "refs": [
             {
-              "kind": "code",
-              "path": "facebookresearch/DiT/models.py",
+              "source_ref": "dit_models_code",
+              "role": "implementation_evidence",
               "lines": "TimestepEmbedder"
             }
           ]
@@ -155,6 +463,9 @@ export const manifest = {
       {
         "id": "label_embedder",
         "parent_ref": "modules.dit_denoiser",
+        "decomposition": {
+          "status": "leaf"
+        },
         "label": "Label Embedder",
         "kind": "feature_adapter",
         "role": "look up the class embedding; randomly drop labels to the null class during training for classifier-free guidance",
@@ -163,8 +474,8 @@ export const manifest = {
           "status": "confirmed_from_code",
           "refs": [
             {
-              "kind": "code",
-              "path": "facebookresearch/DiT/models.py",
+              "source_ref": "dit_models_code",
+              "role": "implementation_evidence",
               "lines": "LabelEmbedder"
             }
           ]
@@ -173,6 +484,9 @@ export const manifest = {
       {
         "id": "cond_combiner",
         "parent_ref": "modules.dit_denoiser",
+        "decomposition": {
+          "status": "leaf"
+        },
         "label": "Conditioning Combiner",
         "kind": "elementwise_sum",
         "role": "sum timestep and label embeddings into one per-sample conditioning vector",
@@ -181,8 +495,8 @@ export const manifest = {
           "status": "confirmed_from_code",
           "refs": [
             {
-              "kind": "code",
-              "path": "facebookresearch/DiT/models.py",
+              "source_ref": "dit_models_code",
+              "role": "implementation_evidence",
               "lines": "DiT.forward",
               "note": "c = t + y."
             }
@@ -192,6 +506,9 @@ export const manifest = {
       {
         "id": "dit_blocks",
         "parent_ref": "modules.dit_denoiser",
+        "decomposition": {
+          "status": "complete"
+        },
         "label": "DiT-XL Block Stack",
         "kind": "attention_stack",
         "role": "update patch tokens through 28 full-attention blocks with 16 heads, each using MLP and adaLN-Zero-gated residual branches",
@@ -217,8 +534,8 @@ export const manifest = {
           "status": "confirmed_from_paper",
           "refs": [
             {
-              "kind": "paper",
-              "path": "arXiv:2212.09748",
+              "source_ref": "dit_2022",
+              "role": "supporting_evidence",
               "lines": "Sec. 3.2 (DiT block design), Table 1",
               "note": "Depth 28 / 16 heads is the DiT-XL configuration; other sizes exist."
             }
@@ -228,6 +545,9 @@ export const manifest = {
       {
         "id": "final_layer",
         "parent_ref": "modules.dit_denoiser",
+        "decomposition": {
+          "status": "leaf"
+        },
         "label": "Final Layer",
         "kind": "decoder",
         "role": "apply adaLN-modulated LayerNorm, then linearly decode each token to a p x p x C_out patch prediction",
@@ -236,8 +556,8 @@ export const manifest = {
           "status": "confirmed_from_code",
           "refs": [
             {
-              "kind": "code",
-              "path": "facebookresearch/DiT/models.py",
+              "source_ref": "dit_models_code",
+              "role": "implementation_evidence",
               "lines": "FinalLayer"
             }
           ]
@@ -246,6 +566,9 @@ export const manifest = {
       {
         "id": "unpatchify",
         "parent_ref": "modules.dit_denoiser",
+        "decomposition": {
+          "status": "leaf"
+        },
         "label": "Unpatchify",
         "kind": "scale_transition",
         "role": "rearrange per-token patch predictions back to the spatial latent layout",
@@ -254,8 +577,8 @@ export const manifest = {
           "status": "confirmed_from_code",
           "refs": [
             {
-              "kind": "code",
-              "path": "facebookresearch/DiT/models.py",
+              "source_ref": "dit_models_code",
+              "role": "implementation_evidence",
               "lines": "DiT.unpatchify"
             }
           ]
@@ -264,6 +587,9 @@ export const manifest = {
       {
         "id": "sinusoidal_embedding",
         "parent_ref": "modules.timestep_embedder",
+        "decomposition": {
+          "status": "leaf"
+        },
         "label": "Sinusoidal Embedding + MLP",
         "kind": "standard_block_occurrence",
         "role": "reusable timestep embedding mechanism",
@@ -273,8 +599,8 @@ export const manifest = {
           "status": "confirmed_from_code",
           "refs": [
             {
-              "kind": "code",
-              "path": "facebookresearch/DiT/models.py",
+              "source_ref": "dit_models_code",
+              "role": "implementation_evidence",
               "lines": "TimestepEmbedder"
             }
           ]
@@ -283,6 +609,9 @@ export const manifest = {
       {
         "id": "adaln_zero",
         "parent_ref": "modules.dit_blocks",
+        "decomposition": {
+          "status": "leaf"
+        },
         "label": "adaLN-Zero",
         "kind": "standard_block_occurrence",
         "role": "reusable adaptive-normalization and gated-residual mechanism",
@@ -292,8 +621,8 @@ export const manifest = {
           "status": "confirmed_from_code",
           "refs": [
             {
-              "kind": "code",
-              "path": "facebookresearch/DiT/models.py",
+              "source_ref": "dit_models_code",
+              "role": "implementation_evidence",
               "lines": "DiTBlock"
             }
           ]
@@ -302,6 +631,9 @@ export const manifest = {
       {
         "id": "adaln_mlp",
         "parent_ref": "modules.dit_blocks",
+        "decomposition": {
+          "status": "leaf"
+        },
         "label": "adaLN Modulation MLP",
         "kind": "conditioning_projection",
         "role": "produce shift, scale, and gate parameters for the attention and MLP residual branches",
@@ -310,8 +642,8 @@ export const manifest = {
           "status": "confirmed_from_code",
           "refs": [
             {
-              "kind": "code",
-              "path": "facebookresearch/DiT/models.py",
+              "source_ref": "dit_models_code",
+              "role": "implementation_evidence",
               "lines": "DiTBlock",
               "note": "The modulation MLP output is chunked into six parameter vectors."
             }
@@ -321,6 +653,9 @@ export const manifest = {
       {
         "id": "norm1",
         "parent_ref": "modules.dit_blocks",
+        "decomposition": {
+          "status": "leaf"
+        },
         "label": "LayerNorm 1",
         "kind": "normalization",
         "role": "normalize the token stream before attention modulation",
@@ -329,8 +664,8 @@ export const manifest = {
           "status": "confirmed_from_code",
           "refs": [
             {
-              "kind": "code",
-              "path": "facebookresearch/DiT/models.py",
+              "source_ref": "dit_models_code",
+              "role": "implementation_evidence",
               "lines": "DiTBlock",
               "note": "The modulation MLP output is chunked into six parameter vectors."
             }
@@ -340,6 +675,9 @@ export const manifest = {
       {
         "id": "adaln_mod",
         "parent_ref": "modules.dit_blocks",
+        "decomposition": {
+          "status": "leaf"
+        },
         "label": "Attention Shift + Scale",
         "kind": "adaptive_normalization",
         "role": "modulate normalized tokens with the attention branch shift and scale",
@@ -348,8 +686,8 @@ export const manifest = {
           "status": "confirmed_from_code",
           "refs": [
             {
-              "kind": "code",
-              "path": "facebookresearch/DiT/models.py",
+              "source_ref": "dit_models_code",
+              "role": "implementation_evidence",
               "lines": "DiTBlock",
               "note": "The modulation MLP output is chunked into six parameter vectors."
             }
@@ -359,6 +697,9 @@ export const manifest = {
       {
         "id": "self_attention",
         "parent_ref": "modules.dit_blocks",
+        "decomposition": {
+          "status": "leaf"
+        },
         "label": "Multi-Head Self-Attention",
         "kind": "attention",
         "role": "apply full self-attention over latent patch tokens",
@@ -367,8 +708,8 @@ export const manifest = {
           "status": "confirmed_from_code",
           "refs": [
             {
-              "kind": "code",
-              "path": "facebookresearch/DiT/models.py",
+              "source_ref": "dit_models_code",
+              "role": "implementation_evidence",
               "lines": "DiTBlock",
               "note": "The modulation MLP output is chunked into six parameter vectors."
             }
@@ -378,6 +719,9 @@ export const manifest = {
       {
         "id": "gate1",
         "parent_ref": "modules.dit_blocks",
+        "decomposition": {
+          "status": "leaf"
+        },
         "label": "Attention Gate",
         "kind": "gated_residual",
         "role": "multiply the attention update by its zero-initialized conditioning gate",
@@ -386,8 +730,8 @@ export const manifest = {
           "status": "confirmed_from_code",
           "refs": [
             {
-              "kind": "code",
-              "path": "facebookresearch/DiT/models.py",
+              "source_ref": "dit_models_code",
+              "role": "implementation_evidence",
               "lines": "DiTBlock",
               "note": "The modulation MLP output is chunked into six parameter vectors."
             }
@@ -397,6 +741,9 @@ export const manifest = {
       {
         "id": "add1",
         "parent_ref": "modules.dit_blocks",
+        "decomposition": {
+          "status": "leaf"
+        },
         "label": "Attention Residual Add",
         "kind": "residual_add",
         "role": "add the gated attention branch to the incoming token state",
@@ -405,8 +752,8 @@ export const manifest = {
           "status": "confirmed_from_code",
           "refs": [
             {
-              "kind": "code",
-              "path": "facebookresearch/DiT/models.py",
+              "source_ref": "dit_models_code",
+              "role": "implementation_evidence",
               "lines": "DiTBlock",
               "note": "The modulation MLP output is chunked into six parameter vectors."
             }
@@ -416,6 +763,9 @@ export const manifest = {
       {
         "id": "norm2",
         "parent_ref": "modules.dit_blocks",
+        "decomposition": {
+          "status": "leaf"
+        },
         "label": "LayerNorm 2",
         "kind": "normalization",
         "role": "normalize the post-attention token state before MLP modulation",
@@ -424,8 +774,8 @@ export const manifest = {
           "status": "confirmed_from_code",
           "refs": [
             {
-              "kind": "code",
-              "path": "facebookresearch/DiT/models.py",
+              "source_ref": "dit_models_code",
+              "role": "implementation_evidence",
               "lines": "DiTBlock",
               "note": "The modulation MLP output is chunked into six parameter vectors."
             }
@@ -435,6 +785,9 @@ export const manifest = {
       {
         "id": "scale_shift2",
         "parent_ref": "modules.dit_blocks",
+        "decomposition": {
+          "status": "leaf"
+        },
         "label": "MLP Shift + Scale",
         "kind": "adaptive_normalization",
         "role": "modulate normalized tokens with the MLP branch shift and scale",
@@ -443,8 +796,8 @@ export const manifest = {
           "status": "confirmed_from_code",
           "refs": [
             {
-              "kind": "code",
-              "path": "facebookresearch/DiT/models.py",
+              "source_ref": "dit_models_code",
+              "role": "implementation_evidence",
               "lines": "DiTBlock",
               "note": "The modulation MLP output is chunked into six parameter vectors."
             }
@@ -454,6 +807,9 @@ export const manifest = {
       {
         "id": "mlp_branch",
         "parent_ref": "modules.dit_blocks",
+        "decomposition": {
+          "status": "leaf"
+        },
         "label": "Feed-Forward MLP",
         "kind": "feed_forward",
         "role": "apply the token-wise MLP residual branch",
@@ -462,8 +818,8 @@ export const manifest = {
           "status": "confirmed_from_code",
           "refs": [
             {
-              "kind": "code",
-              "path": "facebookresearch/DiT/models.py",
+              "source_ref": "dit_models_code",
+              "role": "implementation_evidence",
               "lines": "DiTBlock",
               "note": "The modulation MLP output is chunked into six parameter vectors."
             }
@@ -473,6 +829,9 @@ export const manifest = {
       {
         "id": "gate2",
         "parent_ref": "modules.dit_blocks",
+        "decomposition": {
+          "status": "leaf"
+        },
         "label": "MLP Gate",
         "kind": "gated_residual",
         "role": "multiply the MLP update by its zero-initialized conditioning gate",
@@ -481,8 +840,8 @@ export const manifest = {
           "status": "confirmed_from_code",
           "refs": [
             {
-              "kind": "code",
-              "path": "facebookresearch/DiT/models.py",
+              "source_ref": "dit_models_code",
+              "role": "implementation_evidence",
               "lines": "DiTBlock",
               "note": "The modulation MLP output is chunked into six parameter vectors."
             }
@@ -492,6 +851,9 @@ export const manifest = {
       {
         "id": "add2",
         "parent_ref": "modules.dit_blocks",
+        "decomposition": {
+          "status": "leaf"
+        },
         "label": "MLP Residual Add",
         "kind": "residual_add",
         "role": "add the gated MLP branch to the post-attention token state",
@@ -500,8 +862,8 @@ export const manifest = {
           "status": "confirmed_from_code",
           "refs": [
             {
-              "kind": "code",
-              "path": "facebookresearch/DiT/models.py",
+              "source_ref": "dit_models_code",
+              "role": "implementation_evidence",
               "lines": "DiTBlock",
               "note": "The modulation MLP output is chunked into six parameter vectors."
             }
@@ -522,8 +884,8 @@ export const manifest = {
           "status": "confirmed_from_code",
           "refs": [
             {
-              "kind": "code",
-              "path": "facebookresearch/DiT/sample.py",
+              "source_ref": "dit_sample_code",
+              "role": "implementation_evidence",
               "lines": "main",
               "note": "Sampling starts with torch.randn at four latent channels and one-eighth image resolution."
             }
@@ -542,8 +904,8 @@ export const manifest = {
           "status": "confirmed_from_code",
           "refs": [
             {
-              "kind": "code",
-              "path": "facebookresearch/DiT/diffusion/gaussian_diffusion.py",
+              "source_ref": "dit_gaussian_diffusion_code",
+              "role": "implementation_evidence",
               "lines": "p_sample",
               "note": "A fresh randn_like tensor contributes when t is nonzero."
             }
@@ -562,8 +924,8 @@ export const manifest = {
           "status": "confirmed_from_paper",
           "refs": [
             {
-              "kind": "paper",
-              "path": "arXiv:2212.09748",
+              "source_ref": "dit_2022",
+              "role": "supporting_evidence",
               "lines": "Sec. 3 (Latent diffusion), Sec. 3.2"
             }
           ]
@@ -581,8 +943,8 @@ export const manifest = {
           "status": "confirmed_from_paper",
           "refs": [
             {
-              "kind": "paper",
-              "path": "arXiv:2212.09748",
+              "source_ref": "dit_2022",
+              "role": "supporting_evidence",
               "lines": "Sec. 3.2"
             }
           ]
@@ -600,8 +962,8 @@ export const manifest = {
           "status": "confirmed_from_code",
           "refs": [
             {
-              "kind": "code",
-              "path": "facebookresearch/DiT/models.py",
+              "source_ref": "dit_models_code",
+              "role": "implementation_evidence",
               "lines": "LabelEmbedder",
               "note": "Dropped labels are mapped to an extra embedding index num_classes."
             }
@@ -620,8 +982,8 @@ export const manifest = {
           "status": "confirmed_from_code",
           "refs": [
             {
-              "kind": "code",
-              "path": "facebookresearch/DiT/models.py",
+              "source_ref": "dit_models_code",
+              "role": "implementation_evidence",
               "lines": "TimestepEmbedder"
             }
           ]
@@ -639,8 +1001,8 @@ export const manifest = {
           "status": "confirmed_from_code",
           "refs": [
             {
-              "kind": "code",
-              "path": "facebookresearch/DiT/models.py",
+              "source_ref": "dit_models_code",
+              "role": "implementation_evidence",
               "lines": "LabelEmbedder"
             }
           ]
@@ -658,8 +1020,8 @@ export const manifest = {
           "status": "confirmed_from_code",
           "refs": [
             {
-              "kind": "code",
-              "path": "facebookresearch/DiT/models.py",
+              "source_ref": "dit_models_code",
+              "role": "implementation_evidence",
               "lines": "DiT.forward",
               "note": "c = t + y before the block stack."
             }
@@ -679,8 +1041,8 @@ export const manifest = {
           "status": "confirmed_from_paper",
           "refs": [
             {
-              "kind": "paper",
-              "path": "arXiv:2212.09748",
+              "source_ref": "dit_2022",
+              "role": "supporting_evidence",
               "lines": "Sec. 3.2 (Patchify)"
             }
           ]
@@ -699,8 +1061,8 @@ export const manifest = {
           "status": "confirmed_from_code",
           "refs": [
             {
-              "kind": "code",
-              "path": "facebookresearch/DiT/models.py",
+              "source_ref": "dit_models_code",
+              "role": "implementation_evidence",
               "lines": "FinalLayer",
               "note": "Linear(hidden_size, patch_size * patch_size * out_channels)."
             }
@@ -720,14 +1082,14 @@ export const manifest = {
           "status": "confirmed_from_code",
           "refs": [
             {
-              "kind": "code",
-              "path": "facebookresearch/DiT/models.py",
+              "source_ref": "dit_models_code",
+              "role": "implementation_evidence",
               "lines": "DiT.__init__",
               "note": "out_channels is 2C only when learn_sigma is enabled."
             },
             {
-              "kind": "code",
-              "path": "facebookresearch/DiT/diffusion/gaussian_diffusion.py",
+              "source_ref": "dit_gaussian_diffusion_code",
+              "role": "implementation_evidence",
               "lines": "p_mean_variance",
               "note": "The second C channels interpolate between minimum and maximum log variance."
             }
@@ -746,8 +1108,8 @@ export const manifest = {
           "status": "confirmed_from_code",
           "refs": [
             {
-              "kind": "code",
-              "path": "facebookresearch/DiT/sample.py",
+              "source_ref": "dit_sample_code",
+              "role": "implementation_evidence",
               "lines": "main",
               "note": "p_sample_loop returns the generated latent before VAE decoding."
             }
@@ -766,8 +1128,8 @@ export const manifest = {
           "status": "confirmed_from_code",
           "refs": [
             {
-              "kind": "code",
-              "path": "facebookresearch/DiT/sample.py",
+              "source_ref": "dit_sample_code",
+              "role": "implementation_evidence",
               "lines": "main",
               "note": "The sampler output is divided by 0.18215 immediately before vae.decode."
             }
@@ -786,8 +1148,8 @@ export const manifest = {
           "status": "confirmed_from_code",
           "refs": [
             {
-              "kind": "code",
-              "path": "facebookresearch/DiT/sample.py",
+              "source_ref": "dit_sample_code",
+              "role": "implementation_evidence",
               "lines": "main",
               "note": "The frozen Stable Diffusion VAE decodes the final latent to an image tensor."
             }
@@ -807,8 +1169,8 @@ export const manifest = {
           "status": "confirmed_from_code",
           "refs": [
             {
-              "kind": "code",
-              "path": "facebookresearch/DiT/models.py",
+              "source_ref": "dit_models_code",
+              "role": "implementation_evidence",
               "lines": "DiTBlock",
               "note": "The six-way modulation output is split into shift, scale, and gate triplets for attention and MLP branches."
             }
@@ -864,7 +1226,8 @@ export const manifest = {
       {
         "id": "cond_vector",
         "representation_ref": "representations.cond_vector",
-        "scope_ref": "modules.cond_combiner"
+        "scope_ref": "modules.cond_combiner",
+        "role": "read_only_conditioning"
       },
       {
         "id": "tokens_after_patchify",
@@ -907,7 +1270,8 @@ export const manifest = {
       {
         "id": "final_latent",
         "representation_ref": "representations.final_latent",
-        "scope_ref": "modules.ddpm_sampler"
+        "scope_ref": "modules.ddpm_sampler",
+        "role": "output_state"
       },
       {
         "id": "vae_decode_latent",
@@ -918,9 +1282,294 @@ export const manifest = {
         "id": "generated_image",
         "representation_ref": "representations.generated_image",
         "scope_ref": "architecture",
-        "boundary": "output"
+        "boundary": "output",
+        "role": "task_output"
       }
     ],
+    "valueSiteInterfaces": {
+      "initial_noise": {
+        "incomingRelationRefs": [
+
+        ],
+        "outgoingRelationRefs": [
+          "relations.initial_noise_initializes_current_latent"
+        ],
+        "producerRefs": [
+
+        ],
+        "consumerRefs": [
+          "value_sites.latent_before_step"
+        ]
+      },
+      "class_label": {
+        "incomingRelationRefs": [
+
+        ],
+        "outgoingRelationRefs": [
+          "relations.class_label_featurization"
+        ],
+        "producerRefs": [
+
+        ],
+        "consumerRefs": [
+          "modules.label_embedder"
+        ]
+      },
+      "latent_before_step": {
+        "incomingRelationRefs": [
+          "relations.initial_noise_initializes_current_latent",
+          "relations.updated_latent_reenters_sampling_iteration"
+        ],
+        "outgoingRelationRefs": [
+          "relations.current_latent_enters_reverse_diffusion_step",
+          "relations.input_latent_patch_embedding"
+        ],
+        "producerRefs": [
+          "value_sites.initial_noise",
+          "value_sites.latent_after_step"
+        ],
+        "consumerRefs": [
+          "modules.reverse_diffusion_step",
+          "modules.patchify"
+        ]
+      },
+      "latent_after_step": {
+        "incomingRelationRefs": [
+          "relations.reverse_diffusion_step_updates_current_latent"
+        ],
+        "outgoingRelationRefs": [
+          "relations.updated_latent_reenters_sampling_iteration",
+          "relations.current_latent_becomes_final_latent"
+        ],
+        "producerRefs": [
+          "modules.reverse_diffusion_step"
+        ],
+        "consumerRefs": [
+          "value_sites.latent_before_step",
+          "value_sites.final_latent"
+        ]
+      },
+      "timestep": {
+        "incomingRelationRefs": [
+
+        ],
+        "outgoingRelationRefs": [
+          "relations.timestep_enters_reverse_diffusion_step",
+          "relations.timestep_featurization"
+        ],
+        "producerRefs": [
+
+        ],
+        "consumerRefs": [
+          "modules.reverse_diffusion_step",
+          "modules.timestep_embedder"
+        ]
+      },
+      "step_noise": {
+        "incomingRelationRefs": [
+
+        ],
+        "outgoingRelationRefs": [
+          "relations.step_noise_enters_reverse_diffusion_step"
+        ],
+        "producerRefs": [
+
+        ],
+        "consumerRefs": [
+          "modules.reverse_diffusion_step"
+        ]
+      },
+      "t_embedding": {
+        "incomingRelationRefs": [
+          "relations.timestep_embedding_projection"
+        ],
+        "outgoingRelationRefs": [
+          "relations.timestep_conditioning_sum"
+        ],
+        "producerRefs": [
+          "modules.timestep_embedder"
+        ],
+        "consumerRefs": [
+          "modules.cond_combiner"
+        ]
+      },
+      "y_embedding": {
+        "incomingRelationRefs": [
+          "relations.class_embedding_lookup"
+        ],
+        "outgoingRelationRefs": [
+          "relations.class_conditioning_sum"
+        ],
+        "producerRefs": [
+          "modules.label_embedder"
+        ],
+        "consumerRefs": [
+          "modules.cond_combiner"
+        ]
+      },
+      "cond_vector": {
+        "incomingRelationRefs": [
+          "relations.conditioning_vector_initialization"
+        ],
+        "outgoingRelationRefs": [
+          "relations.cond_vector_enters_adaln_mlp",
+          "relations.final_layer_adaln_conditioning"
+        ],
+        "producerRefs": [
+          "modules.cond_combiner"
+        ],
+        "consumerRefs": [
+          "modules.adaln_mlp",
+          "modules.final_layer"
+        ]
+      },
+      "tokens_after_patchify": {
+        "incomingRelationRefs": [
+          "relations.token_state_initialization"
+        ],
+        "outgoingRelationRefs": [
+          "relations.tokens_enter_block_stack"
+        ],
+        "producerRefs": [
+          "modules.patchify"
+        ],
+        "consumerRefs": [
+          "value_sites.block_input_tokens"
+        ]
+      },
+      "block_input_tokens": {
+        "incomingRelationRefs": [
+          "relations.tokens_enter_block_stack"
+        ],
+        "outgoingRelationRefs": [
+          "relations.tokens_enter_block_norm1",
+          "relations.tokens_skip_to_add1"
+        ],
+        "producerRefs": [
+          "value_sites.tokens_after_patchify"
+        ],
+        "consumerRefs": [
+          "modules.norm1",
+          "modules.add1"
+        ]
+      },
+      "attn_params": {
+        "incomingRelationRefs": [
+          "relations.adaln_mlp_produces_attn_params"
+        ],
+        "outgoingRelationRefs": [
+          "relations.attn_params_enter_adaln_mod",
+          "relations.attn_params_enter_gate1"
+        ],
+        "producerRefs": [
+          "modules.adaln_mlp"
+        ],
+        "consumerRefs": [
+          "modules.adaln_mod",
+          "modules.gate1"
+        ]
+      },
+      "mlp_params": {
+        "incomingRelationRefs": [
+          "relations.adaln_mlp_produces_mlp_params"
+        ],
+        "outgoingRelationRefs": [
+          "relations.mlp_params_enter_scale_shift2",
+          "relations.mlp_params_enter_gate2"
+        ],
+        "producerRefs": [
+          "modules.adaln_mlp"
+        ],
+        "consumerRefs": [
+          "modules.scale_shift2",
+          "modules.gate2"
+        ]
+      },
+      "tokens_after_blocks": {
+        "incomingRelationRefs": [
+          "relations.add2_produces_tokens_after_blocks"
+        ],
+        "outgoingRelationRefs": [
+          "relations.refined_tokens_to_final_layer"
+        ],
+        "producerRefs": [
+          "modules.add2"
+        ],
+        "consumerRefs": [
+          "modules.final_layer"
+        ]
+      },
+      "output_tokens": {
+        "incomingRelationRefs": [
+          "relations.output_token_linear_decode"
+        ],
+        "outgoingRelationRefs": [
+          "relations.output_token_layout_restoration"
+        ],
+        "producerRefs": [
+          "modules.final_layer"
+        ],
+        "consumerRefs": [
+          "modules.unpatchify"
+        ]
+      },
+      "noise_prediction": {
+        "incomingRelationRefs": [
+          "relations.spatial_noise_prediction"
+        ],
+        "outgoingRelationRefs": [
+          "relations.noise_prediction_enters_reverse_diffusion_step"
+        ],
+        "producerRefs": [
+          "modules.unpatchify"
+        ],
+        "consumerRefs": [
+          "modules.reverse_diffusion_step"
+        ]
+      },
+      "final_latent": {
+        "incomingRelationRefs": [
+          "relations.current_latent_becomes_final_latent"
+        ],
+        "outgoingRelationRefs": [
+          "relations.final_latent_enters_inverse_scaling"
+        ],
+        "producerRefs": [
+          "value_sites.latent_after_step"
+        ],
+        "consumerRefs": [
+          "modules.inverse_latent_scaling"
+        ]
+      },
+      "vae_decode_latent": {
+        "incomingRelationRefs": [
+          "relations.inverse_scaling_produces_vae_decode_latent"
+        ],
+        "outgoingRelationRefs": [
+          "relations.vae_decode_latent_enters_frozen_decoder"
+        ],
+        "producerRefs": [
+          "modules.inverse_latent_scaling"
+        ],
+        "consumerRefs": [
+          "modules.frozen_vae_decoder"
+        ]
+      },
+      "generated_image": {
+        "incomingRelationRefs": [
+          "relations.frozen_decoder_produces_generated_image"
+        ],
+        "outgoingRelationRefs": [
+
+        ],
+        "producerRefs": [
+          "modules.frozen_vae_decoder"
+        ],
+        "consumerRefs": [
+
+        ]
+      }
+    },
     "execution": {
       "loops": [
         {
@@ -949,20 +1598,20 @@ export const manifest = {
             "status": "confirmed_from_code",
             "refs": [
               {
-                "kind": "code",
-                "path": "facebookresearch/DiT/diffusion/gaussian_diffusion.py",
+                "source_ref": "dit_gaussian_diffusion_code",
+                "role": "implementation_evidence",
                 "lines": "p_sample_loop_progressive",
                 "note": "Each reverse step replaces x_t with a newly sampled x_(t-1); nonzero timesteps add fresh Gaussian noise."
               },
               {
-                "kind": "code",
-                "path": "facebookresearch/DiT/models.py",
+                "source_ref": "dit_models_code",
+                "role": "implementation_evidence",
                 "lines": "DiT.forward_with_cfg",
                 "note": "Conditional and null-label branches are batched; the reproducibility path guides the first three channels."
               },
               {
-                "kind": "paper",
-                "path": "arXiv:2212.09748",
+                "source_ref": "dit_2022",
+                "role": "supporting_evidence",
                 "lines": "Sec. 3.1, Sec. 4",
                 "note": "DDPM sampling with classifier-free guidance; 250 sampling steps for reported results."
               }
@@ -972,119 +1621,305 @@ export const manifest = {
       ]
     },
     "stateSemantics": {
-      "latent_before_step": {
-        "role": "state_read",
-        "produced_by": "initial_noise_or_previous_iteration",
-        "updated_by": [
-
+      "sampling_latent": {
+        "representation_ref": "representations.input_latent",
+        "value_site_refs": [
+          "value_sites.latent_before_step",
+          "value_sites.latent_after_step"
         ],
-        "consumed_by": [
-          "modules.patchify",
-          "modules.reverse_diffusion_step"
-        ],
+        "lifecycle": "iterative_loop_state",
         "notes": [
-          "This value site is x_t at the beginning of one reverse step."
-        ]
-      },
-      "latent_after_step": {
-        "role": "state_write",
-        "produced_by": "modules.reverse_diffusion_step",
-        "updated_by": [
-
+          "The before and after sites distinguish x_t from x_(t-1), avoiding an ambiguous self-edge for mutable loop state."
         ],
-        "consumed_by": [
-          "next_sampling_iteration_or_final_output"
-        ],
-        "notes": [
-          "This distinct value site is x_(t-1), avoiding an ambiguous self-edge for mutable loop state."
-        ]
+        "evidence": {
+          "status": "confirmed_from_code",
+          "refs": [
+            {
+              "source_ref": "dit_gaussian_diffusion_code",
+              "role": "implementation_evidence",
+              "lines": "p_sample_loop_progressive and p_sample"
+            }
+          ]
+        }
       },
       "final_latent": {
-        "role": "output_state",
-        "produced_by": "ddpm_sampler",
-        "updated_by": [
-
+        "representation_ref": "representations.final_latent",
+        "value_site_refs": [
+          "value_sites.final_latent"
         ],
-        "consumed_by": [
-          "inverse_latent_scaling"
-        ],
+        "lifecycle": "terminal_sampler_output",
         "notes": [
           "This is x_0 after the last reverse-diffusion update, before undoing the VAE latent scale."
-        ]
+        ],
+        "evidence": {
+          "status": "confirmed_from_code",
+          "refs": [
+            {
+              "source_ref": "dit_sample_code",
+              "role": "implementation_evidence",
+              "lines": "main"
+            }
+          ]
+        }
       },
       "generated_image": {
-        "role": "output_state",
-        "produced_by": "frozen_vae_decoder",
-        "updated_by": [
-
+        "representation_ref": "representations.generated_image",
+        "value_site_refs": [
+          "value_sites.generated_image"
         ],
-        "consumed_by": [
-
-        ]
+        "lifecycle": "task_output",
+        "evidence": {
+          "status": "confirmed_from_code",
+          "refs": [
+            {
+              "source_ref": "dit_sample_code",
+              "role": "implementation_evidence",
+              "lines": "main"
+            }
+          ]
+        }
       },
-      "tokens_after_patchify": {
-        "role": "state_read",
-        "produced_by": "modules.patchify",
-        "updated_by": [
-
+      "denoiser_token_state": {
+        "representation_ref": "representations.token_state",
+        "value_site_refs": [
+          "value_sites.tokens_after_patchify",
+          "value_sites.block_input_tokens",
+          "value_sites.tokens_after_blocks"
         ],
-        "consumed_by": [
-          "modules.dit_blocks"
-        ]
-      },
-      "tokens_after_blocks": {
-        "role": "state_write",
-        "produced_by": "modules.dit_blocks",
-        "updated_by": [
-
-        ],
-        "consumed_by": [
-          "modules.final_layer"
-        ],
+        "lifecycle": "transformed_within_forward_pass",
         "notes": [
           "The token stream is the only mutable state inside one forward pass."
-        ]
+        ],
+        "evidence": {
+          "status": "confirmed_from_code",
+          "refs": [
+            {
+              "source_ref": "dit_models_code",
+              "role": "implementation_evidence",
+              "lines": "DiT.forward and DiTBlock"
+            }
+          ]
+        }
       },
-      "cond_vector": {
-        "role": "read_only_conditioning",
-        "produced_by": "cond_combiner",
-        "updated_by": [
-
+      "conditioning_vector": {
+        "representation_ref": "representations.cond_vector",
+        "value_site_refs": [
+          "value_sites.cond_vector"
         ],
-        "consumed_by": [
-          "dit_blocks",
-          "final_layer"
-        ],
+        "lifecycle": "read_only_within_forward_pass",
         "notes": [
           "Per-sample vector; every token in a sample shares the same modulation parameters."
-        ]
+        ],
+        "evidence": {
+          "status": "confirmed_from_code",
+          "refs": [
+            {
+              "source_ref": "dit_models_code",
+              "role": "implementation_evidence",
+              "lines": "DiT.forward and DiTBlock"
+            }
+          ]
+        }
+      }
+    },
+    "stateSemanticsBySite": {
+      "latent_before_step": {
+        "representation_ref": "representations.input_latent",
+        "value_site_refs": [
+          "value_sites.latent_before_step",
+          "value_sites.latent_after_step"
+        ],
+        "lifecycle": "iterative_loop_state",
+        "notes": [
+          "The before and after sites distinguish x_t from x_(t-1), avoiding an ambiguous self-edge for mutable loop state."
+        ],
+        "evidence": {
+          "status": "confirmed_from_code",
+          "refs": [
+            {
+              "source_ref": "dit_gaussian_diffusion_code",
+              "role": "implementation_evidence",
+              "lines": "p_sample_loop_progressive and p_sample"
+            }
+          ]
+        },
+        "groupId": "sampling_latent"
+      },
+      "latent_after_step": {
+        "representation_ref": "representations.input_latent",
+        "value_site_refs": [
+          "value_sites.latent_before_step",
+          "value_sites.latent_after_step"
+        ],
+        "lifecycle": "iterative_loop_state",
+        "notes": [
+          "The before and after sites distinguish x_t from x_(t-1), avoiding an ambiguous self-edge for mutable loop state."
+        ],
+        "evidence": {
+          "status": "confirmed_from_code",
+          "refs": [
+            {
+              "source_ref": "dit_gaussian_diffusion_code",
+              "role": "implementation_evidence",
+              "lines": "p_sample_loop_progressive and p_sample"
+            }
+          ]
+        },
+        "groupId": "sampling_latent"
+      },
+      "final_latent": {
+        "representation_ref": "representations.final_latent",
+        "value_site_refs": [
+          "value_sites.final_latent"
+        ],
+        "lifecycle": "terminal_sampler_output",
+        "notes": [
+          "This is x_0 after the last reverse-diffusion update, before undoing the VAE latent scale."
+        ],
+        "evidence": {
+          "status": "confirmed_from_code",
+          "refs": [
+            {
+              "source_ref": "dit_sample_code",
+              "role": "implementation_evidence",
+              "lines": "main"
+            }
+          ]
+        },
+        "groupId": "final_latent"
+      },
+      "generated_image": {
+        "representation_ref": "representations.generated_image",
+        "value_site_refs": [
+          "value_sites.generated_image"
+        ],
+        "lifecycle": "task_output",
+        "evidence": {
+          "status": "confirmed_from_code",
+          "refs": [
+            {
+              "source_ref": "dit_sample_code",
+              "role": "implementation_evidence",
+              "lines": "main"
+            }
+          ]
+        },
+        "groupId": "generated_image"
+      },
+      "tokens_after_patchify": {
+        "representation_ref": "representations.token_state",
+        "value_site_refs": [
+          "value_sites.tokens_after_patchify",
+          "value_sites.block_input_tokens",
+          "value_sites.tokens_after_blocks"
+        ],
+        "lifecycle": "transformed_within_forward_pass",
+        "notes": [
+          "The token stream is the only mutable state inside one forward pass."
+        ],
+        "evidence": {
+          "status": "confirmed_from_code",
+          "refs": [
+            {
+              "source_ref": "dit_models_code",
+              "role": "implementation_evidence",
+              "lines": "DiT.forward and DiTBlock"
+            }
+          ]
+        },
+        "groupId": "denoiser_token_state"
+      },
+      "block_input_tokens": {
+        "representation_ref": "representations.token_state",
+        "value_site_refs": [
+          "value_sites.tokens_after_patchify",
+          "value_sites.block_input_tokens",
+          "value_sites.tokens_after_blocks"
+        ],
+        "lifecycle": "transformed_within_forward_pass",
+        "notes": [
+          "The token stream is the only mutable state inside one forward pass."
+        ],
+        "evidence": {
+          "status": "confirmed_from_code",
+          "refs": [
+            {
+              "source_ref": "dit_models_code",
+              "role": "implementation_evidence",
+              "lines": "DiT.forward and DiTBlock"
+            }
+          ]
+        },
+        "groupId": "denoiser_token_state"
+      },
+      "tokens_after_blocks": {
+        "representation_ref": "representations.token_state",
+        "value_site_refs": [
+          "value_sites.tokens_after_patchify",
+          "value_sites.block_input_tokens",
+          "value_sites.tokens_after_blocks"
+        ],
+        "lifecycle": "transformed_within_forward_pass",
+        "notes": [
+          "The token stream is the only mutable state inside one forward pass."
+        ],
+        "evidence": {
+          "status": "confirmed_from_code",
+          "refs": [
+            {
+              "source_ref": "dit_models_code",
+              "role": "implementation_evidence",
+              "lines": "DiT.forward and DiTBlock"
+            }
+          ]
+        },
+        "groupId": "denoiser_token_state"
+      },
+      "cond_vector": {
+        "representation_ref": "representations.cond_vector",
+        "value_site_refs": [
+          "value_sites.cond_vector"
+        ],
+        "lifecycle": "read_only_within_forward_pass",
+        "notes": [
+          "Per-sample vector; every token in a sample shares the same modulation parameters."
+        ],
+        "evidence": {
+          "status": "confirmed_from_code",
+          "refs": [
+            {
+              "source_ref": "dit_models_code",
+              "role": "implementation_evidence",
+              "lines": "DiT.forward and DiTBlock"
+            }
+          ]
+        },
+        "groupId": "conditioning_vector"
       }
     },
     "conditioning": [
       {
         "id": "sampling_class_guidance",
         "relation_ref": "relations.class_label_featurization",
-        "source": "value_sites.class_label",
-        "target": "modules.label_embedder",
         "mode": "classifier_free_guidance",
         "updates_source": false,
         "evidence": {
           "status": "confirmed_from_code",
           "refs": [
             {
-              "kind": "code",
-              "path": "facebookresearch/DiT/sample.py",
+              "source_ref": "dit_sample_code",
+              "role": "implementation_evidence",
               "lines": "main",
               "note": "Conditional labels are paired with null labels and passed through forward_with_cfg."
             }
           ]
-        }
+        },
+        "source": "value_sites.class_label",
+        "target": "modules.label_embedder"
       },
       {
         "id": "block_adaln_zero",
         "relation_ref": "relations.cond_vector_enters_adaln_mlp",
-        "source": "value_sites.cond_vector",
-        "target": "modules.adaln_mlp",
         "mode": "adaln_zero",
         "standard_block_ref": "standard_blocks/adaln-zero-conditioning.yaml",
         "updates_source": false,
@@ -1092,97 +1927,117 @@ export const manifest = {
           "status": "confirmed_from_code",
           "refs": [
             {
-              "kind": "code",
-              "path": "facebookresearch/DiT/models.py",
+              "source_ref": "dit_models_code",
+              "role": "implementation_evidence",
               "lines": "DiTBlock",
               "note": "adaLN_modulation(c).chunk(6) yields shift/scale/gate for both branches; the weights and bias of the entire six-output modulation linear are zero-initialized."
             }
           ]
-        }
+        },
+        "source": "value_sites.cond_vector",
+        "target": "modules.adaln_mlp"
       },
       {
         "id": "final_layer_adaln",
         "relation_ref": "relations.final_layer_adaln_conditioning",
-        "source": "value_sites.cond_vector",
-        "target": "modules.final_layer",
         "mode": "adaln",
         "updates_source": false,
         "evidence": {
           "status": "confirmed_from_code",
           "refs": [
             {
-              "kind": "code",
-              "path": "facebookresearch/DiT/models.py",
+              "source_ref": "dit_models_code",
+              "role": "implementation_evidence",
               "lines": "FinalLayer",
               "note": "adaLN_modulation(c).chunk(2) yields shift/scale before the linear decode; no gate in the final layer."
             }
           ]
-        }
+        },
+        "source": "value_sites.cond_vector",
+        "target": "modules.final_layer"
       }
     ],
     "scaleTransitions": [
       {
         "id": "patchify_tokens",
-        "from_scale": "spatial",
-        "to_scale": "token",
-        "source": "value_sites.latent_before_step",
-        "target": "value_sites.tokens_after_patchify",
-        "projection": "patch_embedding",
+        "relation_path": [
+          "relations.input_latent_patch_embedding",
+          "relations.token_state_initialization"
+        ],
         "aggregation": "flatten_patches",
         "copy_vs_pool": "pool",
         "evidence": {
           "status": "confirmed_from_paper",
           "refs": [
             {
-              "kind": "paper",
-              "path": "arXiv:2212.09748",
+              "source_ref": "dit_2022",
+              "role": "supporting_evidence",
               "lines": "Sec. 3.2 (Patchify)",
               "note": "p x p patches are linearly embedded into T = (I/p)^2 tokens."
             }
           ]
-        }
+        },
+        "source": "value_sites.latent_before_step",
+        "target": "value_sites.tokens_after_patchify",
+        "from_scale": "spatial",
+        "to_scale": "token",
+        "projection_refs": [
+          "modules.patchify"
+        ]
       },
       {
         "id": "unpatchify_output",
-        "from_scale": "token",
-        "to_scale": "spatial",
-        "source": "value_sites.output_tokens",
-        "target": "value_sites.noise_prediction",
-        "projection": "none",
+        "relation_path": [
+          "relations.output_token_layout_restoration",
+          "relations.spatial_noise_prediction"
+        ],
         "aggregation": "reshape",
         "copy_vs_pool": "copy",
         "evidence": {
           "status": "confirmed_from_paper",
           "refs": [
             {
-              "kind": "paper",
-              "path": "arXiv:2212.09748",
+              "source_ref": "dit_2022",
+              "role": "supporting_evidence",
               "lines": "Sec. 3.2 (Transformer decoder)",
               "note": "Decoded tokens are rearranged back to the spatial latent layout; lossless reshape."
             }
           ]
-        }
+        },
+        "source": "value_sites.output_tokens",
+        "target": "value_sites.noise_prediction",
+        "from_scale": "token",
+        "to_scale": "spatial",
+        "projection_refs": [
+          "modules.unpatchify"
+        ]
       },
       {
         "id": "vae_decode_pixels",
-        "from_scale": "spatial",
-        "to_scale": "output",
-        "source": "value_sites.vae_decode_latent",
-        "target": "value_sites.generated_image",
-        "projection": "frozen_vae_decode",
+        "relation_path": [
+          "relations.vae_decode_latent_enters_frozen_decoder",
+          "relations.frozen_decoder_produces_generated_image"
+        ],
         "aggregation": "learned_upsampling",
         "copy_vs_pool": "expand",
         "evidence": {
           "status": "confirmed_from_code",
           "refs": [
             {
-              "kind": "code",
-              "path": "facebookresearch/DiT/sample.py",
+              "source_ref": "dit_sample_code",
+              "role": "implementation_evidence",
               "lines": "main",
               "note": "The pretrained VAE decoder maps the four-channel latent at one-eighth resolution to RGB pixels."
             }
           ]
-        }
+        },
+        "source": "value_sites.vae_decode_latent",
+        "target": "value_sites.generated_image",
+        "from_scale": "spatial",
+        "to_scale": "output",
+        "projection_refs": [
+          "modules.frozen_vae_decoder"
+        ]
       }
     ],
     "trainingInference": {
@@ -1235,8 +2090,8 @@ export const manifest = {
           "status": "confirmed_from_code",
           "refs": [
             {
-              "kind": "code",
-              "path": "facebookresearch/DiT/models.py",
+              "source_ref": "dit_models_code",
+              "role": "implementation_evidence",
               "lines": "DiTBlock"
             }
           ]
@@ -1255,8 +2110,8 @@ export const manifest = {
           "status": "confirmed_from_code",
           "refs": [
             {
-              "kind": "code",
-              "path": "facebookresearch/DiT/models.py",
+              "source_ref": "dit_models_code",
+              "role": "implementation_evidence",
               "lines": "DiTBlock"
             }
           ]
@@ -1275,8 +2130,8 @@ export const manifest = {
           "status": "confirmed_from_code",
           "refs": [
             {
-              "kind": "code",
-              "path": "facebookresearch/DiT/models.py",
+              "source_ref": "dit_models_code",
+              "role": "implementation_evidence",
               "lines": "DiTBlock"
             }
           ]
@@ -1295,8 +2150,8 @@ export const manifest = {
           "status": "confirmed_from_code",
           "refs": [
             {
-              "kind": "code",
-              "path": "facebookresearch/DiT/sample.py",
+              "source_ref": "dit_sample_code",
+              "role": "implementation_evidence",
               "lines": "main"
             }
           ]
@@ -1315,8 +2170,8 @@ export const manifest = {
           "status": "confirmed_from_code",
           "refs": [
             {
-              "kind": "code",
-              "path": "facebookresearch/DiT/sample.py",
+              "source_ref": "dit_sample_code",
+              "role": "implementation_evidence",
               "lines": "main"
             }
           ]
@@ -1335,8 +2190,8 @@ export const manifest = {
           "status": "confirmed_from_code",
           "refs": [
             {
-              "kind": "code",
-              "path": "facebookresearch/DiT/sample.py",
+              "source_ref": "dit_sample_code",
+              "role": "implementation_evidence",
               "lines": "main"
             }
           ]
@@ -1355,8 +2210,8 @@ export const manifest = {
           "status": "confirmed_from_code",
           "refs": [
             {
-              "kind": "code",
-              "path": "facebookresearch/DiT/sample.py",
+              "source_ref": "dit_sample_code",
+              "role": "implementation_evidence",
               "lines": "main"
             }
           ]
@@ -1375,8 +2230,8 @@ export const manifest = {
           "status": "confirmed_from_code",
           "refs": [
             {
-              "kind": "code",
-              "path": "facebookresearch/DiT/diffusion/gaussian_diffusion.py",
+              "source_ref": "dit_gaussian_diffusion_code",
+              "role": "implementation_evidence",
               "lines": "p_sample_loop_progressive"
             }
           ]
@@ -1395,8 +2250,8 @@ export const manifest = {
           "status": "confirmed_from_code",
           "refs": [
             {
-              "kind": "code",
-              "path": "facebookresearch/DiT/diffusion/gaussian_diffusion.py",
+              "source_ref": "dit_gaussian_diffusion_code",
+              "role": "implementation_evidence",
               "lines": "p_mean_variance and p_sample"
             }
           ]
@@ -1415,8 +2270,8 @@ export const manifest = {
           "status": "confirmed_from_code",
           "refs": [
             {
-              "kind": "code",
-              "path": "facebookresearch/DiT/diffusion/gaussian_diffusion.py",
+              "source_ref": "dit_gaussian_diffusion_code",
+              "role": "implementation_evidence",
               "lines": "p_mean_variance"
             }
           ]
@@ -1435,8 +2290,8 @@ export const manifest = {
           "status": "confirmed_from_code",
           "refs": [
             {
-              "kind": "code",
-              "path": "facebookresearch/DiT/diffusion/gaussian_diffusion.py",
+              "source_ref": "dit_gaussian_diffusion_code",
+              "role": "implementation_evidence",
               "lines": "p_mean_variance and p_sample"
             }
           ]
@@ -1455,8 +2310,8 @@ export const manifest = {
           "status": "confirmed_from_code",
           "refs": [
             {
-              "kind": "code",
-              "path": "facebookresearch/DiT/diffusion/gaussian_diffusion.py",
+              "source_ref": "dit_gaussian_diffusion_code",
+              "role": "implementation_evidence",
               "lines": "p_sample"
             }
           ]
@@ -1475,8 +2330,8 @@ export const manifest = {
           "status": "confirmed_from_code",
           "refs": [
             {
-              "kind": "code",
-              "path": "facebookresearch/DiT/diffusion/gaussian_diffusion.py",
+              "source_ref": "dit_gaussian_diffusion_code",
+              "role": "implementation_evidence",
               "lines": "p_sample"
             }
           ]
@@ -1495,8 +2350,8 @@ export const manifest = {
           "status": "confirmed_from_code",
           "refs": [
             {
-              "kind": "code",
-              "path": "facebookresearch/DiT/diffusion/gaussian_diffusion.py",
+              "source_ref": "dit_gaussian_diffusion_code",
+              "role": "implementation_evidence",
               "lines": "p_sample_loop_progressive",
               "note": "Each yielded sample replaces the current image tensor for the next scheduled reverse step."
             }
@@ -1516,8 +2371,8 @@ export const manifest = {
           "status": "confirmed_from_code",
           "refs": [
             {
-              "kind": "code",
-              "path": "facebookresearch/DiT/diffusion/gaussian_diffusion.py",
+              "source_ref": "dit_gaussian_diffusion_code",
+              "role": "implementation_evidence",
               "lines": "p_sample_loop_progressive"
             }
           ]
@@ -1536,8 +2391,8 @@ export const manifest = {
           "status": "confirmed_from_paper",
           "refs": [
             {
-              "kind": "paper",
-              "path": "arXiv:2212.09748",
+              "source_ref": "dit_2022",
+              "role": "supporting_evidence",
               "lines": "Sec. 3.2 (Patchify)"
             }
           ]
@@ -1556,8 +2411,8 @@ export const manifest = {
           "status": "confirmed_from_code",
           "refs": [
             {
-              "kind": "code",
-              "path": "facebookresearch/DiT/models.py",
+              "source_ref": "dit_models_code",
+              "role": "implementation_evidence",
               "lines": "DiT.forward"
             }
           ]
@@ -1576,8 +2431,8 @@ export const manifest = {
           "status": "confirmed_from_code",
           "refs": [
             {
-              "kind": "code",
-              "path": "facebookresearch/DiT/models.py",
+              "source_ref": "dit_models_code",
+              "role": "implementation_evidence",
               "lines": "TimestepEmbedder"
             }
           ]
@@ -1596,8 +2451,8 @@ export const manifest = {
           "status": "confirmed_from_code",
           "refs": [
             {
-              "kind": "code",
-              "path": "facebookresearch/DiT/models.py",
+              "source_ref": "dit_models_code",
+              "role": "implementation_evidence",
               "lines": "TimestepEmbedder"
             }
           ]
@@ -1616,8 +2471,8 @@ export const manifest = {
           "status": "confirmed_from_code",
           "refs": [
             {
-              "kind": "code",
-              "path": "facebookresearch/DiT/models.py",
+              "source_ref": "dit_models_code",
+              "role": "implementation_evidence",
               "lines": "LabelEmbedder"
             }
           ]
@@ -1636,8 +2491,8 @@ export const manifest = {
           "status": "confirmed_from_code",
           "refs": [
             {
-              "kind": "code",
-              "path": "facebookresearch/DiT/models.py",
+              "source_ref": "dit_models_code",
+              "role": "implementation_evidence",
               "lines": "LabelEmbedder"
             }
           ]
@@ -1656,8 +2511,8 @@ export const manifest = {
           "status": "confirmed_from_code",
           "refs": [
             {
-              "kind": "code",
-              "path": "facebookresearch/DiT/models.py",
+              "source_ref": "dit_models_code",
+              "role": "implementation_evidence",
               "lines": "DiT.forward"
             }
           ]
@@ -1676,8 +2531,8 @@ export const manifest = {
           "status": "confirmed_from_code",
           "refs": [
             {
-              "kind": "code",
-              "path": "facebookresearch/DiT/models.py",
+              "source_ref": "dit_models_code",
+              "role": "implementation_evidence",
               "lines": "DiT.forward"
             }
           ]
@@ -1696,8 +2551,8 @@ export const manifest = {
           "status": "confirmed_from_code",
           "refs": [
             {
-              "kind": "code",
-              "path": "facebookresearch/DiT/models.py",
+              "source_ref": "dit_models_code",
+              "role": "implementation_evidence",
               "lines": "DiT.forward"
             }
           ]
@@ -1716,8 +2571,8 @@ export const manifest = {
           "status": "confirmed_from_paper",
           "refs": [
             {
-              "kind": "paper",
-              "path": "arXiv:2212.09748",
+              "source_ref": "dit_2022",
+              "role": "supporting_evidence",
               "lines": "Sec. 3.2"
             }
           ]
@@ -1736,8 +2591,8 @@ export const manifest = {
           "status": "confirmed_from_paper",
           "refs": [
             {
-              "kind": "paper",
-              "path": "arXiv:2212.09748",
+              "source_ref": "dit_2022",
+              "role": "supporting_evidence",
               "lines": "Sec. 3.2"
             }
           ]
@@ -1756,8 +2611,8 @@ export const manifest = {
           "status": "confirmed_from_code",
           "refs": [
             {
-              "kind": "code",
-              "path": "facebookresearch/DiT/models.py",
+              "source_ref": "dit_models_code",
+              "role": "implementation_evidence",
               "lines": "DiTBlock"
             }
           ]
@@ -1776,8 +2631,8 @@ export const manifest = {
           "status": "confirmed_from_code",
           "refs": [
             {
-              "kind": "code",
-              "path": "facebookresearch/DiT/models.py",
+              "source_ref": "dit_models_code",
+              "role": "implementation_evidence",
               "lines": "DiT.forward"
             }
           ]
@@ -1796,8 +2651,8 @@ export const manifest = {
           "status": "confirmed_from_code",
           "refs": [
             {
-              "kind": "code",
-              "path": "facebookresearch/DiT/models.py",
+              "source_ref": "dit_models_code",
+              "role": "implementation_evidence",
               "lines": "FinalLayer"
             }
           ]
@@ -1816,8 +2671,8 @@ export const manifest = {
           "status": "confirmed_from_code",
           "refs": [
             {
-              "kind": "code",
-              "path": "facebookresearch/DiT/models.py",
+              "source_ref": "dit_models_code",
+              "role": "implementation_evidence",
               "lines": "FinalLayer"
             }
           ]
@@ -1836,8 +2691,8 @@ export const manifest = {
           "status": "confirmed_from_code",
           "refs": [
             {
-              "kind": "code",
-              "path": "facebookresearch/DiT/models.py",
+              "source_ref": "dit_models_code",
+              "role": "implementation_evidence",
               "lines": "DiT.unpatchify"
             }
           ]
@@ -1856,13 +2711,13 @@ export const manifest = {
           "status": "confirmed_from_code",
           "refs": [
             {
-              "kind": "code",
-              "path": "facebookresearch/DiT/models.py",
+              "source_ref": "dit_models_code",
+              "role": "implementation_evidence",
               "lines": "DiT.forward"
             },
             {
-              "kind": "code",
-              "path": "facebookresearch/DiT/diffusion/gaussian_diffusion.py",
+              "source_ref": "dit_gaussian_diffusion_code",
+              "role": "implementation_evidence",
               "lines": "p_mean_variance"
             }
           ]
@@ -1881,8 +2736,8 @@ export const manifest = {
           "status": "confirmed_from_code",
           "refs": [
             {
-              "kind": "code",
-              "path": "facebookresearch/DiT/models.py",
+              "source_ref": "dit_models_code",
+              "role": "implementation_evidence",
               "lines": "DiTBlock"
             }
           ]
@@ -1901,8 +2756,8 @@ export const manifest = {
           "status": "confirmed_from_code",
           "refs": [
             {
-              "kind": "code",
-              "path": "facebookresearch/DiT/models.py",
+              "source_ref": "dit_models_code",
+              "role": "implementation_evidence",
               "lines": "DiTBlock"
             }
           ]
@@ -1921,8 +2776,8 @@ export const manifest = {
           "status": "confirmed_from_code",
           "refs": [
             {
-              "kind": "code",
-              "path": "facebookresearch/DiT/models.py",
+              "source_ref": "dit_models_code",
+              "role": "implementation_evidence",
               "lines": "DiTBlock"
             }
           ]
@@ -1941,8 +2796,8 @@ export const manifest = {
           "status": "confirmed_from_code",
           "refs": [
             {
-              "kind": "code",
-              "path": "facebookresearch/DiT/models.py",
+              "source_ref": "dit_models_code",
+              "role": "implementation_evidence",
               "lines": "DiTBlock"
             }
           ]
@@ -1961,8 +2816,8 @@ export const manifest = {
           "status": "confirmed_from_code",
           "refs": [
             {
-              "kind": "code",
-              "path": "facebookresearch/DiT/models.py",
+              "source_ref": "dit_models_code",
+              "role": "implementation_evidence",
               "lines": "DiTBlock"
             }
           ]
@@ -1981,8 +2836,8 @@ export const manifest = {
           "status": "confirmed_from_code",
           "refs": [
             {
-              "kind": "code",
-              "path": "facebookresearch/DiT/models.py",
+              "source_ref": "dit_models_code",
+              "role": "implementation_evidence",
               "lines": "DiTBlock"
             }
           ]
@@ -2001,8 +2856,8 @@ export const manifest = {
           "status": "confirmed_from_code",
           "refs": [
             {
-              "kind": "code",
-              "path": "facebookresearch/DiT/models.py",
+              "source_ref": "dit_models_code",
+              "role": "implementation_evidence",
               "lines": "DiTBlock"
             }
           ]
@@ -2021,8 +2876,8 @@ export const manifest = {
           "status": "confirmed_from_code",
           "refs": [
             {
-              "kind": "code",
-              "path": "facebookresearch/DiT/models.py",
+              "source_ref": "dit_models_code",
+              "role": "implementation_evidence",
               "lines": "DiTBlock"
             }
           ]
@@ -2041,8 +2896,8 @@ export const manifest = {
           "status": "confirmed_from_code",
           "refs": [
             {
-              "kind": "code",
-              "path": "facebookresearch/DiT/models.py",
+              "source_ref": "dit_models_code",
+              "role": "implementation_evidence",
               "lines": "DiTBlock"
             }
           ]
@@ -2061,8 +2916,8 @@ export const manifest = {
           "status": "confirmed_from_code",
           "refs": [
             {
-              "kind": "code",
-              "path": "facebookresearch/DiT/models.py",
+              "source_ref": "dit_models_code",
+              "role": "implementation_evidence",
               "lines": "DiTBlock"
             }
           ]
@@ -2081,8 +2936,8 @@ export const manifest = {
           "status": "confirmed_from_code",
           "refs": [
             {
-              "kind": "code",
-              "path": "facebookresearch/DiT/models.py",
+              "source_ref": "dit_models_code",
+              "role": "implementation_evidence",
               "lines": "DiTBlock"
             }
           ]
@@ -2101,8 +2956,8 @@ export const manifest = {
           "status": "confirmed_from_code",
           "refs": [
             {
-              "kind": "code",
-              "path": "facebookresearch/DiT/models.py",
+              "source_ref": "dit_models_code",
+              "role": "implementation_evidence",
               "lines": "DiTBlock"
             }
           ]
@@ -2121,8 +2976,8 @@ export const manifest = {
           "status": "confirmed_from_code",
           "refs": [
             {
-              "kind": "code",
-              "path": "facebookresearch/DiT/models.py",
+              "source_ref": "dit_models_code",
+              "role": "implementation_evidence",
               "lines": "DiTBlock"
             }
           ]
@@ -2141,8 +2996,8 @@ export const manifest = {
           "status": "confirmed_from_code",
           "refs": [
             {
-              "kind": "code",
-              "path": "facebookresearch/DiT/models.py",
+              "source_ref": "dit_models_code",
+              "role": "implementation_evidence",
               "lines": "DiTBlock"
             }
           ]
@@ -2161,8 +3016,8 @@ export const manifest = {
           "status": "confirmed_from_code",
           "refs": [
             {
-              "kind": "code",
-              "path": "facebookresearch/DiT/models.py",
+              "source_ref": "dit_models_code",
+              "role": "implementation_evidence",
               "lines": "DiTBlock"
             }
           ]
@@ -2170,9 +3025,138 @@ export const manifest = {
       }
     ],
     "claims": [
-      "adaLN-Zero conditioning outperformed in-context conditioning and cross-attention conditioning in the DiT block ablations.",
-      "Zero-initializing each block's entire six-output adaLN modulation linear makes all shifts, scale offsets, and gates initially zero; the zero gates make each block the identity at initialization, which accelerated training.",
-      "The conditioning vector is per-sample, not per-token; all tokens of a sample share the same modulation parameters, unlike per-item AdaLN."
+      {
+        "id": "adaln_zero_beats_alternatives",
+        "statement": "adaLN-Zero conditioning outperformed in-context conditioning and cross-attention conditioning in the DiT block ablations.",
+        "scope": {
+          "module": "dit_blocks"
+        },
+        "evidence": {
+          "status": "confirmed_from_paper",
+          "refs": [
+            {
+              "source_ref": "dit_2022",
+              "role": "supporting_evidence",
+              "lines": "Sec. 3.2, Fig. 5"
+            }
+          ]
+        }
+      },
+      {
+        "id": "identity_initialization_helps",
+        "statement": "Zero-initializing each block's entire six-output adaLN modulation linear makes all shifts, scale offsets, and gates initially zero; the zero gates make each block the identity at initialization, which accelerated training.",
+        "scope": {
+          "module": "dit_blocks"
+        },
+        "evidence": {
+          "status": "confirmed_from_paper",
+          "refs": [
+            {
+              "source_ref": "dit_2022",
+              "role": "supporting_evidence",
+              "lines": "Sec. 3.2"
+            },
+            {
+              "source_ref": "dit_models_code",
+              "role": "implementation_evidence",
+              "lines": "DiT.initialize_weights"
+            }
+          ]
+        }
+      },
+      {
+        "id": "conditioning_is_per_sample",
+        "statement": "The conditioning vector is per-sample, not per-token; all tokens of a sample share the same modulation parameters, unlike per-item AdaLN.",
+        "scope": {
+          "module": "dit_blocks"
+        },
+        "evidence": {
+          "status": "confirmed_from_code",
+          "refs": [
+            {
+              "source_ref": "dit_models_code",
+              "role": "implementation_evidence",
+              "lines": "DiTBlock",
+              "note": "chunk(6, dim=1) on a B x d vector broadcasts over tokens."
+            }
+          ]
+        }
+      }
+    ]
+  },
+  "bibliography": {
+    "schemaVersion": "bibliography-v0.1",
+    "sourceYaml": "../../references/bibliography.yaml",
+    "sources": [
+      {
+        "id": "dit_2022",
+        "kind": "paper",
+        "title": "Scalable Diffusion Models with Transformers",
+        "authors": [
+          "William Peebles",
+          "Saining Xie"
+        ],
+        "year": 2022,
+        "identifiers": {
+          "arxiv": "2212.09748"
+        },
+        "url": "https://arxiv.org/abs/2212.09748",
+        "href": "https://arxiv.org/abs/2212.09748"
+      },
+      {
+        "id": "dit_models_code",
+        "kind": "code",
+        "title": "DiT model implementation",
+        "organization": "facebookresearch",
+        "repository": "facebookresearch/DiT",
+        "path": "facebookresearch/DiT/models.py",
+        "url": "https://github.com/facebookresearch/DiT/blob/main/models.py",
+        "href": "https://github.com/facebookresearch/DiT/blob/main/models.py"
+      },
+      {
+        "id": "dit_sample_code",
+        "kind": "code",
+        "title": "DiT sampling entry point",
+        "organization": "facebookresearch",
+        "repository": "facebookresearch/DiT",
+        "path": "facebookresearch/DiT/sample.py",
+        "url": "https://github.com/facebookresearch/DiT/blob/main/sample.py",
+        "href": "https://github.com/facebookresearch/DiT/blob/main/sample.py"
+      },
+      {
+        "id": "dit_gaussian_diffusion_code",
+        "kind": "code",
+        "title": "DiT Gaussian diffusion implementation",
+        "organization": "facebookresearch",
+        "repository": "facebookresearch/DiT",
+        "path": "facebookresearch/DiT/diffusion/gaussian_diffusion.py",
+        "url": "https://github.com/facebookresearch/DiT/blob/main/diffusion/gaussian_diffusion.py",
+        "href": "https://github.com/facebookresearch/DiT/blob/main/diffusion/gaussian_diffusion.py"
+      },
+      {
+        "id": "dit_train_code",
+        "kind": "code",
+        "title": "DiT training entry point",
+        "organization": "facebookresearch",
+        "repository": "facebookresearch/DiT",
+        "path": "facebookresearch/DiT/train.py",
+        "url": "https://github.com/facebookresearch/DiT/blob/main/train.py",
+        "href": "https://github.com/facebookresearch/DiT/blob/main/train.py"
+      },
+      {
+        "id": "generic_feature_refinement_source",
+        "kind": "source",
+        "title": "Generic Feature Refinement architecture source",
+        "path": "architectures/generic-feature-refinement.yaml",
+        "href": "../../architectures/generic-feature-refinement.yaml"
+      },
+      {
+        "id": "architecture_language_protocol",
+        "kind": "protocol",
+        "title": "Architecture language protocol",
+        "path": "protocol/architecture-language.md",
+        "href": "../../protocol/architecture-language.md"
+      }
     ]
   },
   "standardBlocks": {
@@ -2263,6 +3247,16 @@ export const manifest = {
   "pseudocode": {
     "diffusion_transformer": {
       "sourceYaml": "../../pseudocode/diffusion-transformer.yaml",
+      "sources": [
+        {
+          "id": "dit_paper",
+          "source_ref": "dit_2022"
+        },
+        {
+          "id": "dit_code",
+          "source_ref": "dit_models_code"
+        }
+      ],
       "symbols": [
         {
           "id": "initial_noise",
@@ -2403,6 +3397,27 @@ export const manifest = {
             "modules.unpatchify"
           ]
         }
+      ],
+      "claims": [
+        {
+          "id": "modulation_broadcasts_over_tokens",
+          "statement": "The modulation parameters are regressed once per sample from c and broadcast over all tokens; no token-resolved conditioning enters the block stack.",
+          "line_refs": [
+            "combine_conditioning",
+            "run_blocks"
+          ],
+          "evidence": {
+            "status": "confirmed_from_code",
+            "refs": [
+              {
+                "source_ref": "dit_models_code",
+                "role": "implementation_evidence",
+                "lines": "DiTBlock",
+                "note": "chunk(6, dim=1) on a B x d conditioning vector."
+              }
+            ]
+          }
+        }
       ]
     }
   },
@@ -2417,7 +3432,6 @@ export const manifest = {
         "summary": "DiT generates an image by iteratively denoising a random four-channel latent under a class label, undoing the latent scaling used during training, and decoding the final latent with a frozen VAE.",
         "subject_ref": "architecture",
         "expansion_depth": 1,
-        "scale_lanes": false,
         "grid": {
           "columns": 8,
           "rows": 4,
@@ -2761,7 +3775,6 @@ export const manifest = {
         "parent": "generation_overview",
         "subject_ref": "modules.ddpm_sampler",
         "expansion_depth": 1,
-        "scale_lanes": false,
         "grid": {
           "columns": 9,
           "rows": 5,
@@ -3339,7 +4352,6 @@ export const manifest = {
         "parent": "sampling_loop",
         "subject_ref": "modules.dit_denoiser",
         "expansion_depth": 1,
-        "scale_lanes": false,
         "grid": {
           "columns": 8,
           "rows": 5
@@ -4095,7 +5107,6 @@ export const manifest = {
         "parent": "dit_pipeline",
         "subject_ref": "modules.dit_blocks",
         "expansion_depth": 1,
-        "scale_lanes": false,
         "grid": {
           "columns": 12,
           "rows": 4,

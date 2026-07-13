@@ -3,7 +3,7 @@
 require "digest"
 require "set"
 
-# Build-time semantic projection for architecture-v0.3 and visualization-v0.4.
+# Build-time semantic projection for architecture-v0.3/v0.4 and visualization-v0.4.
 #
 # The projector intentionally knows nothing about pixels or wire geometry. It
 # turns a curated board request into visible occurrences and canonical edges
@@ -62,8 +62,8 @@ module ArchitectureProjection
     private
 
     def validate_architecture!
-      unless @architecture["schema_version"] == "architecture-v0.3"
-        fail_projection("unsupported_architecture", "expected architecture-v0.3")
+      unless %w[architecture-v0.3 architecture-v0.4].include?(@architecture["schema_version"])
+        fail_projection("unsupported_architecture", "expected architecture-v0.3 or architecture-v0.4")
       end
 
       @modules = index_objects(@architecture["modules"], "modules")
