@@ -14,7 +14,223 @@ if (retiredUiParams.some((name) => pageParams.has(name))) {
   );
 }
 const activeManifestEntry = manifestIndex.find((entry) => entry.id === archParam) || manifestIndex[0];
-const { manifest } = await import(`./${activeManifestEntry.file}`);
+const { manifest: sourceManifest } = await import(`./${activeManifestEntry.file}`);
+const manifest = normalizeManifestForRenderer(sourceManifest);
+
+function collectionValues(collection) {
+  if (Array.isArray(collection)) return collection;
+  if (collection && typeof collection === "object") return Object.values(collection);
+  return [];
+}
+
+function untypedRef(ref, namespace = null) {
+  const value = String(ref || "");
+  const separator = value.indexOf(".");
+  if (separator < 0) return value;
+  if (namespace && value.slice(0, separator) !== namespace) return value;
+  return value.slice(separator + 1);
+}
+
+function refNamespace(ref) {
+  const value = String(ref || "");
+  const separator = value.indexOf(".");
+  return separator < 0 ? null : value.slice(0, separator);
+}
+
+function humanizeRef(ref) {
+  return untypedRef(ref).replaceAll("_", " ");
+}
+
+function relationRefsForEdge(edge) {
+  const path = edge.relation_path || edge.relationPath;
+  if (Array.isArray(path) && path.length) return path;
+  const hops = edge.provenance_hops || edge.provenanceHops;
+  if (Array.isArray(hops)) {
+    const refs = hops.map((hop) => hop?.relation_ref || hop?.relationRef).filter(Boolean);
+    if (refs.length) return refs;
+  }
+  const direct = edge.relation_ref || edge.relationRef;
+  return direct ? [direct] : [];
+}
+
+function normalizeConnection(edge, presentation, relationRefs) {
+  const connection = edge.connection || presentation.connection || {};
+  const flowName = edge.label || presentation.label || humanizeRef(relationRefs.at(-1) || edge.id || "flow");
+  return {
+    title: connection.title || presentation.title || flowName,
+    role: connection.role || presentation.role || humanizeRef(edge.kind || "information flow"),
+    inside: connection.inside || presentation.inside ||
+      `${humanizeRef(edge.from)} flows into ${humanizeRef(edge.to)}.`,
+  };
+}
+
+function normalizeProjectedSegments(edge, relationRefs, relationsById, localIdsByRef) {
+  if (Array.isArray(edge.segments) && edge.segments.length) {
+    return edge.segments.map((segment) => {
+      const relationRef = segment.relation_ref || segment.relationRef;
+      const relation = relationsById.get(relationRef) || relationsById.get(untypedRef(relationRef));
+      const presentation = segment.presentation || {};
+      const normalized = { ...presentation, ...segment, relation_ref: relationRef };
+      normalized.connection = normalizeConnection(
+        normalized,
+        presentation,
+        relationRef ? [relationRef] : [],
+      );
+      normalized.label ||= relation?.label || relation?.summary || relation?.operation;
+      normalized.tone ||= relation?.kind === "conditioning" ? "conditioning" : undefined;
+      return normalized;
+    });
+  }
+  const isProjectedEdge = edge.projection || edge.origin || edge.presentation ||
+    edge.relation_path || edge.relationPath || edge.provenance_hops || edge.provenanceHops;
+  if (!isProjectedEdge) return null;
+  if (!relationRefs.length) return null;
+
+  const localId = (ref, fallback) => {
+    const ids = localIdsByRef.get(ref) || localIdsByRef.get(untypedRef(ref));
+    return ids?.length === 1 ? ids[0] : fallback;
+  };
+  return relationRefs.map((relationRef, index) => {
+    const relation = relationsById.get(relationRef) || relationsById.get(untypedRef(relationRef));
+    const fromRef = relation?.from || relation?.source;
+    const toRef = relation?.to || relation?.target;
+    const from = index === 0 ? edge.from : localId(fromRef, fromRef || `${edge.id || "flow"}:hop-${index}`);
+    const to = index === relationRefs.length - 1
+      ? edge.to
+      : localId(toRef, toRef || `${edge.id || "flow"}:hop-${index + 1}`);
+    const relationLabel = relation?.summary || relation?.operation || humanizeRef(relationRef);
+    return {
+      from,
+      to,
+      relation_ref: relationRef,
+      label: relation?.label || relationLabel,
+      tone: relation?.kind === "conditioning" ? "conditioning" : undefined,
+      connection: {
+        title: relation?.summary || relationLabel,
+        role: humanizeRef(relation?.kind || relation?.operation || "information flow"),
+        inside: relation?.summary || `${humanizeRef(fromRef || from)} flows into ${humanizeRef(toRef || to)}.`,
+      },
+    };
+  });
+}
+
+function normalizeBoardNode(node, valueSitesById) {
+  const presentation = node.presentation || {};
+  const ref = node.ref || node.canonical_ref || node.canonicalRef;
+  const namespace = refNamespace(ref);
+  const normalized = { ...presentation, ...node };
+
+  if (namespace === "modules") {
+    normalized.kind ||= "module";
+    normalized.module_ref ||= untypedRef(ref, "modules");
+  } else if (namespace === "value_sites") {
+    const siteId = untypedRef(ref, "value_sites");
+    const site = valueSitesById.get(siteId) || {};
+    const representationRef = site.representation_ref || site.representationRef || site.rep_ref;
+    normalized.kind ||= "representation";
+    normalized.value_site_ref ||= siteId;
+    normalized.rep_ref ||= untypedRef(representationRef, "representations");
+    normalized.label ||= site.display_label || site.label || node.id;
+    normalized.role ||= site.role || site.semantic_role;
+    normalized.shape ||= site.shape;
+    normalized.scale ||= site.scale;
+  } else if (namespace === "representations") {
+    // Kept for tolerant reading of early projector fixtures. Visualization
+    // v0.4 normally binds tensor occurrences through value_sites.* instead.
+    normalized.kind ||= "representation";
+    normalized.rep_ref ||= untypedRef(ref, "representations");
+  }
+
+  if (normalized.moduleRef && !normalized.module_ref) normalized.module_ref = normalized.moduleRef;
+  if (normalized.repRef && !normalized.rep_ref) normalized.rep_ref = normalized.repRef;
+  if (normalized.boardRef && !normalized.board_ref) normalized.board_ref = normalized.boardRef;
+  if (normalized.valueSiteRef && !normalized.value_site_ref) {
+    normalized.value_site_ref = untypedRef(normalized.valueSiteRef, "value_sites");
+  }
+  return normalized;
+}
+
+function normalizeBoardEdge(edge, relationsById, localIdsByRef) {
+  const presentation = edge.presentation || {};
+  const relationRefs = relationRefsForEdge(edge);
+  const normalized = {
+    ...presentation,
+    ...edge,
+    label: edge.label ?? presentation.label,
+    tone: edge.tone ?? presentation.tone ?? (edge.kind === "conditioning" ? "conditioning" : undefined),
+    route_side: edge.route_side ?? edge.routeSide ?? presentation.route_side ?? presentation.routeSide,
+    route_clearance: edge.route_clearance ?? edge.routeClearance ??
+      presentation.route_clearance ?? presentation.routeClearance,
+  };
+  normalized.relation_ref ||= relationRefs.length === 1 ? relationRefs[0] : undefined;
+  if (relationRefs.length) normalized.relation_path ||= relationRefs;
+  normalized.connection = normalizeConnection(normalized, presentation, relationRefs);
+  normalized.segments = normalizeProjectedSegments(normalized, relationRefs, relationsById, localIdsByRef);
+  return normalized;
+}
+
+function normalizeBoard(board, architecture) {
+  const projectedGraph = board.projected_graph || board.projectedGraph || board.graph;
+  const graph = projectedGraph && typeof projectedGraph === "object" ? projectedGraph : board;
+  const valueSites = collectionValues(architecture.valueSites || architecture.value_sites);
+  const valueSitesById = new Map(valueSites.map((site) => [site.id, site]));
+  const nodes = collectionValues(graph.nodes).map((node) => normalizeBoardNode(node, valueSitesById));
+  const localIdsByRef = new Map();
+  for (const node of nodes) {
+    const refs = [node.ref, node.canonical_ref, node.canonicalRef, node.module_ref, node.rep_ref]
+      .filter(Boolean);
+    for (const ref of refs) {
+      for (const key of [ref, untypedRef(ref)]) {
+        const ids = localIdsByRef.get(key) || [];
+        ids.push(node.id);
+        localIdsByRef.set(key, ids);
+      }
+    }
+  }
+  const relations = collectionValues(architecture.relations);
+  const relationsById = new Map();
+  for (const relation of relations) {
+    relationsById.set(relation.id, relation);
+    relationsById.set(untypedRef(relation.id, "relations"), relation);
+    relationsById.set(`relations.${relation.id}`, relation);
+  }
+  const edges = collectionValues(graph.edges).map((edge) =>
+    normalizeBoardEdge(edge, relationsById, localIdsByRef));
+  return { ...graph, ...board, nodes, edges };
+}
+
+function normalizeManifestForRenderer(source) {
+  const sourceArchitecture = source.architecture || {};
+  const architecture = {
+    ...sourceArchitecture,
+    sourceYaml: sourceArchitecture.sourceYaml || sourceArchitecture.source_yaml,
+    modules: collectionValues(sourceArchitecture.modules),
+    representations: collectionValues(sourceArchitecture.representations),
+    valueSites: collectionValues(sourceArchitecture.valueSites || sourceArchitecture.value_sites),
+    relations: collectionValues(sourceArchitecture.relations),
+    stateSemantics: sourceArchitecture.stateSemantics || sourceArchitecture.state_semantics || {},
+    scaleTransitions: collectionValues(
+      sourceArchitecture.scaleTransitions || sourceArchitecture.scale_transitions,
+    ),
+    trainingInference: sourceArchitecture.trainingInference ||
+      sourceArchitecture.training_inference || {},
+    claims: collectionValues(sourceArchitecture.claims).map((claim) =>
+      typeof claim === "string" ? claim : claim.statement || claim.summary || claim.id),
+  };
+  const sourceBoards = source.boards || {};
+  const boardItems = collectionValues(
+    sourceBoards.items || sourceBoards.projected || source.projectedBoards || source.projected_boards,
+  ).map((board) => normalizeBoard(board, architecture));
+  return {
+    ...source,
+    architecture,
+    boards: {
+      ...sourceBoards,
+      rootBoard: sourceBoards.rootBoard || sourceBoards.root_board,
+      items: boardItems,
+    },
+  };
+}
 
 const elements = {
   canvas: document.querySelector(".architecture-canvas"),
@@ -35,6 +251,7 @@ const elements = {
 
 const modulesById = new Map(manifest.architecture.modules.map((module) => [module.id, module]));
 const repsById = new Map(manifest.architecture.representations.map((rep) => [rep.id, rep]));
+const valueSitesById = new Map((manifest.architecture.valueSites || []).map((site) => [site.id, site]));
 const boardsById = new Map(manifest.boards.items.map((board) => [board.id, board]));
 const conditioningByPair = new Map(
   (manifest.architecture.conditioning || []).map((cond) => [
@@ -43,9 +260,12 @@ const conditioningByPair = new Map(
   ]),
 );
 const conditioningByRelation = new Map(
-  (manifest.architecture.conditioning || [])
-    .filter((cond) => cond.relation_ref)
-    .map((cond) => [cond.relation_ref, cond]),
+  (manifest.architecture.conditioning || []).flatMap((cond) => {
+    const ref = cond.relation_ref || cond.relationRef;
+    if (!ref) return [];
+    const bare = untypedRef(ref, "relations");
+    return [[ref, cond], [bare, cond], [`relations.${bare}`, cond]];
+  }),
 );
 
 let boardActions = null;
@@ -1487,7 +1707,10 @@ function focusBoardNavigationTarget(originNodeId = null) {
 function displayGraph(board) {
   const nodes = (board.nodes || []).filter((node) => !node.elide);
   const elided = (board.nodes || []).filter((node) => node.elide);
-  let edges = (board.edges || []).map((edge) => ({ ...edge, segments: [edge] }));
+  let edges = (board.edges || []).map((edge) => ({
+    ...edge,
+    segments: edge.segments?.length ? edge.segments : [edge],
+  }));
 
   for (const hidden of elided) {
     const incoming = edges.filter((edge) => edge.to === hidden.id);
@@ -2041,6 +2264,14 @@ function connectionInspectorHtml(edge, { expanded = false } = {}) {
 
 function nodeLabelById(id) {
   const node = (currentBoard().nodes || []).find((candidate) => candidate.id === id);
+  if (!node && refNamespace(id) === "modules") {
+    return modulesById.get(untypedRef(id, "modules"))?.label || humanizeRef(id);
+  }
+  if (!node && refNamespace(id) === "value_sites") {
+    const site = valueSitesById.get(untypedRef(id, "value_sites"));
+    const repId = untypedRef(site?.representation_ref || site?.representationRef, "representations");
+    return site?.label || repsById.get(repId)?.semantic_role || humanizeRef(id);
+  }
   if (!node) return id;
   return node.label || modulesById.get(node.module_ref)?.label || node.rep_ref || node.id;
 }
@@ -2124,6 +2355,7 @@ function hiddenChainStandardBlocks(edge) {
 function standardBlockRefsForModule(module) {
   if (!module) return [];
   return [
+    module.standard_block_ref,
     module.attention?.standard_block_ref,
     ...(module.contains || []).map((child) => child.standard_block_ref),
   ].filter(Boolean);

@@ -4,12 +4,13 @@
 require "json"
 require "fileutils"
 require "yaml"
+require_relative "../../lib/architecture_projection"
 
 ROOT = File.expand_path("../..", __dir__)
 REGISTRY = "architectures/index.yaml"
 
 def load_yaml(path)
-  YAML.load_file(File.join(ROOT, path))
+  YAML.load_file(File.join(ROOT, path), aliases: true)
 end
 
 def architecture_relations(architecture)
@@ -28,6 +29,7 @@ def normalize_module_refs(mod)
   mod = mod.dup
   mod["story_ref"] = web_ref(mod["story_ref"]) if mod["story_ref"]
   mod["pseudocode_ref"] = web_ref(mod["pseudocode_ref"]) if mod["pseudocode_ref"]
+  mod["standard_block_ref"] = web_ref(mod["standard_block_ref"]) if mod["standard_block_ref"]
   if mod["contains"]
     mod["contains"] = mod["contains"].map do |child|
       child = child.dup
@@ -92,9 +94,26 @@ def build_manifest(config)
   pseudocode = load_yaml(config.fetch("pseudocode"))
   semantic_zoom = load_yaml(config.fetch("view"))
   modules = architecture.fetch("modules").map { |mod| normalize_module_refs(mod) }
+  derived_projection = architecture["schema_version"] == "architecture-v0.3" &&
+                       semantic_zoom["schema_version"] == "visualization-v0.4"
+  if architecture["schema_version"] == "architecture-v0.3" && !derived_projection
+    raise "architecture-v0.3 requires visualization-v0.4 for #{config.fetch('id')}"
+  end
+  if semantic_zoom["schema_version"] == "visualization-v0.4" && !derived_projection
+    raise "visualization-v0.4 requires architecture-v0.3 for #{config.fetch('id')}"
+  end
+  boards = if derived_projection
+    projector = ArchitectureProjection::Projector.new(architecture)
+    semantic_zoom.fetch("boards").map do |board|
+      projection = projector.project(board)
+      board.merge(projection).merge("projectionMode" => "derived")
+    end
+  else
+    semantic_zoom.fetch("boards").map { |board| board.merge("projectionMode" => "authored") }
+  end
 
   {
-    "schemaVersion" => "architecture-manifest-v0.2",
+    "schemaVersion" => derived_projection ? "architecture-manifest-v0.3" : "architecture-manifest-v0.2",
     "architecture" => {
       "schemaVersion" => architecture.fetch("schema_version"),
       "id" => architecture.fetch("id"),
@@ -103,6 +122,7 @@ def build_manifest(config)
       "sourceYaml" => web_ref(config.fetch("architecture")),
       "modules" => modules,
       "representations" => architecture.fetch("representations"),
+      "valueSites" => architecture["value_sites"] || [],
       "execution" => architecture["execution"] || {},
       "stateSemantics" => architecture["state_semantics"] || {},
       "conditioning" => architecture["conditioning"] || [],
@@ -123,7 +143,7 @@ def build_manifest(config)
       "schemaVersion" => semantic_zoom.fetch("schema_version"),
       "sourceYaml" => web_ref(config.fetch("view")),
       "rootBoard" => semantic_zoom.fetch("root_board"),
-      "items" => semantic_zoom.fetch("boards"),
+      "items" => boards,
     },
   }
 end
