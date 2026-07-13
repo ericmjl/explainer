@@ -7,6 +7,9 @@ documentation, specifications, and local source artifacts cited anywhere in
 the explainer. Source metadata has one owner; architecture and pseudocode
 files describe why a source supports a particular fact.
 
+Code sources used for confirmation include an immutable 40-character revision,
+and their browser URL is pinned to that revision rather than a mutable branch.
+
 ## Ownership
 
 The bibliography owns source identity and descriptive metadata:
@@ -53,6 +56,10 @@ The role does not replace the evidence status. `confirmed_from_code` says how
 the fact was checked; `implementation_evidence` says why that particular
 source is attached.
 
+Confirmed evidence includes `locator` on at least one compatible source:
+symbols or line ranges for code, sections or tables for papers, and headings or
+anchors for documentation. `lines` is not an alternate citation field.
+
 ## Historical Attribution
 
 “This architecture uses AdaLN” and “this paper first introduced AdaLN” are
@@ -93,8 +100,11 @@ need relationships such as `uses_method` independently of citations.
 
 ## Validation and Rendering
 
-`architectures/index.yaml` registers the bibliography. The linter rejects
-duplicate IDs, malformed paper entries, missing citation roles, and unresolved
-`source_ref` values. The manifest builder includes the bibliography in every
-architecture manifest, and the audience detail dock resolves citations into
-titles, authors, years, locators, notes, and links.
+`architectures/index.yaml` registers the bibliography. Strict parsing and the
+executable bibliography schema reject duplicate keys, unknown fields, invalid
+kinds, and malformed structure. The linter additionally rejects duplicate
+IDs, malformed paper entries, unpinned code sources, missing citation roles,
+incompatible certainty/source-kind combinations, and unresolved `source_ref`
+values. The manifest builder includes the bibliography in every architecture
+manifest, and the audience detail dock resolves citations into titles,
+authors, years, locators, notes, and links.

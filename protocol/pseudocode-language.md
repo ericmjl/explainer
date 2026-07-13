@@ -69,7 +69,7 @@ lines:
       - modules.group_refiner
     source_refs:
       - source: implementation
-        lines: "120-140"
+        locator: "120-140"
     visual:
       block: pair_biased_attention
       slots:
@@ -105,7 +105,7 @@ claims:
       refs:
         - source_ref: implementation_source
           role: implementation_evidence
-          lines: "120-140"
+          locator: "120-140"
 ```
 
 ## Visual Hooks

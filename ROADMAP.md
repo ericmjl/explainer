@@ -73,6 +73,15 @@ Exit criteria are "architecture X renders legibly", not "feature Y exists".
   language references now describe the implemented v0.4 contracts directly;
   legacy behavior is isolated to migration notes, and `protocol/README.md`
   distinguishes implemented contracts from the proposed comparison format.
+- **Source-contract hardening** (2026-07): added duplicate-key-safe YAML
+  loading and implementation-independent JSON Schemas for architecture-v0.4,
+  visualization-v0.4, and bibliography-v0.1. The shared acceptance path now
+  rejects unknown fields, typoed enums, illegal authored board flow, invalid
+  grid/routing values, incompatible evidence/source kinds, unpinned code
+  citations, unresolved execution/question refs, and value-site carry
+  mismatches. Manifest generation runs full lint first, retains previously
+  omitted canonical fields, records deterministic source digests, and supports
+  byte-for-byte `--check` verification.
 
 ## Next
 

@@ -9,6 +9,8 @@ present this graph; they do not redefine it.
 
 Related contracts:
 
+- `protocol/source-validation.md`: executable schemas and compiler acceptance;
+- `protocol/id-evolution.md`: stable-ID compatibility and refactoring;
 - `protocol/fact-ownership.md`: one owner for every fact;
 - `protocol/architecture-coverage.md`: breadth closure and depth frontiers;
 - `protocol/architecture-projection-model.md`: architecture-derived boards;
@@ -60,7 +62,7 @@ evidence:
   refs:
     - source_ref: dit_models_code
       role: implementation_evidence
-      lines: DiT.forward
+      locator: DiT.forward
       note: The forward pass combines timestep and class embeddings.
 ```
 
@@ -72,10 +74,11 @@ Supported certainty states are:
 - `inferred`; and
 - `open_question`.
 
-Every nontrivial module, representation, relation, claim, conditioning use,
-scale transition, and state-lifecycle assertion needs evidence. Do not infer
-historical priority from a citation; record origin claims separately with
-their own evidence.
+Every nontrivial module, representation, value site, relation, claim,
+conditioning use, scale transition, state-lifecycle assertion, and
+training/inference description needs evidence. Confirmed evidence must cite a
+compatible source kind with a stable locator. Do not infer historical priority
+from a citation; record origin claims separately with their own evidence.
 
 ## Decomposition and Hierarchy
 
@@ -90,6 +93,7 @@ decomposition:
     refs:
       - source_ref: implementation_source
         role: implementation_evidence
+        locator: relevant_symbol
 
 modules:
   - id: denoiser
@@ -133,6 +137,7 @@ representations:
       refs:
         - source_ref: implementation_source
           role: implementation_evidence
+          locator: relevant_symbol
 ```
 
 A value site describes one concrete architectural occurrence of that type:
@@ -143,11 +148,23 @@ value_sites:
     representation_ref: representations.diffusion_latent
     scope_ref: modules.ddpm_sampler
     role: state_read
+    evidence:
+      status: confirmed_from_code
+      refs:
+        - source_ref: implementation_source
+          role: implementation_evidence
+          locator: sampler_step
 
   - id: latent_after_step
     representation_ref: representations.diffusion_latent
     scope_ref: modules.ddpm_sampler
     role: state_write
+    evidence:
+      status: confirmed_from_code
+      refs:
+        - source_ref: implementation_source
+          role: implementation_evidence
+          locator: sampler_step
 ```
 
 Split mutable before/after values into distinct sites. Never express a state
@@ -178,6 +195,7 @@ modules:
       refs:
         - source_ref: implementation_source
           role: implementation_evidence
+          locator: relevant_symbol
 ```
 
 Optional module fields include `repeats`, `depth`, `attention`,
@@ -202,6 +220,7 @@ relations:
       refs:
         - source_ref: implementation_source
           role: implementation_evidence
+          locator: relevant_symbol
 ```
 
 Every relation has a stable semantic ID and typed endpoints. Common kinds
@@ -233,6 +252,7 @@ state_semantics:
       refs:
         - source_ref: implementation_source
           role: implementation_evidence
+          locator: relevant_symbol
 ```
 
 The group owns lifecycle interpretation and notes. It does not author `role`,
@@ -257,6 +277,7 @@ conditioning:
       refs:
         - source_ref: implementation_source
           role: implementation_evidence
+          locator: relevant_symbol
 ```
 
 The relation owns source and target; the conditioning entry owns the mechanism
@@ -282,6 +303,7 @@ scale_transitions:
       refs:
         - source_ref: implementation_source
           role: implementation_evidence
+          locator: relevant_symbol
 ```
 
 The path must be continuous and run from a value site to a value site. An
@@ -308,6 +330,7 @@ execution:
         refs:
           - source_ref: implementation_source
             role: implementation_evidence
+            locator: relevant_symbol
 ```
 
 Use it for sampling loops, recycling, recurrent refinement, cached state, and
@@ -330,11 +353,22 @@ claims:
       refs:
         - source_ref: implementation_source
           role: implementation_evidence
+          locator: relevant_symbol
 
 open_questions:
   - id: unresolved_boundary
     question: Is this cache refreshed during inference?
     status: unresolved
+    affected_refs:
+      - execution.loops.refinement_loop
+    blocking: false
+    resolution_criteria: Trace cache invalidation across one complete inference call.
+    evidence:
+      status: open_question
+      refs:
+        - source_ref: implementation_source
+          role: implementation_evidence
+          locator: cache_initialization
 ```
 
 ## Compilation
@@ -343,6 +377,9 @@ The Ruby compiler stack validates and derives the browser manifest:
 
 ```text
 architecture-v0.4 YAML
+  -> duplicate-key rejection
+  -> executable JSON Schema validation
+  -> evidence and typed-reference validation
   -> ownership validation
   -> decomposition coverage validation/compilation
   -> semantic board projection
@@ -353,6 +390,10 @@ Generated convenience fields include value-site producer/consumer indexes,
 conditioning endpoints, scale-transition endpoints/scales, hierarchy coverage,
 and projected board edges. They are compiler output, not alternate authoring
 locations.
+
+The manifest builder first runs the full repository linter and supports
+`--check` for deterministic byte-for-byte verification. See
+`protocol/source-validation.md`.
 
 Legacy architecture-v0.1/v0.2/v0.3 compatibility and migration behavior are
 documented in `protocol/architecture-projection-model.md`; new sources use

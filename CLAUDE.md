@@ -26,6 +26,12 @@ last:
   `evidence.status` + `evidence.refs`. Status vocabulary:
   `confirmed_from_code`, `confirmed_from_paper`, `confirmed_from_docs`,
   `inferred`, `open_question`.
+- Value sites and `training_inference` also carry evidence. Confirmed facts
+  require a compatible bibliography source and `locator`; code sources are
+  pinned to immutable revisions.
+- Current architecture, view, and bibliography YAML must satisfy the executable
+  schemas under `schemas/`. Unknown fields, duplicate YAML keys, and typoed
+  closed enums fail validation.
 - Keep unresolved questions in `open_questions` — they are part of the
   artifact.
 - In architecture-v0.4, canonical `relations` alone own flow endpoints and
@@ -56,11 +62,16 @@ Regenerate manifests, then validate:
 
 ```bash
 ruby renderer/architecture/build-manifest.rb   # emits manifest-<id>.js per registry entry
+ruby renderer/architecture/build-manifest.rb --check
 ruby -Ilib:test test/architecture_projection_test.rb
 ruby -Ilib:test test/architecture_ownership_test.rb
 ruby -Ilib:test test/architecture_coverage_test.rb
 ruby -Ilib:test test/source_projection_integration_test.rb
 ruby -Ilib:test test/bibliography_test.rb
+ruby -Ilib:test test/strict_yaml_test.rb
+ruby -Ilib:test test/source_contract_test.rb
+ruby -Ilib:test test/evidence_contract_test.rb
+ruby -Ilib:test test/manifest_reproducibility_test.rb
 ruby -Ilib:test test/documentation_test.rb
 ruby scripts/lint_sources.rb
 ```
@@ -85,6 +96,10 @@ Compiler/projector: Ruby (`renderer/architecture/build-manifest.rb` and
 selected via `?arch=<id>`. Projected view edges derive from canonical
 architecture `relations`; conditioning badges derive from linked
 `conditioning` entries—do not write modes into edge labels.
+
+The manifest builder runs the full source linter before compilation and emits
+deterministic input digests. `--check` validates without writing and rejects
+stale committed manifests.
 
 ## Writing style
 

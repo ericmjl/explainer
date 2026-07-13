@@ -24,7 +24,8 @@ reusable presentation rules.
 6. **Manifest builder**: `renderer/architecture/build-manifest.rb` compiles the
    registered YAML source sets into `renderer/architecture/manifest-<id>.js`
    files plus `manifest-index.js`, including relation-derived interfaces and
-   top-down decomposition coverage.
+   top-down decomposition coverage. It first runs the same strict source
+   validation used by `scripts/lint_sources.rb`.
 7. **Browser renderer**: `renderer/architecture/renderer.js` renders boards,
    semantic navigation, audience explanation panels, MathJax equations,
    pan/zoom controls, and source links.
@@ -46,11 +47,13 @@ components:
 ```text
 architecture-v0.4 + visualization-v0.4
                   ↓
+strict YAML + executable schema + evidence validation
+                  ↓
 ownership validation + decomposition coverage compilation
                   ↓
 semantic board projector
                   ↓
-lossless architecture-manifest-v0.4 projected boards
+deterministic architecture-manifest-v0.4 projected boards
                   ↓
 browser layout and geometric wire router
 ```
@@ -67,6 +70,12 @@ shape. The renderer retains a narrow visualization-v0.3 adapter for old
 manifests and records `projectionMode: authored | derived` without interpreting
 source schemas in its drawing code.
 
+The manifest retains canonical architecture fields needed by consumers and
+adds derived indexes, projected edges, generator identity, and SHA-256 input
+digests. It is not a YAML round-trip format: paths are web-normalized and
+renderer-specific indexes are materialized. `build-manifest.rb --check`
+compiles in memory and rejects stale committed manifests.
+
 ## Renderer Responsibilities
 
 The browser renderer may:
@@ -80,6 +89,9 @@ The browser renderer may:
 - show focus-panel summaries, evidence, pseudocode lines, and standard-block
   math;
 - support hover peeks, click focus, semantic drilldown, pan, and zoom;
+- expose node and edge inspection through keyboard focus and activation;
+- escape source-authored prose before HTML insertion and reject active-content
+  link schemes;
 - expose one canonical audience interface rather than separate legacy, edit,
   or tuning modes;
 - render generic standard-block diagrams when enough slot information exists.
@@ -87,6 +99,7 @@ The browser renderer may:
 The browser renderer should not:
 
 - encode a specific architecture's module order;
+- target architecture or board IDs from generic renderer CSS;
 - require paper-specific module names;
 - hardcode evidence claims that belong in YAML;
 - infer architecture facts from visual position.
@@ -102,9 +115,11 @@ The prototype supports:
 - one canonical audience view with a location guide, a model map switchable
   between the whole model and immediate parent board, and one compact bottom
   dock whose resting takeaway is replaced by hover previews or pinned details;
-- a model map rendered as a non-interactive miniature of the selected board,
-  reusing the canvas vocabulary for module cards, tensor glyphs, operations,
-  wire tones, and drillable/current-region emphasis;
+- a model map rendered as a dedicated pure-SVG thumbnail of the selected
+  board: it preserves board geometry, tensor/module/operation silhouettes,
+  and wire tones while deliberately omitting card text and internal UI;
+- strong current-region emphasis over a subdued root or parent snapshot, so
+  the map answers location rather than repeating the board explanation;
 - full-width board layout;
 - an unbanded canvas by default, with optional lane guides authored explicitly
   per board in view YAML;
@@ -112,6 +127,8 @@ The prototype supports:
 - orthogonal automatic wiring with reusable explicit outer lanes;
 - pan and zoom controls;
 - hoverable edge ports;
+- keyboard-operable tensor nodes and edge inspectors, with wire roles
+  distinguished by dash pattern as well as color;
 - focus-panel summaries that do not resize the canvas;
 - bibliography-resolved paper and code citations with typed roles and local
   evidence locators;

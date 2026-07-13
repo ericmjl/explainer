@@ -20,6 +20,7 @@ decomposition:
     refs:
       - source_ref: implementation_source
         role: implementation_evidence
+        locator: relevant_symbol
 
 modules:
   - id: sampler

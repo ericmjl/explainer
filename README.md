@@ -19,6 +19,9 @@ Source layers:
   attribution, and provenance-graph rules.
 - `protocol/architecture-language.md`: YAML vocabulary for methods, modules,
   representations, attention patterns, relations, claims, and evidence.
+- `protocol/source-validation.md`: strict YAML parsing, executable schemas,
+  semantic checks, and deterministic manifest compilation.
+- `protocol/id-evolution.md`: stable-ID compatibility and atomic refactors.
 - `protocol/architecture-projection-model.md`: current projection contract for
   architecture hierarchy, scoped board projection, automatic edges, elision,
   provenance, and migration.
@@ -38,6 +41,8 @@ Source layers:
 - `standard_blocks/`: reusable block specs.
 - `views/`: source specs for generated architecture views.
 - `renderer/architecture/`: generated architecture renderer prototype.
+- `schemas/`: implementation-independent JSON Schemas consumed by the Ruby
+  compiler and future authoring frontends.
 
 Stories should increasingly be rendered from these source files instead of
 hardcoding every module diagram in HTML or JavaScript.
@@ -117,11 +122,16 @@ After changing YAML/view sources:
 
 ```bash
 ruby renderer/architecture/build-manifest.rb   # regenerates manifest-<id>.js per registry entry
+ruby renderer/architecture/build-manifest.rb --check
 ruby -Ilib:test test/architecture_projection_test.rb
 ruby -Ilib:test test/architecture_ownership_test.rb
 ruby -Ilib:test test/architecture_coverage_test.rb
 ruby -Ilib:test test/source_projection_integration_test.rb
 ruby -Ilib:test test/bibliography_test.rb
+ruby -Ilib:test test/strict_yaml_test.rb
+ruby -Ilib:test test/source_contract_test.rb
+ruby -Ilib:test test/evidence_contract_test.rb
+ruby -Ilib:test test/manifest_reproducibility_test.rb
 ruby -Ilib:test test/documentation_test.rb
 ruby scripts/lint_sources.rb
 ruby -c renderer/architecture/build-manifest.rb
@@ -140,6 +150,11 @@ Both scripts read `architectures/index.yaml`; register new source sets there,
 not in the scripts. The registry also points to the shared bibliography;
 architecture evidence should cite stable `source_ref` IDs rather than repeat
 paper or repository metadata.
+
+Manifest generation now runs the full source linter first. Current architecture,
+view, and bibliography sources must also satisfy the JSON Schemas under
+`schemas/`; duplicate YAML keys, unknown fields, evidence-status typos,
+unpinned code citations, and stale generated manifests fail closed.
 
 Serve locally with any static file server, for example:
 

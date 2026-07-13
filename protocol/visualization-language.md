@@ -9,6 +9,10 @@ and evidence remain owned by the architecture source.
 
 The full projection algorithm is specified in
 `protocol/architecture-projection-model.md`.
+Its executable structural contract is
+`schemas/visualization-v0.4.schema.json`; unknown board fields, legacy
+`edges`/`view_only` flow, invalid enums, and malformed routing hints fail before
+projection.
 
 ## Top-Level Shape
 
@@ -29,6 +33,9 @@ Every board declares:
 - non-negative relative `expansion_depth`;
 - a grid; and
 - an exact curated `nodes` list.
+
+Optional `notes` add board-specific explanatory caveats to the resting
+takeaway. They are presentation prose, not a location for architecture facts.
 
 ```yaml
 boards:
@@ -306,8 +313,11 @@ available through hover/focus interaction.
 ## Canonical Audience Interface
 
 The browser provides one audience view. Semantic navigation, a root/immediate-
-parent miniature model map, the compact explanation dock, focus details, pan,
-and zoom are parts of that interface—not selectable edit or tuning modes.
+parent SVG snapshot map, the compact explanation dock, focus details, pan, and
+zoom are parts of that interface—not selectable edit or tuning modes. The map
+derives the selected board's geometry and flow but intentionally reduces nodes
+to unlabeled silhouettes; its job is to locate the current region, not repeat
+the full board at unreadable scale.
 
 `?arch=<id>` selects the registered architecture. `?layout=elk` changes only
 the experimental layout implementation. Durable changes happen in YAML or
@@ -320,6 +330,11 @@ binding, visibility accounting, elision ambiguity, exclusions, drilldown
 compatibility, presentation-only overrides, and root boundary reachability.
 It emits canonical projected edges with ordered relation provenance into
 `architecture-manifest-v0.4`.
+
+Before projection, JSON Schema validation also enforces grid and field types,
+presentation enums, edge-override shape, and the absence of authored v0.4
+flow. The repository linter additionally rejects overlapping node cells,
+out-of-grid placement, and clearance hints without a route side.
 
 Visualization-v0.3 authored-edge boards remain readable only through the
 legacy manifest adapter. New and registered sources use visualization-v0.4.

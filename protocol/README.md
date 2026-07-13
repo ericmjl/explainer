@@ -9,6 +9,8 @@ the design in detail.
 | Document | Scope |
 | --- | --- |
 | `architecture-language.md` | architecture-v0.4 source vocabulary |
+| `source-validation.md` | strict parsing, executable schemas, semantic validation, and deterministic compilation |
+| `id-evolution.md` | stable-ID compatibility and atomic refactor policy |
 | `fact-ownership.md` | one-owner rules and derived interfaces |
 | `architecture-coverage.md` | top-down decomposition closure and compiled breadth/depth frontiers |
 | `architecture-projection-model.md` | visualization-v0.4 semantic projection and migration behavior |
@@ -22,13 +24,14 @@ Current source sets compile as:
 
 ```text
 architecture-v0.4 + visualization-v0.4
-  -> Ruby ownership/coverage/projection pipeline
+  -> strict YAML + shared executable schemas
+  -> Ruby evidence/ownership/coverage/projection pipeline
   -> architecture-manifest-v0.4
   -> canonical browser audience view
 ```
 
-Generated manifests are internal compiler output. YAML and Markdown remain the
-durable sources.
+Generated manifests are deterministic internal compiler output with input
+digests. YAML and Markdown remain the durable sources.
 
 ## Proposed Contract
 

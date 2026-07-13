@@ -151,6 +151,7 @@ representations:
       refs:
         - source_ref: implementation_source
           role: implementation_evidence
+          locator: relevant_symbol
 
 value_sites:
   - id: latent_before_step
@@ -219,6 +220,7 @@ relations:
       refs:
         - source_ref: implementation_source
           role: implementation_evidence
+          locator: relevant_symbol
 
   - id: reverse_step_produces_next_latent
     from: modules.reverse_diffusion_step
@@ -232,6 +234,7 @@ relations:
       refs:
         - source_ref: implementation_source
           role: implementation_evidence
+          locator: relevant_symbol
 ```
 
 Relations own:
@@ -721,7 +724,7 @@ lib/architecture_coverage.rb
   compile breadth scopes and depth frontiers
 
 renderer/architecture/build-manifest.rb
-  compile lossless architecture-manifest-v0.4
+  compile deterministic architecture-manifest-v0.4
   include projected boards
 
 scripts/lint_sources.rb

@@ -39,6 +39,9 @@ When updating an architecture, prefer editing the declarative sources first:
   relation without copying endpoints; scale transitions reference an ordered
   relation path; state lifecycle groups never copy producer/consumer lists.
 - Every nontrivial claim should have `evidence.status` and `evidence.refs`.
+- Value sites and `training_inference` are evidence-bearing facts too.
+- Confirmed evidence must cite a compatible source kind with a `locator`.
+  Code sources in the bibliography must use an immutable revision-pinned URL.
 - Mark certainty explicitly:
   - `confirmed_from_code`: directly checked in source code.
   - `confirmed_from_paper`: directly checked in a paper or spec.
@@ -127,6 +130,11 @@ editing the scripts. Current sets:
 
 Shared infrastructure:
 
+- Executable schemas: `schemas/*.schema.json` (strict current architecture,
+  visualization, and bibliography structure shared with future frontends).
+- Strict YAML loader: `lib/strict_yaml.rb` (rejects duplicate mapping keys).
+- Source contract validator: `lib/source_contract.rb` plus
+  `lib/evidence_contract.rb` (structural and cross-source evidence checks).
 - Central bibliography: `references/bibliography.yaml` (canonical metadata for
   papers, code, docs, specs, and local sources; facts cite it through typed
   `source_ref` roles). See `protocol/bibliography.md`.
@@ -160,6 +168,7 @@ Regenerate with:
 
 ```bash
 ruby renderer/architecture/build-manifest.rb
+ruby renderer/architecture/build-manifest.rb --check
 ```
 
 Useful validation:
@@ -170,6 +179,10 @@ ruby -Ilib:test test/architecture_ownership_test.rb
 ruby -Ilib:test test/architecture_coverage_test.rb
 ruby -Ilib:test test/source_projection_integration_test.rb
 ruby -Ilib:test test/bibliography_test.rb
+ruby -Ilib:test test/strict_yaml_test.rb
+ruby -Ilib:test test/source_contract_test.rb
+ruby -Ilib:test test/evidence_contract_test.rb
+ruby -Ilib:test test/manifest_reproducibility_test.rb
 ruby -Ilib:test test/documentation_test.rb
 ruby scripts/lint_sources.rb
 ruby -c renderer/architecture/build-manifest.rb
