@@ -130,7 +130,7 @@ function normalizeBoardNode(node, valueSitesById) {
     normalized.kind ||= "representation";
     normalized.value_site_ref ||= siteId;
     normalized.rep_ref ||= untypedRef(representationRef, "representations");
-    normalized.label ||= site.display_label || site.label || node.id;
+    normalized.label ||= site.display_label || site.label || humanizeRef(node.id);
     normalized.role ||= site.role || site.semantic_role;
     normalized.shape ||= site.shape;
     normalized.scale ||= site.scale;
@@ -209,13 +209,16 @@ function normalizeManifestForRenderer(source) {
     valueSites: collectionValues(sourceArchitecture.valueSites || sourceArchitecture.value_sites),
     relations: collectionValues(sourceArchitecture.relations),
     stateSemantics: sourceArchitecture.stateSemantics || sourceArchitecture.state_semantics || {},
+    stateSemanticsBySite: sourceArchitecture.stateSemanticsBySite ||
+      sourceArchitecture.state_semantics_by_site || {},
+    valueSiteInterfaces: sourceArchitecture.valueSiteInterfaces ||
+      sourceArchitecture.value_site_interfaces || {},
     scaleTransitions: collectionValues(
       sourceArchitecture.scaleTransitions || sourceArchitecture.scale_transitions,
     ),
     trainingInference: sourceArchitecture.trainingInference ||
       sourceArchitecture.training_inference || {},
-    claims: collectionValues(sourceArchitecture.claims).map((claim) =>
-      typeof claim === "string" ? claim : claim.statement || claim.summary || claim.id),
+    claims: collectionValues(sourceArchitecture.claims),
   };
   const sourceBoards = source.boards || {};
   const boardItems = collectionValues(
@@ -240,18 +243,27 @@ const elements = {
   focusHeader: document.getElementById("focusHeader"),
   focusEyebrow: document.getElementById("focusEyebrow"),
   focusTitle: document.getElementById("focusTitle"),
+  focusReset: document.getElementById("focusReset"),
   focusBody: document.getElementById("focusBody"),
   focusPreviewHeader: document.getElementById("focusPreviewHeader"),
   focusPreviewTitle: document.getElementById("focusPreviewTitle"),
   focusPreviewBody: document.getElementById("focusPreviewBody"),
-  boardTakeaway: document.getElementById("boardTakeaway"),
-  takeawayTitle: document.getElementById("takeawayTitle"),
-  takeawaySummary: document.getElementById("takeawaySummary"),
+  scaleLaneLayer: document.getElementById("scaleLaneLayer"),
 };
 
 const modulesById = new Map(manifest.architecture.modules.map((module) => [module.id, module]));
 const repsById = new Map(manifest.architecture.representations.map((rep) => [rep.id, rep]));
 const valueSitesById = new Map((manifest.architecture.valueSites || []).map((site) => [site.id, site]));
+const valueSiteInterfacesById = new Map(
+  Object.entries(manifest.architecture.valueSiteInterfaces || {}),
+);
+const relationsById = new Map(
+  (manifest.architecture.relations || []).flatMap((relation) => [
+    [relation.id, relation],
+    [untypedRef(relation.id, "relations"), relation],
+    [`relations.${untypedRef(relation.id, "relations")}`, relation],
+  ]),
+);
 const boardsById = new Map(manifest.boards.items.map((board) => [board.id, board]));
 const conditioningByPair = new Map(
   (manifest.architecture.conditioning || []).map((cond) => [
@@ -278,6 +290,7 @@ let modelMap = null;
 let modelMapSvg = null;
 let modelMapA11y = null;
 let modelMapContext = null;
+let modelMapViewToggle = null;
 let edgeLabelMeasureContext = null;
 const inspectorPreviews = new Map();
 let inspectorPreviewSequence = 0;
@@ -289,6 +302,7 @@ const state = {
   boardOrigins: [null],
   pinnedEdge: null,
   edgeRoutes: new Map(),
+  modelMapView: "root",
 };
 
 const viewport = {
@@ -307,7 +321,7 @@ const viewport = {
 function render() {
   renderPageChrome();
   ensureBoardChrome();
-  elements.focusBody.addEventListener("click", onFocusBodyClick);
+  elements.focusReset.addEventListener("click", resetFocusedDetail);
   renderBoard();
   focusOverview();
 }
@@ -325,7 +339,7 @@ function renderPageChrome() {
       "The location guide keeps each level connected to the whole.";
   }
   const focusEyebrow = document.getElementById("focusEyebrow");
-  if (focusEyebrow) focusEyebrow.textContent = "Details at this level";
+  if (focusEyebrow) focusEyebrow.textContent = "Current takeaway";
   const sourceLink = document.getElementById("archSourceLink");
   if (sourceLink) sourceLink.href = manifest.architecture.sourceYaml;
   const switcher = document.getElementById("archSwitcher");
@@ -366,7 +380,8 @@ function typesetBoardMathAsync() {
 
 function setFocusBody(html, { selected = false } = {}) {
   clearInspectorPreviews();
-  elements.focusEyebrow.textContent = selected ? "Selected details" : "Details at this level";
+  elements.focusEyebrow.textContent = selected ? "Selected detail" : "Current takeaway";
+  elements.focusReset.hidden = !selected;
   elements.focusPanel.classList.toggle("is-selected", selected);
   elements.focusBody.innerHTML = html;
   state.focusHasMath = html.includes("math-step");
@@ -631,12 +646,11 @@ function renderBoard() {
   );
   elements.canvas.dataset.boardId = board.id;
   elements.canvas.setAttribute("aria-label", `${board.title} architecture map`);
-  elements.canvas.classList.toggle("is-abstract-board", board.scale_lanes === false);
   elements.canvas.classList.toggle("is-root-board", state.boardStack.length === 1);
 
   renderAudienceNavigation();
-  renderBoardTakeaway();
   renderModelMap();
+  renderScaleLanes(board);
 
   const graph = displayGraph(board);
   state.displayEdges = graph.edges;
@@ -647,6 +661,22 @@ function renderBoard() {
   applyGridColumnSizing(board, graph);
   applyViewport();
   layoutBoard(graph);
+}
+
+function renderScaleLanes(board) {
+  const lanes = Array.isArray(board.lanes) ? board.lanes : [];
+  elements.scaleLaneLayer.replaceChildren();
+  elements.scaleLaneLayer.hidden = lanes.length === 0;
+  for (const lane of lanes) {
+    const guide = document.createElement("div");
+    guide.className = "scale-lane";
+    guide.dataset.laneId = lane.id;
+    guide.style.top = `${clamp(Number(lane.position), 0, 100)}%`;
+    const label = document.createElement("span");
+    label.textContent = lane.label || humanizeRef(lane.id);
+    guide.appendChild(label);
+    elements.scaleLaneLayer.appendChild(guide);
+  }
 }
 
 let elkInstance = null;
@@ -946,15 +976,6 @@ function onSemanticLocationClick(event) {
   if (Number.isInteger(index)) popToBoard(index);
 }
 
-function renderBoardTakeaway() {
-  const board = currentBoard();
-  const summary = String(board?.summary || "").trim();
-  elements.boardTakeaway.hidden = !summary;
-  if (!summary) return;
-  elements.takeawayTitle.textContent = board.title;
-  elements.takeawaySummary.textContent = summary;
-}
-
 function ensureModelMap() {
   if (modelMap) return;
   modelMap = document.createElement("aside");
@@ -964,9 +985,26 @@ function ensureModelMap() {
   heading.className = "model-map-heading";
   const label = document.createElement("span");
   label.textContent = "Model map";
+
+  modelMapViewToggle = document.createElement("div");
+  modelMapViewToggle.className = "model-map-view-toggle";
+  modelMapViewToggle.setAttribute("role", "group");
+  modelMapViewToggle.setAttribute("aria-label", "Model map viewpoint");
+  [
+    ["root", "Whole model"],
+    ["parent", "Parent"],
+  ].forEach(([view, text]) => {
+    const button = document.createElement("button");
+    button.type = "button";
+    button.dataset.modelMapView = view;
+    button.textContent = text;
+    modelMapViewToggle.appendChild(button);
+  });
+  modelMapViewToggle.addEventListener("click", onModelMapViewClick);
+  heading.append(label, modelMapViewToggle);
+
   modelMapContext = document.createElement("span");
   modelMapContext.className = "model-map-context";
-  heading.append(label, modelMapContext);
 
   modelMapSvg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
   modelMapSvg.setAttribute("class", "model-map-board");
@@ -975,12 +1013,26 @@ function ensureModelMap() {
 
   modelMapA11y = document.createElement("ol");
   modelMapA11y.className = "model-map-a11y";
-  modelMap.append(heading, modelMapSvg, modelMapA11y);
+  modelMap.append(heading, modelMapContext, modelMapSvg, modelMapA11y);
   elements.canvas.appendChild(modelMap);
 }
 
-function modelMapBoard() {
-  return boardsById.get(manifest.boards.rootBoard) || null;
+function modelMapSelection() {
+  const rootBoard = boardsById.get(manifest.boards.rootBoard) || null;
+  const parentAvailable = state.boardStack.length >= 3;
+  if (state.modelMapView === "parent" && parentAvailable) {
+    const boardIndex = state.boardStack.length - 2;
+    const board = boardsById.get(state.boardStack[boardIndex]);
+    if (board) return { board, boardIndex, view: "parent", parentAvailable };
+  }
+  return { board: rootBoard, boardIndex: 0, view: "root", parentAvailable };
+}
+
+function onModelMapViewClick(event) {
+  const view = event.target.closest("button")?.dataset.modelMapView;
+  if (!view || (view === "parent" && state.boardStack.length < 3)) return;
+  state.modelMapView = view;
+  renderModelMap();
 }
 
 function modelMapGraph(board) {
@@ -996,13 +1048,14 @@ function modelMapGraph(board) {
   return { nodes, edges };
 }
 
-function activeModelMapNode(mapBoard, nodes) {
-  if (!mapBoard || state.boardStack.length <= 1) return null;
-  const originNodeId = state.boardOrigins[1];
+function activeModelMapNode(mapBoard, nodes, mapBoardIndex) {
+  if (!mapBoard || state.boardStack.length <= mapBoardIndex + 1) return null;
+  const childIndex = mapBoardIndex + 1;
+  const originNodeId = state.boardOrigins[childIndex];
   const originNode = nodes.find((node) => node.id === originNodeId);
   if (originNode) return originNode;
 
-  const firstChildBoardId = state.boardStack[1];
+  const firstChildBoardId = state.boardStack[childIndex];
   const matches = nodes.filter(
     (node) => targetBoardForNode(node)?.id === firstChildBoardId,
   );
@@ -1016,9 +1069,9 @@ function modelMapNodeLabel(node) {
 }
 
 function modelMapNodeGeometry(board, nodes) {
-  const cellWidth = 100;
-  const cellHeight = 68;
-  const padding = 18;
+  const cellWidth = 140;
+  const cellHeight = 92;
+  const padding = 24;
   const compactColumns = compactColumnTopology(board, nodes);
   const observedColumns = Math.max(1, ...nodes.map((node) => Number(node.col) || 1));
   const observedRows = Math.max(1, ...nodes.map((node) => Number(node.row) || 1));
@@ -1047,16 +1100,19 @@ function modelMapNodeGeometry(board, nodes) {
       ? node.glyph || glyphKindForShape(rep?.shape || "") || "vector"
       : null;
 
-    let width = node.prominence === "primary" ? 76 : 64;
-    let height = node.treatment === "chip" || node.density === "micro" ? 22 : 32;
-    if (kind === "operation") width = height = 24;
+    let width = node.prominence === "primary" ? 112 : 96;
+    let height = node.treatment === "chip" || node.density === "micro" ? 34 : 50;
+    if (kind === "operation") {
+      width = 58;
+      height = 54;
+    }
     if (kind === "representation") {
       const dimensions = {
-        scalar: [20, 20],
-        vector: [44, 18],
-        matrix: [48, 28],
-        pair: [32, 32],
-        volume: [48, 30],
+        scalar: [62, 66],
+        vector: [86, 58],
+        matrix: [76, 70],
+        pair: [70, 70],
+        volume: [84, 66],
       };
       [width, height] = dimensions[glyph] || dimensions.vector;
     }
@@ -1082,10 +1138,23 @@ function modelMapNodeGeometry(board, nodes) {
 }
 
 function modelMapEdgePath(from, to) {
-  if (Math.abs(from.y - to.y) < 1) return `M ${from.x} ${from.y} H ${to.x}`;
-  if (Math.abs(from.x - to.x) < 1) return `M ${from.x} ${from.y} V ${to.y}`;
-  const middleX = (from.x + to.x) / 2;
-  return `M ${from.x} ${from.y} H ${middleX} V ${to.y} H ${to.x}`;
+  const dx = to.x - from.x;
+  const dy = to.y - from.y;
+  const horizontal = Math.abs(dx) >= Math.abs(dy);
+  const start = horizontal
+    ? { x: from.x + Math.sign(dx || 1) * from.width / 2, y: from.y }
+    : { x: from.x, y: from.y + Math.sign(dy || 1) * from.height / 2 };
+  const end = horizontal
+    ? { x: to.x - Math.sign(dx || 1) * to.width / 2, y: to.y }
+    : { x: to.x, y: to.y - Math.sign(dy || 1) * to.height / 2 };
+  if (Math.abs(start.y - end.y) < 1) return `M ${start.x} ${start.y} H ${end.x}`;
+  if (Math.abs(start.x - end.x) < 1) return `M ${start.x} ${start.y} V ${end.y}`;
+  if (horizontal) {
+    const middleX = (start.x + end.x) / 2;
+    return `M ${start.x} ${start.y} H ${middleX} V ${end.y} H ${end.x}`;
+  }
+  const middleY = (start.y + end.y) / 2;
+  return `M ${start.x} ${start.y} V ${middleY} H ${end.x} V ${end.y}`;
 }
 
 function renderModelMapEdge(edge, geometry) {
@@ -1099,8 +1168,80 @@ function renderModelMapEdge(edge, geometry) {
     "class",
     `model-map-edge tone-${tone}${(edge.segments || []).length > 1 ? " is-contracted" : ""}`,
   );
+  path.setAttribute("marker-end", `url(#model-map-arrow-${tone})`);
   path.setAttribute("vector-effect", "non-scaling-stroke");
   return path;
+}
+
+function renderModelMapDefs() {
+  const defs = document.createElementNS("http://www.w3.org/2000/svg", "defs");
+  ["default", "conditioning", "skip"].forEach((tone) => {
+    const marker = document.createElementNS("http://www.w3.org/2000/svg", "marker");
+    marker.setAttribute("id", `model-map-arrow-${tone}`);
+    marker.setAttribute("viewBox", "0 0 10 10");
+    marker.setAttribute("refX", "9");
+    marker.setAttribute("refY", "5");
+    marker.setAttribute("markerWidth", "4.5");
+    marker.setAttribute("markerHeight", "4.5");
+    marker.setAttribute("orient", "auto");
+    marker.setAttribute("markerUnits", "strokeWidth");
+    const arrow = document.createElementNS("http://www.w3.org/2000/svg", "path");
+    arrow.setAttribute("d", "M 0 0 L 10 5 L 0 10 z");
+    arrow.setAttribute("class", `model-map-arrow tone-${tone}`);
+    marker.appendChild(arrow);
+    defs.appendChild(marker);
+  });
+  return defs;
+}
+
+function modelMapMiniNodeContent(entry) {
+  const node = entry.node;
+  const scale = node.scale || entry.module?.scale || entry.rep?.scale || "item";
+  if (entry.kind === "representation") {
+    const shape = node.shape || entry.rep?.shape || "";
+    const symbol = repSymbolById.get(entry.rep?.id)?.name || node.label || entry.rep?.id || node.id;
+    const dims = entry.glyph === "scalar" ? "" : shapeDimsLabel(shape);
+    const meaning = representationDisplayMeaning(node, entry.rep, node.id);
+    return {
+      className: `model-map-mini-node arch-rep tensor-${entry.glyph} scale-${scale}`,
+      html: `
+        <strong class="tensor-symbol">${escapeHtml(symbol)}</strong>
+        <span class="tensor-box">
+          ${tensorCellsSvg(entry.glyph)}
+          ${dims ? `<small class="tensor-dims">${escapeHtml(dims)}</small>` : ""}
+        </span>
+        <span class="tensor-meaning">${escapeHtml(meaning)}</span>
+      `,
+    };
+  }
+  if (entry.kind === "operation") {
+    const operator = operatorSymbolFor(node, entry.module) || "•";
+    return {
+      className: `model-map-mini-node arch-node arch-op-node scale-${scale}`,
+      html: `
+        <span class="op-circle">${escapeHtml(operator)}</span>
+        <span class="op-label">${escapeHtml(node.label || entry.module?.label || node.id)}</span>
+      `,
+    };
+  }
+  const kind = entry.module?.kind || node.kind || "module";
+  const label = node.label || entry.module?.label || node.id;
+  const prominence = node.prominence || "secondary";
+  const treatment = node.treatment || "block";
+  const density = node.density || "normal";
+  const repeat = entry.module?.repeats ? `<span class="arch-repeat">×${entry.module.repeats}</span>` : "";
+  const drill = targetBoardForNode(node) ? '<span class="model-map-drill">›</span>' : "";
+  return {
+    className: `model-map-mini-node arch-node scale-${scale} prominence-${prominence} treatment-${treatment} density-${density}`,
+    html: `
+      <span class="arch-node-top">
+        <span class="arch-kind">${escapeHtml(String(kind).replaceAll("_", " "))}</span>
+        ${repeat}
+      </span>
+      <strong>${escapeHtml(label)}</strong>
+      ${drill}
+    `,
+  };
 }
 
 function renderModelMapNode(entry, activeNode) {
@@ -1111,33 +1252,26 @@ function renderModelMapNode(entry, activeNode) {
   );
   group.setAttribute("data-model-node-id", entry.node.id);
 
-  const shape = document.createElementNS(
-    "http://www.w3.org/2000/svg",
-    entry.kind === "operation" ? "circle" : "rect",
-  );
-  shape.setAttribute("class", "model-map-node-shape");
-  shape.setAttribute("vector-effect", "non-scaling-stroke");
-  if (entry.kind === "operation") {
-    shape.setAttribute("cx", String(entry.x));
-    shape.setAttribute("cy", String(entry.y));
-    shape.setAttribute("r", String(entry.width / 2));
-  } else {
-    shape.setAttribute("x", String(entry.x - entry.width / 2));
-    shape.setAttribute("y", String(entry.y - entry.height / 2));
-    shape.setAttribute("width", String(entry.width));
-    shape.setAttribute("height", String(entry.height));
-    shape.setAttribute("rx", entry.kind === "module" ? "7" : "3");
-  }
-
   const title = document.createElementNS("http://www.w3.org/2000/svg", "title");
   title.textContent = modelMapNodeLabel(entry.node);
-  group.append(title, shape);
+  const foreignObject = document.createElementNS("http://www.w3.org/2000/svg", "foreignObject");
+  foreignObject.setAttribute("x", String(entry.x - entry.width / 2));
+  foreignObject.setAttribute("y", String(entry.y - entry.height / 2));
+  foreignObject.setAttribute("width", String(entry.width));
+  foreignObject.setAttribute("height", String(entry.height));
+  const content = modelMapMiniNodeContent(entry);
+  const miniature = document.createElementNS("http://www.w3.org/1999/xhtml", "div");
+  miniature.setAttribute("class", content.className);
+  miniature.innerHTML = content.html;
+  foreignObject.appendChild(miniature);
+  group.append(title, foreignObject);
   return group;
 }
 
 function renderModelMap() {
   if (!modelMap) return;
-  const mapBoard = modelMapBoard();
+  const selection = modelMapSelection();
+  const mapBoard = selection.board;
   const { nodes, edges } = modelMapGraph(mapBoard);
   if (!mapBoard || !nodes.length) {
     modelMap.classList.add("is-empty");
@@ -1146,9 +1280,18 @@ function renderModelMap() {
     return;
   }
 
-  const activeNode = activeModelMapNode(mapBoard, nodes);
+  modelMapViewToggle.hidden = !selection.parentAvailable;
+  modelMapViewToggle.querySelectorAll("button").forEach((button) => {
+    const selected = button.dataset.modelMapView === selection.view;
+    button.classList.toggle("is-selected", selected);
+    button.setAttribute("aria-pressed", String(selected));
+  });
+
+  const activeNode = activeModelMapNode(mapBoard, nodes, selection.boardIndex);
   const activeLabel = activeNode ? modelMapNodeLabel(activeNode) : null;
-  const contextLabel = activeLabel ? `Inside: ${activeLabel}` : "Overview";
+  const contextLabel = activeLabel
+    ? `${selection.view === "parent" ? "Current" : "Inside"}: ${activeLabel}`
+    : "Overview";
   modelMapContext.textContent = contextLabel;
   modelMapContext.title = contextLabel;
 
@@ -1163,7 +1306,7 @@ function renderModelMap() {
   const nodeLayer = document.createElementNS("http://www.w3.org/2000/svg", "g");
   nodeLayer.setAttribute("class", "model-map-nodes");
   geometry.nodes.forEach((entry) => nodeLayer.appendChild(renderModelMapNode(entry, activeNode)));
-  modelMapSvg.replaceChildren(edgeLayer, nodeLayer);
+  modelMapSvg.replaceChildren(renderModelMapDefs(), edgeLayer, nodeLayer);
 
   modelMapA11y.replaceChildren(
     ...nodes.map((node) => {
@@ -1176,7 +1319,8 @@ function renderModelMap() {
   modelMap.classList.remove("is-empty");
   modelMap.setAttribute(
     "aria-label",
-    `Overview map for ${mapBoard.title}. Current region: ${activeLabel || "overview"}.`,
+    `${selection.view === "parent" ? "Parent" : "Whole model"} map for ${mapBoard.title}. ` +
+      `Current region: ${activeLabel || "overview"}.`,
   );
 }
 
@@ -1308,9 +1452,26 @@ function representationScaleLabel(scale) {
   return labels[scale] || String(scale || "unknown").replaceAll("_", " ");
 }
 
+function stateSemanticsFor(node, rep) {
+  if (node.value_site_ref) {
+    const bySite = manifest.architecture.stateSemanticsBySite?.[node.value_site_ref];
+    if (bySite) return bySite;
+  }
+  return rep ? manifest.architecture.stateSemantics?.[rep.id] : null;
+}
+
+function valueSiteInterfaceFor(node) {
+  return node.value_site_ref ? valueSiteInterfacesById.get(node.value_site_ref) : null;
+}
+
+function readableRefs(refs) {
+  return (refs || []).map((ref) => humanizeRef(ref)).join(", ");
+}
+
 function repFocusHtml(node, rep) {
   const shape = node.shape || rep?.shape || "";
-  const semantics = rep ? manifest.architecture.stateSemantics?.[rep.id] : null;
+  const semantics = stateSemanticsFor(node, rep);
+  const valueSiteInterface = valueSiteInterfaceFor(node);
   const carries = rep?.carries || [];
   return `
     <div class="focus-section">
@@ -1318,10 +1479,9 @@ function repFocusHtml(node, rep) {
       <dl class="focus-dl">
         ${shape ? `<dt>shape</dt><dd><code>${shape}</code></dd>` : ""}
         <dt>scale</dt><dd>${node.scale || rep?.scale || "unknown"}</dd>
-        ${semantics ? `<dt>state</dt><dd>${String(semantics.role || "").replaceAll("_", " ")}</dd>` : ""}
-        ${semantics?.produced_by ? `<dt>produced by</dt><dd>${semantics.produced_by}</dd>` : ""}
-        ${semantics?.updated_by?.length ? `<dt>updated by</dt><dd>${semantics.updated_by.join(", ")}</dd>` : ""}
-        ${semantics?.consumed_by?.length ? `<dt>consumed by</dt><dd>${semantics.consumed_by.join(", ")}</dd>` : ""}
+        ${semantics?.lifecycle ? `<dt>lifecycle</dt><dd>${String(semantics.lifecycle).replaceAll("_", " ")}</dd>` : ""}
+        ${valueSiteInterface?.producerRefs?.length ? `<dt>produced by</dt><dd>${readableRefs(valueSiteInterface.producerRefs)}</dd>` : ""}
+        ${valueSiteInterface?.consumerRefs?.length ? `<dt>consumed by</dt><dd>${readableRefs(valueSiteInterface.consumerRefs)}</dd>` : ""}
       </dl>
       ${semantics?.notes?.length ? semantics.notes.map((note) => `<p>${note}</p>`).join("") : ""}
       ${carries.length ? `<h3>Carries</h3><ul class="claim-list">${carries.map((item) => `<li>${item}</li>`).join("")}</ul>` : ""}
@@ -1349,11 +1509,14 @@ function hideRepPeek(sourceKey) {
 
 function repTooltipHtml(node, rep) {
   const shape = node.shape || rep?.shape || "";
-  const semantics = rep ? manifest.architecture.stateSemantics?.[rep.id] : null;
+  const semantics = stateSemanticsFor(node, rep);
+  const valueSiteInterface = valueSiteInterfaceFor(node);
   const label = node.label || rep?.id || node.id;
   const scale = node.scale || rep?.scale || "unknown";
   const scaleLabel = representationScaleLabel(scale);
-  const stateRole = semantics?.role ? String(semantics.role).replaceAll("_", " ") : "";
+  const stateRole = node.role || semantics?.lifecycle
+    ? String(node.role || semantics.lifecycle).replaceAll("_", " ")
+    : "";
   const symbol = symbolMarkup(repSymbolById.get(rep?.id), label);
   return `
     <span class="rep-tooltip-meta">${escapeHtml(scaleLabel)}${stateRole ? ` · ${escapeHtml(stateRole)}` : ""}</span>
@@ -1362,7 +1525,7 @@ function repTooltipHtml(node, rep) {
       ${node.role || rep?.semantic_role ? `<p>${escapeHtml(node.role || rep?.semantic_role)}</p>` : ""}
       <dl class="focus-dl">
         ${shape ? `<dt>shape</dt><dd><code>${escapeHtml(shape)}</code></dd>` : ""}
-        ${semantics?.produced_by ? `<dt>produced by</dt><dd>${escapeHtml(semantics.produced_by)}</dd>` : ""}
+        ${valueSiteInterface?.producerRefs?.length ? `<dt>produced by</dt><dd>${escapeHtml(readableRefs(valueSiteInterface.producerRefs))}</dd>` : ""}
       </dl>
     </div>
   `;
@@ -2258,8 +2421,28 @@ function connectionInspectorHtml(edge, { expanded = false } = {}) {
             <dt>role</dt><dd>${edge.connection.role}</dd>
             ${hops ? `<dt>via</dt><dd>${hops}</dd>` : ""}
           </dl>`}
+      ${expanded ? renderEdgeReferences(edge) : ""}
     </div>
   `;
+}
+
+function renderEdgeReferences(edge) {
+  const relations = relationRefsForEdge(edge)
+    .map((ref) => relationsById.get(ref) || relationsById.get(untypedRef(ref, "relations")))
+    .filter(Boolean);
+  const refs = relations.flatMap((relation) => relation.evidence?.refs || []);
+  const uniqueRefs = [...new Map(refs.map((ref) => [
+    [ref.source_ref, ref.role, ref.locator || ref.lines, ref.note].join("|"),
+    ref,
+  ])).values()];
+  if (!uniqueRefs.length) return "";
+  const statuses = [...new Set(relations.map((relation) => relation.evidence?.status).filter(Boolean))];
+  return renderReferences({
+    evidence: {
+      status: statuses.join(" · ") || "unknown",
+      refs: uniqueRefs,
+    },
+  });
 }
 
 function nodeLabelById(id) {
@@ -2389,28 +2572,17 @@ function focusConnection(edge) {
 function showNodePeek(node, module, targetBoard, sourceKey) {
   const label = node.label || module?.label || node.id;
   const kind = node.kind === "operation" ? "operation" : module?.kind || node.kind || "module";
+  const role = node.role || module?.role || "";
   showHoverPanel(`
     <span class="rep-tooltip-meta">${escapeHtml(String(kind).replaceAll("_", " "))}</span>
     <strong class="rep-tooltip-title">${escapeHtml(label)}</strong>
     <div class="focus-section">
-      <p>${node.role || module?.role || ""}</p>
-      ${targetBoard ? renderNestedBoardSummary(targetBoard.id) : ""}
-      ${module?.contains?.length ? renderContains(module.contains) : ""}
-      ${module ? renderAttentionSummary(module) : ""}
-      ${module ? renderReferences(module) : ""}
+      ${role ? `<p>${escapeHtml(role)}</p>` : ""}
+      ${targetBoard
+        ? `<p class="focus-preview-hint">Open detail: ${escapeHtml(targetBoard.title)}</p>`
+        : ""}
     </div>
   `, label, sourceKey);
-}
-
-function renderNestedBoardSummary(boardId) {
-  const board = boardsById.get(boardId);
-  if (!board) return "";
-  return `
-    <div class="zoom-note">
-      <strong>${board.title}</strong>
-      <span>${board.summary}</span>
-    </div>
-  `;
 }
 
 function focusOverview() {
@@ -2418,51 +2590,12 @@ function focusOverview() {
   clearActiveNodes();
   const board = currentBoard();
   elements.focusTitle.textContent = board.title;
-  const drillTargets = visibleNodes(board).filter((node) => targetBoardForNode(node));
-  const selectionHint = !drillTargets.length && board.id !== manifest.boards.rootBoard
-    ? '<p class="focus-empty-hint">Hover to preview a module, tensor, operation, or connection. Select it to keep the details here.</p>'
-    : "";
+  const summary = String(board.summary || "").trim();
   setFocusBody(`
-    <div class="focus-section">
-      ${selectionHint}
-      ${drillTargets.length
-        ? `<h3>Open</h3><div class="summary-grid">${drillTargets.map(renderBoardSummaryNode).join("")}</div>`
-        : ""}
-      ${board.id === manifest.boards.rootBoard ? renderLanguageSummary() : ""}
-      ${board.id === manifest.boards.rootBoard ? renderClaims() : ""}
+    <div class="focus-section focus-takeaway">
+      <p>${escapeHtml(summary || "Explore the board to see how information moves through this level.")}</p>
     </div>
   `);
-}
-
-function onFocusBodyClick(event) {
-  const trigger = event.target.closest("[data-open-board]");
-  if (!trigger || !elements.focusBody.contains(trigger)) return;
-  pushBoard(trigger.dataset.openBoard, trigger.dataset.originNode);
-}
-
-function renderBoardSummaryNode(node) {
-  const module = node.module_ref ? modulesById.get(node.module_ref) : null;
-  const rep = node.rep_ref ? repsById.get(node.rep_ref) : null;
-  const label = node.label || module?.label || rep?.id || node.id;
-  const scale = node.scale || module?.scale || rep?.scale || node.kind;
-  const detail = module?.kind || node.role || rep?.shape || node.kind;
-  const targetBoard = targetBoardForNode(node);
-  const boardId = targetBoard?.id || node.board_ref || node.module_ref || node.id;
-  return `
-    <button
-      type="button"
-      class="mini-summary is-drilldown"
-      data-open-board="${escapeHtml(boardId)}"
-      data-origin-node="${escapeHtml(node.id)}"
-      aria-label="Open ${escapeHtml(targetBoard?.title || label)}"
-      title="Open ${escapeHtml(targetBoard?.title || label)}"
-    >
-      <span>${escapeHtml(scale)}</span>
-      <strong>${escapeHtml(label)}</strong>
-      <em>${escapeHtml(detail)}</em>
-      <span class="arch-drill-cue" aria-hidden="true">Open detail <b>›</b></span>
-    </button>
-  `;
 }
 
 function visibleNodes(board) {
@@ -2471,45 +2604,11 @@ function visibleNodes(board) {
   );
 }
 
-function renderClaims() {
-  return `
-    <h3>Claims</h3>
-    <ul class="claim-list">
-      ${manifest.architecture.claims.map((claim) => `<li>${claim}</li>`).join("")}
-    </ul>
-  `;
-}
-
-function renderLanguageSummary() {
-  const loops = manifest.architecture.execution?.loops?.length || 0;
-  const states = Object.keys(manifest.architecture.stateSemantics || {}).length;
-  const conditioning = manifest.architecture.conditioning?.length || 0;
-  const transitions = manifest.architecture.scaleTransitions?.length || 0;
-  return `
-    <h3>Language Coverage</h3>
-    <div class="summary-grid">
-      <article class="mini-summary">
-        <span>execution</span>
-        <strong>${loops} loop${loops === 1 ? "" : "s"}</strong>
-        <em>control flow and cached state</em>
-      </article>
-      <article class="mini-summary">
-        <span>state</span>
-        <strong>${states} representations</strong>
-        <em>mutable vs conditioning semantics</em>
-      </article>
-      <article class="mini-summary">
-        <span>conditioning</span>
-        <strong>${conditioning} modes</strong>
-        <em>AdaLN, pair bias, additive conditioning</em>
-      </article>
-      <article class="mini-summary">
-        <span>scale</span>
-        <strong>${transitions} transitions</strong>
-        <em>pooling, compression, broadcast</em>
-      </article>
-    </div>
-  `;
+function resetFocusedDetail() {
+  state.focusedId = null;
+  state.pinnedEdge = null;
+  clearActiveNodes();
+  focusOverview();
 }
 
 function focusModule(module) {
@@ -2657,14 +2756,46 @@ function renderPseudocode(module) {
   `;
 }
 
-function renderReferences(module) {
-  const refs = module.evidence?.refs || [];
+function bibliographySource(sourceRef) {
+  return collectionValues(manifest.bibliography?.sources)
+    .find((source) => source.id === sourceRef);
+}
+
+function citationByline(source) {
+  const authors = Array(source?.authors).join(", ");
+  return [authors, source?.organization, source?.year].filter(Boolean).join(" · ");
+}
+
+function renderCitation(ref) {
+  const source = bibliographySource(ref.source_ref);
+  const title = source?.title || ref.path || ref.source_ref || "Unresolved source";
+  const href = source?.href || source?.url || ref.path;
+  const byline = citationByline(source);
+  const locator = ref.locator || ref.lines;
+  const role = String(ref.role || "supporting_evidence").replaceAll("_", " ");
+  const kind = source?.kind || ref.kind || "source";
+  const titleMarkup = href
+    ? `<a href="${escapeHtml(href)}" target="_blank" rel="noreferrer">${escapeHtml(title)}</a>`
+    : `<strong>${escapeHtml(title)}</strong>`;
+  return `
+    <article class="citation-entry">
+      <span class="citation-role">${escapeHtml(role)} · ${escapeHtml(kind)}</span>
+      ${titleMarkup}
+      ${byline ? `<cite>${escapeHtml(byline)}</cite>` : ""}
+      ${locator ? `<span class="citation-locator">${escapeHtml(locator)}</span>` : ""}
+      ${ref.note ? `<p>${escapeHtml(ref.note)}</p>` : ""}
+    </article>
+  `;
+}
+
+function renderReferences(entity) {
+  const refs = entity.evidence?.refs || [];
   if (!refs.length) return "";
   return `
     <h3>References</h3>
     <div class="evidence-list">
-      <span class="evidence-badge">${module.evidence.status.replaceAll("_", " ")}</span>
-      ${refs.map((ref) => `<code>${shortPath(ref.path)}${ref.lines ? `:${ref.lines}` : ""}</code>`).join("")}
+      <span class="evidence-badge">${escapeHtml(String(entity.evidence.status || "unknown").replaceAll("_", " "))}</span>
+      <div class="citation-list">${refs.map(renderCitation).join("")}</div>
     </div>
   `;
 }
@@ -2677,11 +2808,6 @@ function renderFocusLinks(module) {
   ].filter(Boolean);
   if (!links.length) return "";
   return `<div class="focus-links">${links.join("")}</div>`;
-}
-
-function shortPath(path = "") {
-  const parts = path.split("/");
-  return parts.slice(-2).join("/");
 }
 
 function ensurePanZoom() {

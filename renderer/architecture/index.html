@@ -27,35 +27,19 @@
 
       <section class="renderer-grid">
         <section class="architecture-canvas" aria-label="Architecture map">
-          <div class="scale-lane lane-pair">
-            <span>pair/context</span>
-          </div>
-          <div class="scale-lane lane-item">
-            <span>item</span>
-          </div>
-          <div class="scale-lane lane-group">
-            <span>group</span>
-          </div>
-          <div class="scale-lane lane-output">
-            <span>output</span>
-          </div>
+          <div id="scaleLaneLayer" class="scale-lane-layer" aria-hidden="true" hidden></div>
 
           <div id="moduleLayer" class="module-layer"></div>
           <svg id="edgeLayer" class="edge-layer" aria-hidden="true"></svg>
         </section>
 
-        <section id="boardTakeaway" class="board-takeaway" aria-label="What to notice" hidden>
-          <p class="eyebrow">What to notice</p>
-          <div>
-            <strong id="takeawayTitle"></strong>
-            <p id="takeawaySummary"></p>
-          </div>
-        </section>
-
         <aside class="focus-panel" aria-label="Architecture details">
           <div class="focus-panel-header" id="focusHeader">
-            <p class="eyebrow" id="focusEyebrow">Details at this level</p>
-            <h2 id="focusTitle">Architecture overview</h2>
+            <div>
+              <p class="eyebrow" id="focusEyebrow">Current takeaway</p>
+              <h2 id="focusTitle">Architecture overview</h2>
+            </div>
+            <button id="focusReset" class="focus-reset" type="button" hidden>Close</button>
           </div>
           <div id="focusBody" class="focus-body"></div>
 
