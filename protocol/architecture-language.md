@@ -1,7 +1,13 @@
-# Architecture Language v0.2
+# Architecture Language v0.2 (Legacy Reference)
 
 This is a small source format for describing system architectures without
 hardcoding each explanation into HTML or JavaScript.
+
+> **Current contract:**
+> `protocol/architecture-projection-model.md` specifies the implemented
+> architecture-v0.3 hierarchy, typed value sites, and architecture-derived
+> board projection model. This file remains as the legacy v0.2 vocabulary
+> reference for compatibility work.
 
 The goal is not to be complete on day one. The goal is to make every story and
 comparison use the same vocabulary, so a renderer can turn the same source

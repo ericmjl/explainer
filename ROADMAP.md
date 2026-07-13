@@ -44,13 +44,23 @@ Exit criteria are "architecture X renders legibly", not "feature Y exists".
   edit, tuning, and audience variants into one canonical audience renderer.
   Board authoring remains source-first in YAML; `?arch=` selects content and
   `?layout=elk` remains a layout experiment, not a UI mode.
+- **Stage 4 — architecture-derived board projection** (2026-07): added the
+  shared Ruby semantic projector and executable fixtures; both builder and
+  linter compile the same direct/boundary/contracted edge IR with ordered
+  canonical provenance. Migrated generic and DiT to architecture-v0.3 and
+  visualization-v0.4 with strict module hierarchy, typed value sites,
+  before/after mutable state, explicit elision/exclusion, and no authored board
+  edges. The browser consumes architecture-manifest-v0.3 projected boards while
+  retaining a narrow legacy-manifest adapter. Generic now visibly includes the
+  ownership-index and fine-item skip dependencies that its old board omitted.
 
 ## Next
 
-- **Stage 4 — more architectures**: port RFD3 / Genie3 slices from the
-  earlier branch into registry sets. Expect fan-in cases that stress the
-  elision rules.
-- **Stage 5 — comparison view**: generate a cross-architecture table from
+- **Stage 5 — more architectures**: port RFD3 / Genie3 slices from the
+  earlier branch into registry sets. Use fan-in, shared state, and branching
+  failures to evolve the projection contract rather than adding view-only
+  architecture facts.
+- **Stage 6 — comparison view**: generate a cross-architecture table from
   the uniform `conditioning` / `state_semantics` / `scale_transitions`
   fields. This is the highest research value in the design.
 
@@ -60,7 +70,5 @@ Exit criteria are "architecture X renders legibly", not "feature Y exists".
   generic demo today, so needs a scaffold exemption first).
 - Document-level `default_evidence` with per-item overrides to cut YAML
   boilerplate.
-- Ports on child boards derived from parent-board boundary edges, so nesting
-  never re-declares connections.
 - Clickable hops in the contracted-edge popover (jump to the elided module's
   focus panel).

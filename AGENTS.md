@@ -20,13 +20,17 @@ When updating an architecture, prefer editing the declarative sources first:
 - Use stable IDs in snake_case. Keep IDs semantic, not visual:
   `input_adapter`, `context_memory`, `refinement_stack`, not `left_box_1`.
 - Give every architectural fact one owner. Reference that fact from other
-  sections and views instead of copying it. In architecture-v0.2, top-level
+  sections and views instead of copying it. In architecture-v0.3, top-level
   `relations` own information-flow identity, semantics, and evidence.
 - Give every relation a stable semantic snake_case `id`; do not author
   anonymous architecture `edges`.
-- In the current v0.2 migration, module `inputs`/`outputs` remain separately
-  authored interface declarations. A flow shown on a v0.3 board still requires
-  its own canonical relation; module IO alone is not view provenance.
+- Give every module exactly one `parent_ref`, rooted at `architecture`.
+- Model reusable tensor/stream types in `representations` and concrete
+  architectural occurrences in `value_sites`. Split mutable before/after state
+  into distinct value sites; never encode a state update as an ambiguous
+  self-edge.
+- Derive module interfaces from canonical relations. Do not separately author
+  module `inputs`/`outputs` in architecture-v0.3.
 - Every nontrivial claim should have `evidence.status` and `evidence.refs`.
 - Mark certainty explicitly:
   - `confirmed_from_code`: directly checked in source code.
@@ -57,8 +61,8 @@ Use `views/generic-semantic-zoom.view.yaml` as the current reference pattern.
   decoding surround it; do not spend the root on a one-box wrapper.
 - A child board expands exactly one conceptual unit.
 - Use an explicit `board_ref` for every drillable node, and ensure the matching
-  board exists. Do not infer drilldown from `module_ref` or node ID, and do not
-  author `expandable` in visualization-v0.3.
+  board exists. Its `subject_ref` must equal the node's canonical module `ref`.
+  Do not infer drilldown from a node ID and do not author `expandable`.
 - Keep `col`/`row` layout declarative in the view YAML — it is the primary
   layout. Avoid hardcoding module positions in renderer JavaScript. An
   experimental ELK layered layout exists behind `?layout=elk` (needs visual
@@ -69,31 +73,27 @@ Use `views/generic-semantic-zoom.view.yaml` as the current reference pattern.
 - Use `grid.column_sizing: content` when authored columns should define visible
   order/alignment without reserving full-width holes for empty or elided
   columns. Keep the uniform grid when blank ranks intentionally define lanes.
-- Edges should describe information flow. Each edge should include:
-  - `from`
-  - `to`
-  - `relation_ref` for architecture-backed flow, or `view_only: true` for a
-    board-local decomposition involving at least one view-local node
-  - `label`
-  - optional `tone`: `conditioning`, `skip`, or plain/default
-  - optional `route_side`: `top`, `bottom`, `left`, or `right`, with optional
-    `route_clearance`, only when the automatic router cannot preserve a
-    meaningful feedback or bypass lane
-  - `connection.title`, `connection.role`, `connection.inside`
+- Every visualization-v0.4 board declares `subject_ref`, relative
+  `expansion_depth`, and an exact curated `nodes` list. Nodes bind through a
+  typed `ref` (`modules.*` or `value_sites.*`).
+- Do not author normal board `edges` or `view_only` flow. The shared projector
+  derives edges from canonical architecture relations.
+- Preserve board-specific edge presentation in `edge_overrides`, matched by
+  exactly one `relation_ref` or ordered `relation_path`. Overrides may set
+  labels, `tone`, `connection` prose, and exceptional `route_side` /
+  `route_clearance`; they may not redefine endpoints or semantics.
 - Connection text should explain how the source is used inside the target, not
   merely restate the edge label. This prose is presentation; relation identity,
   architectural semantics, and evidence remain owned by the architecture.
-- Every architecture-backed board edge must use `relation_ref`, even though it
-  retains local `from`/`to` node IDs for routing. Edges without an architecture
-  relation must declare `view_only: true` and involve at least one view-local
-  node; the linter enforces this. Author boards as projections of the
-  architecture graph, not as a second copy.
+- Use `elide` for a deliberate pass-through contraction and `exclude` with a
+  reason for content outside a board's scope. Omission is not an implicit
+  elision: an unaccounted in-scope object fails projection.
 - Do not write conditioning modes into edge labels; the renderer derives
   badges from the architecture `conditioning` entries.
-- `elide: true` hides a pass-through node and contracts its edges into
-  dashed through-edges with a peek/pin popover. Elided nodes must have at
-  least one incoming and one outgoing edge and must not have both fan-in and
-  fan-out. See `protocol/visualization-language.md`.
+- Explicitly elided objects must have incoming and outgoing canonical flow and
+  must not form a component with both multiple visible inputs and multiple
+  visible outputs. Contracted edges retain their complete ordered relation
+  provenance. See `protocol/architecture-projection-model.md`.
 - Representation nodes render as tensor-shaped boxes (scalar/vector/matrix/
   pair/volume) derived from the representation's `shape`. All ranks place the
   math symbol above the box; non-scalars place dims inside, and a short
@@ -115,11 +115,13 @@ editing the scripts. Current sets:
   `architectures/diffusion-transformer.yaml`,
   `views/dit-semantic-zoom.view.yaml`,
   `pseudocode/diffusion-transformer.yaml`, and
-  `standard_blocks/adaln-zero-conditioning.yaml`. Its view demonstrates edge
-  elision (`elide: true`) and derived conditioning badges.
+  `standard_blocks/adaln-zero-conditioning.yaml`. Its view demonstrates
+  architecture-derived edge elision and conditioning badges.
 
 Shared infrastructure:
 
+- Semantic projector: `lib/architecture_projection.rb` (used by both builder
+  and linter; emits deterministic projected edges with relation provenance).
 - Renderer manifest builder: `renderer/architecture/build-manifest.rb`
   (emits one `manifest-<id>.js` per registry entry plus `manifest-index.js`).
 - Browser renderer: `renderer/architecture/renderer.js` (architecture chosen
@@ -130,7 +132,8 @@ Shared infrastructure:
 When the user provides architecture knowledge:
 
 1. Translate the statement into architecture/view language.
-2. Decide whether it changes a module, representation, relation, claim, or board.
+2. Decide whether it changes a module, representation type, value site,
+   relation, claim, or board.
 3. Update the YAML source before touching renderer code.
 4. Add evidence references if code, paper, or spec lines are known.
 5. If evidence is not known, keep the scaffold but mark details as inferred or
@@ -147,6 +150,8 @@ ruby renderer/architecture/build-manifest.rb
 Useful validation:
 
 ```bash
+ruby -Ilib:test test/architecture_projection_test.rb
+ruby -Ilib:test test/source_projection_integration_test.rb
 ruby scripts/lint_sources.rb
 ruby -c renderer/architecture/build-manifest.rb
 ```

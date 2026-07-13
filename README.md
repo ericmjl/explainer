@@ -13,6 +13,9 @@ Source layers:
 
 - `protocol/architecture-language.md`: YAML vocabulary for methods, modules,
   representations, attention patterns, relations, claims, and evidence.
+- `protocol/architecture-projection-model.md`: current projection contract for
+  architecture hierarchy, scoped board projection, automatic edges, elision,
+  provenance, and migration.
 - `protocol/architecture-comparison-protocol.md`: comparison workflow and axes.
 - `protocol/pseudocode-language.md`: YAML vocabulary for algorithm lines,
   symbols, source refs, claims, and visual scenes.
@@ -28,15 +31,14 @@ Source layers:
 Stories should increasingly be rendered from these source files instead of
 hardcoding every module diagram in HTML or JavaScript.
 
-The current source contracts move toward a one-fact/one-owner rule.
-Architecture-v0.2 gives board-projected information flow stable top-level
-`relations`, and visualization-v0.3 projects those relations with
-`relation_ref`. Board edges retain local `from`/`to` node IDs for layout;
-board-local decompositions declare `view_only: true`. Drilldown is explicit
-through `board_ref`. View connection prose is presentation, while relation
-identity and evidence remain owned by the architecture source. Module
-`inputs`/`outputs` remain separately authored interface declarations during
-this migration; they are not yet derived from relations.
+The current architecture-v0.3 / visualization-v0.4 contracts enforce the
+one-fact/one-owner rule. Architecture sources own a strict module hierarchy,
+typed value sites, canonical relations, semantics, and evidence. Boards select
+a subject, relative expansion depth, exact visible occurrences, explicit
+elisions/exclusions, and presentation overrides; they do not author semantic
+edges. A shared build/lint-time projector derives direct, boundary, and
+contracted edges with ordered relation provenance. Drilldown remains explicit
+through `board_ref`. See `protocol/architecture-projection-model.md`.
 
 For architecture-aware authoring, read `AGENTS.md` first. It defines the
 source-first update order, evidence rules, semantic-zoom board conventions,
@@ -55,8 +57,9 @@ dropdown or a `?arch=<id>` query parameter:
 - `?arch=generic` (default): the domain-neutral feature-refinement pipeline.
 - `?arch=dit`: the Diffusion Transformer (Peebles & Xie, arXiv:2212.09748),
   rendered from evidence-graded sources. Its board demonstrates edge elision:
-  featurization modules (patchify, embedders) are contracted into dashed
-  edges; hover the edge port to peek at the hidden chain, click to pin.
+  decoder scaling and intermediate value sites are contracted into dashed
+  edges with complete canonical relation paths; hover the edge port to peek at
+  the hidden chain, click to pin.
 
 There is one renderer interface: the audience view. Navigation, location,
 hover explanations, focus details, pan, and zoom all belong to that same
@@ -69,7 +72,8 @@ Conditioning badges on edges (adaLN-Zero, pair bias, per-item AdaLN) are
 derived from the architecture `conditioning` section, never hand-authored in
 views.
 
-The generic demo models a feature-refinement pipeline:
+Both registered demos are compiled through the semantic projector. The generic
+demo models a feature-refinement pipeline:
 
 - input records become item states;
 - a context builder produces pair/context state;
@@ -90,6 +94,8 @@ After changing YAML/view sources:
 
 ```bash
 ruby renderer/architecture/build-manifest.rb   # regenerates manifest-<id>.js per registry entry
+ruby -Ilib:test test/architecture_projection_test.rb
+ruby -Ilib:test test/source_projection_integration_test.rb
 ruby scripts/lint_sources.rb
 ruby -c renderer/architecture/build-manifest.rb
 ```

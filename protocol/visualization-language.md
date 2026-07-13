@@ -1,8 +1,14 @@
-# Visualization Language v0.3
+# Visualization Language v0.3 (Legacy Reference)
 
 This file defines the generic semantic-zoom board language used by the static
 renderer. The view source decides which architecture objects are visible at
 each zoom level; the renderer decides presentation and interaction behavior.
+
+> **Current contract:**
+> `protocol/architecture-projection-model.md` specifies the implemented visualization-v0.4,
+> where boards declare a subject, relative depth, visible occurrences, and
+> presentation overrides while normal edges are derived from architecture
+> relations. Visualization-v0.3 below remains a legacy compatibility reference.
 
 ## Board Shape
 

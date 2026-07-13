@@ -1,4 +1,4 @@
-# Renderer Architecture v0.2
+# Renderer Architecture v0.3
 
 This document describes the generic renderer stack for semantic architecture
 explainers. The renderer should stay domain-neutral: source files decide what
@@ -23,10 +23,40 @@ reusable presentation rules.
    semantic navigation, audience explanation panels, MathJax equations,
    pan/zoom controls, and source links.
 
-The builder accepts legacy architecture `edges` and v0.2 `relations`, then
-normalizes both into `architecture-manifest-v0.2`, whose architecture graph is
-always exposed as `architecture.relations`. The manifest is generated internal
-representation rather than a second durable source contract.
+The builder compiles current architecture-v0.3 / visualization-v0.4 sources
+into architecture-manifest-v0.3 projected boards. A narrow legacy path still
+accepts old architecture `edges` and v0.2 `relations` and normalizes them into
+architecture-manifest-v0.2. Manifests are generated internal representations,
+not second durable source contracts.
+
+## Semantic Projector
+
+`protocol/architecture-projection-model.md` defines the implemented semantic
+layer between sources and browser rendering.
+
+The current pipeline uses a shared build/lint-time semantic projector:
+
+```text
+architecture-v0.3 + visualization-v0.4
+                  ↓
+shared normalizer and semantic board projector
+                  ↓
+lossless architecture-manifest-v0.3 projected boards
+                  ↓
+browser layout and geometric wire router
+```
+
+The projector derives normal board edges from canonical architecture
+relations, remap hidden descendants to visible aggregate modules, contract
+explicitly elided paths, preserve ordered relation provenance, and reject
+ambiguous or incomplete projections. The browser will continue to own node
+measurement, layout, routing, and interaction; it will not interpret semantic
+hierarchy or invent architecture flow.
+
+Derived visualization-v0.4 boards normalize to one projected-board manifest
+shape. The renderer retains a narrow visualization-v0.3 adapter for old
+manifests and records `projectionMode: authored | derived` without interpreting
+source schemas in its drawing code.
 
 ## Renderer Responsibilities
 
