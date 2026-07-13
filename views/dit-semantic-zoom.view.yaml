@@ -1,884 +1,766 @@
-schema_version: visualization-v0.3
+schema_version: visualization-v0.4
 id: dit_semantic_zoom_board
 title: DiT Semantic Zoom Board
 entry:
   architecture: architectures/diffusion-transformer.yaml
 root_board: generation_overview
 boards:
-  - id: generation_overview
-    title: DiT Class-Conditional Image Generation
-    summary: DiT generates an image by iteratively denoising a random four-channel latent under a class label, undoing the latent scaling used during training, and decoding the final latent with a frozen VAE.
-    scale_lanes: false
-    grid:
-      columns: 8
-      rows: 4
-      column_sizing: content
-    nodes:
-      - id: class_label
-        kind: representation
-        rep_ref: class_label
-        prominence: context
-        treatment: chip
-        density: micro
-        col: 1
-        row: 1
-      - id: initial_noise
-        kind: representation
-        rep_ref: initial_noise
-        prominence: context
-        col: 1
-        row: 3
-      - id: ddpm_sampler
-        kind: module
-        module_ref: ddpm_sampler
-        prominence: primary
-        treatment: block
-        board_ref: sampling_loop
-        col: 3
-        row: 2
-      - id: final_latent
-        kind: representation
-        rep_ref: final_latent
-        prominence: secondary
-        col: 4
-        row: 2
-      - id: inverse_latent_scaling
-        kind: module
-        module_ref: inverse_latent_scaling
-        treatment: compact
-        density: compact
-        col: 5
-        row: 2
-        elide: true
-      - id: vae_decode_latent
-        kind: representation
-        rep_ref: vae_decode_latent
-        col: 6
-        row: 2
-        elide: true
-      - id: frozen_vae_decoder
-        kind: module
-        module_ref: frozen_vae_decoder
-        prominence: primary
-        treatment: block
-        col: 7
-        row: 2
-      - id: generated_image
-        kind: representation
-        rep_ref: generated_image
-        prominence: primary
-        col: 8
-        row: 2
-    edges:
-      - relation_ref: initial_noise_enters_ddpm_sampler
-        from: initial_noise
-        to: ddpm_sampler
-        label: x_T
-        connection:
-          title: Initial sampling noise
-          role: reverse-chain initialization
-          inside: Generation begins from a four-channel standard-normal latent at the frozen VAE's spatial resolution.
-      - relation_ref: class_conditioning_enters_ddpm_sampler
-        from: class_label
-        to: ddpm_sampler
-        label: class y
-        tone: conditioning
-        connection:
-          title: Class-conditioned sampling
-          role: classifier-free guidance input
-          inside: The requested class conditions every DiT evaluation; the reference sampler pairs it with a null-class copy for classifier-free guidance.
-      - relation_ref: ddpm_sampler_produces_final_latent
-        from: ddpm_sampler
-        to: final_latent
-        label: x_0
-        connection:
-          title: Final denoised latent
-          role: reverse-chain output
-          inside: After the configured reverse-diffusion steps, the sampler returns the final four-channel latent.
-      - relation_ref: final_latent_enters_inverse_scaling
-        from: final_latent
-        to: inverse_latent_scaling
-        label: x_0
-        connection:
-          title: Latent rescaling input
-          role: restore VAE latent scale
-          inside: The final diffusion latent enters the fixed inverse scaling used before VAE decoding.
-      - relation_ref: inverse_scaling_produces_vae_decode_latent
-        from: inverse_latent_scaling
-        to: vae_decode_latent
-        label: x_0 / 0.18215
-        connection:
-          title: VAE-scale latent
-          role: decoder-ready latent
-          inside: The fixed inverse scaling restores the magnitude expected by the pretrained VAE decoder.
-      - relation_ref: vae_decode_latent_enters_frozen_decoder
-        from: vae_decode_latent
-        to: frozen_vae_decoder
-        label: decoder latent
-        connection:
-          title: Latent into frozen decoder
-          role: latent-to-pixel decoding
-          inside: The rescaled four-channel latent is passed to the frozen pretrained VAE decoder.
-      - relation_ref: frozen_decoder_produces_generated_image
-        from: frozen_vae_decoder
-        to: generated_image
-        label: RGB image
-        connection:
-          title: Generated image
-          role: task-level output
-          inside: The frozen VAE maps the final latent back to an RGB image at the requested resolution.
-    open_notes:
-      - This root presents the generation path. Training has a separate image-to-latent noising path.
-      - Fixed inverse scaling is authored but elided from the high-level view; its dashed connection remains inspectable.
-
-  - id: sampling_loop
-    title: DDPM Sampling Loop
-    summary: This is the denoising iteration repeated by the sampler. DiT predicts noise and learned-range variance parameters from x_t, t, and y; a fixed DDPM formula uses that prediction, the current latent, schedule coefficients, and fresh noise to produce x_(t-1). The loop starts with x_T as Gaussian noise and ends when the updated state is x_0.
-    parent: generation_overview
-    scale_lanes: false
-    grid:
-      columns: 9
-      rows: 5
-      min_col: 150
-      col_gap: 30
-    nodes:
-      - id: class_label
-        kind: representation
-        rep_ref: class_label
-        prominence: context
-        treatment: chip
-        density: micro
-        col: 3
-        row: 1
-      - id: timestep
-        kind: representation
-        rep_ref: timestep
-        prominence: context
-        treatment: chip
-        density: micro
-        col: 5
-        row: 1
-      - id: step_noise
-        kind: representation
-        rep_ref: step_noise
-        label: Fresh step noise
-        prominence: context
-        col: 7
-        row: 1
-      - id: current_latent
-        kind: representation
-        rep_ref: input_latent
-        label: Current latent x_t
-        prominence: secondary
-        col: 1
-        row: 3
-      - id: dit_denoiser_call
-        kind: module
-        label: DiT Noise Predictor
-        scale: spatial
-        role: learned network that estimates the noise present in x_t
-        detail: learned · (epsilon, variance) = DiT(x_t, t, y)
-        prominence: primary
-        treatment: block
-        board_ref: dit_pipeline
-        col: 3
-        row: 3
-      - id: noise_prediction
-        kind: representation
-        rep_ref: noise_prediction
-        label: Predicted noise + variance
-        prominence: secondary
-        col: 5
-        row: 3
-      - id: reverse_diffusion_step
-        kind: module
-        module_ref: reverse_diffusion_step
-        label: DDPM Formula · Fixed Math
-        detail: fixed sampler math · no learned weights
-        prominence: secondary
-        treatment: compact
-        density: compact
-        col: 7
-        row: 3
-      - id: next_latent
-        kind: representation
-        rep_ref: input_latent
-        label: Next latent x_(t-1)
-        prominence: secondary
-        col: 9
-        row: 3
-    edges:
-      - view_only: true
-        from: current_latent
-        to: dit_denoiser_call
-        label: x_t
-        connection:
-          title: Current latent into DiT
-          role: denoiser state
-          inside: At each iteration, the current four-channel latent becomes the DiT backbone's spatial input.
-      - view_only: true
-        from: dit_denoiser_call
-        to: noise_prediction
-        label: prediction
-        connection:
-          title: Learned DiT prediction
-          role: learned reverse-process parameters
-          inside: DiT returns a spatial epsilon prediction and optional learned-range variance parameters; it does not itself calculate x_(t-1).
-      - view_only: true
-        from: class_label
-        to: dit_denoiser_call
-        label: class y
-        tone: conditioning
-        connection:
-          title: Class label into DiT
-          role: class conditioning
-          inside: The reference guidance path evaluates class-conditional and null-class examples together around this learned prediction.
-      - view_only: true
-        from: timestep
-        to: dit_denoiser_call
-        label: timestep t
-        tone: conditioning
-        connection:
-          title: Timestep into DiT
-          role: noise-level conditioning
-          inside: DiT embeds the current scheduled timestep to condition every block and its final layer.
-      - relation_ref: current_latent_enters_reverse_diffusion_step
-        from: current_latent
-        to: reverse_diffusion_step
-        label: current x_t
-        tone: skip
-        route_side: bottom
-        route_clearance: 18
-        connection:
-          title: Current latent into the fixed formula
-          role: sampler state bypass
-          inside: The DDPM equation needs the original current latent as well as DiT's prediction; this lower rail is a data dependency, not another model pass.
-      - relation_ref: noise_prediction_enters_reverse_diffusion_step
-        from: noise_prediction
-        to: reverse_diffusion_step
-        label: eps, variance
-        connection:
-          title: Prediction into the fixed formula
-          role: learned parameters used by sampler math
-          inside: Predicted noise determines the denoised estimate, while the learned-range output selects the reverse-process variance used by the fixed equation.
-      - relation_ref: timestep_enters_reverse_diffusion_step
-        from: timestep
-        to: reverse_diffusion_step
-        label: schedule t
-        connection:
-          title: Timestep into the fixed formula
-          role: schedule lookup
-          inside: The timestep selects the precomputed coefficients and determines whether the stochastic term is active; no learned weights are involved.
-      - relation_ref: step_noise_enters_reverse_diffusion_step
-        from: step_noise
-        to: reverse_diffusion_step
-        label: fresh xi
-        connection:
-          title: Stochastic DDPM noise
-          role: reverse-step randomness
-          inside: Fresh standard-normal noise is scaled by the selected reverse variance for t greater than zero; it is masked out at t equals zero.
-      - relation_ref: reverse_diffusion_step_updates_current_latent
-        from: reverse_diffusion_step
-        to: next_latent
-        label: x_(t-1)
-        connection:
-          title: Formula result
-          role: one-step sampler output
-          inside: Applying the DDPM equation produces x_(t-1); on the last scheduled iteration this state is x_0.
-      - relation_ref: updated_latent_reenters_sampling_iteration
-        from: next_latent
-        to: current_latent
-        label: repeat at next scheduled t
-        tone: skip
-        route_side: bottom
-        route_clearance: 36
-        connection:
-          title: Repeat with the updated latent
-          role: recurrent sampler state
-          inside: If steps remain, x_(t-1) becomes the next iteration's x_t and the sampler advances to the next scheduled timestep.
-    open_notes:
-      - The root board owns the boundary: the first current latent is Gaussian x_T, and the final next latent is emitted as x_0 for VAE decoding.
-      - The official sampler batches conditional and null-class copies for classifier-free guidance; the reproducibility path guides only the first three epsilon channels.
-      - The 250 sampler indices map onto a respaced subset of the 1,000-step training schedule.
-
-  - id: dit_pipeline
-    title: DiT-XL/2 Denoiser Forward Pass
-    summary: One sampler iteration calls DiT-XL/2 on x_t, t, and y. The denoiser patchifies the latent, builds the conditioning vector, runs 28 adaLN-Zero blocks with 16 attention heads, then returns epsilon and learned-range variance parameters to the fixed DDPM sampling formula.
-    parent: sampling_loop
-    scale_lanes: false
-    grid:
-      columns: 8
-      rows: 5
-    nodes:
-      - id: timestep
-        kind: representation
-        rep_ref: timestep
-        prominence: context
-        treatment: chip
-        density: micro
-        col: 1
-        row: 1
-      - id: class_label
-        kind: representation
-        rep_ref: class_label
-        prominence: context
-        treatment: chip
-        density: micro
-        col: 1
-        row: 2
-      - id: input_latent
-        kind: representation
-        rep_ref: input_latent
-        prominence: context
-        treatment: chip
-        density: micro
-        col: 1
-        row: 4
-      - id: timestep_embedder
-        kind: module
-        module_ref: timestep_embedder
-        treatment: compact
-        density: compact
-        col: 2
-        row: 1
-      - id: label_embedder
-        kind: module
-        module_ref: label_embedder
-        treatment: compact
-        density: compact
-        col: 2
-        row: 2
-      - id: t_embedding
-        kind: representation
-        rep_ref: t_embedding
-        treatment: compact
-        density: compact
-        col: 2
-        row: 1
-        elide: true
-      - id: y_embedding
-        kind: representation
-        rep_ref: y_embedding
-        treatment: compact
-        density: compact
-        col: 2
-        row: 2
-        elide: true
-      - id: cond_combiner
-        kind: module
-        module_ref: cond_combiner
-        label: t + y
-        col: 3
-        row: 1
-      - id: patchify
-        kind: module
-        module_ref: patchify
-        treatment: compact
-        density: compact
-        col: 2
-        row: 4
-      - id: cond_vector
-        kind: representation
-        rep_ref: cond_vector
-        prominence: secondary
-        treatment: compact
-        density: compact
-        col: 4
-        row: 1
-      - id: token_state
-        kind: representation
-        rep_ref: token_state
-        prominence: secondary
-        treatment: compact
-        density: compact
-        col: 3
-        row: 4
-      - id: dit_blocks
-        kind: module
-        module_ref: dit_blocks
-        prominence: primary
-        treatment: block
-        col: 5
-        row: 3
-        board_ref: dit_blocks
-      - id: final_layer
-        kind: module
-        module_ref: final_layer
-        prominence: primary
-        treatment: compact
-        density: compact
-        col: 7
-        row: 3
-      - id: output_tokens
-        kind: representation
-        rep_ref: output_tokens
-        treatment: compact
-        density: compact
-        col: 7
-        row: 4
-        elide: true
-      - id: unpatchify
-        kind: module
-        module_ref: unpatchify
-        treatment: compact
-        density: compact
-        col: 8
-        row: 4
-      - id: noise_prediction
-        kind: representation
-        rep_ref: noise_prediction
-        prominence: context
-        treatment: chip
-        density: micro
-        col: 8
-        row: 3
-    edges:
-      - relation_ref: timestep_featurization
-        from: timestep
-        to: timestep_embedder
-        label: t
-        connection:
-          title: Timestep into embedder
-          role: noise-level featurization
-          inside: The scalar timestep is expanded with a 256-dim sinusoidal embedding and projected by a two-layer SiLU MLP.
-      - relation_ref: timestep_embedding_projection
-        from: timestep_embedder
-        to: t_embedding
-        label: t emb
-        connection:
-          title: Embedded timestep
-          role: sample-scale embedding
-          inside: The MLP output is a per-sample vector at model width d.
-      - relation_ref: class_label_featurization
-        from: class_label
-        to: label_embedder
-        label: y
-        connection:
-          title: Label into embedder
-          role: class featurization
-          inside: The class index is looked up in an embedding table; during training labels randomly drop to a null class for classifier-free guidance.
-      - relation_ref: class_embedding_lookup
-        from: label_embedder
-        to: y_embedding
-        label: y emb
-        connection:
-          title: Embedded label
-          role: sample-scale embedding
-          inside: The lookup output is a per-sample vector at model width d.
-      - relation_ref: timestep_conditioning_sum
-        from: t_embedding
-        to: cond_combiner
-        label: t emb
-        connection:
-          title: Timestep embedding into combiner
-          role: additive combination
-          inside: Timestep and label embeddings are summed elementwise; no gating or concatenation.
-      - relation_ref: class_conditioning_sum
-        from: y_embedding
-        to: cond_combiner
-        label: y emb
-        connection:
-          title: Label embedding into combiner
-          role: additive combination
-          inside: Timestep and label embeddings are summed elementwise; no gating or concatenation.
-      - relation_ref: conditioning_vector_initialization
-        from: cond_combiner
-        to: cond_vector
-        label: c
-        tone: conditioning
-        connection:
-          title: Conditioning vector
-          role: read-only conditioning source
-          inside: The summed vector c = t_emb + y_emb is per-sample and is never updated by the block stack.
-      - relation_ref: input_latent_patch_embedding
-        from: input_latent
-        to: patchify
-        label: latent
-        connection:
-          title: Noised latent into patchify
-          role: patch featurization
-          inside: The spatial latent is cut into p x p patches, each linearly embedded into one token.
-      - relation_ref: token_state_initialization
-        from: patchify
-        to: token_state
-        label: tokens + pos
-        connection:
-          title: Token initialization
-          role: mutable token stream
-          inside: Patch tokens receive fixed 2D sin-cos positional embeddings; this is the only mutable state in the forward pass.
-      - relation_ref: block_adaln_zero_conditioning
-        from: cond_vector
-        to: dit_blocks
-        label: c
-        tone: conditioning
-        connection:
-          title: adaLN-Zero conditioning
-          role: per-sample modulation of every block
-          inside: Each block's zero-initialized six-output linear regresses shift, scale offsets, and residual gates from c; modulation uses (1 + scale) times LayerNorm plus shift.
-      - relation_ref: token_state_enters_dit_blocks
-        from: token_state
-        to: dit_blocks
-        label: x
-        connection:
-          title: Tokens into the block stack
-          role: coarse mutable state
-          inside: Full self-attention over all patch tokens updates the token stream block by block.
-      - relation_ref: refined_tokens_to_final_layer
-        from: dit_blocks
-        to: final_layer
-        label: refined tokens
-        connection:
-          title: Refined tokens to decoder
-          role: token decoding
-          inside: The final layer normalizes tokens with adaLN-modulated LayerNorm before the linear decode.
-      - relation_ref: final_layer_adaln_conditioning
-        from: cond_vector
-        to: final_layer
-        label: c
-        tone: conditioning
-        connection:
-          title: Final-layer adaLN
-          role: shift/scale modulation
-          inside: The final layer regresses shift and scale (no gate) from c before decoding.
-      - relation_ref: output_token_linear_decode
-        from: final_layer
-        to: output_tokens
-        label: p*p*C_out per token
-        connection:
-          title: Linear decode
-          role: per-token patch prediction
-          inside: Each token is decoded to a p x p patch of epsilon plus learned-range variance-parameter channels when learn_sigma is enabled.
-      - relation_ref: output_token_layout_restoration
-        from: output_tokens
-        to: unpatchify
-        label: reshape
-        connection:
-          title: Tokens into unpatchify
-          role: layout restoration
-          inside: Per-token patch predictions are rearranged back to the spatial latent grid; this is a lossless reshape.
-      - relation_ref: spatial_noise_prediction
-        from: unpatchify
-        to: noise_prediction
-        label: eps, variance params
-        connection:
-          title: Noise and variance-parameter prediction
-          role: final outputs
-          inside: Unpatchify returns one joint spatial tensor; the diffusion wrapper treats the first C channels as epsilon and, when enabled, the second C as learned-range variance parameters.
-    open_notes:
-      - Intermediate timestep, label, and output-token representations are elided; the canonical modules remain visible on the main board.
-
+- id: generation_overview
+  title: DiT Class-Conditional Image Generation
+  summary: DiT generates an image by iteratively denoising a random four-channel latent under a class label, undoing the latent scaling used during training, and decoding the final latent with a frozen VAE.
+  subject_ref: architecture
+  expansion_depth: 1
+  scale_lanes: false
+  grid:
+    columns: 8
+    rows: 4
+    column_sizing: content
+  nodes:
+  - id: class_label
+    ref: value_sites.class_label
+    prominence: context
+    treatment: chip
+    density: micro
+    col: 1
+    row: 1
+  - id: initial_noise
+    ref: value_sites.initial_noise
+    prominence: context
+    col: 1
+    row: 3
+  - id: ddpm_sampler
+    ref: modules.ddpm_sampler
+    prominence: primary
+    treatment: block
+    board_ref: sampling_loop
+    col: 3
+    row: 2
+  - id: final_latent
+    ref: value_sites.final_latent
+    prominence: secondary
+    col: 4
+    row: 2
+  - id: frozen_vae_decoder
+    ref: modules.frozen_vae_decoder
+    prominence: primary
+    treatment: block
+    col: 7
+    row: 2
+  - id: generated_image
+    ref: value_sites.generated_image
+    prominence: primary
+    col: 8
+    row: 2
+  elide:
+  - ref: modules.inverse_latent_scaling
+  - ref: value_sites.vae_decode_latent
+  edge_overrides:
+  - match:
+      relation_ref: relations.initial_noise_initializes_current_latent
+    label: x_T
+    connection:
+      title: Initial sampling noise
+      role: reverse-chain initialization
+      inside: Generation begins from a four-channel standard-normal latent at the frozen VAE's spatial resolution.
+  - match:
+      relation_ref: relations.class_label_featurization
+    label: class y
+    tone: conditioning
+    connection:
+      title: Class-conditioned sampling
+      role: classifier-free guidance input
+      inside: The requested class conditions every DiT evaluation; the reference sampler pairs it with a null-class copy for classifier-free guidance.
+  - match:
+      relation_ref: relations.current_latent_becomes_final_latent
+    label: x_0
+    connection:
+      title: Final denoised latent
+      role: reverse-chain output
+      inside: After the configured reverse-diffusion steps, the sampler returns the final four-channel latent.
+  - match:
+      relation_path:
+      - relations.final_latent_enters_inverse_scaling
+      - relations.inverse_scaling_produces_vae_decode_latent
+      - relations.vae_decode_latent_enters_frozen_decoder
+    label: decoder latent
+    connection:
+      title: Latent into frozen decoder
+      role: latent-to-pixel decoding
+      inside: The rescaled four-channel latent is passed to the frozen pretrained VAE decoder.
+  - match:
+      relation_ref: relations.frozen_decoder_produces_generated_image
+    label: RGB image
+    connection:
+      title: Generated image
+      role: task-level output
+      inside: The frozen VAE maps the final latent back to an RGB image at the requested resolution.
+  open_notes:
+  - This root presents the generation path. Training has a separate image-to-latent noising path.
+  - Fixed inverse scaling is authored but elided from the high-level view; its dashed connection remains inspectable.
+- id: sampling_loop
+  title: DDPM Sampling Loop
+  summary: This is the denoising iteration repeated by the sampler. DiT predicts noise and learned-range variance parameters from x_t, t, and y; a fixed DDPM formula uses that prediction, the current latent, schedule coefficients, and fresh noise to produce x_(t-1). The loop starts with x_T as Gaussian noise and ends when the updated state is x_0.
+  parent: generation_overview
+  subject_ref: modules.ddpm_sampler
+  expansion_depth: 1
+  scale_lanes: false
+  grid:
+    columns: 9
+    rows: 5
+    min_col: 150
+    col_gap: 30
+  nodes:
+  - id: class_label
+    ref: value_sites.class_label
+    prominence: context
+    treatment: chip
+    density: micro
+    col: 3
+    row: 1
+  - id: timestep
+    ref: value_sites.timestep
+    prominence: context
+    treatment: chip
+    density: micro
+    col: 5
+    row: 1
+  - id: step_noise
+    ref: value_sites.step_noise
+    label: Fresh step noise
+    prominence: context
+    col: 7
+    row: 1
+  - id: current_latent
+    ref: value_sites.latent_before_step
+    label: Current latent x_t
+    prominence: secondary
+    col: 1
+    row: 3
+  - id: dit_denoiser_call
+    ref: modules.dit_denoiser
+    label: DiT Noise Predictor
+    scale: spatial
+    role: learned network that estimates the noise present in x_t
+    detail: learned · (epsilon, variance) = DiT(x_t, t, y)
+    prominence: primary
+    treatment: block
+    board_ref: dit_pipeline
+    col: 3
+    row: 3
+  - id: noise_prediction
+    ref: value_sites.noise_prediction
+    label: Predicted noise + variance
+    prominence: secondary
+    col: 5
+    row: 3
+  - id: reverse_diffusion_step
+    ref: modules.reverse_diffusion_step
+    label: DDPM Formula · Fixed Math
+    detail: fixed sampler math · no learned weights
+    prominence: secondary
+    treatment: compact
+    density: compact
+    col: 7
+    row: 3
+  - id: next_latent
+    ref: value_sites.latent_after_step
+    label: Next latent x_(t-1)
+    prominence: secondary
+    col: 9
+    row: 3
+  exclude:
+  - ref: value_sites.initial_noise
+    reason: The parent overview establishes the initial x_T boundary.
+  - ref: value_sites.final_latent
+    reason: The parent overview shows how the final x_0 leaves the completed sampling loop.
+  edge_overrides:
+  - match:
+      relation_ref: relations.input_latent_patch_embedding
+    label: x_t
+    connection:
+      title: Current latent into DiT
+      role: denoiser state
+      inside: At each iteration, the current four-channel latent becomes the DiT backbone's spatial input.
+  - match:
+      relation_ref: relations.spatial_noise_prediction
+    label: prediction
+    connection:
+      title: Learned DiT prediction
+      role: learned reverse-process parameters
+      inside: DiT returns a spatial epsilon prediction and optional learned-range variance parameters; it does not itself calculate x_(t-1).
+  - match:
+      relation_ref: relations.class_label_featurization
+    label: class y
+    tone: conditioning
+    connection:
+      title: Class label into DiT
+      role: class conditioning
+      inside: The reference guidance path evaluates class-conditional and null-class examples together around this learned prediction.
+  - match:
+      relation_ref: relations.timestep_featurization
+    label: timestep t
+    tone: conditioning
+    connection:
+      title: Timestep into DiT
+      role: noise-level conditioning
+      inside: DiT embeds the current scheduled timestep to condition every block and its final layer.
+  - match:
+      relation_ref: relations.current_latent_enters_reverse_diffusion_step
+    label: current x_t
+    tone: skip
+    route_side: bottom
+    route_clearance: 18
+    connection:
+      title: Current latent into the fixed formula
+      role: sampler state bypass
+      inside: The DDPM equation needs the original current latent as well as DiT's prediction; this lower rail is a data dependency, not another model pass.
+  - match:
+      relation_ref: relations.noise_prediction_enters_reverse_diffusion_step
+    label: eps, variance
+    connection:
+      title: Prediction into the fixed formula
+      role: learned parameters used by sampler math
+      inside: Predicted noise determines the denoised estimate, while the learned-range output selects the reverse-process variance used by the fixed equation.
+  - match:
+      relation_ref: relations.timestep_enters_reverse_diffusion_step
+    label: schedule t
+    connection:
+      title: Timestep into the fixed formula
+      role: schedule lookup
+      inside: The timestep selects the precomputed coefficients and determines whether the stochastic term is active; no learned weights are involved.
+  - match:
+      relation_ref: relations.step_noise_enters_reverse_diffusion_step
+    label: fresh xi
+    connection:
+      title: Stochastic DDPM noise
+      role: reverse-step randomness
+      inside: Fresh standard-normal noise is scaled by the selected reverse variance for t greater than zero; it is masked out at t equals zero.
+  - match:
+      relation_ref: relations.reverse_diffusion_step_updates_current_latent
+    label: x_(t-1)
+    connection:
+      title: Formula result
+      role: one-step sampler output
+      inside: Applying the DDPM equation produces x_(t-1); on the last scheduled iteration this state is x_0.
+  - match:
+      relation_ref: relations.updated_latent_reenters_sampling_iteration
+    label: repeat at next scheduled t
+    tone: skip
+    route_side: bottom
+    route_clearance: 36
+    connection:
+      title: Repeat with the updated latent
+      role: recurrent sampler state
+      inside: If steps remain, x_(t-1) becomes the next iteration's x_t and the sampler advances to the next scheduled timestep.
+  open_notes:
+  - The root board owns the boundary: the first current latent is Gaussian x_T, and the final next latent is emitted as x_0 for VAE decoding.
+  - The official sampler batches conditional and null-class copies for classifier-free guidance; the reproducibility path guides only the first three epsilon channels.
+  - The 250 sampler indices map onto a respaced subset of the 1,000-step training schedule.
+- id: dit_pipeline
+  title: DiT-XL/2 Denoiser Forward Pass
+  summary: One sampler iteration calls DiT-XL/2 on x_t, t, and y. The denoiser patchifies the latent, builds the conditioning vector, runs 28 adaLN-Zero blocks with 16 attention heads, then returns epsilon and learned-range variance parameters to the fixed DDPM sampling formula.
+  parent: sampling_loop
+  subject_ref: modules.dit_denoiser
+  expansion_depth: 1
+  scale_lanes: false
+  grid:
+    columns: 8
+    rows: 5
+  nodes:
+  - id: timestep
+    ref: value_sites.timestep
+    prominence: context
+    treatment: chip
+    density: micro
+    col: 1
+    row: 1
+  - id: class_label
+    ref: value_sites.class_label
+    prominence: context
+    treatment: chip
+    density: micro
+    col: 1
+    row: 2
+  - id: input_latent
+    ref: value_sites.latent_before_step
+    prominence: context
+    treatment: chip
+    density: micro
+    col: 1
+    row: 4
+  - id: timestep_embedder
+    ref: modules.timestep_embedder
+    treatment: compact
+    density: compact
+    col: 2
+    row: 1
+  - id: label_embedder
+    ref: modules.label_embedder
+    treatment: compact
+    density: compact
+    col: 2
+    row: 2
+  - id: cond_combiner
+    ref: modules.cond_combiner
+    label: t + y
+    col: 3
+    row: 1
+  - id: patchify
+    ref: modules.patchify
+    treatment: compact
+    density: compact
+    col: 2
+    row: 4
+  - id: cond_vector
+    ref: value_sites.cond_vector
+    prominence: secondary
+    treatment: compact
+    density: compact
+    col: 4
+    row: 1
+  - id: token_state
+    ref: value_sites.tokens_after_patchify
+    prominence: secondary
+    treatment: compact
+    density: compact
+    col: 3
+    row: 4
   - id: dit_blocks
-    title: DiT-XL Block (adaLN-Zero)
-    summary: "One of the 28 DiT-XL blocks. A SiLU-plus-linear projection on c emits six vectors: shift1, scale1, gate1 for the attention branch and shift2, scale2, gate2 for the MLP branch. Each branch applies (1 + scale) times LayerNorm plus shift, transforms, gates, then adds residually."
-    parent: dit_pipeline
-    scale_lanes: false
-    grid:
-      columns: 12
-      rows: 4
-      min_col: 88
-      col_gap: 14
-    nodes:
-      - id: token_state_in
-        kind: representation
-        rep_ref: token_state
-        label: tokens in
-        col: 1
-        row: 4
-      - id: cond_vector
-        kind: representation
-        rep_ref: cond_vector
-        col: 2
-        row: 1
-      - id: adaln_mlp
-        kind: operation
-        label: adaLN modulation
-        scale: sample
-        treatment: compact
-        density: compact
-        role: apply SiLU then a linear projection from c to six modulation vectors
-        detail: c -> shift1, scale1, gate1, shift2, scale2, gate2
-        col: 4
-        row: 1
-      - id: attn_params
-        kind: operation
-        label: branch-1 params
-        scale: sample
-        treatment: chip
-        density: micro
-        role: shift1, scale1, and gate1 modulate the attention residual branch
-        col: 3
-        row: 2
-      - id: mlp_params
-        kind: operation
-        label: branch-2 params
-        scale: sample
-        treatment: chip
-        density: micro
-        role: shift2, scale2, and gate2 modulate the pointwise MLP residual branch
-        col: 8
-        row: 2
-      - id: norm1
-        kind: operation
-        label: LayerNorm
-        scale: token
-        treatment: chip
-        density: micro
-        role: normalize tokens before the attention branch; no learned affine
-        col: 2
-        row: 4
-      - id: adaln_mod
-        kind: operation
-        label: modulate 1
-        scale: token
-        treatment: chip
-        density: micro
-        role: affine modulation
-        detail: (1 + scale1) * norm1 + shift1
-        col: 3
-        row: 4
-      - id: self_attention
-        kind: module
-        label: self-attention
-        scale: token
-        treatment: compact
-        density: compact
-        role: 16-head full self-attention inside one DiT-XL block
-        detail: standard QKV attention plus output projection
-        col: 4
-        row: 4
-      - id: gate1
-        kind: operation
-        operator: "*"
-        label: gate1
-        scale: token
-        role: multiply the attention output by the zero-initialized gate1 vector
-        col: 5
-        row: 4
-      - id: add1
-        kind: operation
-        operator: "+"
-        label: residual add 1
-        scale: token
-        role: add the gated attention branch back to the incoming token state
-        col: 6
-        row: 4
-      - id: norm2
-        kind: operation
-        label: LayerNorm
-        scale: token
-        treatment: chip
-        density: micro
-        role: normalize the post-attention token state before the MLP branch
-        col: 7
-        row: 4
-      - id: scale_shift2
-        kind: operation
-        label: modulate 2
-        scale: token
-        treatment: chip
-        density: micro
-        role: affine modulation
-        detail: (1 + scale2) * norm2 + shift2
-        col: 8
-        row: 4
-      - id: mlp_branch
-        kind: operation
-        label: pointwise MLP branch
-        scale: token
-        treatment: compact
-        density: compact
-        role: transform each token independently with the DiT MLP branch
-        col: 9
-        row: 4
-      - id: gate2
-        kind: operation
-        operator: "*"
-        label: gate2
-        scale: token
-        role: multiply the MLP output by the zero-initialized gate2 vector
-        col: 10
-        row: 4
-      - id: add2
-        kind: operation
-        operator: "+"
-        label: residual add 2
-        scale: token
-        role: add the gated MLP branch back to the post-attention token state
-        col: 11
-        row: 4
-      - id: token_state_out
-        kind: representation
-        rep_ref: token_state
-        label: tokens out
-        col: 12
-        row: 4
-    edges:
-      - view_only: true
-        from: cond_vector
-        to: adaln_mlp
-        label: c
-        tone: conditioning
-        connection:
-          title: Conditioning into adaLN modulation
-          role: modulation source
-          inside: The per-sample conditioning vector c passes through SiLU and one joint linear to produce six vectors; that entire linear's weights and bias are initialized to zero.
-      - view_only: true
-        from: adaln_mlp
-        to: attn_params
-        label: 1st branch
-        tone: conditioning
-        connection:
-          title: Attention-branch parameters
-          role: adaLN-Zero branch controls
-          inside: The first three chunks are shift1, scale1, and gate1; they modulate and gate the self-attention branch.
-      - view_only: true
-        from: adaln_mlp
-        to: mlp_params
-        label: 2nd branch
-        tone: conditioning
-        connection:
-          title: MLP-branch parameters
-          role: adaLN-Zero branch controls
-          inside: The last three chunks are shift2, scale2, and gate2; they modulate and gate the pointwise MLP branch.
-      - view_only: true
-        from: token_state_in
-        to: norm1
-        label: x
-        connection:
-          title: Tokens into first LayerNorm
-          role: branch input
-          inside: The incoming token state is first LayerNorm-normalized for the attention residual branch.
-      - view_only: true
-        from: norm1
-        to: adaln_mod
-        label: norm1
-        connection:
-          title: Normalized tokens
-          role: normalized branch input
-          inside: DiT uses LayerNorm without learned affine parameters before applying adaptive shift and scale from c.
-      - view_only: true
-        from: attn_params
-        to: adaln_mod
-        label: shift1, scale1
-        tone: conditioning
-        connection:
-          title: First adaLN shift and scale
-          role: attention-branch modulation
-          inside: shift1 and scale1 are broadcast over tokens as (1 + scale1) * LayerNorm(x) + shift1 before self-attention.
-      - view_only: true
-        from: adaln_mod
-        to: self_attention
-        label: modulated x
-        connection:
-          title: Modulated tokens into attention
-          role: attention input
-          inside: The shifted and scaled token stream enters full multi-head self-attention.
-      - view_only: true
-        from: self_attention
-        to: gate1
-        label: attn
-        connection:
-          title: Attention branch output
-          role: residual branch value
-          inside: The attention branch output is not added directly; it is first multiplied by gate1.
-      - view_only: true
-        from: attn_params
-        to: gate1
-        label: gate1
-        tone: conditioning
-        connection:
-          title: First residual gate
-          role: zero-initialized branch gate
-          inside: gate1 is one output of the jointly zero-initialized six-vector modulation linear, so the attention branch initially contributes nothing.
-      - view_only: true
-        from: gate1
-        to: add1
-        label: gate1*attn
-        connection:
-          title: Gated attention update
-          role: gated residual update
-          inside: The gated attention output is the update term for the first residual add.
-      - view_only: true
-        from: token_state_in
-        to: add1
-        label: skip x
-        tone: skip
-        connection:
-          title: First residual skip
-          role: residual identity path
-          inside: The original token state bypasses the attention branch and is added to the gated attention update.
-      - view_only: true
-        from: add1
-        to: norm2
-        label: x1
-        connection:
-          title: Post-attention state
-          role: second branch input
-          inside: The output of the first residual add becomes the input to the MLP residual branch.
-      - view_only: true
-        from: norm2
-        to: scale_shift2
-        label: norm2
-        connection:
-          title: Normalized post-attention tokens
-          role: normalized branch input
-          inside: The post-attention token state is LayerNorm-normalized before the second adaptive shift and scale.
-      - view_only: true
-        from: mlp_params
-        to: scale_shift2
-        label: shift2, scale2
-        tone: conditioning
-        connection:
-          title: Second adaLN shift and scale
-          role: MLP-branch modulation
-          inside: shift2 and scale2 are broadcast over tokens as (1 + scale2) * LayerNorm(x1) + shift2 before the pointwise MLP branch.
-      - view_only: true
-        from: scale_shift2
-        to: mlp_branch
-        label: modulated x1
-        connection:
-          title: Modulated tokens into MLP
-          role: MLP input
-          inside: The second shifted and scaled token stream enters the pointwise feed-forward branch.
-      - view_only: true
-        from: mlp_branch
-        to: gate2
-        label: mlp
-        connection:
-          title: MLP branch output
-          role: residual branch value
-          inside: The pointwise MLP output is multiplied by gate2 before the second residual add.
-      - view_only: true
-        from: mlp_params
-        to: gate2
-        label: gate2
-        tone: conditioning
-        connection:
-          title: Second residual gate
-          role: zero-initialized branch gate
-          inside: gate2 is another output of the jointly zero-initialized modulation linear, so the MLP branch initially contributes nothing.
-      - view_only: true
-        from: gate2
-        to: add2
-        label: gate2*mlp
-        connection:
-          title: Gated MLP update
-          role: gated residual update
-          inside: The gated MLP output is the update term for the second residual add.
-      - view_only: true
-        from: add1
-        to: add2
-        label: skip x1
-        tone: skip
-        connection:
-          title: Second residual skip
-          role: residual identity path
-          inside: The post-attention state bypasses the MLP branch and is added to the gated MLP update.
-      - view_only: true
-        from: add2
-        to: token_state_out
-        label: x out
-        connection:
-          title: Updated tokens
-          role: mutable output
-          inside: The block returns tokens with the same shape and ownership; at initialization both gates are zero, so the whole block starts as an identity map.
+    ref: modules.dit_blocks
+    prominence: primary
+    treatment: block
+    col: 5
+    row: 3
+    board_ref: dit_blocks
+  - id: final_layer
+    ref: modules.final_layer
+    prominence: primary
+    treatment: compact
+    density: compact
+    col: 7
+    row: 3
+  - id: unpatchify
+    ref: modules.unpatchify
+    treatment: compact
+    density: compact
+    col: 8
+    row: 4
+  - id: noise_prediction
+    ref: value_sites.noise_prediction
+    prominence: context
+    treatment: chip
+    density: micro
+    col: 8
+    row: 3
+  elide:
+  - ref: value_sites.t_embedding
+  - ref: value_sites.y_embedding
+  - ref: value_sites.tokens_after_blocks
+  - ref: value_sites.output_tokens
+  exclude:
+  - ref: modules.reverse_diffusion_step
+    reason: The parent sampling board explains how the fixed DDPM formula consumes the denoiser prediction.
+  edge_overrides:
+  - match:
+      relation_ref: relations.timestep_featurization
+    label: t
+    connection:
+      title: Timestep into embedder
+      role: noise-level featurization
+      inside: The scalar timestep is expanded with a 256-dim sinusoidal embedding and projected by a two-layer SiLU MLP.
+  - match:
+      relation_path:
+      - relations.timestep_embedding_projection
+      - relations.timestep_conditioning_sum
+    label: t emb
+    connection:
+      title: Timestep embedding into combiner
+      role: additive combination
+      inside: Timestep and label embeddings are summed elementwise; no gating or concatenation.
+  - match:
+      relation_ref: relations.class_label_featurization
+    label: "y"
+    connection:
+      title: Label into embedder
+      role: class featurization
+      inside: The class index is looked up in an embedding table; during training labels randomly drop to a null class for classifier-free guidance.
+  - match:
+      relation_path:
+      - relations.class_embedding_lookup
+      - relations.class_conditioning_sum
+    label: y emb
+    connection:
+      title: Label embedding into combiner
+      role: additive combination
+      inside: Timestep and label embeddings are summed elementwise; no gating or concatenation.
+  - match:
+      relation_ref: relations.conditioning_vector_initialization
+    label: c
+    tone: conditioning
+    connection:
+      title: Conditioning vector
+      role: read-only conditioning source
+      inside: The summed vector c = t_emb + y_emb is per-sample and is never updated by the block stack.
+  - match:
+      relation_ref: relations.input_latent_patch_embedding
+    label: latent
+    connection:
+      title: Noised latent into patchify
+      role: patch featurization
+      inside: The spatial latent is cut into p x p patches, each linearly embedded into one token.
+  - match:
+      relation_ref: relations.token_state_initialization
+    label: tokens + pos
+    connection:
+      title: Token initialization
+      role: mutable token stream
+      inside: Patch tokens receive fixed 2D sin-cos positional embeddings; this is the only mutable state in the forward pass.
+  - match:
+      relation_ref: relations.cond_vector_enters_adaln_mlp
+    label: c
+    tone: conditioning
+    connection:
+      title: adaLN-Zero conditioning
+      role: per-sample modulation of every block
+      inside: Each block's zero-initialized six-output linear regresses shift, scale offsets, and residual gates from c; modulation uses (1 + scale) times LayerNorm plus shift.
+  - match:
+      relation_ref: relations.tokens_enter_block_stack
+    label: x
+    connection:
+      title: Tokens into the block stack
+      role: coarse mutable state
+      inside: Full self-attention over all patch tokens updates the token stream block by block.
+  - match:
+      relation_path:
+      - relations.add2_produces_tokens_after_blocks
+      - relations.refined_tokens_to_final_layer
+    label: refined tokens
+    connection:
+      title: Refined tokens to decoder
+      role: token decoding
+      inside: The final layer normalizes tokens with adaLN-modulated LayerNorm before the linear decode.
+  - match:
+      relation_ref: relations.final_layer_adaln_conditioning
+    label: c
+    tone: conditioning
+    connection:
+      title: Final-layer adaLN
+      role: shift/scale modulation
+      inside: The final layer regresses shift and scale (no gate) from c before decoding.
+  - match:
+      relation_path:
+      - relations.output_token_linear_decode
+      - relations.output_token_layout_restoration
+    label: reshape
+    connection:
+      title: Tokens into unpatchify
+      role: layout restoration
+      inside: Per-token patch predictions are rearranged back to the spatial latent grid; this is a lossless reshape.
+  - match:
+      relation_ref: relations.spatial_noise_prediction
+    label: eps, variance params
+    connection:
+      title: Noise and variance-parameter prediction
+      role: final outputs
+      inside: Unpatchify returns one joint spatial tensor; the diffusion wrapper treats the first C channels as epsilon and, when enabled, the second C as learned-range variance parameters.
+  open_notes:
+  - Intermediate timestep, label, and output-token representations are elided; the canonical modules remain visible on the main board.
+- id: dit_blocks
+  title: DiT-XL Block (adaLN-Zero)
+  summary: 'One of the 28 DiT-XL blocks. A SiLU-plus-linear projection on c emits six vectors: shift1, scale1, gate1 for the attention branch and shift2, scale2, gate2 for the MLP branch. Each branch applies (1 + scale) times LayerNorm plus shift, transforms, gates, then adds residually.'
+  parent: dit_pipeline
+  subject_ref: modules.dit_blocks
+  expansion_depth: 1
+  scale_lanes: false
+  grid:
+    columns: 12
+    rows: 4
+    min_col: 88
+    col_gap: 14
+  nodes:
+  - id: token_state_in
+    ref: value_sites.block_input_tokens
+    label: tokens in
+    col: 1
+    row: 4
+  - id: cond_vector
+    ref: value_sites.cond_vector
+    col: 2
+    row: 1
+  - id: adaln_mlp
+    ref: modules.adaln_mlp
+    label: adaLN modulation
+    scale: sample
+    treatment: compact
+    density: compact
+    role: apply SiLU then a linear projection from c to six modulation vectors
+    detail: c -> shift1, scale1, gate1, shift2, scale2, gate2
+    col: 4
+    row: 1
+  - id: attn_params
+    ref: value_sites.attn_params
+    label: branch-1 params
+    scale: sample
+    treatment: chip
+    density: micro
+    role: shift1, scale1, and gate1 modulate the attention residual branch
+    col: 3
+    row: 2
+  - id: mlp_params
+    ref: value_sites.mlp_params
+    label: branch-2 params
+    scale: sample
+    treatment: chip
+    density: micro
+    role: shift2, scale2, and gate2 modulate the pointwise MLP residual branch
+    col: 8
+    row: 2
+  - id: norm1
+    ref: modules.norm1
+    label: LayerNorm
+    scale: token
+    treatment: chip
+    density: micro
+    role: normalize tokens before the attention branch; no learned affine
+    col: 2
+    row: 4
+  - id: adaln_mod
+    ref: modules.adaln_mod
+    label: modulate 1
+    scale: token
+    treatment: chip
+    density: micro
+    role: affine modulation
+    detail: "(1 + scale1) * norm1 + shift1"
+    col: 3
+    row: 4
+  - id: self_attention
+    ref: modules.self_attention
+    label: self-attention
+    scale: token
+    treatment: compact
+    density: compact
+    role: 16-head full self-attention inside one DiT-XL block
+    detail: standard QKV attention plus output projection
+    col: 4
+    row: 4
+  - id: gate1
+    ref: modules.gate1
+    operator: "*"
+    label: gate1
+    scale: token
+    role: multiply the attention output by the zero-initialized gate1 vector
+    col: 5
+    row: 4
+  - id: add1
+    ref: modules.add1
+    operator: "+"
+    label: residual add 1
+    scale: token
+    role: add the gated attention branch back to the incoming token state
+    col: 6
+    row: 4
+  - id: norm2
+    ref: modules.norm2
+    label: LayerNorm
+    scale: token
+    treatment: chip
+    density: micro
+    role: normalize the post-attention token state before the MLP branch
+    col: 7
+    row: 4
+  - id: scale_shift2
+    ref: modules.scale_shift2
+    label: modulate 2
+    scale: token
+    treatment: chip
+    density: micro
+    role: affine modulation
+    detail: "(1 + scale2) * norm2 + shift2"
+    col: 8
+    row: 4
+  - id: mlp_branch
+    ref: modules.mlp_branch
+    label: pointwise MLP branch
+    scale: token
+    treatment: compact
+    density: compact
+    role: transform each token independently with the DiT MLP branch
+    col: 9
+    row: 4
+  - id: gate2
+    ref: modules.gate2
+    operator: "*"
+    label: gate2
+    scale: token
+    role: multiply the MLP output by the zero-initialized gate2 vector
+    col: 10
+    row: 4
+  - id: add2
+    ref: modules.add2
+    operator: "+"
+    label: residual add 2
+    scale: token
+    role: add the gated MLP branch back to the post-attention token state
+    col: 11
+    row: 4
+  - id: token_state_out
+    ref: value_sites.tokens_after_blocks
+    label: tokens out
+    col: 12
+    row: 4
+  exclude:
+  - ref: value_sites.tokens_after_patchify
+    reason: This board starts at the block-stack interface after the parent denoiser hands off patch tokens.
+  - ref: modules.final_layer
+    reason: The parent denoiser board explains how the completed block stack is decoded into output patches.
+  edge_overrides:
+  - match:
+      relation_ref: relations.cond_vector_enters_adaln_mlp
+    label: c
+    tone: conditioning
+    connection:
+      title: Conditioning into adaLN modulation
+      role: modulation source
+      inside: The per-sample conditioning vector c passes through SiLU and one joint linear to produce six vectors; that entire linear's weights and bias are initialized to zero.
+  - match:
+      relation_ref: relations.adaln_mlp_produces_attn_params
+    label: 1st branch
+    tone: conditioning
+    connection:
+      title: Attention-branch parameters
+      role: adaLN-Zero branch controls
+      inside: The first three chunks are shift1, scale1, and gate1; they modulate and gate the self-attention branch.
+  - match:
+      relation_ref: relations.adaln_mlp_produces_mlp_params
+    label: 2nd branch
+    tone: conditioning
+    connection:
+      title: MLP-branch parameters
+      role: adaLN-Zero branch controls
+      inside: The last three chunks are shift2, scale2, and gate2; they modulate and gate the pointwise MLP branch.
+  - match:
+      relation_ref: relations.tokens_enter_block_norm1
+    label: x
+    connection:
+      title: Tokens into first LayerNorm
+      role: branch input
+      inside: The incoming token state is first LayerNorm-normalized for the attention residual branch.
+  - match:
+      relation_ref: relations.norm1_enters_adaln_mod
+    label: norm1
+    connection:
+      title: Normalized tokens
+      role: normalized branch input
+      inside: DiT uses LayerNorm without learned affine parameters before applying adaptive shift and scale from c.
+  - match:
+      relation_ref: relations.attn_params_enter_adaln_mod
+    label: shift1, scale1
+    tone: conditioning
+    connection:
+      title: First adaLN shift and scale
+      role: attention-branch modulation
+      inside: shift1 and scale1 are broadcast over tokens as (1 + scale1) * LayerNorm(x) + shift1 before self-attention.
+  - match:
+      relation_ref: relations.adaln_mod_enters_self_attention
+    label: modulated x
+    connection:
+      title: Modulated tokens into attention
+      role: attention input
+      inside: The shifted and scaled token stream enters full multi-head self-attention.
+  - match:
+      relation_ref: relations.self_attention_enters_gate1
+    label: attn
+    connection:
+      title: Attention branch output
+      role: residual branch value
+      inside: The attention branch output is not added directly; it is first multiplied by gate1.
+  - match:
+      relation_ref: relations.attn_params_enter_gate1
+    label: gate1
+    tone: conditioning
+    connection:
+      title: First residual gate
+      role: zero-initialized branch gate
+      inside: gate1 is one output of the jointly zero-initialized six-vector modulation linear, so the attention branch initially contributes nothing.
+  - match:
+      relation_ref: relations.gate1_enters_add1
+    label: gate1*attn
+    connection:
+      title: Gated attention update
+      role: gated residual update
+      inside: The gated attention output is the update term for the first residual add.
+  - match:
+      relation_ref: relations.tokens_skip_to_add1
+    label: skip x
+    tone: skip
+    connection:
+      title: First residual skip
+      role: residual identity path
+      inside: The original token state bypasses the attention branch and is added to the gated attention update.
+  - match:
+      relation_ref: relations.add1_enters_norm2
+    label: x1
+    connection:
+      title: Post-attention state
+      role: second branch input
+      inside: The output of the first residual add becomes the input to the MLP residual branch.
+  - match:
+      relation_ref: relations.norm2_enters_scale_shift2
+    label: norm2
+    connection:
+      title: Normalized post-attention tokens
+      role: normalized branch input
+      inside: The post-attention token state is LayerNorm-normalized before the second adaptive shift and scale.
+  - match:
+      relation_ref: relations.mlp_params_enter_scale_shift2
+    label: shift2, scale2
+    tone: conditioning
+    connection:
+      title: Second adaLN shift and scale
+      role: MLP-branch modulation
+      inside: shift2 and scale2 are broadcast over tokens as (1 + scale2) * LayerNorm(x1) + shift2 before the pointwise MLP branch.
+  - match:
+      relation_ref: relations.scale_shift2_enters_mlp_branch
+    label: modulated x1
+    connection:
+      title: Modulated tokens into MLP
+      role: MLP input
+      inside: The second shifted and scaled token stream enters the pointwise feed-forward branch.
+  - match:
+      relation_ref: relations.mlp_branch_enters_gate2
+    label: mlp
+    connection:
+      title: MLP branch output
+      role: residual branch value
+      inside: The pointwise MLP output is multiplied by gate2 before the second residual add.
+  - match:
+      relation_ref: relations.mlp_params_enter_gate2
+    label: gate2
+    tone: conditioning
+    connection:
+      title: Second residual gate
+      role: zero-initialized branch gate
+      inside: gate2 is another output of the jointly zero-initialized modulation linear, so the MLP branch initially contributes nothing.
+  - match:
+      relation_ref: relations.gate2_enters_add2
+    label: gate2*mlp
+    connection:
+      title: Gated MLP update
+      role: gated residual update
+      inside: The gated MLP output is the update term for the second residual add.
+  - match:
+      relation_ref: relations.add1_skips_to_add2
+    label: skip x1
+    tone: skip
+    connection:
+      title: Second residual skip
+      role: residual identity path
+      inside: The post-attention state bypasses the MLP branch and is added to the gated MLP update.
+  - match:
+      relation_ref: relations.add2_produces_tokens_after_blocks
+    label: x out
+    connection:
+      title: Updated tokens
+      role: mutable output
+      inside: The block returns tokens with the same shape and ownership; at initialization both gates are zero, so the whole block starts as an identity map.
