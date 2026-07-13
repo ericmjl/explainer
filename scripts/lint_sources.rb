@@ -6,6 +6,9 @@ require "yaml"
 require_relative "../lib/architecture_coverage"
 require_relative "../lib/architecture_projection"
 require_relative "../lib/architecture_ownership"
+require_relative "../lib/evidence_contract"
+require_relative "../lib/source_contract"
+require_relative "../lib/strict_yaml"
 
 ROOT = File.expand_path("..", __dir__)
 REGISTRY = "architectures/index.yaml"
@@ -22,10 +25,18 @@ def load_yaml(path)
     @errors << "missing file: #{path}"
     return {}
   end
-  YAML.load_file(full_path, aliases: true)
-rescue Psych::SyntaxError => e
-  @errors << "YAML syntax error in #{path}: #{e.message}"
+  StrictYaml.load_file(full_path)
+rescue StrictYaml::Error => e
+  @errors << "YAML error in #{path}: #{e.message}"
   {}
+end
+
+def lint_source_contract(document, label)
+  return unless SourceContract::SCHEMAS.key?(document["schema_version"])
+
+  SourceContract.errors(document).each do |diagnostic|
+    @errors << "#{label} #{diagnostic}"
+  end
 end
 
 def ids(items)
@@ -77,6 +88,7 @@ def lint_source_ref_targets(value, label)
 end
 
 def lint_bibliography(bibliography)
+  lint_source_contract(bibliography, "bibliography")
   schema_version = bibliography["schema_version"]
   unless BIBLIOGRAPHY_SCHEMA_VERSIONS.include?(schema_version)
     @errors << "unsupported bibliography schema_version #{schema_version.inspect}"
@@ -89,6 +101,15 @@ def lint_bibliography(bibliography)
     @errors << "bibliography source #{id} missing kind" unless source["kind"]
     @errors << "bibliography source #{id} missing title" unless source["title"]
     @errors << "bibliography source #{id} needs url or path" unless source["url"] || source["path"]
+    if source["kind"] == "code"
+      revision = source["revision"]
+      unless revision&.match?(/\A[a-f0-9]{40}\z/)
+        @errors << "code source #{id} requires an immutable 40-character revision"
+      end
+      if source["url"] && revision && !source["url"].include?(revision)
+        @errors << "code source #{id} URL is not pinned to revision #{revision}"
+      end
+    end
     next unless source["kind"] == "paper"
 
     @errors << "paper source #{id} missing authors" if Array(source["authors"]).empty?
@@ -99,13 +120,12 @@ end
 
 def require_evidence(label, item)
   evidence = item["evidence"]
-  unless evidence.is_a?(Hash)
-    @errors << "#{label} missing evidence"
-    return
+  EvidenceContract.errors(evidence, @bibliography_sources_by_id, label: label).each do |error|
+    @errors << error
   end
-  @errors << "#{label} missing evidence.status" unless evidence["status"]
+  return unless evidence.is_a?(Hash)
+
   refs = evidence["refs"]
-  @errors << "#{label} missing evidence.refs" if !refs.is_a?(Array) || refs.empty?
   Array(refs).each_with_index do |ref, index|
     lint_source_ref("#{label} evidence ref #{index}", ref, require_role: true)
   end
@@ -154,6 +174,7 @@ def collect_standard_blocks
 end
 
 def lint_architecture(arch, standard_blocks)
+  lint_source_contract(arch, "architecture #{arch['id'] || 'unknown'}")
   lint_source_ref_targets(arch, "architecture #{arch['id'] || 'unknown'}")
   schema_version = arch["schema_version"]
   unless ARCHITECTURE_SCHEMA_VERSIONS.include?(schema_version)
@@ -207,6 +228,9 @@ def lint_architecture(arch, standard_blocks)
   end
 
   Array(arch["representations"]).each { |rep| require_evidence("representation #{rep['id']}", rep) }
+  value_sites_by_ref = Array(arch["value_sites"]).to_h do |site|
+    ["value_sites.#{site['id']}", site]
+  end
   Array(arch["value_sites"]).each do |site|
     representation_ref = untyped_ref(site["representation_ref"], "representations")
     scope_ref = site["scope_ref"]
@@ -214,6 +238,7 @@ def lint_architecture(arch, standard_blocks)
     unless scope_ref == "architecture" || (scope_ref&.start_with?("modules.") && module_ids.include?(untyped_ref(scope_ref, "modules")))
       @errors << "value site #{site['id']} has unknown scope_ref #{scope_ref.inspect}"
     end
+    require_evidence("value site #{site['id']}", site) if schema_version == "architecture-v0.4"
   end
   Array(arch["modules"]).each do |mod|
     require_evidence("module #{mod['id']}", mod)
@@ -236,11 +261,61 @@ def lint_architecture(arch, standard_blocks)
       Array(relation["carries"]).each do |carry|
         @errors << "architecture relation #{relation_id} carries unknown representation #{carry}" unless rep_ids.include?(untyped_ref(carry, "representations"))
       end
+      if schema_version == "architecture-v0.4"
+        carried = Set.new(Array(relation["carries"]))
+        from_rep = value_sites_by_ref.dig(from, "representation_ref")
+        to_rep = value_sites_by_ref.dig(to, "representation_ref")
+        if from_rep && !to_rep && !carried.include?(from_rep)
+          @errors << "architecture relation #{relation_id} leaves #{from} but does not carry #{from_rep}"
+        elsif to_rep && !from_rep && !carried.include?(to_rep)
+          @errors << "architecture relation #{relation_id} enters #{to} but does not carry #{to_rep}"
+        elsif from_rep && to_rep && (carried & Set[from_rep, to_rep]).empty?
+          @errors << "architecture relation #{relation_id} connects value sites but carries neither #{from_rep} nor #{to_rep}"
+        end
+      end
     end
     require_evidence("architecture relation #{relation_id}", relation)
   end
 
   Array(arch["claims"]).each { |claim| require_evidence("claim #{claim['id']}", claim) }
+  if schema_version == "architecture-v0.4"
+    require_evidence("training_inference", arch["training_inference"])
+    require_evidence("reference_configuration", arch["reference_configuration"]) if arch["reference_configuration"]
+
+    Array(arch.dig("execution", "loops")).each do |loop|
+      Array(loop["reruns"]).each do |ref|
+        unless ref.start_with?("modules.") && module_ids.include?(untyped_ref(ref, "modules"))
+          @errors << "execution loop #{loop['id']} reruns unknown module #{ref}"
+        end
+      end
+      Array(loop["cached"]).each do |ref|
+        unless architecture_ref_exists?(ref, module_ids, rep_ids, value_site_ids, claim_ids, relation_ids)
+          @errors << "execution loop #{loop['id']} caches unknown fact #{ref}"
+        end
+      end
+    end
+
+    known_question_refs = Set["architecture"]
+    known_question_refs.merge(module_ids.map { |id| "modules.#{id}" })
+    known_question_refs.merge(rep_ids.map { |id| "representations.#{id}" })
+    known_question_refs.merge(value_site_ids.map { |id| "value_sites.#{id}" })
+    known_question_refs.merge(relation_ids.map { |id| "relations.#{id}" })
+    known_question_refs.merge(ids(arch["conditioning"]).map { |id| "conditioning.#{id}" })
+    known_question_refs.merge(ids(arch["scale_transitions"]).map { |id| "scale_transitions.#{id}" })
+    known_question_refs.merge(Hash(arch["state_semantics"]).keys.map { |id| "state_semantics.#{id}" })
+    known_question_refs.merge(Array(arch.dig("execution", "loops")).filter_map do |loop|
+      "execution.loops.#{loop['id']}" if loop["id"]
+    end)
+    Array(arch["open_questions"]).each do |question|
+      Array(question["affected_refs"]).each do |ref|
+        @errors << "open question #{question['id']} affects unknown fact #{ref}" unless known_question_refs.include?(ref)
+      end
+      require_evidence("open question #{question['id']}", question)
+      if question.dig("evidence", "status") != "open_question"
+        @errors << "open question #{question['id']} evidence.status must be open_question"
+      end
+    end
+  end
 
   unless schema_version == "architecture-v0.4"
     Hash(arch["state_semantics"]).each_key do |rep_id|
@@ -393,6 +468,31 @@ def lint_projected_view(view, arch)
       @errors << "board #{board_id} expands #{subject_ref}, but its decomposition status is #{subject_status}"
     end
 
+    require_unique_ids("node on board #{board_id}", board["nodes"])
+    columns = board.dig("grid", "columns")
+    rows = board.dig("grid", "rows")
+    occupied = {}
+    Array(board["nodes"]).each do |node|
+      if columns && node["col"] && node["col"] > columns
+        @errors << "board #{board_id} node #{node['id']} col #{node['col']} exceeds grid columns #{columns}"
+      end
+      if rows && node["row"] && node["row"] > rows
+        @errors << "board #{board_id} node #{node['id']} row #{node['row']} exceeds grid rows #{rows}"
+      end
+      cell = [node["col"], node["row"]]
+      if occupied.key?(cell)
+        @errors << "board #{board_id} nodes #{occupied[cell]} and #{node['id']} overlap at col #{cell[0]}, row #{cell[1]}"
+      else
+        occupied[cell] = node["id"]
+      end
+    end
+
+    Array(board["edge_overrides"]).each_with_index do |override, index|
+      if override.key?("route_clearance") && !override["route_side"]
+        @errors << "board #{board_id} edge override #{index} sets route_clearance without route_side"
+      end
+    end
+
     Array(board["nodes"]).each do |node|
       board_ref = node["board_ref"]
       next unless board_ref
@@ -437,6 +537,7 @@ def lint_projected_view(view, arch)
 end
 
 def lint_view(view, arch, module_ids, rep_ids, relations_by_id)
+  lint_source_contract(view, "view #{view['id'] || 'unknown'}")
   schema_version = view["schema_version"]
   unless VIEW_SCHEMA_VERSIONS.include?(schema_version)
     @errors << "unsupported visualization schema_version #{schema_version.inspect}"
@@ -626,10 +727,13 @@ standard_blocks = collect_standard_blocks
 registry = load_yaml(REGISTRY)
 bibliography_path = registry["bibliography"]
 if bibliography_path
-  @bibliography_ids = lint_bibliography(load_yaml(bibliography_path))
+  bibliography = load_yaml(bibliography_path)
+  @bibliography_sources_by_id = Array(bibliography["sources"]).to_h { |source| [source["id"], source] }
+  @bibliography_ids = lint_bibliography(bibliography)
 else
   @errors << "registry missing bibliography"
   @bibliography_ids = Set.new
+  @bibliography_sources_by_id = {}
 end
 
 Array(registry["source_sets"]).each do |source_set|

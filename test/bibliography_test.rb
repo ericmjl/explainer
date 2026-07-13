@@ -2,7 +2,7 @@
 
 require "minitest/autorun"
 require "set"
-require "yaml"
+require_relative "../lib/strict_yaml"
 
 class BibliographyTest < Minitest::Test
   ROOT = File.expand_path("..", __dir__)
@@ -21,6 +21,10 @@ class BibliographyTest < Minitest::Test
     sources.each do |source|
       refute_empty source.fetch("title")
       assert source["url"] || source["path"], source.fetch("id")
+      next unless source["kind"] == "code"
+
+      assert_match(/\A[a-f0-9]{40}\z/, source["revision"], source.fetch("id"))
+      assert_includes source.fetch("url"), source.fetch("revision"), source.fetch("id")
     end
   end
 
@@ -70,6 +74,6 @@ class BibliographyTest < Minitest::Test
   end
 
   def load_yaml(path)
-    YAML.load_file(File.join(ROOT, path), aliases: true)
+    StrictYaml.load_file(File.join(ROOT, path))
   end
 end

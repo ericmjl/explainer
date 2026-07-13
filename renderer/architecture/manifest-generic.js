@@ -1,10 +1,28 @@
 export const manifest = {
   "schemaVersion": "architecture-manifest-v0.4",
+  "build": {
+    "generator": "architecture-manifest-builder-v0.4.1",
+    "inputDigests": {
+      "references/bibliography.yaml": "6923dca15429fe45b7ed1e9ca168db61f67b63728abc0e2cda424100b1d6025e",
+      "architectures/generic-feature-refinement.yaml": "45dc5937fdd244243d8cce75f99a8f65067336c7eab029d725dbad2335e4c782",
+      "views/generic-semantic-zoom.view.yaml": "2ba5ffea9e7fe359c00888011bd86b1572c3bc6fe9958ef39f3f2f0156c8e999",
+      "pseudocode/generic-feature-refinement.yaml": "61fc56702628c377477bb6f25122b8770ec5d10dba3c7f8da9215400e0103086",
+      "standard_blocks/pair-biased-attention.yaml": "a816db9cc6b12a80afbc76af81c1ec3cd99b3dd6fdc525070256fd9561f850ff",
+      "standard_blocks/per-item-adaln-conditioning.yaml": "544bca1c4d238825bfe6e389fe0409e64b27726b54f737e86021a0dc078987f9",
+      "standard_blocks/additive-conditioning.yaml": "5638ead7cbb2df6729e58393703d3e35b6e480b3ba42c657312dc6581bb032f7"
+    }
+  },
   "architecture": {
     "schemaVersion": "architecture-v0.4",
     "id": "generic_feature_refinement",
     "name": "Generic Feature Refinement Pipeline",
+    "family": "transformer",
     "status": "draft",
+    "taskModes": [
+      "prediction",
+      "generation"
+    ],
+    "referenceConfiguration": null,
     "sourceYaml": "../../architectures/generic-feature-refinement.yaml",
     "sources": [
       {
@@ -1149,7 +1167,17 @@ export const manifest = {
       "self_conditioning": "unknown",
       "checkpoint_notes": [
         "This demo is architectural only; it is not tied to a training recipe."
-      ]
+      ],
+      "evidence": {
+        "status": "inferred",
+        "refs": [
+          {
+            "source_ref": "generic_feature_refinement_source",
+            "role": "scaffold_evidence",
+            "note": "The training and inference fields are deliberately unknown or schematic in this domain-neutral demonstration."
+          }
+        ]
+      }
     },
     "relations": [
       {
@@ -1623,6 +1651,29 @@ export const manifest = {
           ]
         }
       }
+    ],
+    "openQuestions": [
+      {
+        "id": "update_pair_context",
+        "question": "Should a concrete architecture update pair/context state or keep it read-only?",
+        "status": "unresolved",
+        "affected_refs": [
+          "state_semantics.pair_context",
+          "value_sites.pair_context"
+        ],
+        "blocking": false,
+        "resolution_criteria": "Resolve when this scaffold is specialized to an architecture with explicit pair/context update semantics.",
+        "evidence": {
+          "status": "open_question",
+          "refs": [
+            {
+              "source_ref": "generic_feature_refinement_source",
+              "role": "scaffold_evidence",
+              "note": "The generic source intentionally leaves this specialization choice open."
+            }
+          ]
+        }
+      }
     ]
   },
   "bibliography": {
@@ -1650,9 +1701,10 @@ export const manifest = {
         "title": "DiT model implementation",
         "organization": "facebookresearch",
         "repository": "facebookresearch/DiT",
+        "revision": "ed81ce2229091fd4ecc9a223645f95cf379d582b",
         "path": "facebookresearch/DiT/models.py",
-        "url": "https://github.com/facebookresearch/DiT/blob/main/models.py",
-        "href": "https://github.com/facebookresearch/DiT/blob/main/models.py"
+        "url": "https://github.com/facebookresearch/DiT/blob/ed81ce2229091fd4ecc9a223645f95cf379d582b/models.py",
+        "href": "https://github.com/facebookresearch/DiT/blob/ed81ce2229091fd4ecc9a223645f95cf379d582b/models.py"
       },
       {
         "id": "dit_sample_code",
@@ -1660,9 +1712,10 @@ export const manifest = {
         "title": "DiT sampling entry point",
         "organization": "facebookresearch",
         "repository": "facebookresearch/DiT",
+        "revision": "ed81ce2229091fd4ecc9a223645f95cf379d582b",
         "path": "facebookresearch/DiT/sample.py",
-        "url": "https://github.com/facebookresearch/DiT/blob/main/sample.py",
-        "href": "https://github.com/facebookresearch/DiT/blob/main/sample.py"
+        "url": "https://github.com/facebookresearch/DiT/blob/ed81ce2229091fd4ecc9a223645f95cf379d582b/sample.py",
+        "href": "https://github.com/facebookresearch/DiT/blob/ed81ce2229091fd4ecc9a223645f95cf379d582b/sample.py"
       },
       {
         "id": "dit_gaussian_diffusion_code",
@@ -1670,9 +1723,10 @@ export const manifest = {
         "title": "DiT Gaussian diffusion implementation",
         "organization": "facebookresearch",
         "repository": "facebookresearch/DiT",
+        "revision": "ed81ce2229091fd4ecc9a223645f95cf379d582b",
         "path": "facebookresearch/DiT/diffusion/gaussian_diffusion.py",
-        "url": "https://github.com/facebookresearch/DiT/blob/main/diffusion/gaussian_diffusion.py",
-        "href": "https://github.com/facebookresearch/DiT/blob/main/diffusion/gaussian_diffusion.py"
+        "url": "https://github.com/facebookresearch/DiT/blob/ed81ce2229091fd4ecc9a223645f95cf379d582b/diffusion/gaussian_diffusion.py",
+        "href": "https://github.com/facebookresearch/DiT/blob/ed81ce2229091fd4ecc9a223645f95cf379d582b/diffusion/gaussian_diffusion.py"
       },
       {
         "id": "dit_train_code",
@@ -1680,9 +1734,10 @@ export const manifest = {
         "title": "DiT training entry point",
         "organization": "facebookresearch",
         "repository": "facebookresearch/DiT",
+        "revision": "ed81ce2229091fd4ecc9a223645f95cf379d582b",
         "path": "facebookresearch/DiT/train.py",
-        "url": "https://github.com/facebookresearch/DiT/blob/main/train.py",
-        "href": "https://github.com/facebookresearch/DiT/blob/main/train.py"
+        "url": "https://github.com/facebookresearch/DiT/blob/ed81ce2229091fd4ecc9a223645f95cf379d582b/train.py",
+        "href": "https://github.com/facebookresearch/DiT/blob/ed81ce2229091fd4ecc9a223645f95cf379d582b/train.py"
       },
       {
         "id": "generic_feature_refinement_source",

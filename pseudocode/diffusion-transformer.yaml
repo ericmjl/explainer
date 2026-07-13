@@ -173,5 +173,5 @@ claims:
       refs:
         - source_ref: dit_models_code
           role: implementation_evidence
-          lines: DiTBlock
+          locator: DiTBlock
           note: chunk(6, dim=1) on a B x d conditioning vector.

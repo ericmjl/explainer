@@ -2,17 +2,36 @@
 # frozen_string_literal: true
 
 require "json"
+require "digest"
 require "fileutils"
-require "yaml"
+require "rbconfig"
 require_relative "../../lib/architecture_coverage"
 require_relative "../../lib/architecture_projection"
 require_relative "../../lib/architecture_ownership"
+require_relative "../../lib/source_contract"
+require_relative "../../lib/strict_yaml"
 
 ROOT = File.expand_path("../..", __dir__)
 REGISTRY = "architectures/index.yaml"
+GENERATOR_VERSION = "architecture-manifest-builder-v0.4.1"
+CHECK_MODE = ARGV.delete("--check")
+abort "usage: ruby #{__FILE__} [--check]" unless ARGV.empty?
 
 def load_yaml(path)
-  YAML.load_file(File.join(ROOT, path), aliases: true)
+  StrictYaml.load_file(File.join(ROOT, path))
+end
+
+def validate_all_sources!
+  lint = File.join(ROOT, "scripts/lint_sources.rb")
+  return if system(RbConfig.ruby, lint, chdir: ROOT)
+
+  raise "source validation failed; manifests were not generated"
+end
+
+def input_digests(paths)
+  paths.uniq.to_h do |path|
+    [path, Digest::SHA256.file(File.join(ROOT, path)).hexdigest]
+  end
 end
 
 def architecture_relations(architecture)
@@ -215,10 +234,12 @@ end
 
 def build_manifest(config, bibliography, bibliography_path)
   architecture = load_yaml(config.fetch("architecture"))
+  SourceContract.validate!(architecture) if architecture["schema_version"] == "architecture-v0.4"
   ArchitectureOwnership.validate!(architecture)
   ArchitectureCoverage.validate!(architecture)
   pseudocode = load_yaml(config.fetch("pseudocode"))
   semantic_zoom = load_yaml(config.fetch("view"))
+  SourceContract.validate!(semantic_zoom) if semantic_zoom["schema_version"] == "visualization-v0.4"
   modules = architecture.fetch("modules").map { |mod| normalize_module_refs(mod) }
   projected_architecture_versions = %w[architecture-v0.3 architecture-v0.4]
   derived_projection = projected_architecture_versions.include?(architecture["schema_version"]) &&
@@ -247,11 +268,24 @@ def build_manifest(config, bibliography, bibliography_path)
   {
     "schemaVersion" => architecture["schema_version"] == "architecture-v0.4" ? "architecture-manifest-v0.4" :
       (derived_projection ? "architecture-manifest-v0.3" : "architecture-manifest-v0.2"),
+    "build" => {
+      "generator" => GENERATOR_VERSION,
+      "inputDigests" => input_digests([
+        bibliography_path,
+        config.fetch("architecture"),
+        config.fetch("view"),
+        config.fetch("pseudocode"),
+        *config.fetch("standard_blocks"),
+      ]),
+    },
     "architecture" => {
       "schemaVersion" => architecture.fetch("schema_version"),
       "id" => architecture.fetch("id"),
       "name" => architecture.fetch("name"),
+      "family" => architecture["family"],
       "status" => architecture.fetch("status"),
+      "taskModes" => architecture["task_modes"] || [],
+      "referenceConfiguration" => architecture["reference_configuration"],
       "sourceYaml" => web_ref(config.fetch("architecture")),
       "sources" => architecture["sources"] || [],
       "decomposition" => architecture["decomposition"] || {},
@@ -268,6 +302,7 @@ def build_manifest(config, bibliography, bibliography_path)
       "trainingInference" => architecture["training_inference"] || {},
       "relations" => architecture_relations(architecture),
       "claims" => architecture.fetch("claims"),
+      "openQuestions" => architecture["open_questions"] || [],
     },
     "bibliography" => bibliography_manifest(bibliography, bibliography_path),
     "standardBlocks" => standard_block_manifest(config.fetch("standard_blocks")),
@@ -289,25 +324,43 @@ def build_manifest(config, bibliography, bibliography_path)
   }
 end
 
+validate_all_sources!
 registry = load_yaml(REGISTRY)
 bibliography_path = registry.fetch("bibliography")
 bibliography = load_yaml(bibliography_path)
+SourceContract.validate!(bibliography)
 index_entries = []
+stale_outputs = []
+
+write_output = lambda do |path, content|
+  if CHECK_MODE
+    stale_outputs << path unless File.exist?(path) && File.read(path) == content
+  else
+    FileUtils.mkdir_p(File.dirname(path))
+    File.write(path, content)
+    puts path
+  end
+end
 
 registry.fetch("source_sets").each do |config|
   set_id = config.fetch("id")
   out = File.join(ROOT, "renderer/architecture/manifest-#{set_id}.js")
-  FileUtils.mkdir_p(File.dirname(out))
   manifest = build_manifest(config, bibliography, bibliography_path)
-  File.write(out, "export const manifest = #{JSON.pretty_generate(manifest)};\n")
+  write_output.call(out, "export const manifest = #{JSON.pretty_generate(manifest)};\n")
   index_entries << {
     "id" => set_id,
     "name" => config["label"] || manifest.dig("architecture", "name"),
     "file" => "manifest-#{set_id}.js",
   }
-  puts out
 end
 
 index_out = File.join(ROOT, "renderer/architecture/manifest-index.js")
-File.write(index_out, "export const manifestIndex = #{JSON.pretty_generate(index_entries)};\n")
-puts index_out
+write_output.call(index_out, "export const manifestIndex = #{JSON.pretty_generate(index_entries)};\n")
+
+if CHECK_MODE
+  unless stale_outputs.empty?
+    warn stale_outputs.map { |path| "stale generated manifest: #{path}" }.join("\n")
+    exit 1
+  end
+  puts "manifest check ok"
+end

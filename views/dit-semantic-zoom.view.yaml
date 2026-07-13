@@ -93,7 +93,7 @@ boards:
       title: Generated image
       role: task-level output
       inside: The frozen VAE maps the final latent back to an RGB image at the requested resolution.
-  open_notes:
+  notes:
   - This root presents the generation path. Training has a separate image-to-latent noising path.
   - Fixed inverse scaling is authored but elided from the high-level view; its dashed connection remains inspectable.
 - id: sampling_loop
@@ -250,8 +250,8 @@ boards:
       title: Repeat with the updated latent
       role: recurrent sampler state
       inside: If steps remain, x_(t-1) becomes the next iteration's x_t and the sampler advances to the next scheduled timestep.
-  open_notes:
-  - The root board owns the boundary: the first current latent is Gaussian x_T, and the final next latent is emitted as x_0 for VAE decoding.
+  notes:
+  - "The root board owns the boundary: the first current latent is Gaussian x_T, and the final next latent is emitted as x_0 for VAE decoding."
   - The official sampler batches conditional and null-class copies for classifier-free guidance; the reproducibility path guides only the first three epsilon channels.
   - The 250 sampler indices map onto a respaced subset of the 1,000-step training schedule.
 - id: dit_pipeline
@@ -460,7 +460,7 @@ boards:
       title: Noise and variance-parameter prediction
       role: final outputs
       inside: Unpatchify returns one joint spatial tensor; the diffusion wrapper treats the first C channels as epsilon and, when enabled, the second C as learned-range variance parameters.
-  open_notes:
+  notes:
   - Intermediate timestep, label, and output-token representations are elided; the canonical modules remain visible on the main board.
 - id: dit_blocks
   title: DiT-XL Block (adaLN-Zero)

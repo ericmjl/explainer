@@ -139,6 +139,12 @@ training_inference:
   self_conditioning: unknown
   checkpoint_notes:
     - This demo is architectural only; it is not tied to a training recipe.
+  evidence:
+    status: inferred
+    refs:
+      - source_ref: generic_feature_refinement_source
+        role: scaffold_evidence
+        note: The training and inference fields are deliberately unknown or schematic in this domain-neutral demonstration.
 representations:
   - id: raw_records
     scale: item
@@ -765,3 +771,14 @@ open_questions:
   - id: update_pair_context
     question: Should a concrete architecture update pair/context state or keep it read-only?
     status: unresolved
+    affected_refs:
+      - state_semantics.pair_context
+      - value_sites.pair_context
+    blocking: false
+    resolution_criteria: Resolve when this scaffold is specialized to an architecture with explicit pair/context update semantics.
+    evidence:
+      status: open_question
+      refs:
+        - source_ref: generic_feature_refinement_source
+          role: scaffold_evidence
+          note: The generic source intentionally leaves this specialization choice open.

@@ -1,10 +1,47 @@
 export const manifest = {
   "schemaVersion": "architecture-manifest-v0.4",
+  "build": {
+    "generator": "architecture-manifest-builder-v0.4.1",
+    "inputDigests": {
+      "references/bibliography.yaml": "6923dca15429fe45b7ed1e9ca168db61f67b63728abc0e2cda424100b1d6025e",
+      "architectures/diffusion-transformer.yaml": "730bad73b786067fc0b6101e41147dffa4272dce88bbdd9f7a0a8f7413468301",
+      "views/dit-semantic-zoom.view.yaml": "3678d81ee30d5e51f8f5b041d5b63af9331fce80117c36427efee4d10d50f43c",
+      "pseudocode/diffusion-transformer.yaml": "c30de43fb5cb70827e520b7f60c410d348de1c10d72646ab68e6b4a2d6064c65",
+      "standard_blocks/adaln-zero-conditioning.yaml": "33cd9afbe3b6867c4ce328c25d41a33210a5e387a195a93b19bc8696ee9e0b32",
+      "standard_blocks/sinusoidal-timestep-embedding.yaml": "8cb2d467fe967e9a83da657ef85940406be89836de502d24cb7f557152763039",
+      "standard_blocks/per-item-adaln-conditioning.yaml": "544bca1c4d238825bfe6e389fe0409e64b27726b54f737e86021a0dc078987f9"
+    }
+  },
   "architecture": {
     "schemaVersion": "architecture-v0.4",
     "id": "diffusion_transformer",
     "name": "Diffusion Transformer (DiT)",
+    "family": "transformer",
     "status": "draft",
+    "taskModes": [
+      "generation"
+    ],
+    "referenceConfiguration": {
+      "model": "DiT-XL/2",
+      "image_size": 256,
+      "latent_size": 32,
+      "patch_size": 2,
+      "hidden_size": 1152,
+      "depth": 28,
+      "heads": 16,
+      "learn_sigma": true,
+      "evidence": {
+        "status": "confirmed_from_paper",
+        "refs": [
+          {
+            "source_ref": "dit_2022",
+            "role": "supporting_evidence",
+            "locator": "Table 1",
+            "note": "DiT-XL/2 uses hidden size 1152, depth 28, and 16 attention heads with patch size 2."
+          }
+        ]
+      }
+    },
     "sourceYaml": "../../architectures/diffusion-transformer.yaml",
     "sources": [
       {
@@ -36,7 +73,7 @@ export const manifest = {
           {
             "source_ref": "dit_sample_code",
             "role": "implementation_evidence",
-            "lines": "main",
+            "locator": "main",
             "note": "Sampling, inverse latent scaling, and frozen VAE decoding form the complete generation path represented at the task boundary."
           }
         ]
@@ -310,13 +347,13 @@ export const manifest = {
             {
               "source_ref": "dit_sample_code",
               "role": "implementation_evidence",
-              "lines": "main",
+              "locator": "main",
               "note": "p_sample_loop starts from Gaussian latent noise and invokes forward_with_cfg over the reverse chain."
             },
             {
               "source_ref": "dit_gaussian_diffusion_code",
               "role": "implementation_evidence",
-              "lines": "p_sample_loop_progressive",
+              "locator": "p_sample_loop_progressive",
               "note": "The reverse loop repeatedly samples x_(t-1) from the current state."
             }
           ]
@@ -338,7 +375,7 @@ export const manifest = {
             {
               "source_ref": "dit_models_code",
               "role": "implementation_evidence",
-              "lines": "DiT.forward and DiT.forward_with_cfg",
+              "locator": "DiT.forward and DiT.forward_with_cfg",
               "note": "One denoiser call patchifies x_t, runs the conditioned block stack, and returns spatial model predictions."
             }
           ]
@@ -360,7 +397,7 @@ export const manifest = {
             {
               "source_ref": "dit_gaussian_diffusion_code",
               "role": "implementation_evidence",
-              "lines": "p_mean_variance and p_sample",
+              "locator": "p_mean_variance and p_sample",
               "note": "The model output parameterizes the reverse mean and learned-range variance before fresh noise is added for nonzero timesteps."
             }
           ]
@@ -382,7 +419,7 @@ export const manifest = {
             {
               "source_ref": "dit_sample_code",
               "role": "implementation_evidence",
-              "lines": "main",
+              "locator": "main",
               "note": "The final latent is divided by 0.18215 immediately before VAE decoding."
             }
           ]
@@ -406,7 +443,7 @@ export const manifest = {
             {
               "source_ref": "dit_sample_code",
               "role": "implementation_evidence",
-              "lines": "main",
+              "locator": "main",
               "note": "A pretrained stabilityai/sd-vae-ft decoder maps the rescaled latent to the output image."
             }
           ]
@@ -428,12 +465,12 @@ export const manifest = {
             {
               "source_ref": "dit_2022",
               "role": "supporting_evidence",
-              "lines": "Sec. 3.2 (Patchify)"
+              "locator": "Sec. 3.2 (Patchify)"
             },
             {
               "source_ref": "dit_models_code",
               "role": "implementation_evidence",
-              "lines": "DiT.__init__ (x_embedder, pos_embed)",
+              "locator": "DiT.__init__ (x_embedder, pos_embed)",
               "note": "PatchEmbed plus non-learned sin-cos positional table."
             }
           ]
@@ -455,7 +492,7 @@ export const manifest = {
             {
               "source_ref": "dit_models_code",
               "role": "implementation_evidence",
-              "lines": "TimestepEmbedder"
+              "locator": "TimestepEmbedder"
             }
           ]
         }
@@ -476,7 +513,7 @@ export const manifest = {
             {
               "source_ref": "dit_models_code",
               "role": "implementation_evidence",
-              "lines": "LabelEmbedder"
+              "locator": "LabelEmbedder"
             }
           ]
         }
@@ -497,7 +534,7 @@ export const manifest = {
             {
               "source_ref": "dit_models_code",
               "role": "implementation_evidence",
-              "lines": "DiT.forward",
+              "locator": "DiT.forward",
               "note": "c = t + y."
             }
           ]
@@ -536,7 +573,7 @@ export const manifest = {
             {
               "source_ref": "dit_2022",
               "role": "supporting_evidence",
-              "lines": "Sec. 3.2 (DiT block design), Table 1",
+              "locator": "Sec. 3.2 (DiT block design), Table 1",
               "note": "Depth 28 / 16 heads is the DiT-XL configuration; other sizes exist."
             }
           ]
@@ -558,7 +595,7 @@ export const manifest = {
             {
               "source_ref": "dit_models_code",
               "role": "implementation_evidence",
-              "lines": "FinalLayer"
+              "locator": "FinalLayer"
             }
           ]
         }
@@ -579,7 +616,7 @@ export const manifest = {
             {
               "source_ref": "dit_models_code",
               "role": "implementation_evidence",
-              "lines": "DiT.unpatchify"
+              "locator": "DiT.unpatchify"
             }
           ]
         }
@@ -601,7 +638,7 @@ export const manifest = {
             {
               "source_ref": "dit_models_code",
               "role": "implementation_evidence",
-              "lines": "TimestepEmbedder"
+              "locator": "TimestepEmbedder"
             }
           ]
         }
@@ -623,7 +660,7 @@ export const manifest = {
             {
               "source_ref": "dit_models_code",
               "role": "implementation_evidence",
-              "lines": "DiTBlock"
+              "locator": "DiTBlock"
             }
           ]
         }
@@ -644,7 +681,7 @@ export const manifest = {
             {
               "source_ref": "dit_models_code",
               "role": "implementation_evidence",
-              "lines": "DiTBlock",
+              "locator": "DiTBlock",
               "note": "The modulation MLP output is chunked into six parameter vectors."
             }
           ]
@@ -666,7 +703,7 @@ export const manifest = {
             {
               "source_ref": "dit_models_code",
               "role": "implementation_evidence",
-              "lines": "DiTBlock",
+              "locator": "DiTBlock",
               "note": "The modulation MLP output is chunked into six parameter vectors."
             }
           ]
@@ -688,7 +725,7 @@ export const manifest = {
             {
               "source_ref": "dit_models_code",
               "role": "implementation_evidence",
-              "lines": "DiTBlock",
+              "locator": "DiTBlock",
               "note": "The modulation MLP output is chunked into six parameter vectors."
             }
           ]
@@ -710,7 +747,7 @@ export const manifest = {
             {
               "source_ref": "dit_models_code",
               "role": "implementation_evidence",
-              "lines": "DiTBlock",
+              "locator": "DiTBlock",
               "note": "The modulation MLP output is chunked into six parameter vectors."
             }
           ]
@@ -732,7 +769,7 @@ export const manifest = {
             {
               "source_ref": "dit_models_code",
               "role": "implementation_evidence",
-              "lines": "DiTBlock",
+              "locator": "DiTBlock",
               "note": "The modulation MLP output is chunked into six parameter vectors."
             }
           ]
@@ -754,7 +791,7 @@ export const manifest = {
             {
               "source_ref": "dit_models_code",
               "role": "implementation_evidence",
-              "lines": "DiTBlock",
+              "locator": "DiTBlock",
               "note": "The modulation MLP output is chunked into six parameter vectors."
             }
           ]
@@ -776,7 +813,7 @@ export const manifest = {
             {
               "source_ref": "dit_models_code",
               "role": "implementation_evidence",
-              "lines": "DiTBlock",
+              "locator": "DiTBlock",
               "note": "The modulation MLP output is chunked into six parameter vectors."
             }
           ]
@@ -798,7 +835,7 @@ export const manifest = {
             {
               "source_ref": "dit_models_code",
               "role": "implementation_evidence",
-              "lines": "DiTBlock",
+              "locator": "DiTBlock",
               "note": "The modulation MLP output is chunked into six parameter vectors."
             }
           ]
@@ -820,7 +857,7 @@ export const manifest = {
             {
               "source_ref": "dit_models_code",
               "role": "implementation_evidence",
-              "lines": "DiTBlock",
+              "locator": "DiTBlock",
               "note": "The modulation MLP output is chunked into six parameter vectors."
             }
           ]
@@ -842,7 +879,7 @@ export const manifest = {
             {
               "source_ref": "dit_models_code",
               "role": "implementation_evidence",
-              "lines": "DiTBlock",
+              "locator": "DiTBlock",
               "note": "The modulation MLP output is chunked into six parameter vectors."
             }
           ]
@@ -864,7 +901,7 @@ export const manifest = {
             {
               "source_ref": "dit_models_code",
               "role": "implementation_evidence",
-              "lines": "DiTBlock",
+              "locator": "DiTBlock",
               "note": "The modulation MLP output is chunked into six parameter vectors."
             }
           ]
@@ -886,7 +923,7 @@ export const manifest = {
             {
               "source_ref": "dit_sample_code",
               "role": "implementation_evidence",
-              "lines": "main",
+              "locator": "main",
               "note": "Sampling starts with torch.randn at four latent channels and one-eighth image resolution."
             }
           ]
@@ -906,7 +943,7 @@ export const manifest = {
             {
               "source_ref": "dit_gaussian_diffusion_code",
               "role": "implementation_evidence",
-              "lines": "p_sample",
+              "locator": "p_sample",
               "note": "A fresh randn_like tensor contributes when t is nonzero."
             }
           ]
@@ -926,7 +963,7 @@ export const manifest = {
             {
               "source_ref": "dit_2022",
               "role": "supporting_evidence",
-              "lines": "Sec. 3 (Latent diffusion), Sec. 3.2"
+              "locator": "Sec. 3 (Latent diffusion), Sec. 3.2"
             }
           ]
         }
@@ -945,7 +982,7 @@ export const manifest = {
             {
               "source_ref": "dit_2022",
               "role": "supporting_evidence",
-              "lines": "Sec. 3.2"
+              "locator": "Sec. 3.2"
             }
           ]
         }
@@ -964,7 +1001,7 @@ export const manifest = {
             {
               "source_ref": "dit_models_code",
               "role": "implementation_evidence",
-              "lines": "LabelEmbedder",
+              "locator": "LabelEmbedder",
               "note": "Dropped labels are mapped to an extra embedding index num_classes."
             }
           ]
@@ -984,7 +1021,7 @@ export const manifest = {
             {
               "source_ref": "dit_models_code",
               "role": "implementation_evidence",
-              "lines": "TimestepEmbedder"
+              "locator": "TimestepEmbedder"
             }
           ]
         }
@@ -1003,7 +1040,7 @@ export const manifest = {
             {
               "source_ref": "dit_models_code",
               "role": "implementation_evidence",
-              "lines": "LabelEmbedder"
+              "locator": "LabelEmbedder"
             }
           ]
         }
@@ -1022,7 +1059,7 @@ export const manifest = {
             {
               "source_ref": "dit_models_code",
               "role": "implementation_evidence",
-              "lines": "DiT.forward",
+              "locator": "DiT.forward",
               "note": "c = t + y before the block stack."
             }
           ]
@@ -1043,7 +1080,7 @@ export const manifest = {
             {
               "source_ref": "dit_2022",
               "role": "supporting_evidence",
-              "lines": "Sec. 3.2 (Patchify)"
+              "locator": "Sec. 3.2 (Patchify)"
             }
           ]
         }
@@ -1063,7 +1100,7 @@ export const manifest = {
             {
               "source_ref": "dit_models_code",
               "role": "implementation_evidence",
-              "lines": "FinalLayer",
+              "locator": "FinalLayer",
               "note": "Linear(hidden_size, patch_size * patch_size * out_channels)."
             }
           ]
@@ -1084,13 +1121,13 @@ export const manifest = {
             {
               "source_ref": "dit_models_code",
               "role": "implementation_evidence",
-              "lines": "DiT.__init__",
+              "locator": "DiT.__init__",
               "note": "out_channels is 2C only when learn_sigma is enabled."
             },
             {
               "source_ref": "dit_gaussian_diffusion_code",
               "role": "implementation_evidence",
-              "lines": "p_mean_variance",
+              "locator": "p_mean_variance",
               "note": "The second C channels interpolate between minimum and maximum log variance."
             }
           ]
@@ -1110,7 +1147,7 @@ export const manifest = {
             {
               "source_ref": "dit_sample_code",
               "role": "implementation_evidence",
-              "lines": "main",
+              "locator": "main",
               "note": "p_sample_loop returns the generated latent before VAE decoding."
             }
           ]
@@ -1130,7 +1167,7 @@ export const manifest = {
             {
               "source_ref": "dit_sample_code",
               "role": "implementation_evidence",
-              "lines": "main",
+              "locator": "main",
               "note": "The sampler output is divided by 0.18215 immediately before vae.decode."
             }
           ]
@@ -1150,7 +1187,7 @@ export const manifest = {
             {
               "source_ref": "dit_sample_code",
               "role": "implementation_evidence",
-              "lines": "main",
+              "locator": "main",
               "note": "The frozen Stable Diffusion VAE decodes the final latent to an image tensor."
             }
           ]
@@ -1171,7 +1208,7 @@ export const manifest = {
             {
               "source_ref": "dit_models_code",
               "role": "implementation_evidence",
-              "lines": "DiTBlock",
+              "locator": "DiTBlock",
               "note": "The six-way modulation output is split into shift, scale, and gate triplets for attention and MLP branches."
             }
           ]
@@ -1183,107 +1220,316 @@ export const manifest = {
         "id": "initial_noise",
         "representation_ref": "representations.initial_noise",
         "scope_ref": "architecture",
-        "boundary": "input"
+        "boundary": "input",
+        "evidence": {
+          "status": "confirmed_from_code",
+          "refs": [
+            {
+              "source_ref": "dit_sample_code",
+              "role": "implementation_evidence",
+              "locator": "main",
+              "note": "The sampling entry point constructs the initial latent, labels, terminal latent, VAE decode input, and generated image occurrences."
+            }
+          ]
+        }
       },
       {
         "id": "class_label",
         "representation_ref": "representations.class_label",
         "scope_ref": "architecture",
-        "boundary": "input"
+        "boundary": "input",
+        "evidence": {
+          "status": "confirmed_from_code",
+          "refs": [
+            {
+              "source_ref": "dit_sample_code",
+              "role": "implementation_evidence",
+              "locator": "main",
+              "note": "The sampling entry point constructs the initial latent, labels, terminal latent, VAE decode input, and generated image occurrences."
+            }
+          ]
+        }
       },
       {
         "id": "latent_before_step",
         "representation_ref": "representations.input_latent",
         "scope_ref": "modules.ddpm_sampler",
-        "role": "state_read"
+        "role": "state_read",
+        "evidence": {
+          "status": "confirmed_from_code",
+          "refs": [
+            {
+              "source_ref": "dit_gaussian_diffusion_code",
+              "role": "implementation_evidence",
+              "locator": "p_sample_loop_progressive and p_sample",
+              "note": "The reverse loop distinguishes its current latent, updated latent, timestep, and fresh per-step noise occurrences."
+            }
+          ]
+        }
       },
       {
         "id": "latent_after_step",
         "representation_ref": "representations.input_latent",
         "scope_ref": "modules.ddpm_sampler",
-        "role": "state_write"
+        "role": "state_write",
+        "evidence": {
+          "status": "confirmed_from_code",
+          "refs": [
+            {
+              "source_ref": "dit_gaussian_diffusion_code",
+              "role": "implementation_evidence",
+              "locator": "p_sample_loop_progressive and p_sample",
+              "note": "The reverse loop distinguishes its current latent, updated latent, timestep, and fresh per-step noise occurrences."
+            }
+          ]
+        }
       },
       {
         "id": "timestep",
         "representation_ref": "representations.timestep",
-        "scope_ref": "modules.ddpm_sampler"
+        "scope_ref": "modules.ddpm_sampler",
+        "evidence": {
+          "status": "confirmed_from_code",
+          "refs": [
+            {
+              "source_ref": "dit_gaussian_diffusion_code",
+              "role": "implementation_evidence",
+              "locator": "p_sample_loop_progressive and p_sample",
+              "note": "The reverse loop distinguishes its current latent, updated latent, timestep, and fresh per-step noise occurrences."
+            }
+          ]
+        }
       },
       {
         "id": "step_noise",
         "representation_ref": "representations.step_noise",
-        "scope_ref": "modules.ddpm_sampler"
+        "scope_ref": "modules.ddpm_sampler",
+        "evidence": {
+          "status": "confirmed_from_code",
+          "refs": [
+            {
+              "source_ref": "dit_gaussian_diffusion_code",
+              "role": "implementation_evidence",
+              "locator": "p_sample_loop_progressive and p_sample",
+              "note": "The reverse loop distinguishes its current latent, updated latent, timestep, and fresh per-step noise occurrences."
+            }
+          ]
+        }
       },
       {
         "id": "t_embedding",
         "representation_ref": "representations.t_embedding",
-        "scope_ref": "modules.timestep_embedder"
+        "scope_ref": "modules.timestep_embedder",
+        "evidence": {
+          "status": "confirmed_from_code",
+          "refs": [
+            {
+              "source_ref": "dit_models_code",
+              "role": "implementation_evidence",
+              "locator": "DiT.forward, TimestepEmbedder, LabelEmbedder, and DiTBlock",
+              "note": "The forward pass creates timestep, label, combined-conditioning, patch-token, block-token, and denoiser-output occurrences."
+            }
+          ]
+        }
       },
       {
         "id": "y_embedding",
         "representation_ref": "representations.y_embedding",
-        "scope_ref": "modules.label_embedder"
+        "scope_ref": "modules.label_embedder",
+        "evidence": {
+          "status": "confirmed_from_code",
+          "refs": [
+            {
+              "source_ref": "dit_models_code",
+              "role": "implementation_evidence",
+              "locator": "DiT.forward, TimestepEmbedder, LabelEmbedder, and DiTBlock",
+              "note": "The forward pass creates timestep, label, combined-conditioning, patch-token, block-token, and denoiser-output occurrences."
+            }
+          ]
+        }
       },
       {
         "id": "cond_vector",
         "representation_ref": "representations.cond_vector",
         "scope_ref": "modules.cond_combiner",
-        "role": "read_only_conditioning"
+        "role": "read_only_conditioning",
+        "evidence": {
+          "status": "confirmed_from_code",
+          "refs": [
+            {
+              "source_ref": "dit_models_code",
+              "role": "implementation_evidence",
+              "locator": "DiT.forward, TimestepEmbedder, LabelEmbedder, and DiTBlock",
+              "note": "The forward pass creates timestep, label, combined-conditioning, patch-token, block-token, and denoiser-output occurrences."
+            }
+          ]
+        }
       },
       {
         "id": "tokens_after_patchify",
         "representation_ref": "representations.token_state",
         "scope_ref": "modules.patchify",
-        "role": "state_read"
+        "role": "state_read",
+        "evidence": {
+          "status": "confirmed_from_code",
+          "refs": [
+            {
+              "source_ref": "dit_models_code",
+              "role": "implementation_evidence",
+              "locator": "DiT.forward, TimestepEmbedder, LabelEmbedder, and DiTBlock",
+              "note": "The forward pass creates timestep, label, combined-conditioning, patch-token, block-token, and denoiser-output occurrences."
+            }
+          ]
+        }
       },
       {
         "id": "block_input_tokens",
         "representation_ref": "representations.token_state",
         "scope_ref": "modules.dit_blocks",
-        "role": "interface_read"
+        "role": "interface_read",
+        "evidence": {
+          "status": "confirmed_from_code",
+          "refs": [
+            {
+              "source_ref": "dit_models_code",
+              "role": "implementation_evidence",
+              "locator": "DiT.forward, TimestepEmbedder, LabelEmbedder, and DiTBlock",
+              "note": "The forward pass creates timestep, label, combined-conditioning, patch-token, block-token, and denoiser-output occurrences."
+            }
+          ]
+        }
       },
       {
         "id": "attn_params",
         "representation_ref": "representations.adaln_parameter_triplet",
-        "scope_ref": "modules.adaln_mlp"
+        "scope_ref": "modules.adaln_mlp",
+        "evidence": {
+          "status": "confirmed_from_code",
+          "refs": [
+            {
+              "source_ref": "dit_models_code",
+              "role": "implementation_evidence",
+              "locator": "DiT.forward, TimestepEmbedder, LabelEmbedder, and DiTBlock",
+              "note": "The forward pass creates timestep, label, combined-conditioning, patch-token, block-token, and denoiser-output occurrences."
+            }
+          ]
+        }
       },
       {
         "id": "mlp_params",
         "representation_ref": "representations.adaln_parameter_triplet",
-        "scope_ref": "modules.adaln_mlp"
+        "scope_ref": "modules.adaln_mlp",
+        "evidence": {
+          "status": "confirmed_from_code",
+          "refs": [
+            {
+              "source_ref": "dit_models_code",
+              "role": "implementation_evidence",
+              "locator": "DiT.forward, TimestepEmbedder, LabelEmbedder, and DiTBlock",
+              "note": "The forward pass creates timestep, label, combined-conditioning, patch-token, block-token, and denoiser-output occurrences."
+            }
+          ]
+        }
       },
       {
         "id": "tokens_after_blocks",
         "representation_ref": "representations.token_state",
         "scope_ref": "modules.add2",
-        "role": "state_write"
+        "role": "state_write",
+        "evidence": {
+          "status": "confirmed_from_code",
+          "refs": [
+            {
+              "source_ref": "dit_models_code",
+              "role": "implementation_evidence",
+              "locator": "DiT.forward, TimestepEmbedder, LabelEmbedder, and DiTBlock",
+              "note": "The forward pass creates timestep, label, combined-conditioning, patch-token, block-token, and denoiser-output occurrences."
+            }
+          ]
+        }
       },
       {
         "id": "output_tokens",
         "representation_ref": "representations.output_tokens",
-        "scope_ref": "modules.final_layer"
+        "scope_ref": "modules.final_layer",
+        "evidence": {
+          "status": "confirmed_from_code",
+          "refs": [
+            {
+              "source_ref": "dit_models_code",
+              "role": "implementation_evidence",
+              "locator": "DiT.forward, TimestepEmbedder, LabelEmbedder, and DiTBlock",
+              "note": "The forward pass creates timestep, label, combined-conditioning, patch-token, block-token, and denoiser-output occurrences."
+            }
+          ]
+        }
       },
       {
         "id": "noise_prediction",
         "representation_ref": "representations.noise_prediction",
-        "scope_ref": "modules.dit_denoiser"
+        "scope_ref": "modules.dit_denoiser",
+        "evidence": {
+          "status": "confirmed_from_code",
+          "refs": [
+            {
+              "source_ref": "dit_models_code",
+              "role": "implementation_evidence",
+              "locator": "DiT.forward, TimestepEmbedder, LabelEmbedder, and DiTBlock",
+              "note": "The forward pass creates timestep, label, combined-conditioning, patch-token, block-token, and denoiser-output occurrences."
+            }
+          ]
+        }
       },
       {
         "id": "final_latent",
         "representation_ref": "representations.final_latent",
         "scope_ref": "modules.ddpm_sampler",
-        "role": "output_state"
+        "role": "output_state",
+        "evidence": {
+          "status": "confirmed_from_code",
+          "refs": [
+            {
+              "source_ref": "dit_sample_code",
+              "role": "implementation_evidence",
+              "locator": "main",
+              "note": "The sampling entry point constructs the initial latent, labels, terminal latent, VAE decode input, and generated image occurrences."
+            }
+          ]
+        }
       },
       {
         "id": "vae_decode_latent",
         "representation_ref": "representations.vae_decode_latent",
-        "scope_ref": "modules.inverse_latent_scaling"
+        "scope_ref": "modules.inverse_latent_scaling",
+        "evidence": {
+          "status": "confirmed_from_code",
+          "refs": [
+            {
+              "source_ref": "dit_sample_code",
+              "role": "implementation_evidence",
+              "locator": "main",
+              "note": "The sampling entry point constructs the initial latent, labels, terminal latent, VAE decode input, and generated image occurrences."
+            }
+          ]
+        }
       },
       {
         "id": "generated_image",
         "representation_ref": "representations.generated_image",
         "scope_ref": "architecture",
         "boundary": "output",
-        "role": "task_output"
+        "role": "task_output",
+        "evidence": {
+          "status": "confirmed_from_code",
+          "refs": [
+            {
+              "source_ref": "dit_sample_code",
+              "role": "implementation_evidence",
+              "locator": "main",
+              "note": "The sampling entry point constructs the initial latent, labels, terminal latent, VAE decode input, and generated image occurrences."
+            }
+          ]
+        }
       }
     ],
     "valueSiteInterfaces": {
@@ -1576,14 +1822,14 @@ export const manifest = {
           "id": "denoising_loop",
           "repeats": "num_sampling_steps",
           "reruns": [
-            "patchify",
-            "timestep_embedder",
-            "label_embedder",
-            "cond_combiner",
-            "dit_blocks",
-            "final_layer",
-            "unpatchify",
-            "reverse_diffusion_step"
+            "modules.patchify",
+            "modules.timestep_embedder",
+            "modules.label_embedder",
+            "modules.cond_combiner",
+            "modules.dit_blocks",
+            "modules.final_layer",
+            "modules.unpatchify",
+            "modules.reverse_diffusion_step"
           ],
           "cached": [
 
@@ -1600,19 +1846,19 @@ export const manifest = {
               {
                 "source_ref": "dit_gaussian_diffusion_code",
                 "role": "implementation_evidence",
-                "lines": "p_sample_loop_progressive",
+                "locator": "p_sample_loop_progressive",
                 "note": "Each reverse step replaces x_t with a newly sampled x_(t-1); nonzero timesteps add fresh Gaussian noise."
               },
               {
                 "source_ref": "dit_models_code",
                 "role": "implementation_evidence",
-                "lines": "DiT.forward_with_cfg",
+                "locator": "DiT.forward_with_cfg",
                 "note": "Conditional and null-label branches are batched; the reproducibility path guides the first three channels."
               },
               {
                 "source_ref": "dit_2022",
                 "role": "supporting_evidence",
-                "lines": "Sec. 3.1, Sec. 4",
+                "locator": "Sec. 3.1, Sec. 4",
                 "note": "DDPM sampling with classifier-free guidance; 250 sampling steps for reported results."
               }
             ]
@@ -1637,7 +1883,7 @@ export const manifest = {
             {
               "source_ref": "dit_gaussian_diffusion_code",
               "role": "implementation_evidence",
-              "lines": "p_sample_loop_progressive and p_sample"
+              "locator": "p_sample_loop_progressive and p_sample"
             }
           ]
         }
@@ -1657,7 +1903,7 @@ export const manifest = {
             {
               "source_ref": "dit_sample_code",
               "role": "implementation_evidence",
-              "lines": "main"
+              "locator": "main"
             }
           ]
         }
@@ -1674,7 +1920,7 @@ export const manifest = {
             {
               "source_ref": "dit_sample_code",
               "role": "implementation_evidence",
-              "lines": "main"
+              "locator": "main"
             }
           ]
         }
@@ -1696,7 +1942,7 @@ export const manifest = {
             {
               "source_ref": "dit_models_code",
               "role": "implementation_evidence",
-              "lines": "DiT.forward and DiTBlock"
+              "locator": "DiT.forward and DiTBlock"
             }
           ]
         }
@@ -1716,7 +1962,7 @@ export const manifest = {
             {
               "source_ref": "dit_models_code",
               "role": "implementation_evidence",
-              "lines": "DiT.forward and DiTBlock"
+              "locator": "DiT.forward and DiTBlock"
             }
           ]
         }
@@ -1739,7 +1985,7 @@ export const manifest = {
             {
               "source_ref": "dit_gaussian_diffusion_code",
               "role": "implementation_evidence",
-              "lines": "p_sample_loop_progressive and p_sample"
+              "locator": "p_sample_loop_progressive and p_sample"
             }
           ]
         },
@@ -1761,7 +2007,7 @@ export const manifest = {
             {
               "source_ref": "dit_gaussian_diffusion_code",
               "role": "implementation_evidence",
-              "lines": "p_sample_loop_progressive and p_sample"
+              "locator": "p_sample_loop_progressive and p_sample"
             }
           ]
         },
@@ -1782,7 +2028,7 @@ export const manifest = {
             {
               "source_ref": "dit_sample_code",
               "role": "implementation_evidence",
-              "lines": "main"
+              "locator": "main"
             }
           ]
         },
@@ -1800,7 +2046,7 @@ export const manifest = {
             {
               "source_ref": "dit_sample_code",
               "role": "implementation_evidence",
-              "lines": "main"
+              "locator": "main"
             }
           ]
         },
@@ -1823,7 +2069,7 @@ export const manifest = {
             {
               "source_ref": "dit_models_code",
               "role": "implementation_evidence",
-              "lines": "DiT.forward and DiTBlock"
+              "locator": "DiT.forward and DiTBlock"
             }
           ]
         },
@@ -1846,7 +2092,7 @@ export const manifest = {
             {
               "source_ref": "dit_models_code",
               "role": "implementation_evidence",
-              "lines": "DiT.forward and DiTBlock"
+              "locator": "DiT.forward and DiTBlock"
             }
           ]
         },
@@ -1869,7 +2115,7 @@ export const manifest = {
             {
               "source_ref": "dit_models_code",
               "role": "implementation_evidence",
-              "lines": "DiT.forward and DiTBlock"
+              "locator": "DiT.forward and DiTBlock"
             }
           ]
         },
@@ -1890,7 +2136,7 @@ export const manifest = {
             {
               "source_ref": "dit_models_code",
               "role": "implementation_evidence",
-              "lines": "DiT.forward and DiTBlock"
+              "locator": "DiT.forward and DiTBlock"
             }
           ]
         },
@@ -1909,7 +2155,7 @@ export const manifest = {
             {
               "source_ref": "dit_sample_code",
               "role": "implementation_evidence",
-              "lines": "main",
+              "locator": "main",
               "note": "Conditional labels are paired with null labels and passed through forward_with_cfg."
             }
           ]
@@ -1929,7 +2175,7 @@ export const manifest = {
             {
               "source_ref": "dit_models_code",
               "role": "implementation_evidence",
-              "lines": "DiTBlock",
+              "locator": "DiTBlock",
               "note": "adaLN_modulation(c).chunk(6) yields shift/scale/gate for both branches; the weights and bias of the entire six-output modulation linear are zero-initialized."
             }
           ]
@@ -1948,7 +2194,7 @@ export const manifest = {
             {
               "source_ref": "dit_models_code",
               "role": "implementation_evidence",
-              "lines": "FinalLayer",
+              "locator": "FinalLayer",
               "note": "adaLN_modulation(c).chunk(2) yields shift/scale before the linear decode; no gate in the final layer."
             }
           ]
@@ -1972,7 +2218,7 @@ export const manifest = {
             {
               "source_ref": "dit_2022",
               "role": "supporting_evidence",
-              "lines": "Sec. 3.2 (Patchify)",
+              "locator": "Sec. 3.2 (Patchify)",
               "note": "p x p patches are linearly embedded into T = (I/p)^2 tokens."
             }
           ]
@@ -1999,7 +2245,7 @@ export const manifest = {
             {
               "source_ref": "dit_2022",
               "role": "supporting_evidence",
-              "lines": "Sec. 3.2 (Transformer decoder)",
+              "locator": "Sec. 3.2 (Transformer decoder)",
               "note": "Decoded tokens are rearranged back to the spatial latent layout; lossless reshape."
             }
           ]
@@ -2026,7 +2272,7 @@ export const manifest = {
             {
               "source_ref": "dit_sample_code",
               "role": "implementation_evidence",
-              "lines": "main",
+              "locator": "main",
               "note": "The pretrained VAE decoder maps the four-channel latent at one-eighth resolution to RGB pixels."
             }
           ]
@@ -2074,7 +2320,24 @@ export const manifest = {
       "checkpoint_notes": [
         "The generation system uses the frozen stabilityai/sd-vae-ft-{ema|mse} decoder after sampling; the DiT denoiser itself operates only in latent space.",
         "The visible 28-block, 16-head backbone is the DiT-XL/2 reference configuration; smaller official variants use different depths and head counts."
-      ]
+      ],
+      "evidence": {
+        "status": "confirmed_from_code",
+        "refs": [
+          {
+            "source_ref": "dit_train_code",
+            "role": "implementation_evidence",
+            "locator": "main",
+            "note": "The training entry point defines the diffusion objective and frozen VAE encoding path."
+          },
+          {
+            "source_ref": "dit_sample_code",
+            "role": "implementation_evidence",
+            "locator": "main",
+            "note": "The sampling entry point defines classifier-free guidance, schedule respacing, latent scaling, and frozen VAE decoding."
+          }
+        ]
+      }
     },
     "relations": [
       {
@@ -2092,7 +2355,7 @@ export const manifest = {
             {
               "source_ref": "dit_models_code",
               "role": "implementation_evidence",
-              "lines": "DiTBlock"
+              "locator": "DiTBlock"
             }
           ]
         }
@@ -2112,7 +2375,7 @@ export const manifest = {
             {
               "source_ref": "dit_models_code",
               "role": "implementation_evidence",
-              "lines": "DiTBlock"
+              "locator": "DiTBlock"
             }
           ]
         }
@@ -2132,7 +2395,7 @@ export const manifest = {
             {
               "source_ref": "dit_models_code",
               "role": "implementation_evidence",
-              "lines": "DiTBlock"
+              "locator": "DiTBlock"
             }
           ]
         }
@@ -2152,7 +2415,7 @@ export const manifest = {
             {
               "source_ref": "dit_sample_code",
               "role": "implementation_evidence",
-              "lines": "main"
+              "locator": "main"
             }
           ]
         }
@@ -2172,7 +2435,7 @@ export const manifest = {
             {
               "source_ref": "dit_sample_code",
               "role": "implementation_evidence",
-              "lines": "main"
+              "locator": "main"
             }
           ]
         }
@@ -2192,7 +2455,7 @@ export const manifest = {
             {
               "source_ref": "dit_sample_code",
               "role": "implementation_evidence",
-              "lines": "main"
+              "locator": "main"
             }
           ]
         }
@@ -2212,7 +2475,7 @@ export const manifest = {
             {
               "source_ref": "dit_sample_code",
               "role": "implementation_evidence",
-              "lines": "main"
+              "locator": "main"
             }
           ]
         }
@@ -2232,7 +2495,7 @@ export const manifest = {
             {
               "source_ref": "dit_gaussian_diffusion_code",
               "role": "implementation_evidence",
-              "lines": "p_sample_loop_progressive"
+              "locator": "p_sample_loop_progressive"
             }
           ]
         }
@@ -2252,7 +2515,7 @@ export const manifest = {
             {
               "source_ref": "dit_gaussian_diffusion_code",
               "role": "implementation_evidence",
-              "lines": "p_mean_variance and p_sample"
+              "locator": "p_mean_variance and p_sample"
             }
           ]
         }
@@ -2272,7 +2535,7 @@ export const manifest = {
             {
               "source_ref": "dit_gaussian_diffusion_code",
               "role": "implementation_evidence",
-              "lines": "p_mean_variance"
+              "locator": "p_mean_variance"
             }
           ]
         }
@@ -2292,7 +2555,7 @@ export const manifest = {
             {
               "source_ref": "dit_gaussian_diffusion_code",
               "role": "implementation_evidence",
-              "lines": "p_mean_variance and p_sample"
+              "locator": "p_mean_variance and p_sample"
             }
           ]
         }
@@ -2312,7 +2575,7 @@ export const manifest = {
             {
               "source_ref": "dit_gaussian_diffusion_code",
               "role": "implementation_evidence",
-              "lines": "p_sample"
+              "locator": "p_sample"
             }
           ]
         }
@@ -2332,7 +2595,7 @@ export const manifest = {
             {
               "source_ref": "dit_gaussian_diffusion_code",
               "role": "implementation_evidence",
-              "lines": "p_sample"
+              "locator": "p_sample"
             }
           ]
         }
@@ -2352,7 +2615,7 @@ export const manifest = {
             {
               "source_ref": "dit_gaussian_diffusion_code",
               "role": "implementation_evidence",
-              "lines": "p_sample_loop_progressive",
+              "locator": "p_sample_loop_progressive",
               "note": "Each yielded sample replaces the current image tensor for the next scheduled reverse step."
             }
           ]
@@ -2373,7 +2636,7 @@ export const manifest = {
             {
               "source_ref": "dit_gaussian_diffusion_code",
               "role": "implementation_evidence",
-              "lines": "p_sample_loop_progressive"
+              "locator": "p_sample_loop_progressive"
             }
           ]
         }
@@ -2393,7 +2656,7 @@ export const manifest = {
             {
               "source_ref": "dit_2022",
               "role": "supporting_evidence",
-              "lines": "Sec. 3.2 (Patchify)"
+              "locator": "Sec. 3.2 (Patchify)"
             }
           ]
         }
@@ -2413,7 +2676,7 @@ export const manifest = {
             {
               "source_ref": "dit_models_code",
               "role": "implementation_evidence",
-              "lines": "DiT.forward"
+              "locator": "DiT.forward"
             }
           ]
         }
@@ -2433,7 +2696,7 @@ export const manifest = {
             {
               "source_ref": "dit_models_code",
               "role": "implementation_evidence",
-              "lines": "TimestepEmbedder"
+              "locator": "TimestepEmbedder"
             }
           ]
         }
@@ -2453,7 +2716,7 @@ export const manifest = {
             {
               "source_ref": "dit_models_code",
               "role": "implementation_evidence",
-              "lines": "TimestepEmbedder"
+              "locator": "TimestepEmbedder"
             }
           ]
         }
@@ -2473,7 +2736,7 @@ export const manifest = {
             {
               "source_ref": "dit_models_code",
               "role": "implementation_evidence",
-              "lines": "LabelEmbedder"
+              "locator": "LabelEmbedder"
             }
           ]
         }
@@ -2493,7 +2756,7 @@ export const manifest = {
             {
               "source_ref": "dit_models_code",
               "role": "implementation_evidence",
-              "lines": "LabelEmbedder"
+              "locator": "LabelEmbedder"
             }
           ]
         }
@@ -2513,7 +2776,7 @@ export const manifest = {
             {
               "source_ref": "dit_models_code",
               "role": "implementation_evidence",
-              "lines": "DiT.forward"
+              "locator": "DiT.forward"
             }
           ]
         }
@@ -2533,7 +2796,7 @@ export const manifest = {
             {
               "source_ref": "dit_models_code",
               "role": "implementation_evidence",
-              "lines": "DiT.forward"
+              "locator": "DiT.forward"
             }
           ]
         }
@@ -2553,7 +2816,7 @@ export const manifest = {
             {
               "source_ref": "dit_models_code",
               "role": "implementation_evidence",
-              "lines": "DiT.forward"
+              "locator": "DiT.forward"
             }
           ]
         }
@@ -2573,7 +2836,7 @@ export const manifest = {
             {
               "source_ref": "dit_2022",
               "role": "supporting_evidence",
-              "lines": "Sec. 3.2"
+              "locator": "Sec. 3.2"
             }
           ]
         }
@@ -2593,7 +2856,7 @@ export const manifest = {
             {
               "source_ref": "dit_2022",
               "role": "supporting_evidence",
-              "lines": "Sec. 3.2"
+              "locator": "Sec. 3.2"
             }
           ]
         }
@@ -2613,7 +2876,7 @@ export const manifest = {
             {
               "source_ref": "dit_models_code",
               "role": "implementation_evidence",
-              "lines": "DiTBlock"
+              "locator": "DiTBlock"
             }
           ]
         }
@@ -2633,7 +2896,7 @@ export const manifest = {
             {
               "source_ref": "dit_models_code",
               "role": "implementation_evidence",
-              "lines": "DiT.forward"
+              "locator": "DiT.forward"
             }
           ]
         }
@@ -2653,7 +2916,7 @@ export const manifest = {
             {
               "source_ref": "dit_models_code",
               "role": "implementation_evidence",
-              "lines": "FinalLayer"
+              "locator": "FinalLayer"
             }
           ]
         }
@@ -2673,7 +2936,7 @@ export const manifest = {
             {
               "source_ref": "dit_models_code",
               "role": "implementation_evidence",
-              "lines": "FinalLayer"
+              "locator": "FinalLayer"
             }
           ]
         }
@@ -2693,7 +2956,7 @@ export const manifest = {
             {
               "source_ref": "dit_models_code",
               "role": "implementation_evidence",
-              "lines": "DiT.unpatchify"
+              "locator": "DiT.unpatchify"
             }
           ]
         }
@@ -2713,12 +2976,12 @@ export const manifest = {
             {
               "source_ref": "dit_models_code",
               "role": "implementation_evidence",
-              "lines": "DiT.forward"
+              "locator": "DiT.forward"
             },
             {
               "source_ref": "dit_gaussian_diffusion_code",
               "role": "implementation_evidence",
-              "lines": "p_mean_variance"
+              "locator": "p_mean_variance"
             }
           ]
         }
@@ -2738,7 +3001,7 @@ export const manifest = {
             {
               "source_ref": "dit_models_code",
               "role": "implementation_evidence",
-              "lines": "DiTBlock"
+              "locator": "DiTBlock"
             }
           ]
         }
@@ -2758,7 +3021,7 @@ export const manifest = {
             {
               "source_ref": "dit_models_code",
               "role": "implementation_evidence",
-              "lines": "DiTBlock"
+              "locator": "DiTBlock"
             }
           ]
         }
@@ -2778,7 +3041,7 @@ export const manifest = {
             {
               "source_ref": "dit_models_code",
               "role": "implementation_evidence",
-              "lines": "DiTBlock"
+              "locator": "DiTBlock"
             }
           ]
         }
@@ -2798,7 +3061,7 @@ export const manifest = {
             {
               "source_ref": "dit_models_code",
               "role": "implementation_evidence",
-              "lines": "DiTBlock"
+              "locator": "DiTBlock"
             }
           ]
         }
@@ -2818,7 +3081,7 @@ export const manifest = {
             {
               "source_ref": "dit_models_code",
               "role": "implementation_evidence",
-              "lines": "DiTBlock"
+              "locator": "DiTBlock"
             }
           ]
         }
@@ -2838,7 +3101,7 @@ export const manifest = {
             {
               "source_ref": "dit_models_code",
               "role": "implementation_evidence",
-              "lines": "DiTBlock"
+              "locator": "DiTBlock"
             }
           ]
         }
@@ -2858,7 +3121,7 @@ export const manifest = {
             {
               "source_ref": "dit_models_code",
               "role": "implementation_evidence",
-              "lines": "DiTBlock"
+              "locator": "DiTBlock"
             }
           ]
         }
@@ -2878,7 +3141,7 @@ export const manifest = {
             {
               "source_ref": "dit_models_code",
               "role": "implementation_evidence",
-              "lines": "DiTBlock"
+              "locator": "DiTBlock"
             }
           ]
         }
@@ -2898,7 +3161,7 @@ export const manifest = {
             {
               "source_ref": "dit_models_code",
               "role": "implementation_evidence",
-              "lines": "DiTBlock"
+              "locator": "DiTBlock"
             }
           ]
         }
@@ -2918,7 +3181,7 @@ export const manifest = {
             {
               "source_ref": "dit_models_code",
               "role": "implementation_evidence",
-              "lines": "DiTBlock"
+              "locator": "DiTBlock"
             }
           ]
         }
@@ -2938,7 +3201,7 @@ export const manifest = {
             {
               "source_ref": "dit_models_code",
               "role": "implementation_evidence",
-              "lines": "DiTBlock"
+              "locator": "DiTBlock"
             }
           ]
         }
@@ -2958,7 +3221,7 @@ export const manifest = {
             {
               "source_ref": "dit_models_code",
               "role": "implementation_evidence",
-              "lines": "DiTBlock"
+              "locator": "DiTBlock"
             }
           ]
         }
@@ -2978,7 +3241,7 @@ export const manifest = {
             {
               "source_ref": "dit_models_code",
               "role": "implementation_evidence",
-              "lines": "DiTBlock"
+              "locator": "DiTBlock"
             }
           ]
         }
@@ -2998,7 +3261,7 @@ export const manifest = {
             {
               "source_ref": "dit_models_code",
               "role": "implementation_evidence",
-              "lines": "DiTBlock"
+              "locator": "DiTBlock"
             }
           ]
         }
@@ -3018,7 +3281,7 @@ export const manifest = {
             {
               "source_ref": "dit_models_code",
               "role": "implementation_evidence",
-              "lines": "DiTBlock"
+              "locator": "DiTBlock"
             }
           ]
         }
@@ -3037,7 +3300,7 @@ export const manifest = {
             {
               "source_ref": "dit_2022",
               "role": "supporting_evidence",
-              "lines": "Sec. 3.2, Fig. 5"
+              "locator": "Sec. 3.2, Fig. 5"
             }
           ]
         }
@@ -3054,12 +3317,12 @@ export const manifest = {
             {
               "source_ref": "dit_2022",
               "role": "supporting_evidence",
-              "lines": "Sec. 3.2"
+              "locator": "Sec. 3.2"
             },
             {
               "source_ref": "dit_models_code",
               "role": "implementation_evidence",
-              "lines": "DiT.initialize_weights"
+              "locator": "DiT.initialize_weights"
             }
           ]
         }
@@ -3076,8 +3339,54 @@ export const manifest = {
             {
               "source_ref": "dit_models_code",
               "role": "implementation_evidence",
-              "lines": "DiTBlock",
+              "locator": "DiTBlock",
               "note": "chunk(6, dim=1) on a B x d vector broadcasts over tokens."
+            }
+          ]
+        }
+      }
+    ],
+    "openQuestions": [
+      {
+        "id": "model_shared_vae_codec",
+        "question": "Should the frozen VAE codec be extracted into a reusable architecture source shared by DiT inference decoding and training encoding?",
+        "status": "unresolved",
+        "affected_refs": [
+          "modules.frozen_vae_decoder",
+          "modules.inverse_latent_scaling"
+        ],
+        "blocking": false,
+        "resolution_criteria": "Decide whether a reusable codec package can preserve the distinct training-encode and inference-decode occurrences without duplicating architecture facts.",
+        "evidence": {
+          "status": "open_question",
+          "refs": [
+            {
+              "source_ref": "dit_sample_code",
+              "role": "implementation_evidence",
+              "locator": "main",
+              "note": "The current source models only the inference-side decoder occurrence."
+            }
+          ]
+        }
+      },
+      {
+        "id": "model_cfg_execution",
+        "question": "Should classifier-free guidance's paired conditional/unconditional forward passes be modeled explicitly in execution loops, or is a note enough?",
+        "status": "unresolved",
+        "affected_refs": [
+          "execution.loops.denoising_loop",
+          "conditioning.sampling_class_guidance"
+        ],
+        "blocking": false,
+        "resolution_criteria": "Choose a representation that distinguishes paired CFG execution without duplicating the denoiser architecture.",
+        "evidence": {
+          "status": "open_question",
+          "refs": [
+            {
+              "source_ref": "dit_models_code",
+              "role": "implementation_evidence",
+              "locator": "DiT.forward_with_cfg",
+              "note": "The paired execution is confirmed; only its explanatory modeling remains unresolved."
             }
           ]
         }
@@ -3109,9 +3418,10 @@ export const manifest = {
         "title": "DiT model implementation",
         "organization": "facebookresearch",
         "repository": "facebookresearch/DiT",
+        "revision": "ed81ce2229091fd4ecc9a223645f95cf379d582b",
         "path": "facebookresearch/DiT/models.py",
-        "url": "https://github.com/facebookresearch/DiT/blob/main/models.py",
-        "href": "https://github.com/facebookresearch/DiT/blob/main/models.py"
+        "url": "https://github.com/facebookresearch/DiT/blob/ed81ce2229091fd4ecc9a223645f95cf379d582b/models.py",
+        "href": "https://github.com/facebookresearch/DiT/blob/ed81ce2229091fd4ecc9a223645f95cf379d582b/models.py"
       },
       {
         "id": "dit_sample_code",
@@ -3119,9 +3429,10 @@ export const manifest = {
         "title": "DiT sampling entry point",
         "organization": "facebookresearch",
         "repository": "facebookresearch/DiT",
+        "revision": "ed81ce2229091fd4ecc9a223645f95cf379d582b",
         "path": "facebookresearch/DiT/sample.py",
-        "url": "https://github.com/facebookresearch/DiT/blob/main/sample.py",
-        "href": "https://github.com/facebookresearch/DiT/blob/main/sample.py"
+        "url": "https://github.com/facebookresearch/DiT/blob/ed81ce2229091fd4ecc9a223645f95cf379d582b/sample.py",
+        "href": "https://github.com/facebookresearch/DiT/blob/ed81ce2229091fd4ecc9a223645f95cf379d582b/sample.py"
       },
       {
         "id": "dit_gaussian_diffusion_code",
@@ -3129,9 +3440,10 @@ export const manifest = {
         "title": "DiT Gaussian diffusion implementation",
         "organization": "facebookresearch",
         "repository": "facebookresearch/DiT",
+        "revision": "ed81ce2229091fd4ecc9a223645f95cf379d582b",
         "path": "facebookresearch/DiT/diffusion/gaussian_diffusion.py",
-        "url": "https://github.com/facebookresearch/DiT/blob/main/diffusion/gaussian_diffusion.py",
-        "href": "https://github.com/facebookresearch/DiT/blob/main/diffusion/gaussian_diffusion.py"
+        "url": "https://github.com/facebookresearch/DiT/blob/ed81ce2229091fd4ecc9a223645f95cf379d582b/diffusion/gaussian_diffusion.py",
+        "href": "https://github.com/facebookresearch/DiT/blob/ed81ce2229091fd4ecc9a223645f95cf379d582b/diffusion/gaussian_diffusion.py"
       },
       {
         "id": "dit_train_code",
@@ -3139,9 +3451,10 @@ export const manifest = {
         "title": "DiT training entry point",
         "organization": "facebookresearch",
         "repository": "facebookresearch/DiT",
+        "revision": "ed81ce2229091fd4ecc9a223645f95cf379d582b",
         "path": "facebookresearch/DiT/train.py",
-        "url": "https://github.com/facebookresearch/DiT/blob/main/train.py",
-        "href": "https://github.com/facebookresearch/DiT/blob/main/train.py"
+        "url": "https://github.com/facebookresearch/DiT/blob/ed81ce2229091fd4ecc9a223645f95cf379d582b/train.py",
+        "href": "https://github.com/facebookresearch/DiT/blob/ed81ce2229091fd4ecc9a223645f95cf379d582b/train.py"
       },
       {
         "id": "generic_feature_refinement_source",
@@ -3412,7 +3725,7 @@ export const manifest = {
               {
                 "source_ref": "dit_models_code",
                 "role": "implementation_evidence",
-                "lines": "DiTBlock",
+                "locator": "DiTBlock",
                 "note": "chunk(6, dim=1) on a B x d conditioning vector."
               }
             ]
@@ -3556,7 +3869,7 @@ export const manifest = {
             }
           }
         ],
-        "open_notes": [
+        "notes": [
           "This root presents the generation path. Training has a separate image-to-latent noising path.",
           "Fixed inverse scaling is authored but elided from the high-level view; its dashed connection remains inspectable."
         ],
@@ -3987,10 +4300,8 @@ export const manifest = {
             }
           }
         ],
-        "open_notes": [
-          {
-            "The root board owns the boundary": "the first current latent is Gaussian x_T, and the final next latent is emitted as x_0 for VAE decoding."
-          },
+        "notes": [
+          "The root board owns the boundary: the first current latent is Gaussian x_T, and the final next latent is emitted as x_0 for VAE decoding.",
           "The official sampler batches conditional and null-class copies for classifier-free guidance; the reproducibility path guides only the first three epsilon channels.",
           "The 250 sampler indices map onto a respaced subset of the 1,000-step training schedule."
         ],
@@ -4649,7 +4960,7 @@ export const manifest = {
             }
           }
         ],
-        "open_notes": [
+        "notes": [
           "Intermediate timestep, label, and output-token representations are elided; the canonical modules remain visible on the main board."
         ],
         "projection_mode": "derived",

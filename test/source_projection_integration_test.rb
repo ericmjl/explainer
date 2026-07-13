@@ -2,8 +2,9 @@
 
 require "minitest/autorun"
 require "json"
-require "yaml"
+require "digest"
 require_relative "../lib/architecture_projection"
+require_relative "../lib/strict_yaml"
 
 class SourceProjectionIntegrationTest < Minitest::Test
   ROOT = File.expand_path("..", __dir__)
@@ -65,6 +66,17 @@ class SourceProjectionIntegrationTest < Minitest::Test
     manifest = load_manifest(source_set_id)
     compiled = manifest.fetch("architecture")
     assert_equal "architecture-manifest-v0.4", manifest.fetch("schemaVersion")
+    assert_equal architecture.fetch("family"), compiled.fetch("family")
+    assert_equal architecture.fetch("task_modes"), compiled.fetch("taskModes")
+    assert_equal architecture.fetch("open_questions"), compiled.fetch("openQuestions")
+    if architecture.key?("reference_configuration")
+      assert_equal architecture.fetch("reference_configuration"), compiled.fetch("referenceConfiguration")
+    else
+      assert_nil compiled["referenceConfiguration"]
+    end
+    manifest.fetch("build").fetch("inputDigests").each do |path, digest|
+      assert_equal Digest::SHA256.file(File.join(ROOT, path)).hexdigest, digest, path
+    end
     coverage = compiled.fetch("coverage")
     assert_equal "declared_decomposition_closure", coverage.fetch("method")
     assert_equal architecture.fetch("modules").length + 1,
@@ -109,6 +121,6 @@ class SourceProjectionIntegrationTest < Minitest::Test
   end
 
   def load_yaml(path)
-    YAML.load_file(File.join(ROOT, path), aliases: true)
+    StrictYaml.load_file(File.join(ROOT, path))
   end
 end

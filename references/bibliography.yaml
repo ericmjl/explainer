@@ -16,32 +16,36 @@ sources:
     title: DiT model implementation
     organization: facebookresearch
     repository: facebookresearch/DiT
+    revision: ed81ce2229091fd4ecc9a223645f95cf379d582b
     path: facebookresearch/DiT/models.py
-    url: https://github.com/facebookresearch/DiT/blob/main/models.py
+    url: https://github.com/facebookresearch/DiT/blob/ed81ce2229091fd4ecc9a223645f95cf379d582b/models.py
 
   - id: dit_sample_code
     kind: code
     title: DiT sampling entry point
     organization: facebookresearch
     repository: facebookresearch/DiT
+    revision: ed81ce2229091fd4ecc9a223645f95cf379d582b
     path: facebookresearch/DiT/sample.py
-    url: https://github.com/facebookresearch/DiT/blob/main/sample.py
+    url: https://github.com/facebookresearch/DiT/blob/ed81ce2229091fd4ecc9a223645f95cf379d582b/sample.py
 
   - id: dit_gaussian_diffusion_code
     kind: code
     title: DiT Gaussian diffusion implementation
     organization: facebookresearch
     repository: facebookresearch/DiT
+    revision: ed81ce2229091fd4ecc9a223645f95cf379d582b
     path: facebookresearch/DiT/diffusion/gaussian_diffusion.py
-    url: https://github.com/facebookresearch/DiT/blob/main/diffusion/gaussian_diffusion.py
+    url: https://github.com/facebookresearch/DiT/blob/ed81ce2229091fd4ecc9a223645f95cf379d582b/diffusion/gaussian_diffusion.py
 
   - id: dit_train_code
     kind: code
     title: DiT training entry point
     organization: facebookresearch
     repository: facebookresearch/DiT
+    revision: ed81ce2229091fd4ecc9a223645f95cf379d582b
     path: facebookresearch/DiT/train.py
-    url: https://github.com/facebookresearch/DiT/blob/main/train.py
+    url: https://github.com/facebookresearch/DiT/blob/ed81ce2229091fd4ecc9a223645f95cf379d582b/train.py
 
   - id: generic_feature_refinement_source
     kind: source
