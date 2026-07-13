@@ -566,25 +566,6 @@ code {
   font-size: 0.9rem;
 }
 
-.architecture-canvas[data-board-id="dit_blocks"] [data-node-id="norm1"],
-.architecture-canvas[data-board-id="dit_blocks"] [data-node-id="norm2"],
-.architecture-canvas[data-board-id="dit_blocks"] [data-node-id="adaln_mod"],
-.architecture-canvas[data-board-id="dit_blocks"] [data-node-id="scale_shift2"] {
-  align-items: center;
-  width: 82px;
-  min-width: 82px;
-  text-align: center;
-}
-
-.architecture-canvas[data-board-id="dit_blocks"] [data-node-id="norm1"] strong,
-.architecture-canvas[data-board-id="dit_blocks"] [data-node-id="norm2"] strong,
-.architecture-canvas[data-board-id="dit_blocks"] [data-node-id="adaln_mod"] strong,
-.architecture-canvas[data-board-id="dit_blocks"] [data-node-id="scale_shift2"] strong {
-  max-width: 56px;
-  line-height: 1.04;
-  overflow-wrap: anywhere;
-}
-
 .arch-chip-meta {
   color: var(--muted);
   font-size: 0.72rem;
@@ -600,10 +581,12 @@ code {
 
 .arch-edge.is-conditioning {
   stroke: var(--edge-conditioning);
+  stroke-dasharray: 3 6;
 }
 
 .arch-edge.is-skip {
   stroke: var(--edge-skip);
+  stroke-dasharray: 14 5 2 5;
 }
 
 .arch-edge-label {
@@ -635,7 +618,11 @@ code {
   stroke: transparent;
   stroke-width: 24;
   pointer-events: stroke;
-  cursor: help;
+  cursor: pointer;
+}
+
+.edge-hit:focus {
+  stroke: color-mix(in srgb, var(--accent) 32%, transparent);
 }
 
 .rep-tooltip-meta {
@@ -1171,6 +1158,7 @@ code {
   box-shadow: none;
   text-align: center;
   cursor: pointer;
+  font: inherit;
 }
 
 .tensor-cells {
@@ -1182,6 +1170,7 @@ code {
 }
 
 .arch-rep:hover,
+.arch-rep:focus-visible,
 .arch-rep.is-focused {
   background: var(--surface-node-hover);
   outline: 3px solid color-mix(in srgb, var(--glyph-color) 30%, transparent);
@@ -1846,6 +1835,10 @@ code {
   stroke-width: 1.3px;
 }
 
+.model-map-edges {
+  opacity: 0.52;
+}
+
 .model-map-edge.tone-conditioning {
   stroke: var(--edge-conditioning);
   stroke-dasharray: 4 3;
@@ -1853,6 +1846,7 @@ code {
 
 .model-map-edge.tone-skip {
   stroke: var(--edge-skip);
+  stroke-dasharray: 8 3 1 3;
 }
 
 .model-map-edge.is-contracted {
@@ -1871,155 +1865,86 @@ code {
   fill: var(--edge-skip);
 }
 
-.model-map-mini-node {
-  box-sizing: border-box;
-  width: 100%;
-  height: 100%;
-  pointer-events: none;
+.model-map-node {
+  --model-map-node-accent: var(--accent);
+  opacity: 0.72;
 }
 
-.model-map-mini-node.arch-node {
-  display: block;
-  width: 100%;
-  max-width: none;
-  height: 100%;
-  min-height: 0;
-  padding: 5px 6px;
-  overflow: hidden;
-  border-width: 1px;
-  border-top-width: 3px;
-  border-radius: 5px;
-  box-shadow: 0 3px 9px color-mix(in srgb, var(--ink) 12%, transparent);
-  cursor: default;
+.model-map-node.scale-item_pair,
+.model-map-node.scale-sample {
+  --model-map-node-accent: var(--violet);
 }
 
-.model-map-mini-node.arch-node.prominence-primary.treatment-block {
-  width: 100%;
-  max-width: none;
+.model-map-node.scale-group,
+.model-map-node.scale-spatial {
+  --model-map-node-accent: var(--accent-2);
 }
 
-.model-map-mini-node.arch-node:hover {
-  background: var(--surface-node);
-  border-inline-color: var(--line);
-  border-bottom-color: var(--line);
+.model-map-node.scale-output {
+  --model-map-node-accent: var(--green);
 }
 
-.model-map-mini-node .arch-node-top {
-  gap: 3px;
+.model-map-nodes.has-current .model-map-node:not(.is-current) {
+  opacity: 0.3;
 }
 
-.model-map-mini-node .arch-kind,
-.model-map-mini-node .arch-repeat {
-  padding: 1px 3px;
-  border-radius: 3px;
-  font-size: 5px;
-  letter-spacing: 0.03em;
-  line-height: 1;
+.model-map-shape {
+  fill: color-mix(in srgb, var(--surface-node) 92%, var(--model-map-node-accent));
+  stroke: color-mix(in srgb, var(--model-map-node-accent) 52%, var(--line));
+  stroke-width: 1.35px;
 }
 
-.model-map-mini-node.arch-node > strong {
-  display: -webkit-box;
-  margin: 4px 0 0;
-  overflow: hidden;
-  font-size: 8px;
-  line-height: 1.05;
-  overflow-wrap: anywhere;
-  -webkit-box-orient: vertical;
-  -webkit-line-clamp: 2;
+.model-map-module-accent {
+  fill: var(--model-map-node-accent);
+  opacity: 0.85;
 }
 
-.model-map-drill {
-  position: absolute;
-  right: 4px;
-  bottom: 2px;
-  color: var(--accent);
-  font-size: 10px;
-  font-weight: 900;
-  line-height: 1;
+.model-map-tensor-front {
+  fill: color-mix(in srgb, var(--surface-tensor) 80%, var(--model-map-node-accent));
 }
 
-.model-map-mini-node.arch-rep {
-  width: 100%;
-  height: 100%;
-  min-height: 0;
-  gap: 2px;
-  padding: 2px 3px;
-  overflow: hidden;
-  background: color-mix(in srgb, var(--surface-tensor) 76%, transparent);
-  cursor: default;
+.model-map-tensor-back {
+  fill: color-mix(in srgb, var(--surface-card) 88%, var(--model-map-node-accent));
+  opacity: 0.78;
 }
 
-.model-map-mini-node.arch-rep:hover {
-  background: color-mix(in srgb, var(--surface-tensor) 76%, transparent);
-  outline: none;
+.model-map-tensor-grid,
+.model-map-tensor-diagonal {
+  stroke: color-mix(in srgb, var(--model-map-node-accent) 46%, var(--surface-card));
+  stroke-width: 0.75px;
+  opacity: 0.66;
 }
 
-.model-map-mini-node.arch-rep .tensor-symbol {
-  margin: 0;
-  padding: 1px 3px;
-  font-size: 7px;
-  line-height: 1;
+.model-map-operation-shape {
+  fill: color-mix(in srgb, var(--surface-card) 76%, var(--model-map-node-accent));
+  stroke-width: 2px;
 }
 
-.model-map-mini-node.arch-rep .tensor-box {
-  width: 72%;
-  height: 24px;
-  min-height: 12px;
+.model-map-current-halo {
+  visibility: hidden;
+  fill: color-mix(in srgb, var(--accent) 13%, transparent);
+  stroke: var(--accent);
+  stroke-width: 2.5px;
 }
 
-.model-map-mini-node.arch-rep.tensor-scalar .tensor-box {
-  width: 22px;
-  height: 22px;
+.model-map-node.is-current {
+  opacity: 1;
+  filter: drop-shadow(0 0 5px color-mix(in srgb, var(--accent) 40%, transparent));
 }
 
-.model-map-mini-node.arch-rep.tensor-pair .tensor-box,
-.model-map-mini-node.arch-rep.tensor-matrix .tensor-box {
-  width: 34px;
-  height: 26px;
+.model-map-node.is-current .model-map-current-halo {
+  visibility: visible;
 }
 
-.model-map-mini-node.arch-rep .tensor-dims {
-  padding: 1px 2px;
-  font-size: 4.6px;
+.model-map-node.is-current .model-map-shape {
+  fill: color-mix(in srgb, var(--accent) 22%, var(--surface-node));
+  stroke: var(--accent);
+  stroke-width: 2px;
 }
 
-.model-map-mini-node.arch-rep .tensor-meaning {
-  max-height: 2.1em;
-  padding: 0;
-  font-size: 5.5px;
-  line-height: 1.05;
-}
-
-.model-map-mini-node.arch-op-node {
-  display: flex;
-  width: 100%;
-  height: 100%;
-  padding: 2px;
-  border: none;
-  background: transparent;
-  box-shadow: none;
-}
-
-.model-map-mini-node.arch-op-node .op-circle {
-  width: 26px;
-  height: 26px;
-  border-width: 1.5px;
-  box-shadow: 0 2px 6px color-mix(in srgb, var(--ink) 12%, transparent);
-  font-size: 12px;
-}
-
-.model-map-mini-node.arch-op-node .op-label {
-  max-width: 100%;
-  overflow: hidden;
-  font-size: 5.5px;
-  text-overflow: ellipsis;
-}
-
-.model-map-node.is-current .model-map-mini-node {
-  background-color: color-mix(in srgb, var(--accent) 18%, var(--surface-node));
-  outline: 3px solid var(--accent);
-  outline-offset: -3px;
-  filter: drop-shadow(0 0 4px color-mix(in srgb, var(--accent) 35%, transparent));
+.model-map-node.is-current .model-map-module-accent {
+  fill: var(--accent);
+  opacity: 1;
 }
 
 .model-map-a11y {

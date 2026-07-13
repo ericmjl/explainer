@@ -473,6 +473,12 @@ function escapeHtml(value = "") {
     .replaceAll("'", "&#39;");
 }
 
+function safeHref(value) {
+  const href = String(value || "").trim();
+  if (!href || /^(?:data|javascript|vbscript):/i.test(href)) return null;
+  return href;
+}
+
 function renderMathStep(step) {
   if (typeof step === "string") return `<li><code>${escapeHtml(step)}</code></li>`;
   const tex = step.tex ? `<span class="math-step">\\(${escapeHtml(step.tex)}\\)</span>` : "";
@@ -1123,6 +1129,7 @@ function modelMapNodeGeometry(board, nodes) {
       rep,
       kind,
       glyph,
+      scale: node.scale || module?.scale || rep?.scale || "item",
       x,
       y,
       width,
@@ -1194,77 +1201,143 @@ function renderModelMapDefs() {
   return defs;
 }
 
-function modelMapMiniNodeContent(entry) {
-  const node = entry.node;
-  const scale = node.scale || entry.module?.scale || entry.rep?.scale || "item";
-  if (entry.kind === "representation") {
-    const shape = node.shape || entry.rep?.shape || "";
-    const symbol = repSymbolById.get(entry.rep?.id)?.name || node.label || entry.rep?.id || node.id;
-    const dims = entry.glyph === "scalar" ? "" : shapeDimsLabel(shape);
-    const meaning = representationDisplayMeaning(node, entry.rep, node.id);
-    return {
-      className: `model-map-mini-node arch-rep tensor-${entry.glyph} scale-${scale}`,
-      html: `
-        <strong class="tensor-symbol">${escapeHtml(symbol)}</strong>
-        <span class="tensor-box">
-          ${tensorCellsSvg(entry.glyph)}
-          ${dims ? `<small class="tensor-dims">${escapeHtml(dims)}</small>` : ""}
-        </span>
-        <span class="tensor-meaning">${escapeHtml(meaning)}</span>
-      `,
-    };
+function modelMapSvgElement(name, attributes = {}) {
+  const element = document.createElementNS("http://www.w3.org/2000/svg", name);
+  Object.entries(attributes).forEach(([key, value]) => element.setAttribute(key, String(value)));
+  return element;
+}
+
+function renderModelMapModuleShape(entry) {
+  const left = entry.x - entry.width / 2;
+  const top = entry.y - entry.height / 2;
+  const group = modelMapSvgElement("g", { class: "model-map-module-shape" });
+  group.append(
+    modelMapSvgElement("rect", {
+      class: "model-map-shape model-map-module-body",
+      x: left,
+      y: top,
+      width: entry.width,
+      height: entry.height,
+      rx: 8,
+      "vector-effect": "non-scaling-stroke",
+    }),
+    modelMapSvgElement("rect", {
+      class: "model-map-module-accent",
+      x: left,
+      y: top,
+      width: entry.width,
+      height: Math.min(7, entry.height * 0.16),
+      rx: 4,
+    }),
+  );
+  return group;
+}
+
+function renderModelMapTensorShape(entry) {
+  const left = entry.x - entry.width / 2;
+  const top = entry.y - entry.height / 2;
+  const group = modelMapSvgElement("g", { class: "model-map-tensor-shape" });
+  const stacked = entry.glyph === "volume";
+  if (stacked) {
+    group.appendChild(modelMapSvgElement("rect", {
+      class: "model-map-shape model-map-tensor-back",
+      x: left + 8,
+      y: top + 1,
+      width: entry.width - 10,
+      height: entry.height - 10,
+      rx: 5,
+      "vector-effect": "non-scaling-stroke",
+    }));
   }
-  if (entry.kind === "operation") {
-    const operator = operatorSymbolFor(node, entry.module) || "•";
-    return {
-      className: `model-map-mini-node arch-node arch-op-node scale-${scale}`,
-      html: `
-        <span class="op-circle">${escapeHtml(operator)}</span>
-        <span class="op-label">${escapeHtml(node.label || entry.module?.label || node.id)}</span>
-      `,
-    };
+
+  const insetX = stacked ? 2 : 0;
+  const insetY = stacked ? 7 : 0;
+  const width = entry.width - (stacked ? 10 : 0);
+  const height = entry.height - (stacked ? 9 : 0);
+  const frontLeft = left + insetX;
+  const frontTop = top + insetY;
+  group.appendChild(modelMapSvgElement("rect", {
+    class: "model-map-shape model-map-tensor-front",
+    x: frontLeft,
+    y: frontTop,
+    width,
+    height,
+    rx: entry.glyph === "scalar" ? 7 : 5,
+    "vector-effect": "non-scaling-stroke",
+  }));
+
+  if (entry.glyph !== "scalar") {
+    [0.33, 0.66].forEach((fraction) => {
+      group.append(
+        modelMapSvgElement("line", {
+          class: "model-map-tensor-grid",
+          x1: frontLeft + width * fraction,
+          y1: frontTop + 3,
+          x2: frontLeft + width * fraction,
+          y2: frontTop + height - 3,
+          "vector-effect": "non-scaling-stroke",
+        }),
+        modelMapSvgElement("line", {
+          class: "model-map-tensor-grid",
+          x1: frontLeft + 3,
+          y1: frontTop + height * fraction,
+          x2: frontLeft + width - 3,
+          y2: frontTop + height * fraction,
+          "vector-effect": "non-scaling-stroke",
+        }),
+      );
+    });
   }
-  const kind = entry.module?.kind || node.kind || "module";
-  const label = node.label || entry.module?.label || node.id;
-  const prominence = node.prominence || "secondary";
-  const treatment = node.treatment || "block";
-  const density = node.density || "normal";
-  const repeat = entry.module?.repeats ? `<span class="arch-repeat">×${entry.module.repeats}</span>` : "";
-  const drill = targetBoardForNode(node) ? '<span class="model-map-drill">›</span>' : "";
-  return {
-    className: `model-map-mini-node arch-node scale-${scale} prominence-${prominence} treatment-${treatment} density-${density}`,
-    html: `
-      <span class="arch-node-top">
-        <span class="arch-kind">${escapeHtml(String(kind).replaceAll("_", " "))}</span>
-        ${repeat}
-      </span>
-      <strong>${escapeHtml(label)}</strong>
-      ${drill}
-    `,
-  };
+  if (entry.glyph === "pair") {
+    group.appendChild(modelMapSvgElement("line", {
+      class: "model-map-tensor-diagonal",
+      x1: frontLeft + 4,
+      y1: frontTop + 4,
+      x2: frontLeft + width - 4,
+      y2: frontTop + height - 4,
+      "vector-effect": "non-scaling-stroke",
+    }));
+  }
+  return group;
+}
+
+function renderModelMapOperationShape(entry) {
+  return modelMapSvgElement("circle", {
+    class: "model-map-shape model-map-operation-shape",
+    cx: entry.x,
+    cy: entry.y,
+    r: Math.min(entry.width, entry.height) * 0.32,
+    "vector-effect": "non-scaling-stroke",
+  });
 }
 
 function renderModelMapNode(entry, activeNode) {
-  const group = document.createElementNS("http://www.w3.org/2000/svg", "g");
+  const group = modelMapSvgElement("g");
   group.setAttribute(
     "class",
-    `model-map-node is-${entry.kind}${entry.glyph ? ` is-${entry.glyph}` : ""}${entry.node === activeNode ? " is-current" : ""}`,
+    `model-map-node is-${entry.kind} scale-${entry.scale}` +
+      `${entry.glyph ? ` is-${entry.glyph}` : ""}` +
+      `${entry.node === activeNode ? " is-current" : ""}`,
   );
   group.setAttribute("data-model-node-id", entry.node.id);
 
-  const title = document.createElementNS("http://www.w3.org/2000/svg", "title");
+  const title = modelMapSvgElement("title");
   title.textContent = modelMapNodeLabel(entry.node);
-  const foreignObject = document.createElementNS("http://www.w3.org/2000/svg", "foreignObject");
-  foreignObject.setAttribute("x", String(entry.x - entry.width / 2));
-  foreignObject.setAttribute("y", String(entry.y - entry.height / 2));
-  foreignObject.setAttribute("width", String(entry.width));
-  foreignObject.setAttribute("height", String(entry.height));
-  const content = modelMapMiniNodeContent(entry);
-  const miniature = document.createElementNS("http://www.w3.org/1999/xhtml", "div");
-  miniature.setAttribute("class", content.className);
-  miniature.innerHTML = content.html;
-  foreignObject.appendChild(miniature);
-  group.append(title, foreignObject);
+  const halo = modelMapSvgElement("rect", {
+    class: "model-map-current-halo",
+    x: entry.x - entry.width / 2 - 7,
+    y: entry.y - entry.height / 2 - 7,
+    width: entry.width + 14,
+    height: entry.height + 14,
+    rx: 12,
+    "vector-effect": "non-scaling-stroke",
+  });
+  const shape = entry.kind === "representation"
+    ? renderModelMapTensorShape(entry)
+    : entry.kind === "operation"
+      ? renderModelMapOperationShape(entry)
+      : renderModelMapModuleShape(entry);
+  group.append(title, halo, shape);
   return group;
 }
 
@@ -1304,7 +1377,7 @@ function renderModelMap() {
     if (path) edgeLayer.appendChild(path);
   });
   const nodeLayer = document.createElementNS("http://www.w3.org/2000/svg", "g");
-  nodeLayer.setAttribute("class", "model-map-nodes");
+  nodeLayer.setAttribute("class", `model-map-nodes${activeNode ? " has-current" : ""}`);
   geometry.nodes.forEach((entry) => nodeLayer.appendChild(renderModelMapNode(entry, activeNode)));
   modelMapSvg.replaceChildren(renderModelMapDefs(), edgeLayer, nodeLayer);
 
@@ -1410,7 +1483,8 @@ function renderRepresentationNode(node) {
   const symbol = symbolMarkup(repSymbolById.get(rep?.id), fullLabel);
   const dims = kind === "scalar" ? "" : shapeDimsLabel(shape);
   const displayMeaning = representationDisplayMeaning(node, rep, fullLabel);
-  const card = document.createElement("article");
+  const card = document.createElement("button");
+  card.type = "button";
   card.className = `arch-rep tensor-${kind} scale-${scale} prominence-${prominence}`;
   card.dataset.nodeId = node.id;
   card.setAttribute("aria-label", [fullLabel, displayMeaning, shape].filter(Boolean).join(" — "));
@@ -1423,8 +1497,11 @@ function renderRepresentationNode(node) {
     ${displayMeaning ? `<span class="tensor-meaning">${escapeHtml(displayMeaning)}</span>` : ""}
   `;
   const pointerPreviewKey = `pointer:representation:${node.id}`;
+  const focusPreviewKey = `focus:representation:${node.id}`;
   card.addEventListener("pointerenter", (event) => showRepPeek(event, node, rep, pointerPreviewKey));
   card.addEventListener("pointerleave", () => hideRepPeek(pointerPreviewKey));
+  card.addEventListener("focus", (event) => showRepPeek(event, node, rep, focusPreviewKey));
+  card.addEventListener("blur", () => hideRepPeek(focusPreviewKey));
   card.addEventListener("click", () => {
     hideRepPeek();
     focusRepresentation(node, rep);
@@ -1475,16 +1552,16 @@ function repFocusHtml(node, rep) {
   const carries = rep?.carries || [];
   return `
     <div class="focus-section">
-      <p>${node.role || rep?.semantic_role || ""}</p>
+      <p>${escapeHtml(node.role || rep?.semantic_role || "")}</p>
       <dl class="focus-dl">
-        ${shape ? `<dt>shape</dt><dd><code>${shape}</code></dd>` : ""}
-        <dt>scale</dt><dd>${node.scale || rep?.scale || "unknown"}</dd>
-        ${semantics?.lifecycle ? `<dt>lifecycle</dt><dd>${String(semantics.lifecycle).replaceAll("_", " ")}</dd>` : ""}
-        ${valueSiteInterface?.producerRefs?.length ? `<dt>produced by</dt><dd>${readableRefs(valueSiteInterface.producerRefs)}</dd>` : ""}
-        ${valueSiteInterface?.consumerRefs?.length ? `<dt>consumed by</dt><dd>${readableRefs(valueSiteInterface.consumerRefs)}</dd>` : ""}
+        ${shape ? `<dt>shape</dt><dd><code>${escapeHtml(shape)}</code></dd>` : ""}
+        <dt>scale</dt><dd>${escapeHtml(node.scale || rep?.scale || "unknown")}</dd>
+        ${semantics?.lifecycle ? `<dt>lifecycle</dt><dd>${escapeHtml(String(semantics.lifecycle).replaceAll("_", " "))}</dd>` : ""}
+        ${valueSiteInterface?.producerRefs?.length ? `<dt>produced by</dt><dd>${escapeHtml(readableRefs(valueSiteInterface.producerRefs))}</dd>` : ""}
+        ${valueSiteInterface?.consumerRefs?.length ? `<dt>consumed by</dt><dd>${escapeHtml(readableRefs(valueSiteInterface.consumerRefs))}</dd>` : ""}
       </dl>
-      ${semantics?.notes?.length ? semantics.notes.map((note) => `<p>${note}</p>`).join("") : ""}
-      ${carries.length ? `<h3>Carries</h3><ul class="claim-list">${carries.map((item) => `<li>${item}</li>`).join("")}</ul>` : ""}
+      ${semantics?.notes?.length ? semantics.notes.map((note) => `<p>${escapeHtml(note)}</p>`).join("") : ""}
+      ${carries.length ? `<h3>Carries</h3><ul class="claim-list">${carries.map((item) => `<li>${escapeHtml(item)}</li>`).join("")}</ul>` : ""}
       ${rep?.evidence ? renderReferences(rep) : ""}
     </div>
   `;
@@ -1612,7 +1689,7 @@ function blockCardHtml(node, module, expandable) {
   const label = node.label || module?.label || node.id;
   const role = node.role || module?.role || "";
   const detail = node.detail || moduleDetail(module) || kind;
-  const repeat = module?.repeats ? `<span class="arch-repeat">x${module.repeats}</span>` : "";
+  const repeat = module?.repeats ? `<span class="arch-repeat">x${escapeHtml(module.repeats)}</span>` : "";
   const badges = blockBadges(node, module);
   const drillCue = expandable
     ? '<span class="arch-drill-cue" aria-hidden="true">Open detail <b>›</b></span>'
@@ -1620,8 +1697,8 @@ function blockCardHtml(node, module, expandable) {
 
   if (node.treatment === "chip" || node.density === "micro") {
     return `
-      <strong>${label}</strong>
-      <span class="arch-chip-meta">${node.scale || module?.scale || kind}</span>
+      <strong>${escapeHtml(label)}</strong>
+      <span class="arch-chip-meta">${escapeHtml(node.scale || module?.scale || kind)}</span>
       ${drillCue}
     `;
   }
@@ -1629,12 +1706,12 @@ function blockCardHtml(node, module, expandable) {
   if (node.treatment === "compact" || node.density === "compact") {
     return `
       <span class="arch-node-top">
-        <span class="arch-kind">${kind}</span>
+        <span class="arch-kind">${escapeHtml(kind)}</span>
         ${repeat}
       </span>
-      <strong>${label}</strong>
+      <strong>${escapeHtml(label)}</strong>
       <span class="arch-badges">
-        ${badges.map((badge) => `<i>${badge}</i>`).join("")}
+        ${badges.map((badge) => `<i>${escapeHtml(badge)}</i>`).join("")}
       </span>
       ${drillCue}
     `;
@@ -1642,14 +1719,14 @@ function blockCardHtml(node, module, expandable) {
 
   return `
     <span class="arch-node-top">
-      <span class="arch-kind">${kind}</span>
+      <span class="arch-kind">${escapeHtml(kind)}</span>
       ${repeat}
     </span>
-    <strong>${label}</strong>
-    <span class="arch-role">${role}</span>
-    <span class="arch-spec">${detail}</span>
+    <strong>${escapeHtml(label)}</strong>
+    <span class="arch-role">${escapeHtml(role)}</span>
+    <span class="arch-spec">${escapeHtml(detail)}</span>
     <span class="arch-badges">
-      ${badges.map((badge) => `<i>${badge}</i>`).join("")}
+      ${badges.map((badge) => `<i>${escapeHtml(badge)}</i>`).join("")}
     </span>
     ${drillCue}
   `;
@@ -1997,6 +2074,7 @@ function renderEdges() {
     const path = document.createElementNS("http://www.w3.org/2000/svg", "path");
     path.setAttribute("d", pathD);
     path.setAttribute("class", "arch-edge");
+    path.setAttribute("aria-hidden", "true");
     path.setAttribute("marker-end", `url(#${edgeMarkerId(edge)})`);
     if (contracted) path.classList.add("is-contracted");
     applyEdgeTone(path, edge);
@@ -2008,6 +2086,7 @@ function renderEdges() {
       label.setAttribute("x", String(labelPoint.x));
       label.setAttribute("y", String(tooltipPoint.y));
       label.setAttribute("class", "arch-edge-label");
+      label.setAttribute("aria-hidden", "true");
       applyEdgeTone(label, edge);
       label.textContent = edge.label;
       elements.edgeLayer.appendChild(label);
@@ -2018,6 +2097,7 @@ function renderEdges() {
       badge.setAttribute("x", String(labelPoint.x));
       badge.setAttribute("y", String(labelPoint.y + 4));
       badge.setAttribute("class", "arch-edge-badge");
+      badge.setAttribute("aria-hidden", "true");
       badge.textContent = conditioning
         .map((entry) => String(entry.mode || "").replaceAll("_", " "))
         .filter(Boolean)
@@ -2363,13 +2443,13 @@ function renderEdgeHitTarget(edge, pathD) {
   hit.setAttribute("d", pathD);
   hit.setAttribute("class", "edge-hit");
   hit.setAttribute("tabindex", "0");
-  hit.setAttribute("role", "note");
+  hit.setAttribute("role", "button");
   hit.setAttribute("aria-label", edge.connection.title);
   hit.addEventListener("mouseenter", () => showConnection(edge, pointerPreviewKey));
   hit.addEventListener("mouseleave", () => hideConnection(false, pointerPreviewKey));
   hit.addEventListener("focus", () => showConnection(edge, focusPreviewKey));
   hit.addEventListener("blur", () => hideConnection(false, focusPreviewKey));
-  hit.addEventListener("click", (event) => {
+  const activate = (event) => {
     event.stopPropagation();
     clearInspectorPreviews();
     if (state.pinnedEdge === edge) {
@@ -2379,6 +2459,12 @@ function renderEdgeHitTarget(edge, pathD) {
       state.pinnedEdge = edge;
       showConnection(edge);
     }
+  };
+  hit.addEventListener("click", activate);
+  hit.addEventListener("keydown", (event) => {
+    if (event.key !== "Enter" && event.key !== " ") return;
+    event.preventDefault();
+    activate(event);
   });
   return hit;
 }
@@ -2412,14 +2498,14 @@ function connectionInspectorHtml(edge, { expanded = false } = {}) {
     : null;
   return `
     <div class="focus-section">
-      <p>${edge.connection.inside}</p>
+      <p>${escapeHtml(edge.connection.inside)}</p>
       ${contracted
         ? contractedTooltipHtml(edge, expanded, "Select to keep details")
         : `<dl class="focus-dl">
-            <dt>from</dt><dd>${edge.from}</dd>
-            <dt>to</dt><dd>${edge.to}</dd>
-            <dt>role</dt><dd>${edge.connection.role}</dd>
-            ${hops ? `<dt>via</dt><dd>${hops}</dd>` : ""}
+            <dt>from</dt><dd>${escapeHtml(edge.from)}</dd>
+            <dt>to</dt><dd>${escapeHtml(edge.to)}</dd>
+            <dt>role</dt><dd>${escapeHtml(edge.connection.role)}</dd>
+            ${hops ? `<dt>via</dt><dd>${escapeHtml(hops)}</dd>` : ""}
           </dl>`}
       ${expanded ? renderEdgeReferences(edge) : ""}
     </div>
@@ -2497,8 +2583,8 @@ function contractedTooltipHtml(edge, pinned, hint = "click edge to pin details")
     .map(
       (segment) => `
         <li>
-          <strong>${nodeLabelById(segment.from)} → ${nodeLabelById(segment.to)}</strong>
-          <p>${segment.connection?.inside || ""}</p>
+          <strong>${escapeHtml(nodeLabelById(segment.from))} → ${escapeHtml(nodeLabelById(segment.to))}</strong>
+          <p>${escapeHtml(segment.connection?.inside || "")}</p>
         </li>
       `,
     )
@@ -2591,9 +2677,13 @@ function focusOverview() {
   const board = currentBoard();
   elements.focusTitle.textContent = board.title;
   const summary = String(board.summary || "").trim();
+  const notes = (board.notes || []).map((note) => String(note).trim()).filter(Boolean);
   setFocusBody(`
     <div class="focus-section focus-takeaway">
       <p>${escapeHtml(summary || "Explore the board to see how information moves through this level.")}</p>
+      ${notes.length
+        ? `<ul>${notes.map((note) => `<li>${escapeHtml(note)}</li>`).join("")}</ul>`
+        : ""}
     </div>
   `);
 }
@@ -2622,7 +2712,7 @@ function focusModule(module) {
 
   setFocusBody(`
     <div class="focus-section">
-      <p>${module.role}</p>
+      <p>${escapeHtml(module.role)}</p>
       ${renderAttentionSummary(module)}
       ${module.accepts_but_does_not_use ? renderUnusedInputs(module.accepts_but_does_not_use) : ""}
       ${renderContains(module.contains || [])}
@@ -2641,10 +2731,10 @@ function focusOperation(node) {
   elements.focusTitle.textContent = node.label || node.id;
   setFocusBody(`
     <div class="focus-section">
-      <p>${node.role || ""}</p>
+      <p>${escapeHtml(node.role || "")}</p>
       <dl class="focus-dl">
-        <dt>scale</dt><dd>${node.scale || "operation"}</dd>
-        <dt>node</dt><dd>${node.id}</dd>
+        <dt>scale</dt><dd>${escapeHtml(node.scale || "operation")}</dd>
+        <dt>node</dt><dd>${escapeHtml(node.id)}</dd>
       </dl>
     </div>
   `, { selected: true });
@@ -2664,8 +2754,8 @@ function renderContains(children) {
       ${children
         .map(
           (child) => `
-            <button class="internal-unit" type="button" data-child-id="${child.id}">
-              <strong>${child.label}</strong>
+            <button class="internal-unit" type="button" data-child-id="${escapeHtml(child.id)}">
+              <strong>${escapeHtml(child.label)}</strong>
               <span>${child.standard_block_ref ? "standard block" : "pseudocode trace"}</span>
             </button>
           `,
@@ -2682,12 +2772,12 @@ function renderAttentionSummary(module) {
   return `
     <h3>Attention</h3>
     <dl class="focus-dl">
-      <dt>pattern</dt><dd>${attention.pattern}</dd>
-      <dt>query</dt><dd>${attention.query_scale}</dd>
-      <dt>key/value</dt><dd>${attention.key_value_scale}</dd>
-      <dt>window</dt><dd>${window}</dd>
-      <dt>pair bias</dt><dd>${String(attention.pair_bias)} (${attention.pair_bias_source ?? "unknown"})</dd>
-      <dt>position</dt><dd>${attention.positional_encoding?.kind ?? "unknown"}</dd>
+      <dt>pattern</dt><dd>${escapeHtml(attention.pattern)}</dd>
+      <dt>query</dt><dd>${escapeHtml(attention.query_scale)}</dd>
+      <dt>key/value</dt><dd>${escapeHtml(attention.key_value_scale)}</dd>
+      <dt>window</dt><dd>${escapeHtml(window)}</dd>
+      <dt>pair bias</dt><dd>${escapeHtml(String(attention.pair_bias))} (${escapeHtml(attention.pair_bias_source ?? "unknown")})</dd>
+      <dt>position</dt><dd>${escapeHtml(attention.positional_encoding?.kind ?? "unknown")}</dd>
     </dl>
   `;
 }
@@ -2696,7 +2786,7 @@ function renderUnusedInputs(inputs) {
   return `
     <div class="warning-note">
       <strong>Accepted but not used here</strong>
-      <span>${inputs.join(", ")}</span>
+      <span>${escapeHtml(inputs.join(", "))}</span>
     </div>
   `;
 }
@@ -2719,7 +2809,7 @@ function standardBlockFromRef(ref) {
 
 function renderStandardBlock(block) {
   return `
-    <h3>${block.name}</h3>
+    <h3>${escapeHtml(block.name)}</h3>
     ${block.id === "pair_biased_attention" ? renderAttentionTermDiagram() : ""}
     <ol class="math-list">
       ${block.math.map(renderMathStep).join("")}
@@ -2750,7 +2840,7 @@ function renderPseudocode(module) {
     <h3>Pseudocode trace</h3>
     <ol class="pseudo-lines">
       ${lines
-        .map((line) => `<li><code>${line.text}</code><span>${line.refs}</span></li>`)
+        .map((line) => `<li><code>${escapeHtml(line.text)}</code><span>${escapeHtml(line.refs)}</span></li>`)
         .join("")}
     </ol>
   `;
@@ -2769,7 +2859,7 @@ function citationByline(source) {
 function renderCitation(ref) {
   const source = bibliographySource(ref.source_ref);
   const title = source?.title || ref.path || ref.source_ref || "Unresolved source";
-  const href = source?.href || source?.url || ref.path;
+  const href = safeHref(source?.href || source?.url || ref.path);
   const byline = citationByline(source);
   const locator = ref.locator || ref.lines;
   const role = String(ref.role || "supporting_evidence").replaceAll("_", " ");
@@ -2802,10 +2892,13 @@ function renderReferences(entity) {
 
 function renderFocusLinks(module) {
   const links = [
-    module.story_ref ? `<a href="${module.story_ref}">Open curated story</a>` : "",
-    module.pseudocode_ref ? `<a href="${module.pseudocode_ref}">Open pseudocode YAML</a>` : "",
-    module.attention?.standard_block_ref ? `<a href="${module.attention.standard_block_ref}">Open standard block</a>` : "",
-  ].filter(Boolean);
+    [module.story_ref, "Open curated story"],
+    [module.pseudocode_ref, "Open pseudocode YAML"],
+    [module.attention?.standard_block_ref, "Open standard block"],
+  ].map(([rawHref, label]) => {
+    const href = safeHref(rawHref);
+    return href ? `<a href="${escapeHtml(href)}">${label}</a>` : "";
+  }).filter(Boolean);
   if (!links.length) return "";
   return `<div class="focus-links">${links.join("")}</div>`;
 }
