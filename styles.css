@@ -579,6 +579,61 @@ code {
   stroke-dasharray: 8 8;
 }
 
+.arch-edge.is-connectivity-input,
+.arch-edge.is-connectivity-output {
+  opacity: 1;
+  stroke-width: 4.5;
+  filter: drop-shadow(0 0 3px color-mix(in srgb, currentColor 35%, transparent));
+}
+
+.arch-edge.is-connectivity-muted {
+  opacity: 0.14;
+}
+
+.arch-edge-label.is-connectivity-muted,
+.arch-edge-badge.is-connectivity-muted {
+  opacity: 0.18;
+}
+
+.arch-edge-label.is-connectivity-input,
+.arch-edge-label.is-connectivity-output,
+.arch-edge-badge.is-connectivity-input,
+.arch-edge-badge.is-connectivity-output {
+  opacity: 1;
+}
+
+.arch-node.is-connectivity-focus,
+.arch-rep.is-connectivity-focus {
+  border-color: color-mix(in srgb, var(--accent) 66%, var(--line));
+  box-shadow:
+    0 0 0 3px color-mix(in srgb, var(--accent) 22%, transparent),
+    var(--node-shadow);
+}
+
+.arch-node.is-connectivity-source,
+.arch-node.is-connectivity-target,
+.arch-rep.is-connectivity-source,
+.arch-rep.is-connectivity-target {
+  border-color: color-mix(in srgb, var(--accent) 42%, var(--line));
+  box-shadow:
+    0 0 0 2px color-mix(in srgb, var(--accent) 14%, transparent),
+    var(--node-shadow);
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .arch-edge,
+  .arch-edge-label,
+  .arch-edge-badge,
+  .arch-node,
+  .arch-rep {
+    transition:
+      opacity 120ms ease,
+      stroke-width 120ms ease,
+      border-color 120ms ease,
+      box-shadow 120ms ease;
+  }
+}
+
 .arch-edge.is-conditioning {
   stroke: var(--edge-conditioning);
   stroke-dasharray: 3 6;
@@ -622,6 +677,10 @@ code {
 }
 
 .edge-hit:focus {
+  outline: none;
+}
+
+.edge-hit:focus-visible {
   stroke: color-mix(in srgb, var(--accent) 32%, transparent);
 }
 
@@ -1196,14 +1255,15 @@ code {
 }
 
 .arch-rep.tensor-scalar {
-  width: 118px;
-  height: 126px;
-  padding: 5px 4px;
+  width: 96px;
+  height: 106px;
+  gap: 3px;
+  padding: 4px;
 }
 
 .arch-rep.tensor-scalar .tensor-box {
-  width: 50px;
-  height: 50px;
+  width: 40px;
+  height: 40px;
 }
 
 .arch-rep.tensor-scalar .tensor-symbol {
@@ -1532,12 +1592,9 @@ code {
    the bottom-left controls. */
 
 .renderer-page .architecture-canvas {
-  --canvas-inspector-height: clamp(88px, 11svh, 112px);
-  --canvas-lower-chrome-reserve: 84px;
+  --canvas-lower-chrome-reserve: 180px;
   --board-inset-top: clamp(72px, 8vh, 86px);
-  --board-inset-bottom: calc(
-    var(--canvas-inspector-height) + var(--canvas-lower-chrome-reserve)
-  );
+  --board-inset-bottom: var(--canvas-lower-chrome-reserve);
 }
 
 .board-actions {
@@ -1739,10 +1796,10 @@ code {
 .model-map {
   position: absolute;
   right: 14px;
-  bottom: calc(var(--canvas-inspector-height) + 28px);
+  bottom: 14px;
   z-index: 35;
   display: grid;
-  width: min(410px, calc(100% - 28px));
+  width: min(330px, calc(100% - 28px));
   gap: 6px;
   padding: 8px;
   border: 1px solid color-mix(in srgb, var(--accent) 24%, var(--line));
@@ -1760,6 +1817,12 @@ code {
   opacity: 0;
 }
 
+.model-map.is-collapsed {
+  width: auto;
+  min-width: 132px;
+  gap: 0;
+}
+
 .model-map-heading {
   display: flex;
   align-items: center;
@@ -1771,6 +1834,42 @@ code {
   letter-spacing: 0.07em;
   line-height: 1.2;
   text-transform: uppercase;
+}
+
+.model-map-heading-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.model-map-body {
+  display: grid;
+  gap: 6px;
+}
+
+.model-map-body[hidden] {
+  display: none;
+}
+
+.model-map-collapse {
+  display: inline-grid;
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  place-items: center;
+  border: 1px solid color-mix(in srgb, var(--accent) 24%, var(--line));
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--surface-card) 76%, transparent);
+  color: var(--accent);
+  font: 900 0.82rem/1 var(--sans);
+  cursor: pointer;
+}
+
+.model-map-collapse:hover,
+.model-map-collapse:focus-visible {
+  border-color: color-mix(in srgb, var(--accent) 50%, var(--line));
+  background: color-mix(in srgb, var(--accent) 10%, var(--surface-card));
+  color: var(--ink);
 }
 
 .model-map-view-toggle {
@@ -1821,7 +1920,7 @@ code {
 .model-map-board {
   display: block;
   width: 100%;
-  height: 122px;
+  height: 96px;
   overflow: hidden;
   border-radius: 5px;
   background: var(--canvas-bg);
@@ -1961,7 +2060,7 @@ code {
 }
 
 .renderer-page .canvas-controls {
-  bottom: calc(var(--canvas-inspector-height) + 28px);
+  bottom: 14px;
   z-index: 35;
   align-items: stretch;
   gap: 3px;
@@ -2001,16 +2100,12 @@ code {
 }
 
 .renderer-page .focus-panel {
-  position: absolute;
-  right: 14px;
-  bottom: 14px;
-  left: 14px;
-  z-index: 34;
-  height: var(--canvas-inspector-height);
+  position: relative;
+  z-index: 2;
+  height: clamp(88px, 11svh, 112px);
   background: var(--surface-popover);
-  box-shadow: 0 -12px 36px color-mix(in srgb, var(--ink) 13%, transparent);
+  box-shadow: var(--shadow-soft);
   backdrop-filter: blur(12px);
-  pointer-events: auto;
   transition:
     background-color 120ms ease,
     box-shadow 120ms ease;
@@ -2040,14 +2135,14 @@ code {
 .renderer-page .focus-panel.is-selected:not(.is-preview) {
   box-shadow:
     inset 4px 0 0 var(--accent),
-    0 -12px 36px color-mix(in srgb, var(--ink) 13%, transparent);
+    var(--shadow-soft);
 }
 
 .renderer-page .focus-panel.is-preview {
   background: color-mix(in srgb, var(--accent) 4%, var(--surface-card));
   box-shadow:
     inset 4px 0 0 color-mix(in srgb, var(--accent) 55%, transparent),
-    0 -12px 36px color-mix(in srgb, var(--ink) 13%, transparent);
+    var(--shadow-soft);
 }
 
 .renderer-page .focus-preview-header {
@@ -2083,9 +2178,12 @@ code {
   }
 
   .renderer-page .architecture-canvas {
-    --canvas-inspector-height: 166px;
     --canvas-lower-chrome-reserve: 74px;
     --board-inset-top: 128px;
+  }
+
+  .renderer-page .focus-panel {
+    height: 166px;
   }
 }
 
@@ -2095,9 +2193,12 @@ code {
   }
 
   .renderer-page .architecture-canvas {
-    --canvas-inspector-height: 156px;
     --canvas-lower-chrome-reserve: 74px;
     --board-inset-top: 154px;
+  }
+
+  .renderer-page .focus-panel {
+    height: 156px;
   }
 
   .board-actions {

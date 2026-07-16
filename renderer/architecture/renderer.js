@@ -290,10 +290,14 @@ let modelMap = null;
 let modelMapSvg = null;
 let modelMapA11y = null;
 let modelMapContext = null;
+let modelMapBody = null;
 let modelMapViewToggle = null;
+let modelMapCollapseButton = null;
 let edgeLabelMeasureContext = null;
 const inspectorPreviews = new Map();
 let inspectorPreviewSequence = 0;
+const connectivityHighlights = new Map();
+let connectivityHighlightSequence = 0;
 
 const state = {
   focusedId: null,
@@ -303,6 +307,7 @@ const state = {
   pinnedEdge: null,
   edgeRoutes: new Map(),
   modelMapView: "root",
+  modelMapCollapsed: true,
 };
 
 const viewport = {
@@ -413,6 +418,97 @@ function clearInspectorPreviews() {
   hideInspectorPreviewSurface();
 }
 
+function beginConnectivityHighlight(sourceKey, nodeId) {
+  const key = sourceKey || "transient-connectivity";
+  connectivityHighlights.set(key, {
+    nodeId,
+    sequence: ++connectivityHighlightSequence,
+  });
+  renderLatestConnectivityHighlight();
+}
+
+function endConnectivityHighlight(sourceKey) {
+  if (!sourceKey) {
+    clearConnectivityHighlights();
+    return;
+  }
+  connectivityHighlights.delete(sourceKey);
+  renderLatestConnectivityHighlight();
+}
+
+function clearConnectivityHighlights() {
+  connectivityHighlights.clear();
+  clearConnectivityHighlightSurface();
+}
+
+function clearConnectivityHighlightSurface() {
+  elements.edgeLayer
+    .querySelectorAll(".is-connectivity-input, .is-connectivity-output, .is-connectivity-muted")
+    .forEach((element) => {
+      element.classList.remove(
+        "is-connectivity-input",
+        "is-connectivity-output",
+        "is-connectivity-muted",
+      );
+    });
+  elements.moduleLayer
+    .querySelectorAll(".is-connectivity-focus, .is-connectivity-source, .is-connectivity-target")
+    .forEach((element) => {
+      element.classList.remove(
+        "is-connectivity-focus",
+        "is-connectivity-source",
+        "is-connectivity-target",
+      );
+    });
+}
+
+function renderLatestConnectivityHighlight() {
+  const latest = Array.from(connectivityHighlights.values()).reduce(
+    (current, highlight) => (
+      !current || highlight.sequence > current.sequence ? highlight : current
+    ),
+    null,
+  );
+  if (!latest) {
+    clearConnectivityHighlightSurface();
+    return;
+  }
+  applyConnectivityHighlight(latest.nodeId);
+}
+
+function applyConnectivityHighlight(nodeId) {
+  clearConnectivityHighlightSurface();
+  const edges = state.displayEdges || [];
+  const directionByEdge = new Map();
+  const sourceIds = new Set();
+  const targetIds = new Set();
+
+  edges.forEach((edge, index) => {
+    const isInput = edge.to === nodeId;
+    const isOutput = edge.from === nodeId;
+    if (!isInput && !isOutput) return;
+    directionByEdge.set(index, isInput && isOutput ? "both" : isInput ? "input" : "output");
+    if (isInput) sourceIds.add(edge.from);
+    if (isOutput) targetIds.add(edge.to);
+  });
+
+  if (!directionByEdge.size) return;
+
+  elements.edgeLayer.querySelectorAll("[data-edge-index]").forEach((element) => {
+    const direction = directionByEdge.get(Number(element.dataset.edgeIndex));
+    element.classList.toggle("is-connectivity-input", direction === "input" || direction === "both");
+    element.classList.toggle("is-connectivity-output", direction === "output" || direction === "both");
+    element.classList.toggle("is-connectivity-muted", !direction);
+  });
+
+  elements.moduleLayer.querySelectorAll("[data-node-id]").forEach((element) => {
+    const candidateId = element.dataset.nodeId;
+    element.classList.toggle("is-connectivity-focus", candidateId === nodeId);
+    element.classList.toggle("is-connectivity-source", sourceIds.has(candidateId));
+    element.classList.toggle("is-connectivity-target", targetIds.has(candidateId));
+  });
+}
+
 function renderLatestInspectorPreview() {
   const latest = Array.from(inspectorPreviews.values()).reduce(
     (current, preview) => (!current || preview.sequence > current.sequence ? preview : current),
@@ -514,10 +610,6 @@ function ensureBoardChrome() {
   }
   ensurePanZoom();
   ensureModelMap();
-  if (!elements.focusPanel.classList.contains("is-canvas-inspector")) {
-    elements.focusPanel.classList.add("is-canvas-inspector", "board-chrome");
-    elements.canvas.appendChild(elements.focusPanel);
-  }
   elements.canvas.tabIndex = -1;
 }
 
@@ -634,6 +726,7 @@ function applyGridColumnSizing(board, graph) {
 function renderBoard() {
   const board = currentBoard();
   hideRepPeek();
+  clearConnectivityHighlights();
   state.displayEdges = null;
   state.layoutEdges = null;
   state.edgeRoutes = new Map();
@@ -814,12 +907,9 @@ function fitViewport(width, height) {
 
 function boardViewportAvailableSize(canvasRect, baseX, baseY) {
   const lowerChromeReserve = modelMap?.offsetParent ? modelMap.offsetHeight + 42 : 74;
-  const bottomInset = elements.focusPanel.classList.contains("is-canvas-inspector")
-    ? elements.focusPanel.offsetHeight + lowerChromeReserve
-    : 26;
   return {
     availableW: Math.max(120, canvasRect.width - baseX * 2),
-    availableH: Math.max(120, canvasRect.height - baseY - bottomInset),
+    availableH: Math.max(120, canvasRect.height - baseY - lowerChromeReserve),
   };
 }
 
@@ -992,6 +1082,9 @@ function ensureModelMap() {
   const label = document.createElement("span");
   label.textContent = "Model map";
 
+  const headingActions = document.createElement("div");
+  headingActions.className = "model-map-heading-actions";
+
   modelMapViewToggle = document.createElement("div");
   modelMapViewToggle.className = "model-map-view-toggle";
   modelMapViewToggle.setAttribute("role", "group");
@@ -1007,7 +1100,14 @@ function ensureModelMap() {
     modelMapViewToggle.appendChild(button);
   });
   modelMapViewToggle.addEventListener("click", onModelMapViewClick);
-  heading.append(label, modelMapViewToggle);
+
+  modelMapCollapseButton = document.createElement("button");
+  modelMapCollapseButton.type = "button";
+  modelMapCollapseButton.className = "model-map-collapse";
+  modelMapCollapseButton.setAttribute("aria-controls", "modelMapBody");
+  modelMapCollapseButton.addEventListener("click", onModelMapCollapseClick);
+  headingActions.append(modelMapViewToggle, modelMapCollapseButton);
+  heading.append(label, headingActions);
 
   modelMapContext = document.createElement("span");
   modelMapContext.className = "model-map-context";
@@ -1019,8 +1119,13 @@ function ensureModelMap() {
 
   modelMapA11y = document.createElement("ol");
   modelMapA11y.className = "model-map-a11y";
-  modelMap.append(heading, modelMapContext, modelMapSvg, modelMapA11y);
+  modelMapBody = document.createElement("div");
+  modelMapBody.id = "modelMapBody";
+  modelMapBody.className = "model-map-body";
+  modelMapBody.append(modelMapContext, modelMapSvg, modelMapA11y);
+  modelMap.append(heading, modelMapBody);
   elements.canvas.appendChild(modelMap);
+  renderModelMapCollapseState();
 }
 
 function modelMapSelection() {
@@ -1039,6 +1144,29 @@ function onModelMapViewClick(event) {
   if (!view || (view === "parent" && state.boardStack.length < 3)) return;
   state.modelMapView = view;
   renderModelMap();
+}
+
+function onModelMapCollapseClick() {
+  state.modelMapCollapsed = !state.modelMapCollapsed;
+  renderModelMapCollapseState();
+  window.requestAnimationFrame(() => {
+    if (!state.userMovedViewport) fitToContent();
+    renderEdges();
+  });
+}
+
+function renderModelMapCollapseState() {
+  if (!modelMap || !modelMapCollapseButton || !modelMapBody) return;
+  const collapsed = state.modelMapCollapsed;
+  modelMap.classList.toggle("is-collapsed", collapsed);
+  modelMapBody.hidden = collapsed;
+  modelMapCollapseButton.textContent = collapsed ? "+" : "−";
+  modelMapCollapseButton.title = collapsed ? "Expand model map" : "Minimize model map";
+  modelMapCollapseButton.setAttribute(
+    "aria-label",
+    collapsed ? "Expand model map" : "Minimize model map",
+  );
+  modelMapCollapseButton.setAttribute("aria-expanded", String(!collapsed));
 }
 
 function modelMapGraph(board) {
@@ -1343,6 +1471,7 @@ function renderModelMapNode(entry, activeNode) {
 
 function renderModelMap() {
   if (!modelMap) return;
+  renderModelMapCollapseState();
   const selection = modelMapSelection();
   const mapBoard = selection.board;
   const { nodes, edges } = modelMapGraph(mapBoard);
@@ -1433,8 +1562,10 @@ function shapeDimsLabel(shape = "") {
 }
 
 const repSymbolById = new Map();
+const pseudocodeSymbolById = new Map();
 for (const program of Object.values(manifest.pseudocode || {})) {
   for (const symbol of program.symbols || []) {
+    if (symbol.id) pseudocodeSymbolById.set(symbol.id, symbol);
     const ref = String(symbol.architectureRef || "");
     if (ref.startsWith("representations.") && symbol.name) {
       repSymbolById.set(ref.slice("representations.".length), symbol);
@@ -1480,7 +1611,10 @@ function renderRepresentationNode(node) {
   const prominence = node.prominence || "secondary";
   const kind = node.glyph || rep?.glyph || glyphKindForShape(shape) || "vector";
   const fullLabel = node.label || rep?.id || node.id;
-  const symbol = symbolMarkup(repSymbolById.get(rep?.id), fullLabel);
+  const symbolDefinition = pseudocodeSymbolById.get(node.value_site_ref)
+    || pseudocodeSymbolById.get(node.id)
+    || repSymbolById.get(rep?.id);
+  const symbol = symbolMarkup(symbolDefinition, node.notation || fullLabel);
   const dims = kind === "scalar" ? "" : shapeDimsLabel(shape);
   const displayMeaning = representationDisplayMeaning(node, rep, fullLabel);
   const card = document.createElement("button");
@@ -1498,12 +1632,25 @@ function renderRepresentationNode(node) {
   `;
   const pointerPreviewKey = `pointer:representation:${node.id}`;
   const focusPreviewKey = `focus:representation:${node.id}`;
-  card.addEventListener("pointerenter", (event) => showRepPeek(event, node, rep, pointerPreviewKey));
-  card.addEventListener("pointerleave", () => hideRepPeek(pointerPreviewKey));
-  card.addEventListener("focus", (event) => showRepPeek(event, node, rep, focusPreviewKey));
-  card.addEventListener("blur", () => hideRepPeek(focusPreviewKey));
+  card.addEventListener("pointerenter", (event) => {
+    showRepPeek(event, node, rep, pointerPreviewKey);
+    beginConnectivityHighlight(pointerPreviewKey, node.id);
+  });
+  card.addEventListener("pointerleave", () => {
+    hideRepPeek(pointerPreviewKey);
+    endConnectivityHighlight(pointerPreviewKey);
+  });
+  card.addEventListener("focus", (event) => {
+    showRepPeek(event, node, rep, focusPreviewKey);
+    beginConnectivityHighlight(focusPreviewKey, node.id);
+  });
+  card.addEventListener("blur", () => {
+    hideRepPeek(focusPreviewKey);
+    endConnectivityHighlight(focusPreviewKey);
+  });
   card.addEventListener("click", () => {
     hideRepPeek();
+    clearConnectivityHighlights();
     focusRepresentation(node, rep);
   });
   return card;
@@ -1662,12 +1809,25 @@ function renderBlockNode(node) {
   }
   const pointerPreviewKey = `pointer:node:${node.id}`;
   const focusPreviewKey = `focus:node:${node.id}`;
-  card.addEventListener("mouseenter", () => showNodePeek(node, module, targetBoard, pointerPreviewKey));
-  card.addEventListener("mouseleave", () => hideHoverPanel(pointerPreviewKey));
-  card.addEventListener("focus", () => showNodePeek(node, module, targetBoard, focusPreviewKey));
-  card.addEventListener("blur", () => hideHoverPanel(focusPreviewKey));
+  card.addEventListener("mouseenter", () => {
+    showNodePeek(node, module, targetBoard, pointerPreviewKey);
+    beginConnectivityHighlight(pointerPreviewKey, node.id);
+  });
+  card.addEventListener("mouseleave", () => {
+    hideHoverPanel(pointerPreviewKey);
+    endConnectivityHighlight(pointerPreviewKey);
+  });
+  card.addEventListener("focus", () => {
+    showNodePeek(node, module, targetBoard, focusPreviewKey);
+    beginConnectivityHighlight(focusPreviewKey, node.id);
+  });
+  card.addEventListener("blur", () => {
+    hideHoverPanel(focusPreviewKey);
+    endConnectivityHighlight(focusPreviewKey);
+  });
   card.addEventListener("click", () => {
     hideHoverPanel();
+    clearConnectivityHighlights();
     if (targetBoard) {
       pushBoard(targetBoard.id, node.id);
     } else if (module) {
@@ -1774,6 +1934,7 @@ const RULES = {
     channelStep: 18, // search step for a clear channel between boxes
     laneClearance: 28, // distance of detour lanes outside the boxes
     nudge: 10, // separation applied to overlapping parallel segments
+    portPreference: 42, // cost for choosing a side that faces away from the other node
   },
   // board dive-in/emerge transition
   diveScale: 2.2,
@@ -2076,6 +2237,7 @@ function renderEdges() {
     path.setAttribute("class", "arch-edge");
     path.setAttribute("aria-hidden", "true");
     path.setAttribute("marker-end", `url(#${edgeMarkerId(edge)})`);
+    path.dataset.edgeIndex = String(index);
     if (contracted) path.classList.add("is-contracted");
     applyEdgeTone(path, edge);
     elements.edgeLayer.appendChild(path);
@@ -2087,6 +2249,7 @@ function renderEdges() {
       label.setAttribute("y", String(tooltipPoint.y));
       label.setAttribute("class", "arch-edge-label");
       label.setAttribute("aria-hidden", "true");
+      label.dataset.edgeIndex = String(index);
       applyEdgeTone(label, edge);
       label.textContent = edge.label;
       elements.edgeLayer.appendChild(label);
@@ -2098,6 +2261,7 @@ function renderEdges() {
       badge.setAttribute("y", String(labelPoint.y + 4));
       badge.setAttribute("class", "arch-edge-badge");
       badge.setAttribute("aria-hidden", "true");
+      badge.dataset.edgeIndex = String(index);
       badge.textContent = conditioning
         .map((entry) => String(entry.mode || "").replaceAll("_", " "))
         .filter(Boolean)
@@ -2105,9 +2269,10 @@ function renderEdges() {
       elements.edgeLayer.appendChild(badge);
     }
 
-    elements.edgeLayer.appendChild(renderEdgeHitTarget(edge, pathD));
+    elements.edgeLayer.appendChild(renderEdgeHitTarget(edge, pathD, index));
   });
   state.edgeRoutes = renderedRoutes;
+  renderLatestConnectivityHighlight();
 }
 
 function renderEdgeMarkers() {
@@ -2176,12 +2341,19 @@ function explicitLaneRoute(edge, fromBox, toBox, allBoxes) {
   return cleanRoute([from, { x: laneX, y: from.y }, { x: laneX, y: to.y }, to]);
 }
 
-const OPPOSITE_SIDE = { left: "right", right: "left", top: "bottom", bottom: "top" };
+const ROUTE_SIDES = ["right", "bottom", "left", "top"];
+const SIDE_VECTOR = {
+  left: { x: -1, y: 0 },
+  right: { x: 1, y: 0 },
+  top: { x: 0, y: -1 },
+  bottom: { x: 0, y: 1 },
+};
 
 // Route every board edge as an orthogonal polyline: dock on the facing box
 // sides, then pick the cheapest horizontal/vertical route that crosses no
-// node box. Candidates per edge: straight, a Z-bend through the channel
-// between the boxes, or a detour lane around them.
+// node box. Port pairs are selected from all four sides so a nearby obstacle
+// or two diagonally overlapping boxes cannot force an edge to tunnel through
+// a node or double back before reaching its target.
 function buildOrthoRoutes(edges) {
   const routes = new Map();
   const boxes = new Map();
@@ -2196,6 +2368,15 @@ function buildOrthoRoutes(edges) {
   });
   const allBoxes = [...boxes.values()].filter(Boolean);
 
+  const obstaclesFor = (edge) => {
+    const obstacles = [];
+    boxes.forEach((box, id) => {
+      if (!box || id === edge.from || id === edge.to) return;
+      obstacles.push(inflateBox(box, RULES.route.margin));
+    });
+    return obstacles;
+  };
+
   const plans = [];
   edges.forEach((edge, index) => {
     if (state.layoutEdges?.get(index)) return;
@@ -2207,27 +2388,71 @@ function buildOrthoRoutes(edges) {
       routes.set(index, explicitRoute);
       return;
     }
-    const dx = toBox.cx - fromBox.cx;
-    const dy = toBox.cy - fromBox.cy;
-    const horizontal = Math.abs(dx) >= Math.abs(dy);
-    const exitSide = horizontal ? (dx >= 0 ? "right" : "left") : (dy >= 0 ? "bottom" : "top");
-    plans.push({ edge, index, fromBox, toBox, horizontal, exitSide, enterSide: OPPOSITE_SIDE[exitSide] });
+    const plan = chooseRoutePlan(edge, index, fromBox, toBox, obstaclesFor(edge));
+    if (plan) plans.push(plan);
   });
 
   spreadDockPoints(plans);
 
   plans.forEach((plan) => {
-    const obstacles = [];
-    boxes.forEach((box, id) => {
-      if (!box || id === plan.edge.from || id === plan.edge.to) return;
-      obstacles.push(inflateBox(box, RULES.route.margin));
-    });
+    const obstacles = obstaclesFor(plan.edge);
     const route = routeOrthogonal(plan, obstacles);
     if (route) routes.set(plan.index, route);
   });
 
   separateParallelSegments(routes);
   return routes;
+}
+
+function chooseRoutePlan(edge, index, fromBox, toBox, obstacles) {
+  let bestPlan = null;
+  let bestScore = Number.POSITIVE_INFINITY;
+  ROUTE_SIDES.forEach((exitSide) => {
+    ROUTE_SIDES.forEach((enterSide) => {
+      const plan = {
+        edge,
+        index,
+        fromBox,
+        toBox,
+        exitSide,
+        enterSide,
+        start: sidePoint(fromBox, exitSide, 0.5),
+        end: sidePoint(toBox, enterSide, 0.5),
+      };
+      if (opposingPortsAreCrossed(plan)) return;
+      const route = routeOrthogonal(plan, obstacles);
+      if (!route) return;
+      const score = routeScore(route, obstacles) + portPreferencePenalty(plan);
+      if (score < bestScore) {
+        bestScore = score;
+        bestPlan = plan;
+      }
+    });
+  });
+  return bestPlan;
+}
+
+function opposingPortsAreCrossed(plan) {
+  const { start, end, exitSide, enterSide } = plan;
+  if (exitSide === "right" && enterSide === "left") return start.x > end.x;
+  if (exitSide === "left" && enterSide === "right") return start.x < end.x;
+  if (exitSide === "bottom" && enterSide === "top") return start.y > end.y;
+  if (exitSide === "top" && enterSide === "bottom") return start.y < end.y;
+  return false;
+}
+
+function portPreferencePenalty(plan) {
+  return sideAlignmentPenalty(plan.exitSide, plan.fromBox, plan.toBox)
+    + sideAlignmentPenalty(plan.enterSide, plan.toBox, plan.fromBox);
+}
+
+function sideAlignmentPenalty(side, box, otherBox) {
+  const dx = otherBox.cx - box.cx;
+  const dy = otherBox.cy - box.cy;
+  const distance = Math.hypot(dx, dy) || 1;
+  const vector = SIDE_VECTOR[side];
+  const alignment = (vector.x * dx + vector.y * dy) / distance;
+  return (1 - alignment) * RULES.route.portPreference;
 }
 
 function sidePoint(box, side, t) {
@@ -2259,7 +2484,12 @@ function spreadDockPoints(plans) {
   // A few px of dock misalignment would read as a pointless jog; snap both
   // docks to the shared coordinate so grid-aligned neighbors get a straight line.
   plans.forEach((plan) => {
-    const axis = plan.horizontal ? "y" : "x";
+    const horizontalPorts = [plan.exitSide, plan.enterSide]
+      .every((side) => side === "left" || side === "right");
+    const verticalPorts = [plan.exitSide, plan.enterSide]
+      .every((side) => side === "top" || side === "bottom");
+    const axis = horizontalPorts ? "y" : verticalPorts ? "x" : null;
+    if (!axis) return;
     const delta = plan.end[axis] - plan.start[axis];
     if (delta === 0 || Math.abs(delta) > RULES.route.snap) return;
     const mid = (plan.start[axis] + plan.end[axis]) / 2;
@@ -2281,35 +2511,64 @@ function inflateBox(box, margin) {
 }
 
 function routeOrthogonal(plan, obstacles) {
-  const { start, end, horizontal } = plan;
+  if (opposingPortsAreCrossed(plan)) return null;
+  const { start, end } = plan;
   const candidates = [];
   const stub = RULES.route.margin + 6;
-  if (horizontal) {
-    if (start.y === end.y) candidates.push([start, end]);
-    channelPositions(start.x, end.x).forEach((cx) => {
-      candidates.push([start, { x: cx, y: start.y }, { x: cx, y: end.y }, end]);
-    });
-    const outX = start.x + (plan.exitSide === "right" ? stub : -stub);
-    const inX = end.x + (plan.enterSide === "left" ? -stub : stub);
-    const top = Math.min(plan.fromBox.y, plan.toBox.y) - RULES.route.laneClearance;
-    const bottom = Math.max(plan.fromBox.y + plan.fromBox.height, plan.toBox.y + plan.toBox.height) + RULES.route.laneClearance;
-    [top, bottom].forEach((laneY) => {
-      candidates.push([start, { x: outX, y: start.y }, { x: outX, y: laneY }, { x: inX, y: laneY }, { x: inX, y: end.y }, end]);
-    });
-  } else {
-    if (start.x === end.x) candidates.push([start, end]);
-    channelPositions(start.y, end.y).forEach((cy) => {
-      candidates.push([start, { x: start.x, y: cy }, { x: end.x, y: cy }, end]);
-    });
-    const outY = start.y + (plan.exitSide === "bottom" ? stub : -stub);
-    const inY = end.y + (plan.enterSide === "top" ? -stub : stub);
-    const left = Math.min(plan.fromBox.x, plan.toBox.x) - RULES.route.laneClearance;
-    const right = Math.max(plan.fromBox.x + plan.fromBox.width, plan.toBox.x + plan.toBox.width) + RULES.route.laneClearance;
-    [left, right].forEach((laneX) => {
-      candidates.push([start, { x: start.x, y: outY }, { x: laneX, y: outY }, { x: laneX, y: inY }, { x: end.x, y: inY }, end]);
-    });
+  const [startStub, endStub] = routeStubLengths(plan, stub);
+  const startOut = offsetTowardSide(start, plan.exitSide, startStub);
+  const endOut = offsetTowardSide(end, plan.enterSide, endStub);
+  const wrap = (core) => [start, startOut, ...core, endOut, end];
+
+  if (startOut.x === endOut.x || startOut.y === endOut.y) {
+    candidates.push(wrap([startOut, endOut]));
   }
-  return pickBestRoute(candidates, obstacles);
+  candidates.push(wrap([startOut, { x: endOut.x, y: startOut.y }, endOut]));
+  candidates.push(wrap([startOut, { x: startOut.x, y: endOut.y }, endOut]));
+  channelPositions(startOut.x, endOut.x).forEach((x) => {
+    candidates.push(wrap([startOut, { x, y: startOut.y }, { x, y: endOut.y }, endOut]));
+  });
+  channelPositions(startOut.y, endOut.y).forEach((y) => {
+    candidates.push(wrap([startOut, { x: startOut.x, y }, { x: endOut.x, y }, endOut]));
+  });
+
+  const top = Math.min(plan.fromBox.y, plan.toBox.y) - RULES.route.laneClearance;
+  const bottom = Math.max(
+    plan.fromBox.y + plan.fromBox.height,
+    plan.toBox.y + plan.toBox.height,
+  ) + RULES.route.laneClearance;
+  const left = Math.min(plan.fromBox.x, plan.toBox.x) - RULES.route.laneClearance;
+  const right = Math.max(
+    plan.fromBox.x + plan.fromBox.width,
+    plan.toBox.x + plan.toBox.width,
+  ) + RULES.route.laneClearance;
+  [top, bottom].forEach((y) => {
+    candidates.push(wrap([startOut, { x: startOut.x, y }, { x: endOut.x, y }, endOut]));
+  });
+  [left, right].forEach((x) => {
+    candidates.push(wrap([startOut, { x, y: startOut.y }, { x, y: endOut.y }, endOut]));
+  });
+  return pickBestRoute(candidates, obstacles, plan);
+}
+
+function routeStubLengths(plan, preferred) {
+  const { start, end, exitSide, enterSide } = plan;
+  let gap = null;
+  if (exitSide === "right" && enterSide === "left") gap = end.x - start.x;
+  if (exitSide === "left" && enterSide === "right") gap = start.x - end.x;
+  if (exitSide === "bottom" && enterSide === "top") gap = end.y - start.y;
+  if (exitSide === "top" && enterSide === "bottom") gap = start.y - end.y;
+  if (gap == null || gap < 0) return [preferred, preferred];
+  const available = Math.max(0, gap / 2);
+  return [Math.min(preferred, available), Math.min(preferred, available)];
+}
+
+function offsetTowardSide(point, side, distance) {
+  const vector = SIDE_VECTOR[side];
+  return {
+    x: point.x + vector.x * distance,
+    y: point.y + vector.y * distance,
+  };
 }
 
 // Candidate positions for the bend between two docks: the midpoint first,
@@ -2335,27 +2594,58 @@ function channelPositions(a, b) {
   return positions;
 }
 
-function pickBestRoute(candidates, obstacles) {
+function pickBestRoute(candidates, obstacles, plan) {
   let best = null;
   let bestScore = Number.POSITIVE_INFINITY;
   candidates.forEach((raw) => {
     const points = cleanRoute(raw);
     if (points.length < 2) return;
-    let length = 0;
-    let hits = 0;
-    for (let i = 1; i < points.length; i += 1) {
-      length += Math.abs(points[i].x - points[i - 1].x) + Math.abs(points[i].y - points[i - 1].y);
-      obstacles.forEach((box) => {
-        if (segmentHitsBox(points[i - 1], points[i], box)) hits += 1;
-      });
-    }
-    const score = hits * 10000 + length + (points.length - 2) * 30;
+    if (!routeHonorsPorts(points, plan) || routeHasBacktrack(points)) return;
+    const score = routeScore(points, obstacles);
     if (score < bestScore) {
       bestScore = score;
       best = points;
     }
   });
   return best;
+}
+
+function routeScore(points, obstacles) {
+  let length = 0;
+  let hits = 0;
+  for (let i = 1; i < points.length; i += 1) {
+    length += Math.abs(points[i].x - points[i - 1].x)
+      + Math.abs(points[i].y - points[i - 1].y);
+    obstacles.forEach((box) => {
+      if (segmentHitsBox(points[i - 1], points[i], box)) hits += 1;
+    });
+  }
+  return hits * 10000 + length + (points.length - 2) * 30;
+}
+
+function routeHonorsPorts(points, plan) {
+  if (!plan || points.length < 2) return true;
+  const first = segmentVector(points[0], points[1]);
+  const lastOutward = segmentVector(points.at(-1), points.at(-2));
+  return vectorsAlign(first, SIDE_VECTOR[plan.exitSide])
+    && vectorsAlign(lastOutward, SIDE_VECTOR[plan.enterSide]);
+}
+
+function segmentVector(from, to) {
+  return { x: Math.sign(to.x - from.x), y: Math.sign(to.y - from.y) };
+}
+
+function vectorsAlign(a, b) {
+  return a.x === b.x && a.y === b.y;
+}
+
+function routeHasBacktrack(points) {
+  for (let i = 1; i < points.length - 1; i += 1) {
+    const incoming = segmentVector(points[i - 1], points[i]);
+    const outgoing = segmentVector(points[i], points[i + 1]);
+    if (incoming.x === -outgoing.x && incoming.y === -outgoing.y) return true;
+  }
+  return false;
 }
 
 // Copy the polyline, dropping zero-length segments and collinear midpoints.
@@ -2370,7 +2660,12 @@ function cleanRoute(raw) {
     const a = points[i - 1];
     const b = points[i];
     const c = points[i + 1];
-    if ((a.x === b.x && b.x === c.x) || (a.y === b.y && b.y === c.y)) points.splice(i, 1);
+    const vertical = a.x === b.x && b.x === c.x;
+    const horizontal = a.y === b.y && b.y === c.y;
+    const between = vertical
+      ? b.y >= Math.min(a.y, c.y) && b.y <= Math.max(a.y, c.y)
+      : b.x >= Math.min(a.x, c.x) && b.x <= Math.max(a.x, c.x);
+    if ((vertical || horizontal) && between) points.splice(i, 1);
   }
   return points;
 }
@@ -2435,13 +2730,14 @@ function nodeBox(id) {
   };
 }
 
-function renderEdgeHitTarget(edge, pathD) {
+function renderEdgeHitTarget(edge, pathD, edgeIndex) {
   const hit = document.createElementNS("http://www.w3.org/2000/svg", "path");
   const previewId = edge.relation_ref || edge.id || `${edge.from}->${edge.to}:${edge.label || "flow"}`;
   const pointerPreviewKey = `pointer:edge:${previewId}`;
   const focusPreviewKey = `focus:edge:${previewId}`;
   hit.setAttribute("d", pathD);
   hit.setAttribute("class", "edge-hit");
+  hit.dataset.edgeIndex = String(edgeIndex);
   hit.setAttribute("tabindex", "0");
   hit.setAttribute("role", "button");
   hit.setAttribute("aria-label", edge.connection.title);
