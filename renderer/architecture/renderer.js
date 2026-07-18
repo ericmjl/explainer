@@ -1,7 +1,73 @@
 import { manifestIndex } from "./manifest-index.js";
+import {
+  allocateContentGridGutters,
+  allocateContentGridRowGutters,
+  balancedTextLines,
+  edgeLabelFits,
+} from "./content-grid.mjs";
+import {
+  buildEdgeQuestionContext,
+  buildNodeQuestionContext,
+  canonicalNodeRef,
+  edgeRelationPath,
+  formatQuestionContext,
+  questionContextReference,
+} from "./question-context.mjs";
+import {
+  glyphKindForShape,
+  shapeDimsLabel,
+  tensorGlyphSvg,
+} from "./representation-glyphs.mjs";
+import {
+  PAYLOAD_FLOW_FAMILIES,
+  edgeFlowProfile,
+  nodeFlowProfiles,
+} from "./flow-families.mjs";
+import {
+  edgeIsRepresentedByRepeatRegion,
+  executionLoopForRef,
+  repeatRegionAccessibleLabel,
+  repeatRegionBounds,
+  repeatRegions,
+  representedIterationRelationRefs,
+} from "./repeat-regions.mjs";
+import {
+  clearFacingPortPlan,
+  DEFAULT_ARROW_LANDING,
+  ensureMinimumLanding,
+  fitEndpointStubLengths,
+  separateParallelSegments,
+} from "./orthogonal-routing.mjs";
+import {
+  measureEdgeAnnotation,
+  placeEdgeAnnotation,
+} from "./edge-annotations.mjs";
+import {
+  collectionValues,
+  createRendererModel,
+  humanizeRef,
+  refNamespace,
+  relationRefsForEdge,
+  untypedRef,
+} from "./renderer-model.mjs";
+import { allocateFeedbackLanes } from "./semantic-routing.mjs";
+import {
+  createWorkspaceSelection,
+  edgeSelectionKey,
+  selectionMatchesEdge,
+  selectionMessageProjection,
+  targetFromSelection,
+} from "./workspace-selection.mjs";
+import {
+  deepLinkHistoryMode,
+  resolveDeepLink,
+  writeDeepLink,
+} from "./deep-link-state.mjs";
 
 const pageParams = new URLSearchParams(window.location.search);
 const archParam = pageParams.get("arch");
+const unknownArchParam = Boolean(archParam)
+  && !manifestIndex.some((entry) => entry.id === archParam);
 const useElkLayout = pageParams.get("layout") === "elk";
 const retiredUiParams = ["ui", "edit", "tune"];
 if (retiredUiParams.some((name) => pageParams.has(name))) {
@@ -15,226 +81,27 @@ if (retiredUiParams.some((name) => pageParams.has(name))) {
 }
 const activeManifestEntry = manifestIndex.find((entry) => entry.id === archParam) || manifestIndex[0];
 const { manifest: sourceManifest } = await import(`./${activeManifestEntry.file}`);
-const manifest = normalizeManifestForRenderer(sourceManifest);
-
-function collectionValues(collection) {
-  if (Array.isArray(collection)) return collection;
-  if (collection && typeof collection === "object") return Object.values(collection);
-  return [];
+const rendererModel = createRendererModel(sourceManifest);
+const { manifest } = rendererModel;
+const {
+  modulesById,
+  repsById,
+  valueSitesById,
+  valueSiteInterfacesById,
+  relationsById,
+  boardsById,
+  conditioningByPair,
+  conditioningByRelation,
+} = rendererModel.indexes;
+const initialDeepLink = resolveDeepLink({
+  boards: manifest.boards.items,
+  rootBoardId: manifest.boards.rootBoard,
+  search: window.location.search,
+});
+if (unknownArchParam) {
+  initialDeepLink.issues.unshift({ code: "unknown_arch", param: "arch", value: archParam });
+  initialDeepLink.sanitized = true;
 }
-
-function untypedRef(ref, namespace = null) {
-  const value = String(ref || "");
-  const separator = value.indexOf(".");
-  if (separator < 0) return value;
-  if (namespace && value.slice(0, separator) !== namespace) return value;
-  return value.slice(separator + 1);
-}
-
-function refNamespace(ref) {
-  const value = String(ref || "");
-  const separator = value.indexOf(".");
-  return separator < 0 ? null : value.slice(0, separator);
-}
-
-function humanizeRef(ref) {
-  return untypedRef(ref).replaceAll("_", " ");
-}
-
-function relationRefsForEdge(edge) {
-  const path = edge.relation_path || edge.relationPath;
-  if (Array.isArray(path) && path.length) return path;
-  const hops = edge.provenance_hops || edge.provenanceHops;
-  if (Array.isArray(hops)) {
-    const refs = hops.map((hop) => hop?.relation_ref || hop?.relationRef).filter(Boolean);
-    if (refs.length) return refs;
-  }
-  const direct = edge.relation_ref || edge.relationRef;
-  return direct ? [direct] : [];
-}
-
-function normalizeConnection(edge, presentation, relationRefs) {
-  const connection = edge.connection || presentation.connection || {};
-  const flowName = edge.label || presentation.label || humanizeRef(relationRefs.at(-1) || edge.id || "flow");
-  return {
-    title: connection.title || presentation.title || flowName,
-    role: connection.role || presentation.role || humanizeRef(edge.kind || "information flow"),
-    inside: connection.inside || presentation.inside ||
-      `${humanizeRef(edge.from)} flows into ${humanizeRef(edge.to)}.`,
-  };
-}
-
-function normalizeProjectedSegments(edge, relationRefs, relationsById, localIdsByRef) {
-  if (Array.isArray(edge.segments) && edge.segments.length) {
-    return edge.segments.map((segment) => {
-      const relationRef = segment.relation_ref || segment.relationRef;
-      const relation = relationsById.get(relationRef) || relationsById.get(untypedRef(relationRef));
-      const presentation = segment.presentation || {};
-      const normalized = { ...presentation, ...segment, relation_ref: relationRef };
-      normalized.connection = normalizeConnection(
-        normalized,
-        presentation,
-        relationRef ? [relationRef] : [],
-      );
-      normalized.label ||= relation?.label || relation?.summary || relation?.operation;
-      normalized.tone ||= relation?.kind === "conditioning" ? "conditioning" : undefined;
-      return normalized;
-    });
-  }
-  const isProjectedEdge = edge.projection || edge.origin || edge.presentation ||
-    edge.relation_path || edge.relationPath || edge.provenance_hops || edge.provenanceHops;
-  if (!isProjectedEdge) return null;
-  if (!relationRefs.length) return null;
-
-  const localId = (ref, fallback) => {
-    const ids = localIdsByRef.get(ref) || localIdsByRef.get(untypedRef(ref));
-    return ids?.length === 1 ? ids[0] : fallback;
-  };
-  return relationRefs.map((relationRef, index) => {
-    const relation = relationsById.get(relationRef) || relationsById.get(untypedRef(relationRef));
-    const fromRef = relation?.from || relation?.source;
-    const toRef = relation?.to || relation?.target;
-    const from = index === 0 ? edge.from : localId(fromRef, fromRef || `${edge.id || "flow"}:hop-${index}`);
-    const to = index === relationRefs.length - 1
-      ? edge.to
-      : localId(toRef, toRef || `${edge.id || "flow"}:hop-${index + 1}`);
-    const relationLabel = relation?.summary || relation?.operation || humanizeRef(relationRef);
-    return {
-      from,
-      to,
-      relation_ref: relationRef,
-      label: relation?.label || relationLabel,
-      tone: relation?.kind === "conditioning" ? "conditioning" : undefined,
-      connection: {
-        title: relation?.summary || relationLabel,
-        role: humanizeRef(relation?.kind || relation?.operation || "information flow"),
-        inside: relation?.summary || `${humanizeRef(fromRef || from)} flows into ${humanizeRef(toRef || to)}.`,
-      },
-    };
-  });
-}
-
-function normalizeBoardNode(node, valueSitesById) {
-  const presentation = node.presentation || {};
-  const ref = node.ref || node.canonical_ref || node.canonicalRef;
-  const namespace = refNamespace(ref);
-  const normalized = { ...presentation, ...node };
-
-  if (namespace === "modules") {
-    normalized.kind ||= "module";
-    normalized.module_ref ||= untypedRef(ref, "modules");
-  } else if (namespace === "value_sites") {
-    const siteId = untypedRef(ref, "value_sites");
-    const site = valueSitesById.get(siteId) || {};
-    const representationRef = site.representation_ref || site.representationRef || site.rep_ref;
-    normalized.kind ||= "representation";
-    normalized.value_site_ref ||= siteId;
-    normalized.rep_ref ||= untypedRef(representationRef, "representations");
-    normalized.label ||= site.display_label || site.label || humanizeRef(node.id);
-    normalized.role ||= site.role || site.semantic_role;
-    normalized.shape ||= site.shape;
-    normalized.scale ||= site.scale;
-  } else if (namespace === "representations") {
-    // Kept for tolerant reading of early projector fixtures. Visualization
-    // v0.4 normally binds tensor occurrences through value_sites.* instead.
-    normalized.kind ||= "representation";
-    normalized.rep_ref ||= untypedRef(ref, "representations");
-  }
-
-  if (normalized.moduleRef && !normalized.module_ref) normalized.module_ref = normalized.moduleRef;
-  if (normalized.repRef && !normalized.rep_ref) normalized.rep_ref = normalized.repRef;
-  if (normalized.boardRef && !normalized.board_ref) normalized.board_ref = normalized.boardRef;
-  if (normalized.valueSiteRef && !normalized.value_site_ref) {
-    normalized.value_site_ref = untypedRef(normalized.valueSiteRef, "value_sites");
-  }
-  return normalized;
-}
-
-function normalizeBoardEdge(edge, relationsById, localIdsByRef) {
-  const presentation = edge.presentation || {};
-  const relationRefs = relationRefsForEdge(edge);
-  const normalized = {
-    ...presentation,
-    ...edge,
-    label: edge.label ?? presentation.label,
-    tone: edge.tone ?? presentation.tone ?? (edge.kind === "conditioning" ? "conditioning" : undefined),
-    route_side: edge.route_side ?? edge.routeSide ?? presentation.route_side ?? presentation.routeSide,
-    route_clearance: edge.route_clearance ?? edge.routeClearance ??
-      presentation.route_clearance ?? presentation.routeClearance,
-  };
-  normalized.relation_ref ||= relationRefs.length === 1 ? relationRefs[0] : undefined;
-  if (relationRefs.length) normalized.relation_path ||= relationRefs;
-  normalized.connection = normalizeConnection(normalized, presentation, relationRefs);
-  normalized.segments = normalizeProjectedSegments(normalized, relationRefs, relationsById, localIdsByRef);
-  return normalized;
-}
-
-function normalizeBoard(board, architecture) {
-  const projectedGraph = board.projected_graph || board.projectedGraph || board.graph;
-  const graph = projectedGraph && typeof projectedGraph === "object" ? projectedGraph : board;
-  const valueSites = collectionValues(architecture.valueSites || architecture.value_sites);
-  const valueSitesById = new Map(valueSites.map((site) => [site.id, site]));
-  const nodes = collectionValues(graph.nodes).map((node) => normalizeBoardNode(node, valueSitesById));
-  const localIdsByRef = new Map();
-  for (const node of nodes) {
-    const refs = [node.ref, node.canonical_ref, node.canonicalRef, node.module_ref, node.rep_ref]
-      .filter(Boolean);
-    for (const ref of refs) {
-      for (const key of [ref, untypedRef(ref)]) {
-        const ids = localIdsByRef.get(key) || [];
-        ids.push(node.id);
-        localIdsByRef.set(key, ids);
-      }
-    }
-  }
-  const relations = collectionValues(architecture.relations);
-  const relationsById = new Map();
-  for (const relation of relations) {
-    relationsById.set(relation.id, relation);
-    relationsById.set(untypedRef(relation.id, "relations"), relation);
-    relationsById.set(`relations.${relation.id}`, relation);
-  }
-  const edges = collectionValues(graph.edges).map((edge) =>
-    normalizeBoardEdge(edge, relationsById, localIdsByRef));
-  return { ...graph, ...board, nodes, edges };
-}
-
-function normalizeManifestForRenderer(source) {
-  const sourceArchitecture = source.architecture || {};
-  const architecture = {
-    ...sourceArchitecture,
-    sourceYaml: sourceArchitecture.sourceYaml || sourceArchitecture.source_yaml,
-    modules: collectionValues(sourceArchitecture.modules),
-    representations: collectionValues(sourceArchitecture.representations),
-    valueSites: collectionValues(sourceArchitecture.valueSites || sourceArchitecture.value_sites),
-    relations: collectionValues(sourceArchitecture.relations),
-    stateSemantics: sourceArchitecture.stateSemantics || sourceArchitecture.state_semantics || {},
-    stateSemanticsBySite: sourceArchitecture.stateSemanticsBySite ||
-      sourceArchitecture.state_semantics_by_site || {},
-    valueSiteInterfaces: sourceArchitecture.valueSiteInterfaces ||
-      sourceArchitecture.value_site_interfaces || {},
-    scaleTransitions: collectionValues(
-      sourceArchitecture.scaleTransitions || sourceArchitecture.scale_transitions,
-    ),
-    trainingInference: sourceArchitecture.trainingInference ||
-      sourceArchitecture.training_inference || {},
-    claims: collectionValues(sourceArchitecture.claims),
-  };
-  const sourceBoards = source.boards || {};
-  const boardItems = collectionValues(
-    sourceBoards.items || sourceBoards.projected || source.projectedBoards || source.projected_boards,
-  ).map((board) => normalizeBoard(board, architecture));
-  return {
-    ...source,
-    architecture,
-    boards: {
-      ...sourceBoards,
-      rootBoard: sourceBoards.rootBoard || sourceBoards.root_board,
-      items: boardItems,
-    },
-  };
-}
-
 const elements = {
   canvas: document.querySelector(".architecture-canvas"),
   moduleLayer: document.getElementById("moduleLayer"),
@@ -243,49 +110,23 @@ const elements = {
   focusHeader: document.getElementById("focusHeader"),
   focusEyebrow: document.getElementById("focusEyebrow"),
   focusTitle: document.getElementById("focusTitle"),
+  focusQuestion: document.getElementById("focusQuestion"),
   focusReset: document.getElementById("focusReset"),
   focusBody: document.getElementById("focusBody"),
-  focusPreviewHeader: document.getElementById("focusPreviewHeader"),
-  focusPreviewTitle: document.getElementById("focusPreviewTitle"),
-  focusPreviewBody: document.getElementById("focusPreviewBody"),
+  boardNavigation: document.getElementById("boardNavigation"),
+  boardBack: document.getElementById("boardBack"),
+  boardBackLabel: document.querySelector(".board-back-label"),
+  boardBreadcrumbs: document.getElementById("boardBreadcrumbs"),
+  boardDepth: document.getElementById("boardDepth"),
+  copyDeepLink: document.getElementById("copyDeepLink"),
+  semanticLocationStatus: document.getElementById("semanticLocationStatus"),
+  canvasControls: document.getElementById("canvasControls"),
+  canvasZoomValue: document.querySelector(".canvas-zoom-value"),
+  canvasTooltip: document.getElementById("canvasTooltip"),
   scaleLaneLayer: document.getElementById("scaleLaneLayer"),
+  representationLaneLayer: document.getElementById("representationLaneLayer"),
 };
 
-const modulesById = new Map(manifest.architecture.modules.map((module) => [module.id, module]));
-const repsById = new Map(manifest.architecture.representations.map((rep) => [rep.id, rep]));
-const valueSitesById = new Map((manifest.architecture.valueSites || []).map((site) => [site.id, site]));
-const valueSiteInterfacesById = new Map(
-  Object.entries(manifest.architecture.valueSiteInterfaces || {}),
-);
-const relationsById = new Map(
-  (manifest.architecture.relations || []).flatMap((relation) => [
-    [relation.id, relation],
-    [untypedRef(relation.id, "relations"), relation],
-    [`relations.${untypedRef(relation.id, "relations")}`, relation],
-  ]),
-);
-const boardsById = new Map(manifest.boards.items.map((board) => [board.id, board]));
-const conditioningByPair = new Map(
-  (manifest.architecture.conditioning || []).map((cond) => [
-    `${cond.source}->${String(cond.target || "").split(".")[0]}`,
-    cond,
-  ]),
-);
-const conditioningByRelation = new Map(
-  (manifest.architecture.conditioning || []).flatMap((cond) => {
-    const ref = cond.relation_ref || cond.relationRef;
-    if (!ref) return [];
-    const bare = untypedRef(ref, "relations");
-    return [[ref, cond], [bare, cond], [`relations.${bare}`, cond]];
-  }),
-);
-
-let boardActions = null;
-let canvasContextRail = null;
-let semanticLocation = null;
-let semanticLocationStatus = null;
-let canvasControls = null;
-let canvasZoomValue = null;
 let modelMap = null;
 let modelMapSvg = null;
 let modelMapA11y = null;
@@ -294,27 +135,50 @@ let modelMapBody = null;
 let modelMapViewToggle = null;
 let modelMapCollapseButton = null;
 let edgeLabelMeasureContext = null;
-const inspectorPreviews = new Map();
-let inspectorPreviewSequence = 0;
+let questionMenu = null;
+let questionMenuIdentifier = null;
+let questionMenuTarget = null;
+let questionMenuInvoker = null;
+let questionCopyStatus = null;
+let questionCopyStatusTimer = null;
+let questionCopyFallback = null;
+let questionCopyFallbackText = null;
+let questionCopyFallbackInvoker = null;
 const connectivityHighlights = new Map();
 let connectivityHighlightSequence = 0;
+let activeTooltipKey = null;
+let viewportFrame = null;
+let renderedViewportTransform = null;
+let renderedZoomPercent = null;
+let geometryFrame = null;
+let deepLinkWritesSuppressed = 0;
+let boardTransitionGeneration = 0;
+const pendingGeometry = {
+  measureGrid: false,
+  renderEdges: false,
+  fit: false,
+};
 
 const state = {
-  focusedId: null,
+  selection: null,
   focusHasMath: false,
-  boardStack: [manifest.boards.rootBoard],
-  boardOrigins: [null],
-  pinnedEdge: null,
+  boardStack: [...initialDeepLink.boardStack],
+  boardOrigins: [...initialDeepLink.boardOrigins],
+  deepLink: null,
   edgeRoutes: new Map(),
+  edgeAnnotationBoxes: [],
   modelMapView: "root",
   modelMapCollapsed: true,
+  modelMapDirty: true,
+  isTransitioning: false,
+  userMovedViewport: false,
 };
 
 const viewport = {
   x: 0,
   y: 0,
   scale: 1,
-  minScale: 0.48,
+  minScale: 0.42,
   maxScale: 2.2,
   isPanning: false,
   startClientX: 0,
@@ -326,9 +190,12 @@ const viewport = {
 function render() {
   renderPageChrome();
   ensureBoardChrome();
+  ensureQuestionMenu();
   elements.focusReset.addEventListener("click", resetFocusedDetail);
-  renderBoard();
-  focusOverview();
+  elements.focusQuestion?.addEventListener("click", onFocusQuestionClick);
+  elements.copyDeepLink?.addEventListener("click", onCopyDeepLinkClick);
+  window.addEventListener("popstate", onDeepLinkPopState);
+  applyResolvedDeepLink(initialDeepLink, { canonicalize: true, announceIssues: true });
 }
 
 function renderPageChrome() {
@@ -339,12 +206,10 @@ function renderPageChrome() {
   if (eyebrow) eyebrow.textContent = "Interactive architecture";
   const intro = document.getElementById("rendererIntro");
   if (intro) {
-    intro.textContent =
-      "Open a part of the system to move from the overview into its internal mechanism. " +
-      "The location guide keeps each level connected to the whole.";
+    intro.textContent = "Explore the model from system flow to implementation detail.";
   }
   const focusEyebrow = document.getElementById("focusEyebrow");
-  if (focusEyebrow) focusEyebrow.textContent = "Current takeaway";
+  if (focusEyebrow) focusEyebrow.textContent = "Board overview";
   const sourceLink = document.getElementById("archSourceLink");
   if (sourceLink) sourceLink.href = manifest.architecture.sourceYaml;
   const switcher = document.getElementById("archSwitcher");
@@ -360,6 +225,8 @@ function renderPageChrome() {
     switcher.addEventListener("change", () => {
       const params = new URLSearchParams(window.location.search);
       params.set("arch", switcher.value);
+      params.delete("board");
+      params.delete("node");
       window.location.search = params.toString();
     });
   }
@@ -367,11 +234,14 @@ function renderPageChrome() {
 
 window.addEventListener("mathjax-ready", () => {
   typesetMath();
-  renderBoard();
+  refreshBoardAfterMath();
 });
 
 window.addEventListener("elk-ready", () => {
-  if (useElkLayout) renderBoard();
+  if (!useElkLayout) return;
+  const graph = displayGraph(currentBoard());
+  state.displayEdges = graph.edges;
+  layoutBoard(graph);
 });
 
 function typesetBoardMathAsync() {
@@ -384,38 +254,67 @@ function typesetBoardMathAsync() {
 }
 
 function setFocusBody(html, { selected = false } = {}) {
-  clearInspectorPreviews();
-  elements.focusEyebrow.textContent = selected ? "Selected detail" : "Current takeaway";
+  hideCanvasTooltip();
+  elements.focusEyebrow.textContent = selected ? "Selected" : "Board overview";
   elements.focusReset.hidden = !selected;
   elements.focusPanel.classList.toggle("is-selected", selected);
+  elements.focusPanel.dataset.mode = selected ? "selected" : "overview";
   elements.focusBody.innerHTML = html;
   state.focusHasMath = html.includes("math-step");
   typesetMath();
-  renderModelMap();
 }
 
-function beginInspectorPreview(sourceKey, { title, html }) {
-  const key = sourceKey || "transient-preview";
-  inspectorPreviews.set(key, {
-    title,
-    html,
-    sequence: ++inspectorPreviewSequence,
-  });
-  renderLatestInspectorPreview();
+function showCanvasTooltip(sourceKey, { title, html, anchor }) {
+  const key = sourceKey || "transient-tooltip";
+  activeTooltipKey = key;
+  elements.canvasTooltip.setAttribute("aria-label", title || "Architecture preview");
+  elements.canvasTooltip.innerHTML = html;
+  elements.canvasTooltip.hidden = false;
+  positionCanvasTooltip(anchor);
+  typesetCanvasTooltip(html);
 }
 
-function endInspectorPreview(sourceKey) {
-  if (!sourceKey) {
-    clearInspectorPreviews();
-    return;
+function positionCanvasTooltip(anchor) {
+  const anchorRect = anchor?.getBoundingClientRect?.();
+  if (!anchorRect) return;
+  const canvasRect = elements.canvas.getBoundingClientRect();
+  const tooltipRect = elements.canvasTooltip.getBoundingClientRect();
+  const gap = 12;
+  let left = anchorRect.right + gap;
+  if (left + tooltipRect.width > canvasRect.right - 8) {
+    left = anchorRect.left - tooltipRect.width - gap;
   }
-  inspectorPreviews.delete(sourceKey);
-  renderLatestInspectorPreview();
+  const top = clamp(
+    anchorRect.top + anchorRect.height / 2 - tooltipRect.height / 2,
+    canvasRect.top + 8,
+    Math.max(canvasRect.top + 8, canvasRect.bottom - tooltipRect.height - 8),
+  );
+  elements.canvasTooltip.style.left = `${clamp(
+    left,
+    canvasRect.left + 8,
+    Math.max(canvasRect.left + 8, canvasRect.right - tooltipRect.width - 8),
+  )}px`;
+  elements.canvasTooltip.style.top = `${top}px`;
 }
 
-function clearInspectorPreviews() {
-  inspectorPreviews.clear();
-  hideInspectorPreviewSurface();
+function hideCanvasTooltip(sourceKey = null) {
+  if (sourceKey && activeTooltipKey !== sourceKey) return;
+  if (activeTooltipKey === null && elements.canvasTooltip.hidden) return;
+  const mathJax = window.MathJax;
+  mathJax?.typesetClear?.([elements.canvasTooltip]);
+  activeTooltipKey = null;
+  elements.canvasTooltip.hidden = true;
+  elements.canvasTooltip.innerHTML = "";
+}
+
+function typesetCanvasTooltip(html) {
+  if (!html.includes("math-step") && !html.includes("\\(")) return;
+  const mathJax = window.MathJax;
+  if (!mathJax?.typesetPromise) return;
+  mathJax.typesetClear?.([elements.canvasTooltip]);
+  mathJax.typesetPromise([elements.canvasTooltip]).catch((error) => {
+    console.warn("MathJax tooltip typesetting failed", error);
+  });
 }
 
 function beginConnectivityHighlight(sourceKey, nodeId) {
@@ -509,47 +408,6 @@ function applyConnectivityHighlight(nodeId) {
   });
 }
 
-function renderLatestInspectorPreview() {
-  const latest = Array.from(inspectorPreviews.values()).reduce(
-    (current, preview) => (!current || preview.sequence > current.sequence ? preview : current),
-    null,
-  );
-  if (!latest) {
-    hideInspectorPreviewSurface();
-    return;
-  }
-
-  elements.focusHeader.hidden = true;
-  elements.focusBody.hidden = true;
-  elements.focusPreviewHeader.hidden = false;
-  elements.focusPreviewBody.hidden = false;
-  elements.focusPreviewTitle.textContent = latest.title;
-  elements.focusPreviewBody.innerHTML = latest.html;
-  elements.focusPanel.classList.add("is-preview");
-  typesetInspectorPreview(latest.html);
-}
-
-function hideInspectorPreviewSurface() {
-  const mathJax = window.MathJax;
-  mathJax?.typesetClear?.([elements.focusPreviewBody]);
-  elements.focusPreviewBody.innerHTML = "";
-  elements.focusPreviewHeader.hidden = true;
-  elements.focusPreviewBody.hidden = true;
-  elements.focusHeader.hidden = false;
-  elements.focusBody.hidden = false;
-  elements.focusPanel.classList.remove("is-preview");
-}
-
-function typesetInspectorPreview(html) {
-  if (!html.includes("math-step") && !html.includes("\\(")) return;
-  const mathJax = window.MathJax;
-  if (!mathJax?.typesetPromise) return;
-  mathJax.typesetClear?.([elements.focusPreviewBody]);
-  mathJax.typesetPromise([elements.focusPreviewBody]).catch((error) => {
-    console.warn("MathJax inspector preview typesetting failed", error);
-  });
-}
-
 function typesetMath() {
   if (!state.focusHasMath) return;
   const mathJax = window.MathJax;
@@ -583,30 +441,9 @@ function renderMathStep(step) {
 }
 
 function ensureBoardChrome() {
-  if (!boardActions) {
-    boardActions = document.createElement("nav");
-    boardActions.className = "board-actions board-chrome";
-    boardActions.setAttribute("aria-label", "Board navigation");
-    boardActions.addEventListener("click", onBoardActionClick);
-    elements.canvas.appendChild(boardActions);
-  }
-  if (!canvasContextRail) {
-    canvasContextRail = document.createElement("div");
-    canvasContextRail.className = "canvas-context-rail board-chrome";
-    elements.canvas.appendChild(canvasContextRail);
-
-    semanticLocation = document.createElement("nav");
-    semanticLocation.className = "semantic-location";
-    semanticLocation.setAttribute("aria-label", "Semantic location");
-    semanticLocation.addEventListener("click", onSemanticLocationClick);
-    canvasContextRail.appendChild(semanticLocation);
-
-    semanticLocationStatus = document.createElement("p");
-    semanticLocationStatus.className = "semantic-location-status";
-    semanticLocationStatus.setAttribute("role", "status");
-    semanticLocationStatus.setAttribute("aria-live", "polite");
-    semanticLocationStatus.setAttribute("aria-atomic", "true");
-    canvasContextRail.appendChild(semanticLocationStatus);
+  if (!elements.boardNavigation.dataset.ready) {
+    elements.boardNavigation.dataset.ready = "true";
+    elements.boardNavigation.addEventListener("click", onBoardNavigationClick);
   }
   ensurePanZoom();
   ensureModelMap();
@@ -615,6 +452,493 @@ function ensureBoardChrome() {
 
 function currentBoard() {
   return boardsById.get(state.boardStack.at(-1)) || boardsById.get(manifest.boards.rootBoard);
+}
+
+function withDeepLinkWritesSuppressed(callback) {
+  deepLinkWritesSuppressed += 1;
+  try {
+    return callback();
+  } finally {
+    deepLinkWritesSuppressed -= 1;
+  }
+}
+
+function currentRendererDeepLink() {
+  const boardId = currentBoard()?.id || manifest.boards.rootBoard;
+  const nodeId = state.selection?.kind === "node" && state.selection.boardId === boardId
+    ? state.selection.occurrenceId
+    : null;
+  return { boardId, nodeId };
+}
+
+function canonicalDeepLinkSearch(link = currentRendererDeepLink()) {
+  const search = writeDeepLink(window.location.search, {
+    rootBoardId: manifest.boards.rootBoard,
+    boardId: link.boardId,
+    nodeId: link.nodeId,
+  });
+  const params = new URLSearchParams(search);
+  params.set("arch", activeManifestEntry.id);
+  return `?${params.toString()}`;
+}
+
+function deepLinkLocation(search) {
+  return `${window.location.pathname}${search}${window.location.hash}`;
+}
+
+function syncDeepLinkHistory({ mode = null } = {}) {
+  if (deepLinkWritesSuppressed) return;
+  const next = currentRendererDeepLink();
+  const previous = state.deepLink;
+  const requestedMode = mode || deepLinkHistoryMode(previous, next);
+  const search = canonicalDeepLinkSearch(next);
+  const location = deepLinkLocation(search);
+  const currentLocation = deepLinkLocation(window.location.search);
+  state.deepLink = next;
+  if (location === currentLocation) return;
+  const historyMode = requestedMode === "push" ? "pushState" : "replaceState";
+  window.history[historyMode]({ architectureDeepLink: next }, "", location);
+}
+
+function deepLinkIssueMessage(issues = []) {
+  const codes = new Set(issues.map((issue) => issue.code));
+  if (codes.has("unknown_arch")) {
+    return `That shared architecture is not available, so ${activeManifestEntry.name} was opened instead.`;
+  }
+  if (codes.has("unknown_board") || codes.has("unreachable_board")) {
+    return "That shared architecture view is no longer available, so the overview was opened instead.";
+  }
+  if (codes.has("unknown_node")) {
+    return "That shared component is no longer on this board, so the board overview was opened instead.";
+  }
+  return null;
+}
+
+function applyResolvedDeepLink(resolved, { canonicalize = false, announceIssues = false } = {}) {
+  cancelBoardArrival();
+  state.boardStack = resolved.boardStack.length
+    ? [...resolved.boardStack]
+    : [manifest.boards.rootBoard];
+  state.boardOrigins = resolved.boardOrigins.length
+    ? [...resolved.boardOrigins]
+    : [null];
+  state.userMovedViewport = false;
+  resetViewport();
+  withDeepLinkWritesSuppressed(() => {
+    renderBoard();
+    if (!focusNodeOccurrence(resolved.nodeId)) focusOverview();
+  });
+  state.deepLink = currentRendererDeepLink();
+  updateDeepLinkControl();
+  if (canonicalize || resolved.sanitized) syncDeepLinkHistory({ mode: "replace" });
+  if (announceIssues) {
+    const message = deepLinkIssueMessage(resolved.issues);
+    if (message) announceQuestionCopy(message);
+  }
+}
+
+function onDeepLinkPopState() {
+  const params = new URLSearchParams(window.location.search);
+  const requestedArch = params.get("arch");
+  if (requestedArch && requestedArch !== activeManifestEntry.id) {
+    window.location.reload();
+    return;
+  }
+  const resolved = resolveDeepLink({
+    boards: manifest.boards.items,
+    rootBoardId: manifest.boards.rootBoard,
+    search: window.location.search,
+  });
+  applyResolvedDeepLink(resolved, {
+    canonicalize: resolved.sanitized || !requestedArch,
+    announceIssues: true,
+  });
+}
+
+function deepLinkTargetLabel() {
+  if (state.selection?.kind === "node" && state.selection.boardId === currentBoard().id) {
+    return nodeLabelById(state.selection.occurrenceId);
+  }
+  return currentBoard()?.title || manifest.architecture.name;
+}
+
+function updateDeepLinkControl() {
+  const label = deepLinkTargetLabel();
+  if (elements.copyDeepLink) {
+    const description = `Copy link to ${label}`;
+    elements.copyDeepLink.setAttribute("aria-label", description);
+    elements.copyDeepLink.title = description;
+  }
+  document.title = `${label} — ${manifest.architecture.name}`;
+}
+
+function shareableDeepLinkUrl() {
+  const url = new URL(window.location.href);
+  url.search = canonicalDeepLinkSearch();
+  ["ui", "edit", "tune", "review_refresh"].forEach((name) => url.searchParams.delete(name));
+  url.hash = "";
+  return url.href;
+}
+
+async function onCopyDeepLinkClick() {
+  syncDeepLinkHistory({ mode: "replace" });
+  const link = shareableDeepLinkUrl();
+  const copied = await writeQuestionClipboard(link);
+  if (copied) {
+    announceQuestionCopy("Link copied. It will reopen this architecture view.");
+  } else {
+    showQuestionCopyFallback(link, elements.copyDeepLink);
+  }
+}
+
+function ensureQuestionMenu() {
+  if (questionMenu) return;
+
+  questionMenu = document.createElement("div");
+  questionMenu.id = "architectureQuestionMenu";
+  questionMenu.className = "architecture-question-menu";
+  questionMenu.setAttribute("role", "menu");
+  questionMenu.setAttribute("aria-label", "Architecture question actions");
+  questionMenu.hidden = true;
+  questionMenu.innerHTML = `
+    <div class="architecture-question-menu-heading">
+      <span>Ask about</span>
+      <code></code>
+    </div>
+    <button type="button" role="menuitem" data-question-action="reference">
+      <strong>Copy reference</strong>
+      <small>Canonical identifier for a short follow-up</small>
+    </button>
+    <button type="button" role="menuitem" data-question-action="context">
+      <strong>Copy question context</strong>
+      <small>Board, neighborhood, arrows, and evidence for a conversation</small>
+    </button>
+  `;
+  questionMenuIdentifier = questionMenu.querySelector("code");
+  questionMenu.addEventListener("click", onQuestionMenuClick);
+  questionMenu.addEventListener("keydown", onQuestionMenuKeyDown);
+  document.body.appendChild(questionMenu);
+  elements.focusQuestion?.setAttribute("aria-controls", questionMenu.id);
+
+  questionCopyStatus = document.createElement("p");
+  questionCopyStatus.className = "architecture-copy-status";
+  questionCopyStatus.setAttribute("role", "status");
+  questionCopyStatus.setAttribute("aria-live", "polite");
+  questionCopyStatus.setAttribute("aria-atomic", "true");
+  questionCopyStatus.hidden = true;
+  document.body.appendChild(questionCopyStatus);
+
+  questionCopyFallback = document.createElement("section");
+  questionCopyFallback.className = "architecture-copy-fallback";
+  questionCopyFallback.setAttribute("role", "dialog");
+  questionCopyFallback.setAttribute("aria-modal", "true");
+  questionCopyFallback.setAttribute("aria-labelledby", "architectureCopyFallbackTitle");
+  questionCopyFallback.hidden = true;
+  questionCopyFallback.innerHTML = `
+    <div>
+      <h2 id="architectureCopyFallbackTitle">Copy text</h2>
+      <p>Clipboard access is unavailable. The text is selected; copy it manually.</p>
+      <textarea readonly spellcheck="false"></textarea>
+      <button type="button" data-question-fallback-close>Close</button>
+    </div>
+  `;
+  questionCopyFallbackText = questionCopyFallback.querySelector("textarea");
+  questionCopyFallback.querySelector("button").addEventListener("click", closeQuestionCopyFallback);
+  document.body.appendChild(questionCopyFallback);
+
+  document.addEventListener("pointerdown", onQuestionDocumentPointerDown);
+  document.addEventListener("keydown", onQuestionDocumentKeyDown);
+  window.addEventListener("resize", () => closeQuestionMenu({ restoreFocus: true }));
+  window.addEventListener("scroll", () => closeQuestionMenu({ restoreFocus: true }), true);
+}
+
+function questionBreadcrumbs() {
+  return state.boardStack.map((boardId) => boardsById.get(boardId)).filter(Boolean)
+    .map((board) => ({ id: board.id, title: board.title }));
+}
+
+function questionContextForTarget(target) {
+  if (!target) return null;
+  const board = currentBoard();
+  // Repeat enclosures replace long recurrence wires visually, but question
+  // packets still need the canonical iteration relations in the node
+  // neighborhood so an agent can explain what the indexed ports mean.
+  const edges = displayGraph(board, { includeRepresentedIterations: true }).edges;
+  const shared = {
+    sourceSet: activeManifestEntry.id,
+    manifest,
+    board,
+    breadcrumbs: questionBreadcrumbs(),
+    edges,
+  };
+  if (target.kind === "node") {
+    return buildNodeQuestionContext({ ...shared, node: target.node });
+  }
+  if (target.kind === "edge") {
+    return buildEdgeQuestionContext({ ...shared, edge: target.edge });
+  }
+  return null;
+}
+
+function questionIdentifierForTarget(target) {
+  if (target?.kind === "node") {
+    return canonicalNodeRef(target.node) || `${currentBoard().id}#${target.node.id}`;
+  }
+  if (target?.kind === "edge") {
+    const relationPath = edgeRelationPath(target.edge);
+    return relationPath.length
+      ? relationPath.join(" → ")
+      : `${target.edge.from} → ${target.edge.to}`;
+  }
+  return "architecture element";
+}
+
+function openQuestionMenu(target, { clientX = 0, clientY = 0, invoker = null } = {}) {
+  if (!target || !questionMenu) return;
+  hideCanvasTooltip();
+  clearConnectivityHighlights();
+  questionMenuTarget = target;
+  questionMenuInvoker = invoker;
+  questionMenuIdentifier.textContent = questionIdentifierForTarget(target);
+  questionMenuIdentifier.title = questionMenuIdentifier.textContent;
+  questionMenu.hidden = false;
+  questionMenu.style.left = "0px";
+  questionMenu.style.top = "0px";
+
+  const anchorRect = invoker?.getBoundingClientRect?.();
+  const requestedX = clientX || anchorRect?.right || 12;
+  const requestedY = clientY || anchorRect?.bottom || 12;
+  const menuRect = questionMenu.getBoundingClientRect();
+  const left = clamp(requestedX, 8, Math.max(8, window.innerWidth - menuRect.width - 8));
+  const top = clamp(requestedY, 8, Math.max(8, window.innerHeight - menuRect.height - 8));
+  questionMenu.style.left = `${left}px`;
+  questionMenu.style.top = `${top}px`;
+  if (invoker === elements.focusQuestion) elements.focusQuestion.setAttribute("aria-expanded", "true");
+  questionMenu.querySelector("button")?.focus({ preventScroll: true });
+}
+
+function closeQuestionMenu({ restoreFocus = false } = {}) {
+  if (!questionMenu || questionMenu.hidden) return;
+  questionMenu.hidden = true;
+  elements.focusQuestion?.setAttribute("aria-expanded", "false");
+  const invoker = questionMenuInvoker;
+  questionMenuTarget = null;
+  questionMenuInvoker = null;
+  if (restoreFocus && invoker?.isConnected) invoker.focus({ preventScroll: true });
+}
+
+function selectionTarget() {
+  return targetFromSelection(state.selection);
+}
+
+function setSelection(target) {
+  closeQuestionMenu();
+  state.selection = createWorkspaceSelection(target, currentBoard().id);
+  if (elements.focusQuestion) {
+    elements.focusQuestion.hidden = !state.selection;
+    elements.focusQuestion.setAttribute("aria-expanded", "false");
+  }
+  updateDeepLinkControl();
+  syncDeepLinkHistory();
+  announceSelection();
+}
+
+function announceSelection() {
+  const selection = selectionMessageProjection(state.selection);
+  const detail = {
+    sourceSet: activeManifestEntry.id,
+    selection,
+  };
+  window.dispatchEvent(new CustomEvent("architecture-selection-change", { detail }));
+  if (window.parent !== window) {
+    window.parent.postMessage({ type: "architecture-selection-change", ...detail }, window.location.origin);
+  }
+}
+
+function edgeIsSelected(edge) {
+  return selectionMatchesEdge(state.selection, currentBoard().id, edge);
+}
+
+function onFocusQuestionClick(event) {
+  event.stopPropagation();
+  const target = selectionTarget();
+  if (!target) return;
+  if (!questionMenu.hidden && questionMenuInvoker === elements.focusQuestion) {
+    closeQuestionMenu({ restoreFocus: true });
+    return;
+  }
+  openQuestionMenu(target, { invoker: elements.focusQuestion });
+}
+
+function attachQuestionMenuHandlers(element, target) {
+  element.addEventListener("contextmenu", (event) => {
+    event.preventDefault();
+    event.stopPropagation();
+    openQuestionMenu(target, {
+      clientX: event.clientX,
+      clientY: event.clientY,
+      invoker: element,
+    });
+  });
+  element.addEventListener("keydown", (event) => {
+    const opensMenu = event.key === "ContextMenu" || (event.shiftKey && event.key === "F10");
+    if (!opensMenu) return;
+    event.preventDefault();
+    event.stopPropagation();
+    openQuestionMenu(target, { invoker: element });
+  });
+}
+
+function onQuestionDocumentPointerDown(event) {
+  if (!questionMenu || questionMenu.hidden) return;
+  if (questionMenu.contains(event.target) || event.target === questionMenuInvoker) return;
+  const nextFocus = event.target.closest?.(
+    'button, a[href], input, select, textarea, [tabindex]:not([tabindex="-1"])',
+  ) || elements.canvas;
+  closeQuestionMenu();
+  nextFocus.focus?.({ preventScroll: true });
+}
+
+function onQuestionDocumentKeyDown(event) {
+  if (questionCopyFallback && !questionCopyFallback.hidden) {
+    if (event.key === "Escape") {
+      event.preventDefault();
+      closeQuestionCopyFallback();
+      return;
+    }
+    if (event.key === "Tab") trapQuestionFallbackFocus(event);
+    return;
+  }
+  if (event.key !== "Escape") return;
+  if (questionMenu && !questionMenu.hidden) {
+    event.preventDefault();
+    closeQuestionMenu({ restoreFocus: true });
+  }
+}
+
+function onQuestionMenuKeyDown(event) {
+  if (!questionMenu || questionMenu.hidden) return;
+  if (event.key === "Tab") {
+    closeQuestionMenu({ restoreFocus: true });
+    return;
+  }
+  const buttons = Array.from(questionMenu.querySelectorAll('[role="menuitem"]'));
+  const currentIndex = buttons.indexOf(document.activeElement);
+  let nextIndex = null;
+  if (event.key === "ArrowDown") nextIndex = (currentIndex + 1) % buttons.length;
+  if (event.key === "ArrowUp") nextIndex = (currentIndex - 1 + buttons.length) % buttons.length;
+  if (event.key === "Home") nextIndex = 0;
+  if (event.key === "End") nextIndex = buttons.length - 1;
+  if (nextIndex == null) return;
+  event.preventDefault();
+  buttons[nextIndex]?.focus({ preventScroll: true });
+}
+
+async function onQuestionMenuClick(event) {
+  const action = event.target.closest("button")?.dataset.questionAction;
+  if (!action || !questionMenuTarget) return;
+  const target = questionMenuTarget;
+  const invoker = questionMenuInvoker;
+  try {
+    const context = questionContextForTarget(target);
+    if (!context) throw new Error("Question context is unavailable for this element.");
+    const text = action === "reference"
+      ? questionContextReference(context)
+      : formatQuestionContext(context);
+    const copied = await writeQuestionClipboard(text);
+    closeQuestionMenu({ restoreFocus: copied });
+    if (copied) {
+      announceQuestionCopy(
+        action === "reference"
+          ? "Architecture reference copied."
+          : "Question context copied. Paste it into your conversation.",
+      );
+    } else {
+      showQuestionCopyFallback(text, invoker);
+    }
+  } catch (error) {
+    closeQuestionMenu({ restoreFocus: true });
+    announceQuestionCopy(error?.message || "Could not build question context.", { error: true });
+  }
+}
+
+async function writeQuestionClipboard(text) {
+  try {
+    if (navigator.clipboard?.writeText) {
+      await navigator.clipboard.writeText(text);
+      return true;
+    }
+  } catch (_error) {
+    // Fall through to the synchronous copy path used by local HTTP/file views.
+  }
+
+  const textarea = document.createElement("textarea");
+  textarea.value = text;
+  textarea.setAttribute("readonly", "");
+  textarea.className = "architecture-copy-proxy";
+  document.body.appendChild(textarea);
+  textarea.select();
+  let copied = false;
+  try {
+    copied = Boolean(document.execCommand?.("copy"));
+  } catch (_error) {
+    copied = false;
+  }
+  textarea.remove();
+  return copied;
+}
+
+function announceQuestionCopy(message, { error = false } = {}) {
+  if (!questionCopyStatus) return;
+  window.clearTimeout(questionCopyStatusTimer);
+  questionCopyStatus.textContent = message;
+  questionCopyStatus.classList.toggle("is-error", error);
+  questionCopyStatus.hidden = false;
+  questionCopyStatusTimer = window.setTimeout(() => {
+    questionCopyStatus.hidden = true;
+  }, 3600);
+}
+
+function showQuestionCopyFallback(text, invoker) {
+  closeQuestionMenu();
+  questionCopyFallbackInvoker = invoker;
+  questionCopyFallbackText.value = text;
+  questionCopyFallback.hidden = false;
+  questionCopyFallbackText.focus({ preventScroll: true });
+  questionCopyFallbackText.select();
+  announceQuestionCopy("Clipboard unavailable. The text is selected for manual copying.");
+}
+
+function closeQuestionCopyFallback() {
+  if (!questionCopyFallback || questionCopyFallback.hidden) return;
+  questionCopyFallback.hidden = true;
+  questionCopyFallbackText.value = "";
+  const target = questionCopyFallbackInvoker?.isConnected
+    ? questionCopyFallbackInvoker
+    : elements.focusQuestion && !elements.focusQuestion.hidden
+      ? elements.focusQuestion
+      : elements.canvas;
+  questionCopyFallbackInvoker = null;
+  target?.focus({ preventScroll: true });
+}
+
+function trapQuestionFallbackFocus(event) {
+  const controls = [
+    questionCopyFallbackText,
+    questionCopyFallback.querySelector("button"),
+  ].filter((element) => element && !element.disabled);
+  const first = controls[0];
+  const last = controls.at(-1);
+  if (event.shiftKey && document.activeElement === first) {
+    event.preventDefault();
+    last.focus({ preventScroll: true });
+  } else if (!event.shiftKey && document.activeElement === last) {
+    event.preventDefault();
+    first.focus({ preventScroll: true });
+  } else if (!controls.includes(document.activeElement)) {
+    event.preventDefault();
+    first.focus({ preventScroll: true });
+  }
 }
 
 function compactColumnTopology(board, nodes) {
@@ -629,37 +953,238 @@ function compactColumnTopology(board, nodes) {
 }
 
 function resetGridColumnSizing() {
-  elements.moduleLayer.classList.remove("is-content-grid");
-  elements.moduleLayer.style.gridTemplateColumns = "";
-  elements.moduleLayer.style.justifyContent = "";
-  elements.moduleLayer.style.columnGap = "";
+  [elements.moduleLayer, elements.representationLaneLayer].forEach((layer) => {
+    layer.classList.remove("is-content-grid", "is-content-row-grid");
+    layer.style.gridTemplateColumns = "";
+    layer.style.gridTemplateRows = "";
+    layer.style.justifyContent = "";
+    layer.style.alignContent = "";
+    layer.style.columnGap = "";
+    layer.style.rowGap = "";
+  });
 }
 
-function measureEdgeText(text) {
+const EDGE_TEXT_STYLES = {
+  label: { fontSize: 12, letterSpacingEm: 0.04 },
+  badge: { fontSize: 10, letterSpacingEm: 0.05 },
+};
+
+const EDGE_ANNOTATION_METRICS = {
+  labelHeight: 14,
+  badgeLineHeight: 12,
+  badgeLineGap: 0,
+  groupGap: 4,
+  paddingX: 4,
+  paddingY: 2,
+};
+
+function measureEdgeText(text, kind = "label") {
   const normalized = String(text || "").replaceAll("_", " ").toUpperCase();
   if (!normalized) return 0;
+  const style = EDGE_TEXT_STYLES[kind] || EDGE_TEXT_STYLES.label;
   if (!edgeLabelMeasureContext) {
     edgeLabelMeasureContext = document.createElement("canvas").getContext("2d");
   }
-  if (!edgeLabelMeasureContext) return normalized.length * 7.5;
-  edgeLabelMeasureContext.font = '900 12px system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif';
-  const letterSpacing = normalized.length * 0.48;
+  const letterSpacing = Math.max(0, normalized.length - 1) *
+    style.fontSize * style.letterSpacingEm;
+  if (!edgeLabelMeasureContext) {
+    return normalized.length * style.fontSize * 0.62 + letterSpacing;
+  }
+  edgeLabelMeasureContext.font = `900 ${style.fontSize}px system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif`;
   return edgeLabelMeasureContext.measureText(normalized).width + letterSpacing;
 }
 
-function alwaysVisibleEdgeTextWidth(board, edge) {
+function conditioningBadgeText(conditioning) {
+  return conditioning
+    .map((entry) => String(entry.mode || "").replaceAll("_", " "))
+    .filter(Boolean)
+    .join(" · ");
+}
+
+function conditioningBadgeLines(conditioning) {
+  return balancedTextLines(conditioningBadgeText(conditioning), {
+    measure: (line) => measureEdgeText(line, "badge"),
+    maxWidth: RULES.layout.edgeBadgeWrapWidth,
+  });
+}
+
+function reservedEdgeTextWidth(board, edge) {
   const conditioning = derivedConditioning(board, edge);
   const contracted = (edge.segments || []).length > 1;
   if (!contracted && edge.tone !== "conditioning" && !conditioning.length) return 0;
-  const texts = [];
-  if (edge.label) texts.push(edge.label);
+  const widths = [];
+  if (edge.label) widths.push(measureEdgeText(edge.label, "label"));
   if (conditioning.length) {
-    texts.push(conditioning
-      .map((entry) => String(entry.mode || "").replaceAll("_", " "))
-      .filter(Boolean)
-      .join(" · "));
+    widths.push(...conditioningBadgeLines(conditioning)
+      .map((line) => measureEdgeText(line, "badge")));
   }
-  return Math.max(0, ...texts.map(measureEdgeText));
+  return Math.max(0, ...widths);
+}
+
+function reservedEdgeTextHeight(board, edge) {
+  const conditioning = derivedConditioning(board, edge);
+  const contracted = (edge.segments || []).length > 1;
+  if (!contracted && edge.tone !== "conditioning" && !conditioning.length) return 0;
+  const labelHeight = edge.label ? EDGE_TEXT_STYLES.label.fontSize + 4 : 0;
+  const badgeLines = conditioningBadgeLines(conditioning).length;
+  const badgeHeight = badgeLines * 12;
+  const labelBadgeGap = labelHeight && badgeHeight ? 8 : 0;
+  return labelHeight + labelBadgeGap + badgeHeight;
+}
+
+function applyContentColumnSizing(board, graph, nodes, nodeById) {
+  if (board.grid?.column_sizing !== "content") return null;
+  const topology = compactColumnTopology(board, nodes);
+  if (!topology?.authoredColumns.length) return null;
+
+  const minimum = Number(board.grid?.min_col) || RULES.layout.contentMinColumn;
+  const widths = topology.authoredColumns.map(() => minimum);
+  nodes.forEach((node) => {
+    const rank = topology.rankByAuthored.get(Math.max(1, Number(node.col) || 1));
+    const element = elements.moduleLayer.querySelector(`[data-node-id="${node.id}"]`);
+    if (rank == null || !element) return;
+    const width = Math.ceil(element.offsetWidth);
+    widths[rank] = Math.max(widths[rank], width);
+  });
+
+  const baseGap = Number(board.grid?.col_gap) || RULES.layout.contentColumnGap;
+  const setTracks = (gutters) => {
+    const tracks = [];
+    widths.forEach((width, index) => {
+      tracks.push(`${width}px`);
+      if (index < gutters.length) tracks.push(`${gutters[index]}px`);
+    });
+    [elements.moduleLayer, elements.representationLaneLayer].forEach((layer) => {
+      layer.classList.add("is-content-grid");
+      layer.style.gridTemplateColumns = tracks.join(" ");
+      layer.style.justifyContent = "center";
+      layer.style.columnGap = "0px";
+    });
+    nodes.forEach((node) => {
+      const rank = topology.rankByAuthored.get(Math.max(1, Number(node.col) || 1));
+      const element = elements.moduleLayer.querySelector(`[data-node-id="${node.id}"]`);
+      if (rank != null && element) element.style.gridColumn = String(rank * 2 + 1);
+    });
+  };
+
+  const baseGutters = allocateContentGridGutters({
+    columnWidths: widths,
+    baseGap,
+  });
+  setTracks(baseGutters);
+
+  // Route once against the compact tracks. A label grows only the boundary
+  // by its remaining measured deficit; room already present on its actual
+  // horizontal route segment is not charged a second time.
+  const preliminaryRoutes = buildOrthoRoutes(graph.edges || []);
+  const labelEdges = [];
+  (graph.edges || []).forEach((edge, index) => {
+    const fromNode = nodeById.get(edge.from);
+    const toNode = nodeById.get(edge.to);
+    if (!fromNode || !toNode) return;
+    const fromRank = topology.rankByAuthored.get(Math.max(1, Number(fromNode.col) || 1));
+    const toRank = topology.rankByAuthored.get(Math.max(1, Number(toNode.col) || 1));
+    if (fromRank == null || toRank == null || Math.abs(fromRank - toRank) !== 1) return;
+    const textWidth = reservedEdgeTextWidth(board, edge);
+    if (!textWidth) return;
+    const segment = longestHorizontalSegment(preliminaryRoutes.get(index));
+    if (!segment) return;
+    labelEdges.push({
+      fromRank,
+      toRank,
+      textWidth,
+      availableSpan: segment.length,
+    });
+  });
+  const gutters = allocateContentGridGutters({
+    columnWidths: widths,
+    baseGap,
+    edges: labelEdges,
+    labelPadding: RULES.layout.edgeTextPadding,
+  });
+  setTracks(gutters);
+
+  return { topology, widths, gutters };
+}
+
+function applyContentRowSizing(board, graph, nodes, nodeById) {
+  if (board.grid?.row_sizing !== "content") return null;
+  const rowCount = Math.max(1, Number(board.grid?.rows) || 1);
+  const heights = Array(rowCount).fill(RULES.layout.contentMinRow);
+  nodes.forEach((node) => {
+    const row = Math.max(1, Number(node.row) || 1);
+    const element = elements.moduleLayer.querySelector(`[data-node-id="${node.id}"]`);
+    if (!element || row > rowCount) return;
+    heights[row - 1] = Math.max(heights[row - 1], Math.ceil(element.offsetHeight));
+  });
+
+  const configuredRowGap = Number(board.grid?.row_gap);
+  const baseGap = board.grid?.row_gap != null && Number.isFinite(configuredRowGap)
+    ? configuredRowGap
+    : RULES.layout.contentRowGap;
+  const setTracks = (gutters) => {
+    const tracks = [];
+    heights.forEach((height, index) => {
+      tracks.push(`${height}px`);
+      if (index < gutters.length) tracks.push(`${gutters[index]}px`);
+    });
+    [elements.moduleLayer, elements.representationLaneLayer].forEach((layer) => {
+      layer.classList.add("is-content-row-grid");
+      layer.style.gridTemplateRows = tracks.join(" ");
+      layer.style.alignContent = "center";
+      layer.style.rowGap = "0px";
+    });
+    nodes.forEach((node) => {
+      const element = elements.moduleLayer.querySelector(`[data-node-id="${node.id}"]`);
+      if (element) element.style.gridRow = String((Math.max(1, Number(node.row) || 1) - 1) * 2 + 1);
+    });
+    elements.representationLaneLayer.querySelectorAll("[data-lane-row]").forEach((lane) => {
+      lane.style.gridRow = String((Math.max(1, Number(lane.dataset.laneRow) || 1) - 1) * 2 + 1);
+    });
+  };
+
+  const baseGutters = allocateContentGridRowGutters({
+    rowHeights: heights,
+    baseGap,
+  });
+  setTracks(baseGutters);
+
+  const annotationEdges = [];
+  (graph.edges || []).forEach((edge) => {
+    const fromNode = nodeById.get(edge.from);
+    const toNode = nodeById.get(edge.to);
+    if (!fromNode || !toNode) return;
+    const fromRow = Math.max(1, Number(fromNode.row) || 1);
+    const toRow = Math.max(1, Number(toNode.row) || 1);
+    if (Math.abs(fromRow - toRow) !== 1 || Number(fromNode.col) !== Number(toNode.col)) return;
+    const annotationHeight = reservedEdgeTextHeight(board, edge);
+    if (!annotationHeight) return;
+    const fromElement = elements.moduleLayer.querySelector(`[data-node-id="${edge.from}"]`);
+    const toElement = elements.moduleLayer.querySelector(`[data-node-id="${edge.to}"]`);
+    if (!fromElement || !toElement) return;
+    const fromTop = fromElement.offsetTop;
+    const fromBottom = fromTop + fromElement.offsetHeight;
+    const toTop = toElement.offsetTop;
+    const toBottom = toTop + toElement.offsetHeight;
+    const availableSpan = fromTop < toTop
+      ? Math.max(0, toTop - fromBottom)
+      : Math.max(0, fromTop - toBottom);
+    annotationEdges.push({
+      fromRank: fromRow - 1,
+      toRank: toRow - 1,
+      annotationHeight,
+      availableSpan,
+    });
+  });
+  const gutters = allocateContentGridRowGutters({
+    rowHeights: heights,
+    baseGap,
+    edges: annotationEdges,
+    annotationPadding: RULES.layout.edgeTextVerticalPadding,
+  });
+  setTracks(gutters);
+
+  return { heights, gutters };
 }
 
 function applyGridColumnSizing(board, graph) {
@@ -671,102 +1196,81 @@ function applyGridColumnSizing(board, graph) {
   resetGridColumnSizing();
   nodes.forEach((node) => {
     const element = elements.moduleLayer.querySelector(`[data-node-id="${node.id}"]`);
-    if (element) element.style.gridColumn = String(node.col || 1);
+    if (!element) return;
+    element.style.gridColumn = String(node.col || 1);
+    element.style.gridRow = String(node.row || 1);
+  });
+  elements.representationLaneLayer.querySelectorAll("[data-lane-row]").forEach((lane) => {
+    lane.style.gridRow = lane.dataset.laneRow;
   });
 
-  if (useElkLayout || board.grid?.column_sizing !== "content") return null;
-  const topology = compactColumnTopology(board, nodes);
-  if (!topology?.authoredColumns.length) return null;
-
-  const minimum = Number(board.grid?.min_col) || RULES.layout.contentMinColumn;
-  const widths = topology.authoredColumns.map(() => minimum);
-  nodes.forEach((node) => {
-    const rank = topology.rankByAuthored.get(Math.max(1, Number(node.col) || 1));
-    const element = elements.moduleLayer.querySelector(`[data-node-id="${node.id}"]`);
-    if (rank == null || !element) return;
-    widths[rank] = Math.max(widths[rank], Math.ceil(element.offsetWidth));
-  });
-
-  const baseGap = Number(board.grid?.col_gap) || RULES.layout.contentColumnGap;
-  const gutters = Array(Math.max(0, widths.length - 1)).fill(baseGap);
-  for (const edge of graph.edges || []) {
-    const fromNode = nodeById.get(edge.from);
-    const toNode = nodeById.get(edge.to);
-    if (!fromNode || !toNode) continue;
-    const fromRank = topology.rankByAuthored.get(Math.max(1, Number(fromNode.col) || 1));
-    const toRank = topology.rankByAuthored.get(Math.max(1, Number(toNode.col) || 1));
-    if (fromRank == null || toRank == null || Math.abs(fromRank - toRank) !== 1) continue;
-    const textWidth = alwaysVisibleEdgeTextWidth(board, edge);
-    if (!textWidth) continue;
-    const gutterIndex = Math.min(fromRank, toRank);
-    gutters[gutterIndex] = Math.max(
-      gutters[gutterIndex],
-      Math.ceil(textWidth + RULES.layout.edgeTextPadding),
-    );
-  }
-
-  const tracks = [];
-  widths.forEach((width, index) => {
-    tracks.push(`${width}px`);
-    if (index < gutters.length) tracks.push(`${gutters[index]}px`);
-  });
-  elements.moduleLayer.classList.add("is-content-grid");
-  elements.moduleLayer.style.gridTemplateColumns = tracks.join(" ");
-  elements.moduleLayer.style.justifyContent = "center";
-  elements.moduleLayer.style.columnGap = "0px";
-  nodes.forEach((node) => {
-    const rank = topology.rankByAuthored.get(Math.max(1, Number(node.col) || 1));
-    const element = elements.moduleLayer.querySelector(`[data-node-id="${node.id}"]`);
-    if (rank != null && element) element.style.gridColumn = String(rank * 2 + 1);
-  });
-
-  return { topology, widths, gutters };
+  if (useElkLayout) return null;
+  const columns = applyContentColumnSizing(board, graph, nodes, nodeById);
+  const rows = applyContentRowSizing(board, graph, nodes, nodeById);
+  return { columns, rows };
 }
 
 function renderBoard() {
   const board = currentBoard();
-  hideRepPeek();
+  closeQuestionMenu();
+  hideCanvasTooltip();
   clearConnectivityHighlights();
   state.displayEdges = null;
   state.layoutEdges = null;
   state.edgeRoutes = new Map();
+  state.edgeAnnotationBoxes = [];
   resetGridColumnSizing();
   elements.moduleLayer.innerHTML = "";
+  elements.representationLaneLayer.innerHTML = "";
   elements.edgeLayer.innerHTML = "";
-  elements.moduleLayer.style.setProperty("--board-columns", String(board.grid?.columns || 5));
-  elements.moduleLayer.style.setProperty("--board-rows", String(board.grid?.rows || 4));
-  elements.moduleLayer.style.setProperty(
-    "--board-min-col",
-    board.grid?.min_col ? `${board.grid.min_col}px` : "",
-  );
-  elements.moduleLayer.style.setProperty(
-    "--board-col-gap",
-    board.grid?.col_gap ? `${board.grid.col_gap}px` : "",
-  );
+  [elements.moduleLayer, elements.representationLaneLayer].forEach((layer) => {
+    layer.style.setProperty("--board-columns", String(board.grid?.columns || 5));
+    layer.style.setProperty("--board-rows", String(board.grid?.rows || 4));
+    layer.style.setProperty(
+      "--board-min-col",
+      board.grid?.min_col ? `${board.grid.min_col}px` : "",
+    );
+    layer.style.setProperty(
+      "--board-col-gap",
+      board.grid?.col_gap ? `${board.grid.col_gap}px` : "",
+    );
+    layer.style.setProperty(
+      "--board-row-gap",
+      board.grid?.row_gap != null ? `${board.grid.row_gap}px` : "",
+    );
+  });
   elements.canvas.dataset.boardId = board.id;
   elements.canvas.setAttribute("aria-label", `${board.title} architecture map`);
   elements.canvas.classList.toggle("is-root-board", state.boardStack.length === 1);
 
   renderAudienceNavigation();
+  state.modelMapDirty = true;
   renderModelMap();
   renderScaleLanes(board);
 
   const graph = displayGraph(board);
   state.displayEdges = graph.edges;
+  const nodeProfiles = nodeFlowProfiles(graph.nodes, graph.edges, { repsById, relationsById });
   for (const node of visibleNodes(board)) {
-    const el = renderNode(node);
+    const profile = nodeProfiles.get(node.id) || { family: "default", families: [] };
+    const el = renderNode({
+      ...node,
+      flow_family: profile.family,
+      flow_families: profile.families,
+    });
     elements.moduleLayer.appendChild(el);
   }
-  applyGridColumnSizing(board, graph);
   applyViewport();
   layoutBoard(graph);
 }
 
 function renderScaleLanes(board) {
   const lanes = Array.isArray(board.lanes) ? board.lanes : [];
+  const manualLanes = lanes.filter((lane) => lane.kind !== "representation");
+  const representationLanes = lanes.filter((lane) => lane.kind === "representation");
   elements.scaleLaneLayer.replaceChildren();
-  elements.scaleLaneLayer.hidden = lanes.length === 0;
-  for (const lane of lanes) {
+  elements.scaleLaneLayer.hidden = manualLanes.length === 0;
+  for (const lane of manualLanes) {
     const guide = document.createElement("div");
     guide.className = "scale-lane";
     guide.dataset.laneId = lane.id;
@@ -775,6 +1279,21 @@ function renderScaleLanes(board) {
     label.textContent = lane.label || humanizeRef(lane.id);
     guide.appendChild(label);
     elements.scaleLaneLayer.appendChild(guide);
+  }
+
+  for (const lane of representationLanes) {
+    const guide = document.createElement("div");
+    guide.className = `representation-lane representation-lane-${lane.glyph}`;
+    guide.dataset.laneId = lane.id;
+    guide.dataset.laneRow = String(lane.row);
+    guide.style.gridColumn = "1 / -1";
+    guide.style.gridRow = String(lane.row);
+    guide.setAttribute("aria-hidden", "true");
+    const label = document.createElement("span");
+    label.className = "representation-lane-label";
+    label.textContent = lane.label || humanizeRef(lane.id);
+    guide.appendChild(label);
+    elements.representationLaneLayer.appendChild(guide);
   }
 }
 
@@ -821,9 +1340,9 @@ function buildElkGraph(graph, sizeOf) {
   };
 }
 
-async function layoutBoard(graph) {
+async function layoutBoard(graph, { typeset = true } = {}) {
   const generation = (state.layoutGeneration = (state.layoutGeneration || 0) + 1);
-  await typesetBoardMathAsync();
+  if (typeset) await typesetBoardMathAsync();
   if (generation !== state.layoutGeneration) return;
 
   const elk = useElkLayout ? getElk() : null;
@@ -833,6 +1352,7 @@ async function layoutBoard(graph) {
   }
 
   elements.moduleLayer.classList.add("is-elk-layout", "is-layouting");
+  elements.representationLaneLayer.classList.add("is-elk-layout", "is-layouting");
   const elkGraph = buildElkGraph(graph, (node) => {
     const el = elements.moduleLayer.querySelector(`[data-node-id="${node.id}"]`);
     return { width: el?.offsetWidth || 200, height: el?.offsetHeight || 100 };
@@ -847,21 +1367,43 @@ async function layoutBoard(graph) {
     useGridLayout(graph);
   } finally {
     elements.moduleLayer.classList.remove("is-layouting");
+    elements.representationLaneLayer.classList.remove("is-layouting");
   }
 }
 
 function useGridLayout(graph) {
   state.layoutEdges = null;
   elements.moduleLayer.classList.remove("is-elk-layout", "is-layouting");
+  elements.representationLaneLayer.classList.remove("is-elk-layout", "is-layouting");
   elements.canvas.classList.remove("is-elk-layout");
   elements.moduleLayer.style.width = "";
   elements.moduleLayer.style.height = "";
+  elements.representationLaneLayer.style.width = "";
+  elements.representationLaneLayer.style.height = "";
   elements.edgeLayer.style.width = "";
   elements.edgeLayer.style.height = "";
   applyGridColumnSizing(currentBoard(), graph || displayGraph(currentBoard()));
-  window.requestAnimationFrame(() => {
-    renderEdges();
-    if (!state.isTransitioning && !state.userMovedViewport) fitToContent();
+  scheduleGeometryUpdate({
+    renderEdges: true,
+    fit: !state.isTransitioning && !state.userMovedViewport,
+  });
+}
+
+async function refreshBoardAfterMath() {
+  const board = currentBoard();
+  const boardId = board.id;
+  const graph = displayGraph(board);
+  await typesetBoardMathAsync();
+  if (currentBoard().id !== boardId) return;
+  state.displayEdges = graph.edges;
+  if (useElkLayout && getElk()) {
+    layoutBoard(graph, { typeset: false });
+    return;
+  }
+  applyGridColumnSizing(board, graph);
+  scheduleGeometryUpdate({
+    renderEdges: true,
+    fit: !state.isTransitioning && !state.userMovedViewport,
   });
 }
 
@@ -871,6 +1413,8 @@ function applyElkLayout(layout) {
   elements.canvas.classList.add("is-elk-layout");
   elements.moduleLayer.style.width = `${width}px`;
   elements.moduleLayer.style.height = `${height}px`;
+  elements.representationLaneLayer.style.width = `${width}px`;
+  elements.representationLaneLayer.style.height = `${height}px`;
   elements.edgeLayer.style.width = `${width}px`;
   elements.edgeLayer.style.height = `${height}px`;
 
@@ -922,7 +1466,7 @@ function boardViewportCenter(canvasRect, baseX, baseY) {
 }
 
 function boardContentBounds() {
-  const nodes = elements.moduleLayer.querySelectorAll("[data-node-id]");
+  const nodes = elements.moduleLayer.querySelectorAll("[data-node-id], .board-region");
   if (!nodes.length) return null;
   let minX = Infinity;
   let minY = Infinity;
@@ -942,6 +1486,12 @@ function boardContentBounds() {
       maxY = Math.max(maxY, point.y);
     }
   }
+  for (const box of state.edgeAnnotationBoxes || []) {
+    minX = Math.min(minX, box.x);
+    minY = Math.min(minY, box.y);
+    maxX = Math.max(maxX, box.x + box.width);
+    maxY = Math.max(maxY, box.y + box.height);
+  }
   const wirePadding = state.edgeRoutes?.size ? 18 : 0;
   return {
     minX: minX - wirePadding,
@@ -951,7 +1501,10 @@ function boardContentBounds() {
   };
 }
 
-function fitToContent() {
+// Semantic-zoom boards are intentionally bounded, so the arrival view should
+// reveal the complete board. A caller may still request the readable floor
+// for an unusually large free-pan surface.
+function fitToContent({ readable = false } = {}) {
   const bounds = boardContentBounds();
   if (!bounds || bounds.width <= 0 || bounds.height <= 0) {
     resetViewport();
@@ -962,64 +1515,42 @@ function fitToContent() {
   const baseY = elements.moduleLayer.offsetTop;
   const { availableW, availableH } = boardViewportAvailableSize(canvasRect, baseX, baseY);
   const margin = RULES.fitMargin;
-  const fit = Math.min(
+  const exactFit = Math.min(
     1,
     (availableW - margin) / bounds.width,
     (availableH - margin) / bounds.height,
   );
-  viewport.scale = clamp(fit, viewport.minScale, 1);
-  viewport.x = (availableW - bounds.width * viewport.scale) / 2 - bounds.minX * viewport.scale;
-  viewport.y = (availableH - bounds.height * viewport.scale) / 2 - bounds.minY * viewport.scale;
+  const readableFloor = canvasRect.width < 700 ? 0.56 : 0.68;
+  const requestedScale = readable ? Math.max(exactFit, readableFloor) : exactFit;
+  viewport.scale = clamp(requestedScale, viewport.minScale, 1);
+  const scaledWidth = bounds.width * viewport.scale;
+  const scaledHeight = bounds.height * viewport.scale;
+  viewport.x = scaledWidth <= availableW
+    ? (availableW - scaledWidth) / 2 - bounds.minX * viewport.scale
+    : margin / 2 - bounds.minX * viewport.scale;
+  viewport.y = scaledHeight <= availableH
+    ? (availableH - scaledHeight) / 2 - bounds.minY * viewport.scale
+    : margin / 2 - bounds.minY * viewport.scale;
   applyViewport();
 }
 
 function renderAudienceNavigation() {
   const depth = state.boardStack.length;
   const parent = depth > 1 ? boardsById.get(state.boardStack[depth - 2]) : null;
-
-  boardActions.innerHTML = "";
-  boardActions.hidden = depth === 1;
-  if (depth > 1) {
-    const up = document.createElement("button");
-    up.type = "button";
-    up.className = "board-action board-action-up";
-    up.dataset.boardAction = "up";
-    up.title = `Go up to ${parent?.title || "the parent view"}`;
-    up.innerHTML = `
-      <span aria-hidden="true">←</span>
-      <span>Up</span>
-      <strong>${escapeHtml(parent?.title || "Parent view")}</strong>
-    `;
-    boardActions.appendChild(up);
-
-    const overview = document.createElement("button");
-    overview.type = "button";
-    overview.className = "board-action board-action-overview";
-    overview.dataset.boardAction = "overview";
-    overview.textContent = "Overview";
-    overview.title = `Return to ${boardsById.get(state.boardStack[0])?.title || "the overview"}`;
-    boardActions.appendChild(overview);
-  }
-
-  const heading = document.createElement("div");
-  heading.className = "semantic-location-heading";
-  const label = document.createElement("span");
-  label.textContent = "You are here";
-  const level = document.createElement("span");
   const maximumDepth = semanticDepthFrom(manifest.boards.rootBoard);
-  level.className = "semantic-location-level";
-  level.textContent = `Level ${depth} of ${maximumDepth}`;
-  level.title = `Semantic depth ${depth} of ${maximumDepth}; geometric zoom is shown at the bottom left`;
-  heading.append(label, level);
+  elements.boardBack.hidden = depth === 1;
+  const parentLabel = parent?.title || "the parent view";
+  const upLabel = `Up to ${parentLabel}`;
+  elements.boardBack.title = upLabel;
+  elements.boardBack.setAttribute("aria-label", upLabel);
+  elements.boardBackLabel.textContent = upLabel;
 
-  const path = document.createElement("ol");
-  path.className = "semantic-location-path";
-  state.boardStack.forEach((boardId, index) => {
+  const breadcrumbs = state.boardStack.map((boardId, index) => {
     const board = boardsById.get(boardId);
-    if (!board) return;
+    if (!board) return null;
     const item = document.createElement("li");
     const isCurrent = index === depth - 1;
-    item.className = `semantic-location-step${isCurrent ? " is-current" : ""}`;
+    item.className = `board-breadcrumb${isCurrent ? " is-current" : ""}`;
 
     const control = document.createElement(isCurrent ? "span" : "button");
     if (!isCurrent) {
@@ -1029,21 +1560,16 @@ function renderAudienceNavigation() {
     } else {
       control.setAttribute("aria-current", "page");
     }
-    const marker = document.createElement("span");
-    marker.className = "semantic-location-marker";
-    marker.textContent = String(index + 1);
-    marker.setAttribute("aria-hidden", "true");
-    const title = document.createElement("span");
-    title.className = "semantic-location-title";
-    title.textContent = board.title;
-    control.append(marker, title);
+    control.textContent = board.title;
     item.appendChild(control);
-    path.appendChild(item);
+    return item;
   });
-
-  semanticLocation.replaceChildren(heading, path);
-  semanticLocationStatus.textContent =
+  elements.boardBreadcrumbs.replaceChildren(...breadcrumbs.filter(Boolean));
+  elements.boardDepth.textContent = `${depth} / ${maximumDepth}`;
+  elements.boardDepth.title = `Semantic level ${depth} of ${maximumDepth}`;
+  elements.semanticLocationStatus.textContent =
     `Now viewing ${currentBoard().title}, semantic level ${depth} of ${maximumDepth}.`;
+  updateDeepLinkControl();
 }
 
 function semanticDepthFrom(boardId, visiting = new Set()) {
@@ -1061,13 +1587,9 @@ function semanticDepthFrom(boardId, visiting = new Set()) {
   return 1 + Math.max(0, ...childDepths);
 }
 
-function onBoardActionClick(event) {
+function onBoardNavigationClick(event) {
   const action = event.target.closest("button")?.dataset.boardAction;
   if (action === "up") popToBoard(state.boardStack.length - 2);
-  if (action === "overview") popToBoard(0);
-}
-
-function onSemanticLocationClick(event) {
   const index = Number(event.target.closest("button")?.dataset.boardIndex);
   if (Number.isInteger(index)) popToBoard(index);
 }
@@ -1143,15 +1665,16 @@ function onModelMapViewClick(event) {
   const view = event.target.closest("button")?.dataset.modelMapView;
   if (!view || (view === "parent" && state.boardStack.length < 3)) return;
   state.modelMapView = view;
+  state.modelMapDirty = true;
   renderModelMap();
 }
 
 function onModelMapCollapseClick() {
   state.modelMapCollapsed = !state.modelMapCollapsed;
   renderModelMapCollapseState();
-  window.requestAnimationFrame(() => {
-    if (!state.userMovedViewport) fitToContent();
-    renderEdges();
+  if (!state.modelMapCollapsed) renderModelMap();
+  scheduleGeometryUpdate({
+    fit: !state.userMovedViewport,
   });
 }
 
@@ -1179,7 +1702,18 @@ function modelMapGraph(board) {
   const edges = graph.edges.filter(
     (edge) => nodeIds.has(edge.from) && nodeIds.has(edge.to),
   );
-  return { nodes, edges };
+  const profiles = nodeFlowProfiles(nodes, edges, { repsById, relationsById });
+  return {
+    nodes: nodes.map((node) => {
+      const profile = profiles.get(node.id) || { family: "default", families: [] };
+      return {
+        ...node,
+        flow_family: profile.family,
+        flow_families: profile.families,
+      };
+    }),
+    edges,
+  };
 }
 
 function activeModelMapNode(mapBoard, nodes, mapBoardIndex) {
@@ -1231,7 +1765,7 @@ function modelMapNodeGeometry(board, nodes) {
         ? "representation"
         : "module";
     const glyph = kind === "representation"
-      ? node.glyph || glyphKindForShape(rep?.shape || "") || "vector"
+      ? node.glyph || rep?.glyph || glyphKindForShape(rep?.shape || "") || "vector"
       : null;
 
     let width = node.prominence === "primary" ? 112 : 96;
@@ -1244,9 +1778,12 @@ function modelMapNodeGeometry(board, nodes) {
       const dimensions = {
         scalar: [62, 66],
         vector: [86, 58],
+        single: [90, 24],
         matrix: [76, 70],
         pair: [70, 70],
         volume: [84, 66],
+        coordinates: [82, 70],
+        frames: [88, 72],
       };
       [width, height] = dimensions[glyph] || dimensions.vector;
     }
@@ -1298,19 +1835,23 @@ function renderModelMapEdge(edge, geometry) {
   if (!from || !to) return null;
   const path = document.createElementNS("http://www.w3.org/2000/svg", "path");
   const tone = edge.tone === "conditioning" || edge.tone === "skip" ? edge.tone : "default";
+  const flowFamily = PAYLOAD_FLOW_FAMILIES.includes(edge.flow_family)
+    ? edge.flow_family
+    : null;
   path.setAttribute("d", modelMapEdgePath(from, to));
   path.setAttribute(
     "class",
-    `model-map-edge tone-${tone}${(edge.segments || []).length > 1 ? " is-contracted" : ""}`,
+    `model-map-edge tone-${tone}${flowFamily ? ` flow-family-${flowFamily}` : ""}` +
+      `${(edge.segments || []).length > 1 ? " is-contracted" : ""}`,
   );
-  path.setAttribute("marker-end", `url(#model-map-arrow-${tone})`);
+  path.setAttribute("marker-end", `url(#model-map-arrow-${edgeMarkerFamily(edge)})`);
   path.setAttribute("vector-effect", "non-scaling-stroke");
   return path;
 }
 
 function renderModelMapDefs() {
   const defs = document.createElementNS("http://www.w3.org/2000/svg", "defs");
-  ["default", "conditioning", "skip"].forEach((tone) => {
+  ["default", "conditioning", "skip", ...PAYLOAD_FLOW_FAMILIES].forEach((tone) => {
     const marker = document.createElementNS("http://www.w3.org/2000/svg", "marker");
     marker.setAttribute("id", `model-map-arrow-${tone}`);
     marker.setAttribute("viewBox", "0 0 10 10");
@@ -1322,7 +1863,10 @@ function renderModelMapDefs() {
     marker.setAttribute("markerUnits", "strokeWidth");
     const arrow = document.createElementNS("http://www.w3.org/2000/svg", "path");
     arrow.setAttribute("d", "M 0 0 L 10 5 L 0 10 z");
-    arrow.setAttribute("class", `model-map-arrow tone-${tone}`);
+    arrow.setAttribute(
+      "class",
+      `model-map-arrow ${PAYLOAD_FLOW_FAMILIES.includes(tone) ? `flow-family-${tone}` : `tone-${tone}`}`,
+    );
     marker.appendChild(arrow);
     defs.appendChild(marker);
   });
@@ -1361,6 +1905,90 @@ function renderModelMapModuleShape(entry) {
   return group;
 }
 
+function appendModelMapAxisTriad(group, originX, originY, size, { muted = false } = {}) {
+  const className = `model-map-geometry-axis${muted ? " is-muted" : ""}`;
+  group.append(
+    modelMapSvgElement("circle", {
+      class: `model-map-geometry-origin${muted ? " is-muted" : ""}`,
+      cx: originX,
+      cy: originY,
+      r: Math.max(1.4, size * 0.12),
+    }),
+    modelMapSvgElement("line", {
+      class: `${className} axis-x`,
+      x1: originX,
+      y1: originY,
+      x2: originX + size,
+      y2: originY,
+      "vector-effect": "non-scaling-stroke",
+    }),
+    modelMapSvgElement("line", {
+      class: `${className} axis-y`,
+      x1: originX,
+      y1: originY,
+      x2: originX,
+      y2: originY - size,
+      "vector-effect": "non-scaling-stroke",
+    }),
+    modelMapSvgElement("line", {
+      class: `${className} axis-z`,
+      x1: originX,
+      y1: originY,
+      x2: originX - size * 0.58,
+      y2: originY + size * 0.58,
+      "vector-effect": "non-scaling-stroke",
+    }),
+  );
+}
+
+function appendModelMapCoordinateGeometry(group, left, top, width, height) {
+  const points = [
+    [0.17, 0.48, 2.3],
+    [0.32, 0.28, 3.1],
+    [0.48, 0.58, 3.3],
+    [0.62, 0.36, 2.5],
+    [0.76, 0.52, 3.1],
+  ];
+  points.forEach(([x, y, radius], index) => {
+    group.appendChild(modelMapSvgElement("circle", {
+      class: `model-map-coordinate-point${index === 0 || index === points.length - 1 ? " is-muted" : ""}`,
+      cx: left + width * x,
+      cy: top + height * y,
+      r: radius,
+    }));
+  });
+  appendModelMapAxisTriad(
+    group,
+    left + width * 0.82,
+    top + height * 0.73,
+    Math.min(width, height) * 0.13,
+    { muted: true },
+  );
+}
+
+function appendModelMapFrameGeometry(group, left, top, width, height) {
+  appendModelMapAxisTriad(
+    group,
+    left + width * 0.24,
+    top + height * 0.64,
+    Math.min(width, height) * 0.18,
+    { muted: true },
+  );
+  appendModelMapAxisTriad(
+    group,
+    left + width * 0.52,
+    top + height * 0.52,
+    Math.min(width, height) * 0.24,
+  );
+  appendModelMapAxisTriad(
+    group,
+    left + width * 0.79,
+    top + height * 0.43,
+    Math.min(width, height) * 0.16,
+    { muted: true },
+  );
+}
+
 function renderModelMapTensorShape(entry) {
   const left = entry.x - entry.width / 2;
   const top = entry.y - entry.height / 2;
@@ -1390,41 +2018,40 @@ function renderModelMapTensorShape(entry) {
     y: frontTop,
     width,
     height,
-    rx: entry.glyph === "scalar" ? 7 : 5,
+    rx: entry.glyph === "single" ? height / 2 : entry.glyph === "scalar" ? 7 : 5,
     "vector-effect": "non-scaling-stroke",
   }));
 
+  if (entry.glyph === "coordinates") {
+    appendModelMapCoordinateGeometry(group, frontLeft, frontTop, width, height);
+    return group;
+  }
+  if (entry.glyph === "frames") {
+    appendModelMapFrameGeometry(group, frontLeft, frontTop, width, height);
+    return group;
+  }
+
   if (entry.glyph !== "scalar") {
     [0.33, 0.66].forEach((fraction) => {
-      group.append(
-        modelMapSvgElement("line", {
-          class: "model-map-tensor-grid",
-          x1: frontLeft + width * fraction,
-          y1: frontTop + 3,
-          x2: frontLeft + width * fraction,
-          y2: frontTop + height - 3,
-          "vector-effect": "non-scaling-stroke",
-        }),
-        modelMapSvgElement("line", {
+      group.appendChild(modelMapSvgElement("line", {
+        class: "model-map-tensor-grid",
+        x1: frontLeft + width * fraction,
+        y1: frontTop + 3,
+        x2: frontLeft + width * fraction,
+        y2: frontTop + height - 3,
+        "vector-effect": "non-scaling-stroke",
+      }));
+      if (entry.glyph !== "single") {
+        group.appendChild(modelMapSvgElement("line", {
           class: "model-map-tensor-grid",
           x1: frontLeft + 3,
           y1: frontTop + height * fraction,
           x2: frontLeft + width - 3,
           y2: frontTop + height * fraction,
           "vector-effect": "non-scaling-stroke",
-        }),
-      );
+        }));
+      }
     });
-  }
-  if (entry.glyph === "pair") {
-    group.appendChild(modelMapSvgElement("line", {
-      class: "model-map-tensor-diagonal",
-      x1: frontLeft + 4,
-      y1: frontTop + 4,
-      x2: frontLeft + width - 4,
-      y2: frontTop + height - 4,
-      "vector-effect": "non-scaling-stroke",
-    }));
   }
   return group;
 }
@@ -1445,6 +2072,7 @@ function renderModelMapNode(entry, activeNode) {
     "class",
     `model-map-node is-${entry.kind} scale-${entry.scale}` +
       `${entry.glyph ? ` is-${entry.glyph}` : ""}` +
+      `${entry.node.flow_family && entry.node.flow_family !== "default" ? ` flow-family-${entry.node.flow_family}` : ""}` +
       `${entry.node === activeNode ? " is-current" : ""}`,
   );
   group.setAttribute("data-model-node-id", entry.node.id);
@@ -1474,6 +2102,21 @@ function renderModelMap() {
   renderModelMapCollapseState();
   const selection = modelMapSelection();
   const mapBoard = selection.board;
+  const hasMapContent = Boolean((mapBoard?.nodes || []).some(
+    (node) => node.prominence !== "hidden" && node.treatment !== "hidden",
+  ));
+  modelMap.classList.toggle("is-empty", !hasMapContent);
+  if (!hasMapContent) {
+    state.modelMapDirty = false;
+    modelMapSvg.replaceChildren();
+    modelMapA11y.replaceChildren();
+    return;
+  }
+  if (state.modelMapCollapsed || modelMap.offsetParent === null) {
+    state.modelMapDirty = true;
+    return;
+  }
+  state.modelMapDirty = false;
   const { nodes, edges } = modelMapGraph(mapBoard);
   if (!mapBoard || !nodes.length) {
     modelMap.classList.add("is-empty");
@@ -1531,36 +2174,6 @@ function renderNode(node) {
   return renderBlockNode(node);
 }
 
-function glyphKindForShape(shape = "") {
-  const head = String(shape).split(",")[0];
-  const dims = head
-    .split(" x ")
-    .map((token) => {
-      const stripped = token.split("(")[0].trim();
-      return stripped || token.trim();
-    })
-    .filter(Boolean);
-  if (!dims.length) return null;
-  const rest = dims[0].toLowerCase() === "b" ? dims.slice(1) : dims;
-  if (rest.length === 0) return "scalar";
-  if (rest.length === 1) return "vector";
-  if (rest.length === 2) return "matrix";
-  return rest[0] === rest[1] ? "pair" : "volume";
-}
-
-function shapeDimsLabel(shape = "") {
-  const head = String(shape).split(",")[0];
-  const dims = head
-    .split(" x ")
-    .map((token) => {
-      const stripped = token.split("(")[0].trim();
-      return stripped || token.trim();
-    })
-    .filter(Boolean);
-  const rest = dims[0]?.toLowerCase() === "b" ? dims.slice(1) : dims;
-  return rest.join(" × ");
-}
-
 const repSymbolById = new Map();
 const pseudocodeSymbolById = new Map();
 for (const program of Object.values(manifest.pseudocode || {})) {
@@ -1582,28 +2195,6 @@ function symbolMarkup(symbol, fallback) {
   return escapeHtml(name);
 }
 
-function tensorCellsSvg(kind) {
-  const grids = {
-    scalar: [1, 1],
-    vector: [10, 1],
-    matrix: [8, 6],
-    pair: [6, 6],
-    volume: [8, 6],
-  };
-  const [cols, rows] = grids[kind] || grids.vector;
-  let cells = "";
-  for (let r = 0; r < rows; r += 1) {
-    for (let c = 0; c < cols; c += 1) {
-      const index = r * cols + c;
-      const jitter = ((((index + 1) * 2654435761) >>> 16) % 1000) / 1000;
-      const opacity = (0.18 + jitter * 0.38).toFixed(2);
-      const inset = cols * rows === 1 ? 0 : 0.04;
-      cells += `<rect x="${c + inset}" y="${r + inset}" width="${1 - 2 * inset}" height="${1 - 2 * inset}" fill="var(--glyph-color)" opacity="${opacity}"></rect>`;
-    }
-  }
-  return `<svg class="tensor-cells" viewBox="0 0 ${cols} ${rows}" preserveAspectRatio="none" aria-hidden="true">${cells}</svg>`;
-}
-
 function renderRepresentationNode(node) {
   const rep = node.rep_ref ? repsById.get(node.rep_ref) : null;
   const scale = node.scale || rep?.scale || "item";
@@ -1614,42 +2205,55 @@ function renderRepresentationNode(node) {
   const symbolDefinition = pseudocodeSymbolById.get(node.value_site_ref)
     || pseudocodeSymbolById.get(node.id)
     || repSymbolById.get(rep?.id);
-  const symbol = symbolMarkup(symbolDefinition, node.notation || fullLabel);
+  // A view occurrence can name a temporal/state-specific value more precisely
+  // than a representation-wide pseudocode symbol. Keep that authored local
+  // notation authoritative (for example x_t versus x_(t-10)).
+  const symbol = node.notation
+    ? symbolMarkup(null, node.notation)
+    : symbolMarkup(symbolDefinition, fullLabel);
   const dims = kind === "scalar" ? "" : shapeDimsLabel(shape);
   const displayMeaning = representationDisplayMeaning(node, rep, fullLabel);
+  const semanticGlyphLabel = kind === "coordinates"
+    ? "coordinate point cloud"
+    : kind === "frames"
+      ? "local coordinate frames"
+      : null;
   const card = document.createElement("button");
   card.type = "button";
   card.className = `arch-rep tensor-${kind} scale-${scale} prominence-${prominence}`;
+  applyFlowFamily(card, node.flow_family, node.flow_families);
   card.dataset.nodeId = node.id;
-  card.setAttribute("aria-label", [fullLabel, displayMeaning, shape].filter(Boolean).join(" — "));
+  const canonicalRef = canonicalNodeRef(node);
+  if (canonicalRef) card.dataset.canonicalRef = canonicalRef;
+  card.setAttribute(
+    "aria-label",
+    [fullLabel, semanticGlyphLabel, displayMeaning, shape].filter(Boolean).join(" — "),
+  );
   placeNode(card, node);
   const symbolHtml = `<strong class="tensor-symbol">${symbol}</strong>`;
-  const box = (inner) => `<span class="tensor-box">${tensorCellsSvg(kind)}${inner}</span>`;
+  const box = (inner) => `<span class="tensor-box">${tensorGlyphSvg(kind)}${inner}</span>`;
   card.innerHTML = `
     ${symbolHtml}
     ${box(dims ? `<small class="tensor-dims">${dims}</small>` : "")}
     ${displayMeaning ? `<span class="tensor-meaning">${escapeHtml(displayMeaning)}</span>` : ""}
   `;
-  const pointerPreviewKey = `pointer:representation:${node.id}`;
-  const focusPreviewKey = `focus:representation:${node.id}`;
-  card.addEventListener("pointerenter", (event) => {
-    showRepPeek(event, node, rep, pointerPreviewKey);
-    beginConnectivityHighlight(pointerPreviewKey, node.id);
+  attachQuestionMenuHandlers(card, { kind: "node", node });
+  const pointerHighlightKey = `pointer:representation:${node.id}`;
+  const focusHighlightKey = `focus:representation:${node.id}`;
+  card.addEventListener("pointerenter", () => {
+    beginConnectivityHighlight(pointerHighlightKey, node.id);
   });
   card.addEventListener("pointerleave", () => {
-    hideRepPeek(pointerPreviewKey);
-    endConnectivityHighlight(pointerPreviewKey);
+    endConnectivityHighlight(pointerHighlightKey);
   });
-  card.addEventListener("focus", (event) => {
-    showRepPeek(event, node, rep, focusPreviewKey);
-    beginConnectivityHighlight(focusPreviewKey, node.id);
+  card.addEventListener("focus", () => {
+    beginConnectivityHighlight(focusHighlightKey, node.id);
   });
   card.addEventListener("blur", () => {
-    hideRepPeek(focusPreviewKey);
-    endConnectivityHighlight(focusPreviewKey);
+    endConnectivityHighlight(focusHighlightKey);
   });
   card.addEventListener("click", () => {
-    hideRepPeek();
+    hideCanvasTooltip();
     clearConnectivityHighlights();
     focusRepresentation(node, rep);
   });
@@ -1662,18 +2266,6 @@ function representationDisplayMeaning(node, rep, fallback) {
     .replaceAll("_", " ")
     .replace(/\btimestep\b/gi, "time step")
     .trim();
-}
-
-function representationScaleLabel(scale) {
-  const labels = {
-    sample: "per sample",
-    token: "per token",
-    spatial: "spatial grid",
-    item: "per item",
-    item_pair: "per pair",
-    group: "per group",
-  };
-  return labels[scale] || String(scale || "unknown").replaceAll("_", " ");
 }
 
 function stateSemanticsFor(node, rep) {
@@ -1714,49 +2306,8 @@ function repFocusHtml(node, rep) {
   `;
 }
 
-function showHoverPanel(html, title, sourceKey) {
-  beginInspectorPreview(sourceKey, { title, html });
-}
-
-function hideHoverPanel(sourceKey) {
-  endInspectorPreview(sourceKey);
-}
-
-function showRepPeek(event, node, rep, sourceKey) {
-  const title = node.label || rep?.display_label || rep?.id || node.id;
-  showHoverPanel(repTooltipHtml(node, rep), title, sourceKey);
-}
-
-function hideRepPeek(sourceKey) {
-  hideHoverPanel(sourceKey);
-}
-
-function repTooltipHtml(node, rep) {
-  const shape = node.shape || rep?.shape || "";
-  const semantics = stateSemanticsFor(node, rep);
-  const valueSiteInterface = valueSiteInterfaceFor(node);
-  const label = node.label || rep?.id || node.id;
-  const scale = node.scale || rep?.scale || "unknown";
-  const scaleLabel = representationScaleLabel(scale);
-  const stateRole = node.role || semantics?.lifecycle
-    ? String(node.role || semantics.lifecycle).replaceAll("_", " ")
-    : "";
-  const symbol = symbolMarkup(repSymbolById.get(rep?.id), label);
-  return `
-    <span class="rep-tooltip-meta">${escapeHtml(scaleLabel)}${stateRole ? ` · ${escapeHtml(stateRole)}` : ""}</span>
-    <strong class="rep-tooltip-title"><i class="rep-tooltip-symbol">${symbol}</i>${escapeHtml(label)}</strong>
-    <div class="focus-section">
-      ${node.role || rep?.semantic_role ? `<p>${escapeHtml(node.role || rep?.semantic_role)}</p>` : ""}
-      <dl class="focus-dl">
-        ${shape ? `<dt>shape</dt><dd><code>${escapeHtml(shape)}</code></dd>` : ""}
-        ${valueSiteInterface?.producerRefs?.length ? `<dt>produced by</dt><dd>${escapeHtml(readableRefs(valueSiteInterface.producerRefs))}</dd>` : ""}
-      </dl>
-    </div>
-  `;
-}
-
 function focusRepresentation(node, rep) {
-  state.focusedId = node.id;
+  setSelection({ kind: "node", node });
   clearActiveNodes();
   elements.moduleLayer.querySelector(`[data-node-id="${node.id}"]`)?.classList.add("is-focused");
   elements.focusTitle.textContent = node.label || rep?.id || node.id;
@@ -1787,51 +2338,65 @@ function renderBlockNode(node) {
   const treatment = node.treatment || "block";
   const density = node.density || "normal";
   const operator = operatorSymbolFor(node, module);
-  const card = document.createElement("button");
-  card.type = "button";
+  const card = document.createElement("article");
   card.className = operator
     ? `arch-node arch-op-node scale-${scale}`
     : `arch-node scale-${scale} prominence-${prominence} treatment-${treatment} density-${density}`;
   if (node.kind === "operation") card.classList.add("is-operation");
   if (expandable) card.classList.add("is-expandable");
+  applyFlowFamily(card, node.flow_family, node.flow_families);
   card.dataset.nodeId = node.id;
+  const canonicalRef = canonicalNodeRef(node);
+  if (canonicalRef) card.dataset.canonicalRef = canonicalRef;
   if (module) card.dataset.moduleId = module.id;
   placeNode(card, node);
-  card.innerHTML = operator
+  const selectButton = document.createElement("button");
+  selectButton.type = "button";
+  selectButton.className = "arch-node-main";
+  selectButton.innerHTML = operator
     ? `
       <span class="op-circle">${escapeHtml(operator)}</span>
       <span class="op-label">${escapeHtml(node.label || module?.label || node.id)}</span>
     `
-    : blockCardHtml(node, module, expandable);
+    : blockCardHtml(node, module, false);
+  const label = node.label || module?.label || node.id;
+  selectButton.setAttribute("aria-label", `Inspect ${label}`);
+  attachQuestionMenuHandlers(selectButton, { kind: "node", node });
+  card.appendChild(selectButton);
   if (targetBoard) {
-    card.setAttribute("aria-label", `Open ${targetBoard.title}`);
-    card.title = `Open ${targetBoard.title}`;
+    const drillButton = document.createElement("button");
+    drillButton.type = "button";
+    drillButton.className = "arch-drill-cue arch-node-drill";
+    drillButton.setAttribute("aria-label", `Open detail: ${targetBoard.title}`);
+    drillButton.innerHTML = '<span>Open detail</span><b aria-hidden="true">›</b>';
+    drillButton.addEventListener("click", (event) => {
+      event.stopPropagation();
+      hideCanvasTooltip();
+      clearConnectivityHighlights();
+      pushBoard(targetBoard.id, node.id);
+    });
+    card.appendChild(drillButton);
   }
-  const pointerPreviewKey = `pointer:node:${node.id}`;
-  const focusPreviewKey = `focus:node:${node.id}`;
+  const pointerHighlightKey = `pointer:node:${node.id}`;
+  const focusHighlightKey = `focus:node:${node.id}`;
   card.addEventListener("mouseenter", () => {
-    showNodePeek(node, module, targetBoard, pointerPreviewKey);
-    beginConnectivityHighlight(pointerPreviewKey, node.id);
+    beginConnectivityHighlight(pointerHighlightKey, node.id);
   });
   card.addEventListener("mouseleave", () => {
-    hideHoverPanel(pointerPreviewKey);
-    endConnectivityHighlight(pointerPreviewKey);
+    endConnectivityHighlight(pointerHighlightKey);
   });
-  card.addEventListener("focus", () => {
-    showNodePeek(node, module, targetBoard, focusPreviewKey);
-    beginConnectivityHighlight(focusPreviewKey, node.id);
+  card.addEventListener("focusin", () => {
+    beginConnectivityHighlight(focusHighlightKey, node.id);
   });
-  card.addEventListener("blur", () => {
-    hideHoverPanel(focusPreviewKey);
-    endConnectivityHighlight(focusPreviewKey);
+  card.addEventListener("focusout", (event) => {
+    if (card.contains(event.relatedTarget)) return;
+    endConnectivityHighlight(focusHighlightKey);
   });
-  card.addEventListener("click", () => {
-    hideHoverPanel();
+  selectButton.addEventListener("click", () => {
+    hideCanvasTooltip();
     clearConnectivityHighlights();
-    if (targetBoard) {
-      pushBoard(targetBoard.id, node.id);
-    } else if (module) {
-      focusModule(module);
+    if (module) {
+      focusModule(module, node);
     } else {
       focusOperation(node);
     }
@@ -1918,14 +2483,23 @@ const prefersReducedMotion = Boolean(window.matchMedia?.("(prefers-reduced-motio
 // VISIBLE (not just how it looks) are specced in
 // protocol/visualization-language.md — change them there first.
 const RULES = {
-  // an edge prints its label only when it spans at least this many px,
-  // is a contracted (elided) edge, or carries conditioning tone;
-  // shorter edges communicate by shape alone and reveal text on hover
-  edgeLabelMinSpan: 130,
   layout: {
     contentMinColumn: 96,
-    contentColumnGap: 64,
-    edgeTextPadding: 24,
+    contentColumnGap: 42,
+    contentMinRow: 112,
+    contentRowGap: 18,
+    edgeTextPadding: 16,
+    edgeTextVerticalPadding: 24,
+    edgeBadgeWrapWidth: 160,
+    edgeAnnotationSegmentPadding: 8,
+    edgeAnnotationCrossAxisGap: 8,
+    edgeAnnotationNodeClearance: 10,
+    edgeAnnotationClearance: 6,
+  },
+  gesture: {
+    wheelLinePixels: 16,
+    maxWheelDelta: 160,
+    wheelZoomSensitivity: 0.0015,
   },
   // orthogonal edge routing: all edges are horizontal/vertical polylines
   route: {
@@ -1935,11 +2509,12 @@ const RULES = {
     laneClearance: 28, // distance of detour lanes outside the boxes
     nudge: 10, // separation applied to overlapping parallel segments
     portPreference: 42, // cost for choosing a side that faces away from the other node
+    arrowLanding: DEFAULT_ARROW_LANDING, // straight shaft reserved before arrowheads
   },
-  // board dive-in/emerge transition
+  // One render-first board arrival; navigation never waits on an outgoing scene.
   diveScale: 2.2,
   arriveScale: 0.92,
-  transitionMs: 340,
+  transitionMs: 200,
   // fit-to-content margin inside the canvas
   fitMargin: 12,
 };
@@ -1952,63 +2527,21 @@ function setBoardTransition(on) {
   elements.canvas.classList.toggle("is-board-transition", on);
 }
 
-function animateDiveIn(originNodeId, done) {
-  const box = originNodeId ? nodeBox(originNodeId) : null;
-  if (prefersReducedMotion || !box) {
-    done();
-    return;
-  }
-  state.isTransitioning = true;
-  const canvasRect = elements.canvas.getBoundingClientRect();
-  const baseX = elements.moduleLayer.offsetLeft;
-  const baseY = elements.moduleLayer.offsetTop;
-  const center = boardViewportCenter(canvasRect, baseX, baseY);
-  const targetScale = Math.max(viewport.scale * RULES.diveScale, RULES.diveScale);
-  setBoardTransition(true);
-  elements.canvas.classList.add("is-board-fading");
-  viewport.x = center.x - baseX - box.cx * targetScale;
-  viewport.y = center.y - baseY - box.cy * targetScale;
-  viewport.scale = targetScale;
-  applyViewport();
-  window.setTimeout(() => {
-    setBoardTransition(false);
-    elements.canvas.classList.remove("is-board-fading");
-    state.isTransitioning = false;
-    done();
-  }, RULES.transitionMs);
-}
-
-function animateFadeOut(done) {
-  if (prefersReducedMotion) {
-    done();
-    return;
-  }
-  state.isTransitioning = true;
-  const canvasRect = elements.canvas.getBoundingClientRect();
-  const baseX = elements.moduleLayer.offsetLeft;
-  const baseY = elements.moduleLayer.offsetTop;
-  const center = boardViewportCenter(canvasRect, baseX, baseY);
-  const px = center.x - baseX;
-  const py = center.y - baseY;
-  const nextScale = viewport.scale * 0.82;
-  const localX = (px - viewport.x) / viewport.scale;
-  const localY = (py - viewport.y) / viewport.scale;
-  setBoardTransition(true);
-  elements.canvas.classList.add("is-board-fading");
-  viewport.x = px - localX * nextScale;
-  viewport.y = py - localY * nextScale;
-  viewport.scale = nextScale;
-  applyViewport();
-  window.setTimeout(() => {
-    setBoardTransition(false);
-    elements.canvas.classList.remove("is-board-fading");
-    state.isTransitioning = false;
-    done();
-  }, RULES.transitionMs);
+function cancelBoardArrival() {
+  boardTransitionGeneration += 1;
+  state.isTransitioning = false;
+  setBoardTransition(false);
+  elements.canvas.classList.remove("is-board-fading");
 }
 
 function animateArriveFrom(originNodeId) {
-  if (prefersReducedMotion) return;
+  const generation = ++boardTransitionGeneration;
+  if (prefersReducedMotion) {
+    state.isTransitioning = false;
+    setBoardTransition(false);
+    elements.canvas.classList.remove("is-board-fading");
+    return;
+  }
   let start = null;
   if (originNodeId) {
     const box = nodeBox(originNodeId);
@@ -2038,15 +2571,19 @@ function animateArriveFrom(originNodeId) {
   viewport.x = start.x;
   viewport.y = start.y;
   viewport.scale = start.scale;
-  applyViewport();
+  applyViewport({ immediate: true });
   window.requestAnimationFrame(() => {
+    if (generation !== boardTransitionGeneration) return;
     window.requestAnimationFrame(() => {
+      if (generation !== boardTransitionGeneration) return;
       setBoardTransition(true);
       elements.canvas.classList.remove("is-board-fading");
       fitToContent();
       window.setTimeout(() => {
+        if (generation !== boardTransitionGeneration) return;
         setBoardTransition(false);
         state.isTransitioning = false;
+        scheduleGeometryUpdate({ fit: !state.userMovedViewport });
       }, RULES.transitionMs);
     });
   });
@@ -2054,45 +2591,39 @@ function animateArriveFrom(originNodeId) {
 
 function pushBoard(boardId, originNodeId) {
   if (!boardsById.has(boardId) || state.isTransitioning) return;
-  const commit = () => {
-    state.boardStack.push(boardId);
-    state.boardOrigins.push(originNodeId || null);
-    state.focusedId = null;
-    state.pinnedEdge = null;
-    state.userMovedViewport = false;
-    resetViewport();
-    hideConnection(true);
+  state.boardStack.push(boardId);
+  state.boardOrigins.push(originNodeId || null);
+  state.userMovedViewport = false;
+  resetViewport();
+  withDeepLinkWritesSuppressed(() => {
     renderBoard();
     focusOverview();
-    animateArriveFrom(null);
-    focusBoardNavigationTarget();
-  };
-  animateDiveIn(originNodeId, commit);
+  });
+  syncDeepLinkHistory();
+  animateArriveFrom(null);
+  focusBoardNavigationTarget();
 }
 
 function popToBoard(index) {
   if (state.isTransitioning) return;
   const returningFromBoardId = state.boardStack[index + 1];
   const returningToOriginId = state.boardOrigins[index + 1];
-  const commit = () => {
-    state.boardStack = state.boardStack.slice(0, index + 1);
-    state.boardOrigins = state.boardOrigins.slice(0, index + 1);
-    state.focusedId = null;
-    state.pinnedEdge = null;
-    state.userMovedViewport = false;
-    resetViewport();
-    hideConnection(true);
+  state.boardStack = state.boardStack.slice(0, index + 1);
+  state.boardOrigins = state.boardOrigins.slice(0, index + 1);
+  state.userMovedViewport = false;
+  resetViewport();
+  withDeepLinkWritesSuppressed(() => {
     renderBoard();
     focusOverview();
-    const origin = (currentBoard().nodes || []).find((node) =>
-      returningToOriginId
-        ? node.id === returningToOriginId
-        : targetBoardForNode(node)?.id === returningFromBoardId,
-    );
-    animateArriveFrom(origin?.id || null);
-    focusBoardNavigationTarget(origin?.id || null);
-  };
-  animateFadeOut(commit);
+  });
+  syncDeepLinkHistory();
+  const origin = (currentBoard().nodes || []).find((node) =>
+    returningToOriginId
+      ? node.id === returningToOriginId
+      : targetBoardForNode(node)?.id === returningFromBoardId,
+  );
+  animateArriveFrom(origin?.id || null);
+  focusBoardNavigationTarget(origin?.id || null);
 }
 
 function focusBoardNavigationTarget(originNodeId = null) {
@@ -2101,17 +2632,21 @@ function focusBoardNavigationTarget(originNodeId = null) {
         (element) => element.dataset.nodeId === originNodeId,
       )
     : null;
-  const navigationTarget = boardActions?.querySelector('[data-board-action="up"]');
+  const navigationTarget = elements.boardBack.hidden ? null : elements.boardBack;
   (origin || navigationTarget || elements.canvas).focus({ preventScroll: true });
 }
 
-function displayGraph(board) {
+function displayGraph(board, { includeRepresentedIterations = false } = {}) {
   const nodes = (board.nodes || []).filter((node) => !node.elide);
   const elided = (board.nodes || []).filter((node) => node.elide);
+  const representedIterationRefs = representedIterationRelationRefs(board);
   let edges = (board.edges || []).map((edge) => ({
     ...edge,
     segments: edge.segments?.length ? edge.segments : [edge],
-  }));
+  })).filter((edge) => (
+    includeRepresentedIterations
+      || !edgeIsRepresentedByRepeatRegion(edge, representedIterationRefs)
+  ));
 
   for (const hidden of elided) {
     const incoming = edges.filter((edge) => edge.to === hidden.id);
@@ -2123,6 +2658,9 @@ function displayGraph(board) {
         merged.push({
           from: inEdge.from,
           to: outEdge.to,
+          kind: [inEdge.kind, outEdge.kind].includes("conditioning")
+            ? "conditioning"
+            : outEdge.kind || inEdge.kind,
           label: outEdge.label,
           tone: inEdge.tone === "conditioning" || outEdge.tone === "conditioning"
             ? "conditioning"
@@ -2134,6 +2672,15 @@ function displayGraph(board) {
     }
     edges = [...rest, ...merged];
   }
+  edges = edges.map((edge) => {
+    const profile = edgeFlowProfile(edge, { repsById, relationsById });
+    return {
+      ...edge,
+      flow_family: profile.family,
+      flow_families: profile.families,
+      carried_representation_refs: profile.representation_refs,
+    };
+  });
   return { nodes, edges };
 }
 
@@ -2199,6 +2746,24 @@ function polylineMidpoint(points) {
   return points.at(-1);
 }
 
+function longestHorizontalSegment(points) {
+  let longest = null;
+  for (let index = 1; index < (points || []).length; index += 1) {
+    const from = points[index - 1];
+    const to = points[index];
+    if (Math.abs(to.y - from.y) > 0.5) continue;
+    const length = Math.abs(to.x - from.x);
+    if (!length || (longest && longest.length >= length)) continue;
+    longest = {
+      from,
+      to,
+      length,
+      midpoint: { x: (from.x + to.x) / 2, y: (from.y + to.y) / 2 },
+    };
+  }
+  return longest;
+}
+
 function renderEdges() {
   const board = currentBoard();
   const width = elements.moduleLayer.offsetWidth;
@@ -2206,10 +2771,21 @@ function renderEdges() {
   elements.edgeLayer.setAttribute("viewBox", `0 0 ${width} ${height}`);
   elements.edgeLayer.innerHTML = "";
   elements.edgeLayer.appendChild(renderEdgeMarkers());
+  const pathLayer = document.createElementNS("http://www.w3.org/2000/svg", "g");
+  pathLayer.setAttribute("class", "arch-edge-paths");
+  const annotationLayer = document.createElementNS("http://www.w3.org/2000/svg", "g");
+  annotationLayer.setAttribute("class", "arch-edge-annotations");
+  const hitLayer = document.createElementNS("http://www.w3.org/2000/svg", "g");
+  hitLayer.setAttribute("class", "arch-edge-hits");
+  elements.edgeLayer.append(pathLayer, annotationLayer, hitLayer);
 
   const edges = state.displayEdges || displayGraph(board).edges;
   const orthoRoutes = buildOrthoRoutes(edges);
   const renderedRoutes = new Map();
+  const annotationObstacles = visibleNodes(board)
+    .map((node) => nodeBox(node.id))
+    .filter(Boolean);
+  const occupiedAnnotationBoxes = [];
   edges.forEach((edge, index) => {
     const conditioning = derivedConditioning(board, edge);
     if (conditioning.length && !edge.tone) edge.tone = "conditioning";
@@ -2224,14 +2800,14 @@ function renderEdges() {
       if (!route) return;
       routePoints = route;
     }
+    routePoints = ensureMinimumLanding(routePoints, RULES.route.arrowLanding);
     renderedRoutes.set(index, routePoints);
     const pathD = roundedOrthPath(routePoints);
-    const labelPoint = polylineMidpoint(routePoints);
+    const labelSegment = longestHorizontalSegment(routePoints);
     const edgeSpan = Math.hypot(
       routePoints.at(-1).x - routePoints[0].x,
       routePoints.at(-1).y - routePoints[0].y,
     );
-    const tooltipPoint = { x: labelPoint.x, y: labelPoint.y - 12 };
     const path = document.createElementNS("http://www.w3.org/2000/svg", "path");
     path.setAttribute("d", pathD);
     path.setAttribute("class", "arch-edge");
@@ -2240,39 +2816,147 @@ function renderEdges() {
     path.dataset.edgeIndex = String(index);
     if (contracted) path.classList.add("is-contracted");
     applyEdgeTone(path, edge);
-    elements.edgeLayer.appendChild(path);
+    pathLayer.appendChild(path);
 
-    const showLabel = edge.label && (edgeSpan >= RULES.edgeLabelMinSpan || contracted || edge.tone === "conditioning");
-    if (showLabel) {
+    const labelWidth = edge.label ? measureEdgeText(edge.label, "label") : 0;
+    const showLabel = edge.label && edgeLabelFits({
+      span: labelSegment?.length || edgeSpan,
+      textWidth: labelWidth,
+      padding: RULES.layout.edgeTextPadding,
+      force: contracted || edge.tone === "conditioning",
+    });
+    const badgeLines = conditioning.length ? conditioningBadgeLines(conditioning) : [];
+    const annotationSize = measureEdgeAnnotation({
+      labelWidth: showLabel ? labelWidth : 0,
+      badgeLineWidths: badgeLines.map((line) => measureEdgeText(line, "badge")),
+      ...EDGE_ANNOTATION_METRICS,
+    });
+    const annotationPlacement = placeEdgeAnnotation({
+      route: routePoints,
+      size: annotationSize,
+      obstacles: annotationObstacles,
+      occupied: occupiedAnnotationBoxes,
+      segmentPadding: RULES.layout.edgeAnnotationSegmentPadding,
+      crossAxisGap: RULES.layout.edgeAnnotationCrossAxisGap,
+      obstaclePadding: RULES.layout.edgeAnnotationNodeClearance,
+      occupiedPadding: RULES.layout.edgeAnnotationClearance,
+    });
+    const annotationBox = annotationPlacement?.box;
+    if (annotationBox) occupiedAnnotationBoxes.push(annotationBox);
+    const annotationX = annotationBox ? annotationBox.x + annotationBox.width / 2 : null;
+    let annotationY = annotationBox ? annotationBox.y + EDGE_ANNOTATION_METRICS.paddingY : null;
+
+    if (showLabel && annotationBox) {
       const label = document.createElementNS("http://www.w3.org/2000/svg", "text");
-      label.setAttribute("x", String(labelPoint.x));
-      label.setAttribute("y", String(tooltipPoint.y));
+      label.setAttribute("x", String(annotationX));
+      label.setAttribute("y", String(annotationY + EDGE_TEXT_STYLES.label.fontSize));
       label.setAttribute("class", "arch-edge-label");
       label.setAttribute("aria-hidden", "true");
       label.dataset.edgeIndex = String(index);
+      label.dataset.annotationSide = annotationPlacement.side;
       applyEdgeTone(label, edge);
       label.textContent = edge.label;
-      elements.edgeLayer.appendChild(label);
+      annotationLayer.appendChild(label);
+      annotationY += EDGE_ANNOTATION_METRICS.labelHeight;
+      if (badgeLines.length) annotationY += EDGE_ANNOTATION_METRICS.groupGap;
     }
 
-    if (conditioning.length) {
+    if (badgeLines.length && annotationBox) {
       const badge = document.createElementNS("http://www.w3.org/2000/svg", "text");
-      badge.setAttribute("x", String(labelPoint.x));
-      badge.setAttribute("y", String(labelPoint.y + 4));
       badge.setAttribute("class", "arch-edge-badge");
       badge.setAttribute("aria-hidden", "true");
       badge.dataset.edgeIndex = String(index);
-      badge.textContent = conditioning
-        .map((entry) => String(entry.mode || "").replaceAll("_", " "))
-        .filter(Boolean)
-        .join(" · ");
-      elements.edgeLayer.appendChild(badge);
+      badge.dataset.annotationSide = annotationPlacement.side;
+      badgeLines.forEach((line, lineIndex) => {
+        const span = document.createElementNS("http://www.w3.org/2000/svg", "tspan");
+        span.setAttribute("x", String(annotationX));
+        span.setAttribute(
+          "y",
+          String(annotationY + EDGE_TEXT_STYLES.badge.fontSize
+            + lineIndex * (EDGE_ANNOTATION_METRICS.badgeLineHeight
+              + EDGE_ANNOTATION_METRICS.badgeLineGap)),
+        );
+        span.textContent = line;
+        badge.appendChild(span);
+      });
+      applyEdgeTone(badge, edge);
+      annotationLayer.appendChild(badge);
     }
 
-    elements.edgeLayer.appendChild(renderEdgeHitTarget(edge, pathD, index));
+    hitLayer.appendChild(renderEdgeHitTarget(edge, pathD, index));
   });
   state.edgeRoutes = renderedRoutes;
+  state.edgeAnnotationBoxes = occupiedAnnotationBoxes;
+  renderBoardRegions(board);
   renderLatestConnectivityHighlight();
+  restoreSelectionVisuals();
+}
+
+function renderBoardRegions(board) {
+  elements.moduleLayer.querySelectorAll(".board-region").forEach((element) => element.remove());
+  for (const region of repeatRegions(board)) {
+    const boxes = (region.node_ids || region.nodeIds || []).map((nodeId) => {
+      const element = elements.moduleLayer.querySelector(`[data-node-id="${CSS.escape(nodeId)}"]`);
+      if (!element) return null;
+      return {
+        x: element.offsetLeft,
+        y: element.offsetTop,
+        width: element.offsetWidth,
+        height: element.offsetHeight,
+      };
+    });
+    const bounds = repeatRegionBounds(boxes);
+    if (!bounds) continue;
+
+    const loop = executionLoopForRef(
+      manifest.architecture.execution || {},
+      region.execution_ref || region.executionRef,
+    );
+    const enclosure = document.createElement("div");
+    enclosure.className = "board-region repeat-region";
+    enclosure.dataset.regionId = region.id;
+    enclosure.setAttribute("role", "group");
+    enclosure.setAttribute("aria-label", repeatRegionAccessibleLabel(region, loop));
+    enclosure.style.left = `${Math.round(bounds.x)}px`;
+    enclosure.style.top = `${Math.round(bounds.y)}px`;
+    enclosure.style.width = `${Math.round(bounds.width)}px`;
+    enclosure.style.height = `${Math.round(bounds.height)}px`;
+
+    const header = document.createElement("div");
+    header.className = "repeat-region-header";
+    const label = document.createElement("span");
+    label.className = "repeat-region-label";
+    label.textContent = region.label || "repeated block";
+    header.appendChild(label);
+    if (loop?.repeats) {
+      const count = document.createElement("span");
+      count.className = "repeat-region-count";
+      count.textContent = `repeat ×${loop.repeats}`;
+      header.appendChild(count);
+    }
+    enclosure.appendChild(header);
+    elements.moduleLayer.appendChild(enclosure);
+  }
+}
+
+function restoreSelectionVisuals() {
+  if (!state.selection || state.selection.boardId !== currentBoard().id) return;
+  if (state.selection.kind === "node") {
+    elements.moduleLayer
+      .querySelector(`[data-node-id="${state.selection.occurrenceId}"]`)
+      ?.classList.add("is-focused");
+    return;
+  }
+  const edgeIndex = (state.displayEdges || []).findIndex(
+    (edge) => edgeSelectionKey(edge) === state.selection.edgeId,
+  );
+  if (edgeIndex < 0) return;
+  state.selection.edge = state.displayEdges[edgeIndex];
+  elements.edgeLayer.querySelectorAll(`[data-edge-index="${edgeIndex}"]`).forEach((element) => {
+    element.classList.add("is-selected");
+  });
+  const edge = state.displayEdges[edgeIndex];
+  elements.moduleLayer.querySelector(`[data-node-id="${edge.to}"]`)?.classList.add("is-focused");
 }
 
 function renderEdgeMarkers() {
@@ -2281,16 +2965,20 @@ function renderEdgeMarkers() {
     ["edge-arrow-default", "edge-marker-default"],
     ["edge-arrow-conditioning", "edge-marker-conditioning"],
     ["edge-arrow-skip", "edge-marker-skip"],
+    ["edge-arrow-single", "edge-marker-single"],
+    ["edge-arrow-pair", "edge-marker-pair"],
+    ["edge-arrow-coordinates", "edge-marker-coordinates"],
+    ["edge-arrow-frames", "edge-marker-frames"],
   ].forEach(([id, markerClass]) => {
     const marker = document.createElementNS("http://www.w3.org/2000/svg", "marker");
     marker.setAttribute("id", id);
     marker.setAttribute("viewBox", "0 0 10 10");
     marker.setAttribute("refX", "9");
     marker.setAttribute("refY", "5");
-    marker.setAttribute("markerWidth", "4.5");
-    marker.setAttribute("markerHeight", "4.5");
+    marker.setAttribute("markerWidth", "14");
+    marker.setAttribute("markerHeight", "14");
     marker.setAttribute("orient", "auto");
-    marker.setAttribute("markerUnits", "strokeWidth");
+    marker.setAttribute("markerUnits", "userSpaceOnUse");
 
     const arrow = document.createElementNS("http://www.w3.org/2000/svg", "path");
     arrow.setAttribute("d", "M 0 0 L 10 5 L 0 10 z");
@@ -2302,9 +2990,19 @@ function renderEdgeMarkers() {
 }
 
 function edgeMarkerId(edge) {
-  if (edge.tone === "conditioning") return "edge-arrow-conditioning";
   if (edge.tone === "skip") return "edge-arrow-skip";
+  if (PAYLOAD_FLOW_FAMILIES.includes(edge.flow_family)) {
+    return `edge-arrow-${edge.flow_family}`;
+  }
+  if (edge.tone === "conditioning") return "edge-arrow-conditioning";
   return "edge-arrow-default";
+}
+
+function edgeMarkerFamily(edge) {
+  if (edge.tone === "skip") return "skip";
+  if (PAYLOAD_FLOW_FAMILIES.includes(edge.flow_family)) return edge.flow_family;
+  if (edge.tone === "conditioning") return "conditioning";
+  return "default";
 }
 
 function explicitLaneRoute(edge, fromBox, toBox, allBoxes) {
@@ -2324,7 +3022,10 @@ function explicitLaneRoute(edge, fromBox, toBox, allBoxes) {
       : Math.max(boundary + 6, Math.min(elements.moduleLayer.offsetHeight - 12, boundary + clearance));
     const from = sidePoint(fromBox, side, 0.5);
     const to = sidePoint(toBox, side, 0.5);
-    return cleanRoute([from, { x: from.x, y: laneY }, { x: to.x, y: laneY }, to]);
+    return ensureMinimumLanding(
+      cleanRoute([from, { x: from.x, y: laneY }, { x: to.x, y: laneY }, to]),
+      RULES.route.arrowLanding,
+    );
   }
 
   const lo = Math.min(fromBox.cy, toBox.cy);
@@ -2338,7 +3039,10 @@ function explicitLaneRoute(edge, fromBox, toBox, allBoxes) {
     : Math.max(boundary + 6, Math.min(elements.moduleLayer.offsetWidth - 12, boundary + clearance));
   const from = sidePoint(fromBox, side, 0.5);
   const to = sidePoint(toBox, side, 0.5);
-  return cleanRoute([from, { x: laneX, y: from.y }, { x: laneX, y: to.y }, to]);
+  return ensureMinimumLanding(
+    cleanRoute([from, { x: laneX, y: from.y }, { x: laneX, y: to.y }, to]),
+    RULES.route.arrowLanding,
+  );
 }
 
 const ROUTE_SIDES = ["right", "bottom", "left", "top"];
@@ -2367,6 +3071,10 @@ function buildOrthoRoutes(edges) {
     boxFor(edge.to);
   });
   const allBoxes = [...boxes.values()].filter(Boolean);
+  const feedbackLanes = allocateFeedbackLanes(edges, boxes, {
+    baseClearance: RULES.route.laneClearance + 14,
+    laneStep: RULES.route.channelStep,
+  });
 
   const obstaclesFor = (edge) => {
     const obstacles = [];
@@ -2383,7 +3091,15 @@ function buildOrthoRoutes(edges) {
     const fromBox = boxFor(edge.from);
     const toBox = boxFor(edge.to);
     if (!fromBox || !toBox || fromBox === toBox) return;
-    const explicitRoute = explicitLaneRoute(edge, fromBox, toBox, allBoxes);
+    const inferredFeedback = feedbackLanes.get(index);
+    const routedEdge = inferredFeedback
+      ? {
+          ...edge,
+          route_side: inferredFeedback.side,
+          route_clearance: inferredFeedback.clearance,
+        }
+      : edge;
+    const explicitRoute = explicitLaneRoute(routedEdge, fromBox, toBox, allBoxes);
     if (explicitRoute) {
       routes.set(index, explicitRoute);
       return;
@@ -2400,11 +3116,26 @@ function buildOrthoRoutes(edges) {
     if (route) routes.set(plan.index, route);
   });
 
-  separateParallelSegments(routes);
+  separateParallelSegments(routes, {
+    nudge: RULES.route.nudge,
+    minimumDeparture: RULES.route.margin + 6,
+    minimumArrival: RULES.route.arrowLanding,
+  });
   return routes;
 }
 
 function chooseRoutePlan(edge, index, fromBox, toBox, obstacles) {
+  const clearFacing = clearFacingPortPlan(fromBox, toBox, obstacles);
+  if (clearFacing) {
+    return {
+      edge,
+      index,
+      fromBox,
+      toBox,
+      ...clearFacing,
+      preserveFacingDocks: true,
+    };
+  }
   let bestPlan = null;
   let bestScore = Number.POSITIVE_INFINITY;
   ROUTE_SIDES.forEach((exitSide) => {
@@ -2475,6 +3206,7 @@ function spreadDockPoints(plans) {
     add(`${plan.edge.to}|${plan.enterSide}`, { plan, end: "end", box: plan.toBox, side: plan.enterSide, other: plan.fromBox });
   });
   groups.forEach((entries) => {
+    if (entries.length === 1 && entries[0].plan.preserveFacingDocks) return;
     const alongY = entries[0].side === "left" || entries[0].side === "right";
     entries.sort((a, b) => (alongY ? a.other.cy - b.other.cy : a.other.cx - b.other.cx));
     entries.forEach((entry, i) => {
@@ -2514,8 +3246,12 @@ function routeOrthogonal(plan, obstacles) {
   if (opposingPortsAreCrossed(plan)) return null;
   const { start, end } = plan;
   const candidates = [];
-  const stub = RULES.route.margin + 6;
-  const [startStub, endStub] = routeStubLengths(plan, stub);
+  const departureStub = RULES.route.margin + 6;
+  const [startStub, endStub] = routeStubLengths(
+    plan,
+    departureStub,
+    RULES.route.arrowLanding,
+  );
   const startOut = offsetTowardSide(start, plan.exitSide, startStub);
   const endOut = offsetTowardSide(end, plan.enterSide, endStub);
   const wrap = (core) => [start, startOut, ...core, endOut, end];
@@ -2551,16 +3287,14 @@ function routeOrthogonal(plan, obstacles) {
   return pickBestRoute(candidates, obstacles, plan);
 }
 
-function routeStubLengths(plan, preferred) {
+function routeStubLengths(plan, departure, arrival) {
   const { start, end, exitSide, enterSide } = plan;
   let gap = null;
   if (exitSide === "right" && enterSide === "left") gap = end.x - start.x;
   if (exitSide === "left" && enterSide === "right") gap = start.x - end.x;
   if (exitSide === "bottom" && enterSide === "top") gap = end.y - start.y;
   if (exitSide === "top" && enterSide === "bottom") gap = start.y - end.y;
-  if (gap == null || gap < 0) return [preferred, preferred];
-  const available = Math.max(0, gap / 2);
-  return [Math.min(preferred, available), Math.min(preferred, available)];
+  return fitEndpointStubLengths(gap, departure, arrival);
 }
 
 function offsetTowardSide(point, side, distance) {
@@ -2598,7 +3332,7 @@ function pickBestRoute(candidates, obstacles, plan) {
   let best = null;
   let bestScore = Number.POSITIVE_INFINITY;
   candidates.forEach((raw) => {
-    const points = cleanRoute(raw);
+    const points = ensureMinimumLanding(cleanRoute(raw), RULES.route.arrowLanding);
     if (points.length < 2) return;
     if (!routeHonorsPorts(points, plan) || routeHasBacktrack(points)) return;
     const score = routeScore(points, obstacles);
@@ -2678,43 +3412,6 @@ function segmentHitsBox(a, b, box) {
     && Math.max(a.y, b.y) >= box.y;
 }
 
-// Two edges sharing a channel would draw on top of each other; shift the
-// later edge's interior segment sideways until it has its own lane.
-function separateParallelSegments(routes) {
-  const used = [];
-  routes.forEach((points) => {
-    if (!points || points.length < 4) return;
-    for (let i = 1; i < points.length - 2; i += 1) {
-      const a = points[i];
-      const b = points[i + 1];
-      const vertical = a.x === b.x;
-      const coord = vertical ? a.x : a.y;
-      const lo = vertical ? Math.min(a.y, b.y) : Math.min(a.x, b.x);
-      const hi = vertical ? Math.max(a.y, b.y) : Math.max(a.x, b.x);
-      if (hi - lo < 1) continue;
-      let shifted = coord;
-      for (let attempt = 1; attempt <= 8; attempt += 1) {
-        const blocked = used.some((seg) => seg.vertical === vertical
-          && Math.abs(seg.coord - shifted) < RULES.route.nudge
-          && seg.lo < hi && seg.hi > lo);
-        if (!blocked) break;
-        const dir = attempt % 2 === 1 ? 1 : -1;
-        shifted = coord + dir * Math.ceil(attempt / 2) * RULES.route.nudge;
-      }
-      if (shifted !== coord) {
-        if (vertical) {
-          a.x = shifted;
-          b.x = shifted;
-        } else {
-          a.y = shifted;
-          b.y = shifted;
-        }
-      }
-      used.push({ vertical, coord: shifted, lo, hi });
-    }
-  });
-}
-
 function nodeBox(id) {
   const node = elements.moduleLayer.querySelector(`[data-node-id="${id}"]`);
   if (!node) return null;
@@ -2738,22 +3435,24 @@ function renderEdgeHitTarget(edge, pathD, edgeIndex) {
   hit.setAttribute("d", pathD);
   hit.setAttribute("class", "edge-hit");
   hit.dataset.edgeIndex = String(edgeIndex);
+  const relationPath = edgeRelationPath(edge);
+  if (relationPath.length) hit.dataset.relationPath = relationPath.join(" ");
   hit.setAttribute("tabindex", "0");
   hit.setAttribute("role", "button");
   hit.setAttribute("aria-label", edge.connection.title);
-  hit.addEventListener("mouseenter", () => showConnection(edge, pointerPreviewKey));
+  attachQuestionMenuHandlers(hit, { kind: "edge", edge });
+  hit.addEventListener("mouseenter", (event) => showConnection(edge, pointerPreviewKey, event.currentTarget));
   hit.addEventListener("mouseleave", () => hideConnection(false, pointerPreviewKey));
-  hit.addEventListener("focus", () => showConnection(edge, focusPreviewKey));
+  hit.addEventListener("focus", (event) => showConnection(edge, focusPreviewKey, event.currentTarget));
   hit.addEventListener("blur", () => hideConnection(false, focusPreviewKey));
   const activate = (event) => {
     event.stopPropagation();
-    clearInspectorPreviews();
-    if (state.pinnedEdge === edge) {
-      state.pinnedEdge = null;
+    hideCanvasTooltip();
+    if (edgeIsSelected(edge)) {
+      setSelection(null);
       hideConnection(true);
     } else {
-      state.pinnedEdge = edge;
-      showConnection(edge);
+      focusConnection(edge);
     }
   };
   hit.addEventListener("click", activate);
@@ -2766,6 +3465,7 @@ function renderEdgeHitTarget(edge, pathD, edgeIndex) {
 }
 
 function applyEdgeTone(element, edge) {
+  applyFlowFamily(element, edge.flow_family, edge.flow_families);
   if (edge.tone === "conditioning") {
     element.classList.add("is-conditioning");
   }
@@ -2774,15 +3474,21 @@ function applyEdgeTone(element, edge) {
   }
 }
 
-function showConnection(edge, previewSourceKey = null) {
-  const pinned = state.pinnedEdge === edge;
-  if (pinned) {
-    clearInspectorPreviews();
+function applyFlowFamily(element, family, families = []) {
+  if (family && family !== "default") element.classList.add(`flow-family-${family}`);
+  if (family) element.dataset.flowFamily = family;
+  if (families?.length) element.dataset.flowFamilies = families.join(" ");
+}
+
+function showConnection(edge, previewSourceKey = null, anchor = null) {
+  if (edgeIsSelected(edge)) {
+    hideCanvasTooltip();
     focusConnection(edge);
   } else if (previewSourceKey) {
-    beginInspectorPreview(previewSourceKey, {
+    showCanvasTooltip(previewSourceKey, {
       title: edge.connection.title,
       html: connectionInspectorHtml(edge, { expanded: false }),
+      anchor,
     });
   }
 }
@@ -2936,39 +3642,29 @@ function renderInlineStandardBlocks(blocks) {
 
 function hideConnection(force = false, previewSourceKey = null) {
   if (force) {
-    clearInspectorPreviews();
-    if (!state.focusedId && !state.pinnedEdge) focusOverview();
+    hideCanvasTooltip();
+    if (!state.selection) focusOverview();
   } else {
-    endInspectorPreview(previewSourceKey);
+    hideCanvasTooltip(previewSourceKey);
   }
 }
 
 function focusConnection(edge) {
-  state.focusedId = null;
+  setSelection({ kind: "edge", edge });
   clearActiveNodes();
+  const edgeIndex = (state.displayEdges || []).indexOf(edge);
+  if (edgeIndex >= 0) {
+    elements.edgeLayer.querySelectorAll(`[data-edge-index="${edgeIndex}"]`).forEach((element) => {
+      element.classList.add("is-selected");
+    });
+  }
   elements.moduleLayer.querySelector(`[data-node-id="${edge.to}"]`)?.classList.add("is-focused");
   elements.focusTitle.textContent = edge.connection.title;
   setFocusBody(connectionInspectorHtml(edge, { expanded: true }), { selected: true });
 }
 
-function showNodePeek(node, module, targetBoard, sourceKey) {
-  const label = node.label || module?.label || node.id;
-  const kind = node.kind === "operation" ? "operation" : module?.kind || node.kind || "module";
-  const role = node.role || module?.role || "";
-  showHoverPanel(`
-    <span class="rep-tooltip-meta">${escapeHtml(String(kind).replaceAll("_", " "))}</span>
-    <strong class="rep-tooltip-title">${escapeHtml(label)}</strong>
-    <div class="focus-section">
-      ${role ? `<p>${escapeHtml(role)}</p>` : ""}
-      ${targetBoard
-        ? `<p class="focus-preview-hint">Open detail: ${escapeHtml(targetBoard.title)}</p>`
-        : ""}
-    </div>
-  `, label, sourceKey);
-}
-
 function focusOverview() {
-  state.focusedId = null;
+  setSelection(null);
   clearActiveNodes();
   const board = currentBoard();
   elements.focusTitle.textContent = board.title;
@@ -2980,6 +3676,7 @@ function focusOverview() {
       ${notes.length
         ? `<ul>${notes.map((note) => `<li>${escapeHtml(note)}</li>`).join("")}</ul>`
         : ""}
+      <p class="focus-guidance">Select a block or connection to inspect it. Open a detail block to move deeper.</p>
     </div>
   `);
 }
@@ -2990,15 +3687,29 @@ function visibleNodes(board) {
   );
 }
 
+function focusNodeOccurrence(nodeId) {
+  if (!nodeId) return false;
+  const node = visibleNodes(currentBoard()).find((candidate) => candidate.id === nodeId);
+  if (!node) return false;
+  if (node.kind === "representation") {
+    focusRepresentation(node, node.rep_ref ? repsById.get(node.rep_ref) : null);
+    return true;
+  }
+  const module = node.module_ref ? modulesById.get(node.module_ref) : null;
+  if (module) {
+    focusModule(module, node);
+  } else {
+    focusOperation(node);
+  }
+  return true;
+}
+
 function resetFocusedDetail() {
-  state.focusedId = null;
-  state.pinnedEdge = null;
-  clearActiveNodes();
   focusOverview();
 }
 
-function focusModule(module) {
-  state.focusedId = module.id;
+function focusModule(module, node) {
+  setSelection(node ? { kind: "node", node } : null);
   clearActiveNodes();
   elements.moduleLayer.querySelector(`[data-module-id="${module.id}"]`)?.classList.add("is-focused");
   elements.focusTitle.textContent = module.label;
@@ -3021,7 +3732,7 @@ function focusModule(module) {
 }
 
 function focusOperation(node) {
-  state.focusedId = node.id;
+  setSelection({ kind: "node", node });
   clearActiveNodes();
   elements.moduleLayer.querySelector(`[data-node-id="${node.id}"]`)?.classList.add("is-focused");
   elements.focusTitle.textContent = node.label || node.id;
@@ -3040,6 +3751,9 @@ function clearActiveNodes() {
   elements.moduleLayer.querySelectorAll(".arch-node, .arch-rep").forEach((node) => {
     node.classList.remove("is-focused");
   });
+  elements.edgeLayer.querySelectorAll("[data-edge-index]").forEach((edge) => {
+    edge.classList.remove("is-selected");
+  });
 }
 
 function renderContains(children) {
@@ -3050,10 +3764,10 @@ function renderContains(children) {
       ${children
         .map(
           (child) => `
-            <button class="internal-unit" type="button" data-child-id="${escapeHtml(child.id)}">
+            <div class="internal-unit" data-child-id="${escapeHtml(child.id)}">
               <strong>${escapeHtml(child.label)}</strong>
               <span>${child.standard_block_ref ? "standard block" : "pseudocode trace"}</span>
-            </button>
+            </div>
           `,
         )
         .join("")}
@@ -3199,19 +3913,39 @@ function renderFocusLinks(module) {
   return `<div class="focus-links">${links.join("")}</div>`;
 }
 
+function scheduleGeometryUpdate({ measureGrid = false, renderEdges: edges = false, fit = false } = {}) {
+  pendingGeometry.measureGrid ||= measureGrid;
+  pendingGeometry.renderEdges ||= edges;
+  pendingGeometry.fit ||= fit;
+  if (geometryFrame !== null) return;
+  geometryFrame = window.requestAnimationFrame(flushGeometryUpdate);
+}
+
+function flushGeometryUpdate() {
+  geometryFrame = null;
+  const request = { ...pendingGeometry };
+  pendingGeometry.measureGrid = false;
+  pendingGeometry.renderEdges = false;
+  pendingGeometry.fit = false;
+
+  if (state.modelMapDirty && !state.modelMapCollapsed && modelMap?.offsetParent !== null) {
+    renderModelMap();
+  }
+
+  if (request.measureGrid && !useElkLayout) {
+    const board = currentBoard();
+    const graph = displayGraph(board);
+    state.displayEdges = graph.edges;
+    applyGridColumnSizing(board, graph);
+  }
+  if (request.renderEdges) renderEdges();
+  if (request.fit && !state.isTransitioning && !state.userMovedViewport) fitToContent();
+}
+
 function ensurePanZoom() {
-  if (!canvasControls) {
-    canvasControls = document.createElement("div");
-    canvasControls.className = "canvas-controls board-chrome";
-    canvasControls.innerHTML = `
-      <button type="button" data-zoom="out" aria-label="Zoom out" title="Zoom out">−</button>
-      <button type="button" class="canvas-zoom-value" data-zoom="reset" aria-label="Reset geometric zoom to 100 percent" title="Reset geometric zoom to 100%">100%</button>
-      <button type="button" data-zoom="in" aria-label="Zoom in" title="Zoom in">+</button>
-      <button type="button" class="canvas-fit-button" data-zoom="fit" aria-label="Fit board to view" title="Fit board to view">Fit</button>
-    `;
-    canvasZoomValue = canvasControls.querySelector(".canvas-zoom-value");
-    canvasControls.addEventListener("click", onCanvasControlClick);
-    elements.canvas.appendChild(canvasControls);
+  if (!elements.canvasControls.dataset.ready) {
+    elements.canvasControls.dataset.ready = "true";
+    elements.canvasControls.addEventListener("click", onCanvasControlClick);
   }
 
   if (elements.canvas.dataset.panZoomReady) return;
@@ -3233,7 +3967,7 @@ function onCanvasControlClick(event) {
   }
   if (action === "fit") {
     state.userMovedViewport = false;
-    fitToContent();
+    fitToContent({ readable: false });
     return;
   }
   state.userMovedViewport = true;
@@ -3242,21 +3976,32 @@ function onCanvasControlClick(event) {
 
 function onCanvasWheel(event) {
   if (event.target.closest(".board-chrome")) return;
+  const delta = normalizedWheelDelta(event);
   event.preventDefault();
-  hideRepPeek();
+  if (Math.abs(delta) < 0.01) return;
+  closeQuestionMenu({ restoreFocus: true });
+  hideCanvasTooltip();
   state.userMovedViewport = true;
-  const factor = Math.exp(-event.deltaY * 0.001);
+  const factor = Math.exp(-delta * RULES.gesture.wheelZoomSensitivity);
   zoomAt(event.clientX, event.clientY, factor);
+}
+
+function normalizedWheelDelta(event) {
+  let unit = 1;
+  if (event.deltaMode === 1) unit = RULES.gesture.wheelLinePixels;
+  if (event.deltaMode === 2) unit = Math.max(elements.canvas.clientHeight, 1);
+  return clamp(
+    event.deltaY * unit,
+    -RULES.gesture.maxWheelDelta,
+    RULES.gesture.maxWheelDelta,
+  );
 }
 
 function onCanvasPointerDown(event) {
   if (event.button !== 0 && event.button !== 1) return;
   if (event.target.closest(".arch-node, .arch-rep, .edge-hit, .board-chrome")) return;
-  if (state.pinnedEdge) {
-    state.pinnedEdge = null;
-    hideConnection(true);
-  }
-  hideRepPeek();
+  if (state.selection) focusOverview();
+  hideCanvasTooltip();
   viewport.isPanning = true;
   state.userMovedViewport = true;
   viewport.startClientX = event.clientX;
@@ -3314,27 +4059,56 @@ function resetViewport() {
   applyViewport();
 }
 
-function applyViewport() {
-  const transform = `translate(${viewport.x}px, ${viewport.y}px) scale(${viewport.scale})`;
-  elements.moduleLayer.style.transform = transform;
-  elements.edgeLayer.style.transform = transform;
-  if (canvasZoomValue) canvasZoomValue.textContent = `${Math.round(viewport.scale * 100)}%`;
+function applyViewport({ immediate = false } = {}) {
+  if (immediate) {
+    if (viewportFrame !== null) window.cancelAnimationFrame(viewportFrame);
+    viewportFrame = null;
+    flushViewport();
+    return;
+  }
+  if (viewportFrame !== null) return;
+  viewportFrame = window.requestAnimationFrame(flushViewport);
+}
+
+function flushViewport() {
+  viewportFrame = null;
+  const transform = `translate3d(${viewport.x}px, ${viewport.y}px, 0) scale(${viewport.scale})`;
+  if (transform !== renderedViewportTransform) {
+    elements.representationLaneLayer.style.transform = transform;
+    elements.moduleLayer.style.transform = transform;
+    elements.edgeLayer.style.transform = transform;
+    renderedViewportTransform = transform;
+  }
+  const zoomPercent = Math.round(viewport.scale * 100);
+  if (elements.canvasZoomValue && zoomPercent !== renderedZoomPercent) {
+    elements.canvasZoomValue.textContent = `${zoomPercent}%`;
+    renderedZoomPercent = zoomPercent;
+  }
 }
 
 function clamp(value, min, max) {
   return Math.min(max, Math.max(min, value));
 }
 
-window.addEventListener("resize", () => {
-  window.requestAnimationFrame(() => {
-    if (!state.userMovedViewport && !useElkLayout) {
-      const board = currentBoard();
-      const graph = displayGraph(board);
-      state.displayEdges = graph.edges;
-      applyGridColumnSizing(board, graph);
-    }
-    if (!state.isTransitioning && !state.userMovedViewport) fitToContent();
-    renderEdges();
+function refreshResponsiveGeometry() {
+  hideCanvasTooltip();
+  scheduleGeometryUpdate({
+    measureGrid: !state.userMovedViewport && !useElkLayout,
+    renderEdges: true,
+    fit: !state.isTransitioning && !state.userMovedViewport,
   });
-});
+}
+
+window.addEventListener("resize", refreshResponsiveGeometry);
+if (typeof ResizeObserver === "function") {
+  let observedCanvasSize = null;
+  new ResizeObserver(([entry]) => {
+    const size = entry?.contentRect;
+    if (!size) return;
+    const next = `${Math.round(size.width)}x${Math.round(size.height)}`;
+    if (next === observedCanvasSize) return;
+    observedCanvasSize = next;
+    refreshResponsiveGeometry();
+  }).observe(elements.canvas);
+}
 render();

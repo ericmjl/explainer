@@ -7,48 +7,97 @@
     <link rel="stylesheet" href="../../styles.css" />
   </head>
   <body class="renderer-page">
+    <a class="skip-link" href="#architectureCanvas">Skip to architecture</a>
     <main class="renderer-shell">
       <header class="renderer-header">
-        <div>
-          <p class="eyebrow" id="rendererEyebrow">Interactive architecture</p>
-          <h1 id="archTitle">Architecture</h1>
-          <p id="rendererIntro">
-            Open a part of the system to move from the overview into its
-            internal mechanism. The location guide keeps each level connected
-            to the whole.
-          </p>
+        <div class="renderer-identity">
+          <a class="renderer-library-link" href="../../">← Explainer library</a>
+          <div>
+            <p class="eyebrow" id="rendererEyebrow">Interactive architecture</p>
+            <h1 id="archTitle">Architecture</h1>
+            <p id="rendererIntro">Explore the model from system flow to implementation detail.</p>
+          </div>
         </div>
-        <nav class="note-nav" aria-label="Renderer navigation">
-          <select id="archSwitcher" class="arch-switcher" aria-label="Choose architecture"></select>
-          <a class="story-home-link" href="../../">All pages</a>
-          <a class="story-home-link" id="archSourceLink" href="#">Source YAML</a>
+        <nav class="renderer-toolbar" aria-label="Architecture actions">
+          <label class="arch-switcher-label" for="archSwitcher">
+            <span>Architecture</span>
+            <select id="archSwitcher" class="arch-switcher"></select>
+          </label>
+          <a class="renderer-source-link" id="archSourceLink" href="#">View source</a>
         </nav>
       </header>
 
       <section class="renderer-grid">
-        <aside class="focus-panel" aria-label="Architecture details">
-          <div class="focus-panel-header" id="focusHeader">
-            <div>
-              <p class="eyebrow" id="focusEyebrow">Current takeaway</p>
-              <h2 id="focusTitle">Architecture overview</h2>
-            </div>
-            <button id="focusReset" class="focus-reset" type="button" hidden>Close</button>
-          </div>
-          <div id="focusBody" class="focus-body"></div>
+        <section
+          id="architectureCanvas"
+          class="architecture-canvas"
+          aria-label="Architecture map"
+          aria-describedby="canvasHelp"
+        >
+          <nav id="boardNavigation" class="board-navigation board-chrome" aria-label="Board navigation">
+            <button id="boardBack" class="board-back" type="button" data-board-action="up" hidden>
+              <span aria-hidden="true">←</span>
+              <span class="board-back-label">Up</span>
+            </button>
+            <ol id="boardBreadcrumbs" class="board-breadcrumbs"></ol>
+            <span id="boardDepth" class="board-depth" aria-label="Semantic depth"></span>
+            <button
+              id="copyDeepLink"
+              class="board-copy-link"
+              type="button"
+              aria-label="Copy link to this architecture view"
+              title="Copy link to this architecture view"
+            >
+              <svg viewBox="0 0 24 24" aria-hidden="true">
+                <path d="M10.5 13.5 13.5 10.5" />
+                <path d="M8.1 15.9 6.7 17.3a3.5 3.5 0 0 1-5-5l3.6-3.6a3.5 3.5 0 0 1 5 0" />
+                <path d="m15.9 8.1 1.4-1.4a3.5 3.5 0 0 1 5 5l-3.6 3.6a3.5 3.5 0 0 1-5 0" />
+              </svg>
+              <span class="board-copy-link-label">Copy link</span>
+            </button>
+          </nav>
+          <p id="semanticLocationStatus" class="sr-only" role="status" aria-live="polite" aria-atomic="true"></p>
+          <p id="canvasHelp" class="sr-only">
+            Select a block or connection to inspect it. Open a detail node to move deeper.
+            Drag the canvas to follow long flows. Use a two-finger scroll or mouse wheel to zoom around the pointer.
+          </p>
 
-          <div class="focus-panel-header focus-preview-header" id="focusPreviewHeader" hidden>
-            <p class="eyebrow">Preview · select to keep</p>
-            <h2 id="focusPreviewTitle">Preview</h2>
-          </div>
-          <div id="focusPreviewBody" class="focus-body focus-preview-body" hidden></div>
-        </aside>
-
-        <section class="architecture-canvas" aria-label="Architecture map">
           <div id="scaleLaneLayer" class="scale-lane-layer" aria-hidden="true" hidden></div>
-
+          <div id="representationLaneLayer" class="representation-lane-layer" aria-hidden="true"></div>
           <div id="moduleLayer" class="module-layer"></div>
           <svg id="edgeLayer" class="edge-layer" aria-label="Architecture connections"></svg>
+
+          <div id="canvasControls" class="canvas-controls board-chrome" aria-label="Canvas controls">
+            <button type="button" data-zoom="out" aria-label="Zoom out" title="Zoom out">−</button>
+            <button type="button" class="canvas-zoom-value" data-zoom="reset" aria-label="Reset geometric zoom to 100 percent" title="Reset geometric zoom to 100%">100%</button>
+            <button type="button" data-zoom="in" aria-label="Zoom in" title="Zoom in">+</button>
+            <button type="button" class="canvas-fit-button" data-zoom="fit" aria-label="Fit board to view" title="Fit board to view">Fit</button>
+          </div>
+
+          <div id="canvasTooltip" class="canvas-tooltip" role="tooltip" hidden></div>
         </section>
+
+        <aside id="workspaceInspector" class="focus-panel" aria-label="Architecture inspector">
+          <div class="focus-panel-header" id="focusHeader">
+            <div>
+              <p class="eyebrow" id="focusEyebrow">Board overview</p>
+              <h2 id="focusTitle">Architecture overview</h2>
+            </div>
+            <div class="focus-header-actions">
+              <button
+                id="focusQuestion"
+                class="focus-question"
+                type="button"
+                aria-haspopup="menu"
+                aria-label="Question and copy actions for the selected architecture element"
+                title="Question and copy actions"
+                hidden
+              ><span aria-hidden="true">?</span><span>Ask / copy</span></button>
+              <button id="focusReset" class="focus-reset" type="button" hidden>Clear</button>
+            </div>
+          </div>
+          <div id="focusBody" class="focus-body"></div>
+        </aside>
       </section>
     </main>
 
