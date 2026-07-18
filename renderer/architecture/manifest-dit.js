@@ -4,7 +4,7 @@ export const manifest = {
     "generator": "architecture-manifest-builder-v0.4.1",
     "inputDigests": {
       "references/bibliography.yaml": "2c238cc39ff866cfb41c1b60c3e7a142df5707d3a9292efb8051aabbd5c8f336",
-      "architectures/diffusion-transformer.yaml": "730bad73b786067fc0b6101e41147dffa4272dce88bbdd9f7a0a8f7413468301",
+      "architectures/diffusion-transformer.yaml": "5d7c09d2a97999cd526241976db9881acc2499d98abbe3624520562a53510aad",
       "views/dit-semantic-zoom.view.yaml": "ebca6fefd29f612792b8957db940cc3237132140722d52b76999194823dbc5eb",
       "pseudocode/diffusion-transformer.yaml": "c30de43fb5cb70827e520b7f60c410d348de1c10d72646ab68e6b4a2d6064c65",
       "standard_blocks/adaln-zero-conditioning.yaml": "33cd9afbe3b6867c4ce328c25d41a33210a5e387a195a93b19bc8696ee9e0b32",
@@ -337,7 +337,11 @@ export const manifest = {
           "status": "complete"
         },
         "label": "DDPM Sampling Loop",
-        "kind": "iterative_sampler",
+        "kind": "sampler",
+        "mechanisms": [
+          "reverse_diffusion",
+          "ddpm"
+        ],
         "role": "repeatedly call the classifier-free-guided DiT denoiser and apply stochastic reverse-diffusion updates",
         "scale": "spatial",
         "repeats": 250,
@@ -388,7 +392,10 @@ export const manifest = {
           "status": "leaf"
         },
         "label": "DDPM Sampling Formula",
-        "kind": "sampling_formula",
+        "kind": "operator",
+        "mechanisms": [
+          "ddpm"
+        ],
         "role": "use fixed diffusion-schedule math to combine x_t, timestep, predicted epsilon, learned-range variance parameters, and fresh noise into x_(t-1); this module has no learned weights",
         "scale": "spatial",
         "evidence": {
@@ -410,7 +417,10 @@ export const manifest = {
           "status": "leaf"
         },
         "label": "Undo Latent Scaling",
-        "kind": "feature_adapter",
+        "kind": "adapter",
+        "mechanisms": [
+          "latent_rescaling"
+        ],
         "role": "divide the generated latent by 0.18215 to restore the frozen VAE decoder convention",
         "scale": "spatial",
         "evidence": {
@@ -456,7 +466,10 @@ export const manifest = {
           "status": "leaf"
         },
         "label": "Patchify",
-        "kind": "feature_adapter",
+        "kind": "adapter",
+        "mechanisms": [
+          "patchify"
+        ],
         "role": "embed p x p latent patches into tokens and add fixed 2D sin-cos positional embeddings",
         "scale": "token",
         "evidence": {
@@ -483,7 +496,10 @@ export const manifest = {
           "status": "complete"
         },
         "label": "Timestep Embedder",
-        "kind": "feature_adapter",
+        "kind": "adapter",
+        "mechanisms": [
+          "timestep_embedding"
+        ],
         "role": "encode the scalar timestep with a 256-dim sinusoidal embedding followed by a two-layer SiLU MLP",
         "scale": "sample",
         "evidence": {
@@ -504,7 +520,10 @@ export const manifest = {
           "status": "leaf"
         },
         "label": "Label Embedder",
-        "kind": "feature_adapter",
+        "kind": "adapter",
+        "mechanisms": [
+          "label_embedding"
+        ],
         "role": "look up the class embedding; randomly drop labels to the null class during training for classifier-free guidance",
         "scale": "sample",
         "evidence": {
@@ -525,7 +544,10 @@ export const manifest = {
           "status": "leaf"
         },
         "label": "Conditioning Combiner",
-        "kind": "elementwise_sum",
+        "kind": "operator",
+        "mechanisms": [
+          "elementwise_sum"
+        ],
         "role": "sum timestep and label embeddings into one per-sample conditioning vector",
         "scale": "sample",
         "evidence": {
@@ -547,7 +569,12 @@ export const manifest = {
           "status": "complete"
         },
         "label": "DiT-XL Block Stack",
-        "kind": "attention_stack",
+        "kind": "refiner",
+        "mechanisms": [
+          "attention",
+          "adaptive_normalization",
+          "gated_residual"
+        ],
         "role": "update patch tokens through 28 full-attention blocks with 16 heads, each using MLP and adaLN-Zero-gated residual branches",
         "scale": "token",
         "repeats": 28,
@@ -607,7 +634,10 @@ export const manifest = {
           "status": "leaf"
         },
         "label": "Unpatchify",
-        "kind": "scale_transition",
+        "kind": "adapter",
+        "mechanisms": [
+          "unpatchify"
+        ],
         "role": "rearrange per-token patch predictions back to the spatial latent layout",
         "scale": "spatial",
         "evidence": {
@@ -628,7 +658,10 @@ export const manifest = {
           "status": "leaf"
         },
         "label": "Sinusoidal Embedding + MLP",
-        "kind": "standard_block_occurrence",
+        "kind": "adapter",
+        "mechanisms": [
+          "sinusoidal_embedding"
+        ],
         "role": "reusable timestep embedding mechanism",
         "scale": "sample",
         "standard_block_ref": "../../standard_blocks/sinusoidal-timestep-embedding.yaml",
@@ -650,7 +683,12 @@ export const manifest = {
           "status": "leaf"
         },
         "label": "adaLN-Zero",
-        "kind": "standard_block_occurrence",
+        "kind": "normalization",
+        "mechanisms": [
+          "adaptive_normalization",
+          "gated_residual",
+          "zero_initialization"
+        ],
         "role": "reusable adaptive-normalization and gated-residual mechanism",
         "scale": "token",
         "standard_block_ref": "../../standard_blocks/adaln-zero-conditioning.yaml",
@@ -672,7 +710,10 @@ export const manifest = {
           "status": "leaf"
         },
         "label": "adaLN Modulation MLP",
-        "kind": "conditioning_projection",
+        "kind": "adapter",
+        "mechanisms": [
+          "conditioning_projection"
+        ],
         "role": "produce shift, scale, and gate parameters for the attention and MLP residual branches",
         "scale": "sample",
         "evidence": {
@@ -716,7 +757,10 @@ export const manifest = {
           "status": "leaf"
         },
         "label": "Attention Shift + Scale",
-        "kind": "adaptive_normalization",
+        "kind": "normalization",
+        "mechanisms": [
+          "adaptive_normalization"
+        ],
         "role": "modulate normalized tokens with the attention branch shift and scale",
         "scale": "token",
         "evidence": {
@@ -739,6 +783,9 @@ export const manifest = {
         },
         "label": "Multi-Head Self-Attention",
         "kind": "attention",
+        "mechanisms": [
+          "self_attention"
+        ],
         "role": "apply full self-attention over latent patch tokens",
         "scale": "token",
         "evidence": {
@@ -760,7 +807,10 @@ export const manifest = {
           "status": "leaf"
         },
         "label": "Attention Gate",
-        "kind": "gated_residual",
+        "kind": "residual_update",
+        "mechanisms": [
+          "gated_residual"
+        ],
         "role": "multiply the attention update by its zero-initialized conditioning gate",
         "scale": "token",
         "evidence": {
@@ -782,7 +832,10 @@ export const manifest = {
           "status": "leaf"
         },
         "label": "Attention Residual Add",
-        "kind": "residual_add",
+        "kind": "residual_update",
+        "mechanisms": [
+          "residual_add"
+        ],
         "role": "add the gated attention branch to the incoming token state",
         "scale": "token",
         "evidence": {
@@ -826,7 +879,10 @@ export const manifest = {
           "status": "leaf"
         },
         "label": "MLP Shift + Scale",
-        "kind": "adaptive_normalization",
+        "kind": "normalization",
+        "mechanisms": [
+          "adaptive_normalization"
+        ],
         "role": "modulate normalized tokens with the MLP branch shift and scale",
         "scale": "token",
         "evidence": {
@@ -870,7 +926,10 @@ export const manifest = {
           "status": "leaf"
         },
         "label": "MLP Gate",
-        "kind": "gated_residual",
+        "kind": "residual_update",
+        "mechanisms": [
+          "gated_residual"
+        ],
         "role": "multiply the MLP update by its zero-initialized conditioning gate",
         "scale": "token",
         "evidence": {
@@ -892,7 +951,10 @@ export const manifest = {
           "status": "leaf"
         },
         "label": "MLP Residual Add",
-        "kind": "residual_add",
+        "kind": "residual_update",
+        "mechanisms": [
+          "residual_add"
+        ],
         "role": "add the gated MLP branch to the post-attention token state",
         "scale": "token",
         "evidence": {

@@ -27,9 +27,14 @@
   "$defs": {
     "id": { "type": "string", "pattern": "^[a-z][a-z0-9_]*$" },
     "nonEmptyString": { "type": "string", "minLength": 1 },
+    "representationGlyph": {
+      "enum": ["scalar", "vector", "single", "matrix", "pair", "volume", "coordinates", "frames"]
+    },
     "nodeRef": { "type": "string", "pattern": "^(modules|value_sites)\\.[a-z][a-z0-9_]*$" },
     "moduleRef": { "type": "string", "pattern": "^modules\\.[a-z][a-z0-9_]*$" },
+    "representationRef": { "type": "string", "pattern": "^representations\\.[a-z][a-z0-9_]*$" },
     "relationRef": { "type": "string", "pattern": "^relations\\.[a-z][a-z0-9_]*$" },
+    "executionLoopRef": { "type": "string", "pattern": "^execution\\.loops\\.[a-z][a-z0-9_]*$" },
     "board": {
       "type": "object",
       "required": ["id", "title", "summary", "subject_ref", "expansion_depth", "grid", "nodes"],
@@ -48,6 +53,7 @@
         "grid": { "$ref": "#/$defs/grid" },
         "lanes": { "type": "array", "items": { "$ref": "#/$defs/lane" } },
         "nodes": { "type": "array", "minItems": 1, "items": { "$ref": "#/$defs/node" } },
+        "regions": { "type": "array", "items": { "$ref": "#/$defs/region" } },
         "occurrence_bindings": { "type": "array", "items": { "$ref": "#/$defs/occurrenceBinding" } },
         "elide": { "type": "array", "items": { "$ref": "#/$defs/elide" } },
         "exclude": { "type": "array", "items": { "$ref": "#/$defs/exclude" } },
@@ -63,18 +69,44 @@
         "columns": { "type": "integer", "minimum": 1 },
         "rows": { "type": "integer", "minimum": 1 },
         "column_sizing": { "enum": ["uniform", "content"] },
+        "row_sizing": { "enum": ["uniform", "content"] },
         "min_col": { "type": "number", "exclusiveMinimum": 0 },
-        "col_gap": { "type": "number", "minimum": 0 }
+        "col_gap": { "type": "number", "minimum": 0 },
+        "row_gap": { "type": "number", "minimum": 0 }
       },
       "additionalProperties": false
     },
     "lane": {
+      "oneOf": [
+        { "$ref": "#/$defs/guideLane" },
+        { "$ref": "#/$defs/representationLane" }
+      ]
+    },
+    "guideLane": {
       "type": "object",
       "required": ["id", "label", "position"],
       "properties": {
         "id": { "$ref": "#/$defs/id" },
         "label": { "$ref": "#/$defs/nonEmptyString" },
         "position": { "type": "number", "minimum": 0, "maximum": 100 }
+      },
+      "additionalProperties": false
+    },
+    "representationLane": {
+      "type": "object",
+      "required": ["id", "label", "kind", "row", "representation_refs", "glyph"],
+      "properties": {
+        "id": { "$ref": "#/$defs/id" },
+        "label": { "$ref": "#/$defs/nonEmptyString" },
+        "kind": { "const": "representation" },
+        "row": { "type": "integer", "minimum": 1 },
+        "representation_refs": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": { "$ref": "#/$defs/representationRef" }
+        },
+        "glyph": { "enum": ["single", "pair", "coordinates", "frames"] }
       },
       "additionalProperties": false
     },
@@ -92,11 +124,34 @@
         "prominence": { "enum": ["primary", "secondary", "context"] },
         "treatment": { "enum": ["block", "compact", "chip"] },
         "density": { "enum": ["normal", "compact", "micro"] },
-        "glyph": { "enum": ["scalar", "vector", "matrix", "pair", "volume"] },
+        "glyph": { "$ref": "#/$defs/representationGlyph" },
         "operator": { "$ref": "#/$defs/nonEmptyString" },
         "col": { "type": "integer", "minimum": 1 },
         "row": { "type": "integer", "minimum": 1 },
         "board_ref": { "$ref": "#/$defs/id" }
+      },
+      "additionalProperties": false
+    },
+    "region": {
+      "type": "object",
+      "required": ["id", "kind", "execution_ref", "label", "node_ids"],
+      "properties": {
+        "id": { "$ref": "#/$defs/id" },
+        "kind": { "const": "repeat" },
+        "execution_ref": { "$ref": "#/$defs/executionLoopRef" },
+        "label": { "$ref": "#/$defs/nonEmptyString" },
+        "node_ids": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": { "$ref": "#/$defs/id" }
+        },
+        "iteration_relation_refs": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": { "$ref": "#/$defs/relationRef" }
+        }
       },
       "additionalProperties": false
     },

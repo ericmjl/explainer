@@ -4,8 +4,8 @@ export const manifest = {
     "generator": "architecture-manifest-builder-v0.4.1",
     "inputDigests": {
       "references/bibliography.yaml": "2c238cc39ff866cfb41c1b60c3e7a142df5707d3a9292efb8051aabbd5c8f336",
-      "architectures/genie2.yaml": "ef52f2fc399c959b2cfeec3fb92b932c5b38f4913868de225fe0df57f7a5862d",
-      "views/genie2-semantic-zoom.view.yaml": "07c4264ebfcc2039810826cb1852e44fb6199a04e6c4743297c5c96b0219a86c",
+      "architectures/genie2.yaml": "cc0f6dea8ed2d6622590cc8da824921fdd9010203c29bab8b59ad7993087c514",
+      "views/genie2-semantic-zoom.view.yaml": "3bef1fa640d8e2d0cb1654b6c145920f258ec40e8d8acd526017d1c5c72ea87e",
       "pseudocode/genie2.yaml": "b78ca953f8ebed98a688501d7485e3b2e79fb50b2e9434d876012c1ee4289bd0"
     }
   },
@@ -301,7 +301,10 @@ export const manifest = {
           "status": "leaf"
         },
         "label": "Sampling Feature Builder",
-        "kind": "input_adapter",
+        "kind": "adapter",
+        "mechanisms": [
+          "task_featurization"
+        ],
         "role": "turn a target length or motif PDB specification into residue layout, masks, and optional motif sequence and geometry constraints",
         "scale": "mixed",
         "evidence": {
@@ -322,7 +325,11 @@ export const manifest = {
           "status": "complete"
         },
         "label": "Genie 2 Reverse Diffusion",
-        "kind": "iterative_sampler",
+        "kind": "sampler",
+        "mechanisms": [
+          "reverse_diffusion",
+          "ddpm"
+        ],
         "role": "initialize random C-alpha coordinates and run all 1000 denoising and posterior-update steps",
         "scale": "residue",
         "repeats": 1000,
@@ -366,7 +373,10 @@ export const manifest = {
           "status": "leaf"
         },
         "label": "Gaussian Coordinate Initializer",
-        "kind": "state_initializer",
+        "kind": "sampler",
+        "mechanisms": [
+          "gaussian_initialization"
+        ],
         "role": "sample standard-normal C-alpha coordinates with the requested residue count",
         "scale": "residue",
         "evidence": {
@@ -387,7 +397,10 @@ export const manifest = {
           "status": "leaf"
         },
         "label": "Reverse Timestep Controller",
-        "kind": "loop_controller",
+        "kind": "controller",
+        "mechanisms": [
+          "timestep_schedule"
+        ],
         "role": "enumerate diffusion steps from 1000 down to 1",
         "scale": "sample",
         "evidence": {
@@ -408,7 +421,10 @@ export const manifest = {
           "status": "leaf"
         },
         "label": "Frenet Frame Construction",
-        "kind": "geometric_adapter",
+        "kind": "adapter",
+        "mechanisms": [
+          "frenet_frames"
+        ],
         "role": "derive residue rotations from the current C-alpha trace and package them with the unchanged x_t translations for the denoiser",
         "scale": "residue",
         "evidence": {
@@ -450,7 +466,10 @@ export const manifest = {
           "status": "leaf"
         },
         "label": "Step Noise Sampler",
-        "kind": "stochastic_source",
+        "kind": "sampler",
+        "mechanisms": [
+          "gaussian_noise"
+        ],
         "role": "draw fresh Gaussian translation noise for every nonfinal reverse step",
         "scale": "residue",
         "evidence": {
@@ -471,7 +490,10 @@ export const manifest = {
           "status": "leaf"
         },
         "label": "DDPM Coordinate Update",
-        "kind": "sampling_formula",
+        "kind": "operator",
+        "mechanisms": [
+          "ddpm"
+        ],
         "role": "combine current C-alpha coordinates, predicted noise, schedule coefficients, and fresh noise into the next C-alpha coordinates",
         "scale": "residue",
         "evidence": {
@@ -492,7 +514,10 @@ export const manifest = {
           "status": "complete"
         },
         "label": "SE(3)-Invariant Feature Encoder",
-        "kind": "multimodal_encoder",
+        "kind": "encoder",
+        "mechanisms": [
+          "invariant_geometry"
+        ],
         "role": "construct and refine residue and residue-pair states from indices, noisy-frame geometry, timestep, and optional motif constraints",
         "scale": "mixed",
         "evidence": {
@@ -513,7 +538,11 @@ export const manifest = {
           "status": "complete"
         },
         "label": "SE(3)-Equivariant Structure Decoder",
-        "kind": "structure_refiner",
+        "kind": "refiner",
+        "mechanisms": [
+          "invariant_point_attention",
+          "rigid_transform"
+        ],
         "role": "use invariant point attention to update single features and compose learned rigid increments into the noisy residue frames",
         "scale": "residue",
         "repeats": 8,
@@ -535,7 +564,10 @@ export const manifest = {
           "status": "leaf"
         },
         "label": "Translation Displacement Readout",
-        "kind": "vector_difference",
+        "kind": "operator",
+        "mechanisms": [
+          "vector_difference"
+        ],
         "role": "subtract updated translations from the input noisy translations to obtain the predicted diffusion noise",
         "scale": "residue",
         "evidence": {
@@ -556,7 +588,7 @@ export const manifest = {
           "status": "leaf"
         },
         "label": "Single-Feature Network",
-        "kind": "feature_encoder",
+        "kind": "encoder",
         "role": "concatenate residue, chain, timestep, motif-sequence, and mask encodings and project them to 384-dimensional per-residue features",
         "scale": "residue",
         "evidence": {
@@ -577,7 +609,7 @@ export const manifest = {
           "status": "leaf"
         },
         "label": "Pair-Feature Network",
-        "kind": "feature_encoder",
+        "kind": "encoder",
         "role": "combine the single-feature outer sum, relative positions, noisy-frame distances and orientations, and masked motif distances into 128-dimensional pair features",
         "scale": "pair",
         "evidence": {
@@ -598,7 +630,10 @@ export const manifest = {
           "status": "complete"
         },
         "label": "Pair Transform Stack",
-        "kind": "pair_refiner",
+        "kind": "refiner",
+        "mechanisms": [
+          "triangular_multiplication"
+        ],
         "role": "refine pair features through five residual layers of outgoing and incoming triangular multiplication followed by pair transition",
         "scale": "pair",
         "repeats": 5,
@@ -625,7 +660,10 @@ export const manifest = {
           "status": "leaf"
         },
         "label": "Triangle Multiplication Outgoing",
-        "kind": "triangular_multiplicative_update",
+        "kind": "operator",
+        "mechanisms": [
+          "triangular_multiplication"
+        ],
         "role": "update each pair edge through outgoing two-edge paths and add the row-dropout result residually",
         "scale": "pair",
         "evidence": {
@@ -646,7 +684,10 @@ export const manifest = {
           "status": "leaf"
         },
         "label": "Triangle Multiplication Incoming",
-        "kind": "triangular_multiplicative_update",
+        "kind": "operator",
+        "mechanisms": [
+          "triangular_multiplication"
+        ],
         "role": "update each pair edge through incoming two-edge paths and add the row-dropout result residually",
         "scale": "pair",
         "evidence": {
@@ -688,7 +729,10 @@ export const manifest = {
           "status": "leaf"
         },
         "label": "Invariant Point Attention",
-        "kind": "geometric_attention",
+        "kind": "attention",
+        "mechanisms": [
+          "invariant_point_attention"
+        ],
         "role": "update the single state using single features, pair features, and query/key/value points expressed in current residue frames",
         "scale": "residue",
         "attention": {
@@ -741,7 +785,10 @@ export const manifest = {
           "status": "leaf"
         },
         "label": "Backbone Frame Update",
-        "kind": "rigid_transform_update",
+        "kind": "operator",
+        "mechanisms": [
+          "rigid_transform"
+        ],
         "role": "project each residue state to a six-parameter rigid increment and compose it into the current frame",
         "scale": "residue",
         "evidence": {
@@ -821,7 +868,8 @@ export const manifest = {
               "locator": "BaseSampler._sample"
             }
           ]
-        }
+        },
+        "glyph": "coordinates"
       },
       {
         "id": "residue_frames",
@@ -841,7 +889,8 @@ export const manifest = {
               "locator": "BaseSampler._sample"
             }
           ]
-        }
+        },
+        "glyph": "frames"
       },
       {
         "id": "timestep",
@@ -3768,7 +3817,6 @@ export const manifest = {
             "prominence": "secondary",
             "treatment": "compact",
             "density": "compact",
-            "glyph": "matrix",
             "col": 5,
             "row": 2
           },
@@ -4148,7 +4196,6 @@ export const manifest = {
             "prominence": "secondary",
             "treatment": "compact",
             "density": "compact",
-            "glyph": "matrix",
             "col": 2,
             "row": 3
           },
@@ -4241,7 +4288,6 @@ export const manifest = {
             "prominence": "secondary",
             "treatment": "compact",
             "density": "compact",
-            "glyph": "matrix",
             "col": 7,
             "row": 3
           },
@@ -4253,7 +4299,6 @@ export const manifest = {
             "prominence": "context",
             "treatment": "compact",
             "density": "compact",
-            "glyph": "matrix",
             "col": 8,
             "row": 3
           }
@@ -5043,7 +5088,6 @@ export const manifest = {
             "prominence": "secondary",
             "treatment": "compact",
             "density": "compact",
-            "glyph": "volume",
             "col": 1,
             "row": 4
           },
@@ -5073,7 +5117,6 @@ export const manifest = {
             "prominence": "secondary",
             "treatment": "compact",
             "density": "compact",
-            "glyph": "volume",
             "col": 5,
             "row": 4
           },
@@ -5686,7 +5729,6 @@ export const manifest = {
             "prominence": "secondary",
             "treatment": "compact",
             "density": "compact",
-            "glyph": "volume",
             "col": 1,
             "row": 5
           },
@@ -5706,7 +5748,6 @@ export const manifest = {
             "prominence": "secondary",
             "treatment": "compact",
             "density": "compact",
-            "glyph": "matrix",
             "col": 4,
             "row": 2
           },
@@ -6499,7 +6540,6 @@ export const manifest = {
             "prominence": "secondary",
             "treatment": "compact",
             "density": "compact",
-            "glyph": "matrix",
             "col": 1,
             "row": 2
           },
@@ -6523,7 +6563,6 @@ export const manifest = {
             "prominence": "secondary",
             "treatment": "compact",
             "density": "compact",
-            "glyph": "volume",
             "col": 1,
             "row": 4
           },
@@ -6555,7 +6594,6 @@ export const manifest = {
             "prominence": "secondary",
             "treatment": "compact",
             "density": "compact",
-            "glyph": "matrix",
             "col": 4,
             "row": 3
           },
@@ -6576,7 +6614,6 @@ export const manifest = {
             "prominence": "secondary",
             "treatment": "compact",
             "density": "compact",
-            "glyph": "matrix",
             "col": 6,
             "row": 3
           },
@@ -6596,7 +6633,6 @@ export const manifest = {
             "prominence": "secondary",
             "treatment": "compact",
             "density": "compact",
-            "glyph": "volume",
             "col": 7,
             "row": 5
           }

@@ -5,6 +5,8 @@ require "set"
 require "yaml"
 require_relative "../lib/architecture_coverage"
 require_relative "../lib/architecture_projection"
+require_relative "../lib/architecture_view_lanes"
+require_relative "../lib/architecture_view_regions"
 require_relative "../lib/architecture_ownership"
 require_relative "../lib/evidence_contract"
 require_relative "../lib/source_contract"
@@ -433,8 +435,10 @@ def lint_board_lanes(board)
   lanes.each_with_index do |lane, index|
     @errors << "board #{board_id} lane at index #{index} missing id" unless lane["id"]
     label = lane["label"]
-    position = lane["position"]
     @errors << "board #{board_id} lane #{lane['id'] || index} missing label" unless label.is_a?(String) && !label.empty?
+    next if lane["kind"] == "representation"
+
+    position = lane["position"]
     unless position.is_a?(Numeric) && position.between?(0, 100)
       @errors << "board #{board_id} lane #{lane['id'] || index} position must be between 0 and 100"
     end
@@ -511,7 +515,13 @@ def lint_projected_view(view, arch)
     end
 
     begin
-      projector.project(board)
+      projection = projector.project(board)
+      ArchitectureViewLanes.errors(arch, board, projection: projection).each do |item|
+        @errors << "board #{board_id} lane validation [#{item['code']}]: #{item['message']}"
+      end
+      ArchitectureViewRegions.errors(arch, board, projection: projection).each do |item|
+        @errors << "board #{board_id} region validation [#{item['code']}]: #{item['message']}"
+      end
     rescue ArchitectureProjection::ProjectionError => e
       @errors << "board #{board_id} projection failed [#{e.code}]: #{e.message}"
     end
@@ -737,6 +747,11 @@ else
 end
 
 Array(registry["source_sets"]).each do |source_set|
+  directory_role = source_set["directory_role"]
+  unless %w[architecture reference].include?(directory_role)
+    @errors << "registry set #{source_set['id']} requires directory_role architecture or reference"
+  end
+
   arch = load_yaml(source_set.fetch("architecture"))
   view = load_yaml(source_set.fetch("view"))
   program = load_yaml(source_set.fetch("pseudocode"))

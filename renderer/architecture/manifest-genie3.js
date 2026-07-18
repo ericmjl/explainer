@@ -4,9 +4,9 @@ export const manifest = {
     "generator": "architecture-manifest-builder-v0.4.1",
     "inputDigests": {
       "references/bibliography.yaml": "2c238cc39ff866cfb41c1b60c3e7a142df5707d3a9292efb8051aabbd5c8f336",
-      "architectures/genie3.yaml": "1f9f6ad86865f5e7bf58c9f7f0985c79e0a6ee805a0de0cb7b0709a19f86073c",
-      "views/genie3-semantic-zoom.view.yaml": "aaaf783a8cb21d357c2e18427effbd383c9858c3fa2985a1afa784fa997c498a",
-      "pseudocode/genie3.yaml": "2547263f81df8b0a9ba86e4b15037fe0f8a46ca57394a1fb167dcb28ad15252c"
+      "architectures/genie3.yaml": "88a8a44647f2f05c653931acb6d930a804ee9ba4080def21fa331bf94b83614a",
+      "views/genie3-semantic-zoom.view.yaml": "a0d15e91f89d17a9e9566ede4e39532df61d4a02f9e69c0e55c67833d3b5fd1e",
+      "pseudocode/genie3.yaml": "fd5ba25f1755060ff1cea1e105b1d1e62413ad351e15529c2f74747e32f5a02a"
     }
   },
   "architecture": {
@@ -105,14 +105,10 @@ export const manifest = {
         "modules.diffusion_sampler": {
           "status": "complete",
           "depth": 1,
-          "immediateModuleCount": 7,
+          "immediateModuleCount": 3,
           "immediateModuleRefs": [
             "modules.coordinate_initializer",
-            "modules.timestep_controller",
-            "modules.frenet_frame_builder",
-            "modules.denoiser",
-            "modules.noise_readout",
-            "modules.ddim_update",
+            "modules.reverse_diffusion_step",
             "modules.sequence_sampler"
           ]
         },
@@ -132,9 +128,20 @@ export const manifest = {
 
           ]
         },
+        "modules.reverse_diffusion_step": {
+          "status": "complete",
+          "depth": 2,
+          "immediateModuleCount": 4,
+          "immediateModuleRefs": [
+            "modules.timestep_controller",
+            "modules.frenet_frame_builder",
+            "modules.denoiser",
+            "modules.directional_ddim_sampler_math"
+          ]
+        },
         "modules.timestep_controller": {
           "status": "leaf",
-          "depth": 2,
+          "depth": 3,
           "immediateModuleCount": 0,
           "immediateModuleRefs": [
 
@@ -142,7 +149,7 @@ export const manifest = {
         },
         "modules.frenet_frame_builder": {
           "status": "leaf",
-          "depth": 2,
+          "depth": 3,
           "immediateModuleCount": 0,
           "immediateModuleRefs": [
 
@@ -150,7 +157,7 @@ export const manifest = {
         },
         "modules.denoiser": {
           "status": "complete",
-          "depth": 2,
+          "depth": 3,
           "immediateModuleCount": 5,
           "immediateModuleRefs": [
             "modules.single_feature_embedder",
@@ -160,9 +167,18 @@ export const manifest = {
             "modules.structure_decoder"
           ]
         },
+        "modules.directional_ddim_sampler_math": {
+          "status": "complete",
+          "depth": 3,
+          "immediateModuleCount": 2,
+          "immediateModuleRefs": [
+            "modules.noise_readout",
+            "modules.ddim_update"
+          ]
+        },
         "modules.noise_readout": {
           "status": "leaf",
-          "depth": 2,
+          "depth": 4,
           "immediateModuleCount": 0,
           "immediateModuleRefs": [
 
@@ -170,7 +186,7 @@ export const manifest = {
         },
         "modules.ddim_update": {
           "status": "leaf",
-          "depth": 2,
+          "depth": 4,
           "immediateModuleCount": 0,
           "immediateModuleRefs": [
 
@@ -186,7 +202,7 @@ export const manifest = {
         },
         "modules.single_feature_embedder": {
           "status": "leaf",
-          "depth": 3,
+          "depth": 4,
           "immediateModuleCount": 0,
           "immediateModuleRefs": [
 
@@ -194,7 +210,7 @@ export const manifest = {
         },
         "modules.pair_feature_embedder": {
           "status": "leaf",
-          "depth": 3,
+          "depth": 4,
           "immediateModuleCount": 0,
           "immediateModuleRefs": [
 
@@ -202,7 +218,7 @@ export const manifest = {
         },
         "modules.latent_transformer": {
           "status": "complete",
-          "depth": 3,
+          "depth": 4,
           "immediateModuleCount": 5,
           "immediateModuleRefs": [
             "modules.global_token_adapter",
@@ -214,7 +230,7 @@ export const manifest = {
         },
         "modules.sequence_head": {
           "status": "leaf",
-          "depth": 3,
+          "depth": 4,
           "immediateModuleCount": 0,
           "immediateModuleRefs": [
 
@@ -222,7 +238,7 @@ export const manifest = {
         },
         "modules.structure_decoder": {
           "status": "complete",
-          "depth": 3,
+          "depth": 4,
           "immediateModuleCount": 3,
           "immediateModuleRefs": [
             "modules.invariant_point_attention",
@@ -232,7 +248,7 @@ export const manifest = {
         },
         "modules.global_token_adapter": {
           "status": "leaf",
-          "depth": 4,
+          "depth": 5,
           "immediateModuleCount": 0,
           "immediateModuleRefs": [
 
@@ -240,7 +256,7 @@ export const manifest = {
         },
         "modules.pair_biased_attention_update": {
           "status": "leaf",
-          "depth": 4,
+          "depth": 5,
           "immediateModuleCount": 0,
           "immediateModuleRefs": [
 
@@ -248,7 +264,7 @@ export const manifest = {
         },
         "modules.single_to_pair_update": {
           "status": "leaf",
-          "depth": 4,
+          "depth": 5,
           "immediateModuleCount": 0,
           "immediateModuleRefs": [
 
@@ -256,7 +272,7 @@ export const manifest = {
         },
         "modules.triangle_multiplication_stack": {
           "status": "leaf",
-          "depth": 4,
+          "depth": 5,
           "immediateModuleCount": 0,
           "immediateModuleRefs": [
 
@@ -264,7 +280,7 @@ export const manifest = {
         },
         "modules.pair_transition": {
           "status": "leaf",
-          "depth": 4,
+          "depth": 5,
           "immediateModuleCount": 0,
           "immediateModuleRefs": [
 
@@ -272,7 +288,7 @@ export const manifest = {
         },
         "modules.invariant_point_attention": {
           "status": "leaf",
-          "depth": 4,
+          "depth": 5,
           "immediateModuleCount": 0,
           "immediateModuleRefs": [
 
@@ -280,7 +296,7 @@ export const manifest = {
         },
         "modules.structure_transition": {
           "status": "leaf",
-          "depth": 4,
+          "depth": 5,
           "immediateModuleCount": 0,
           "immediateModuleRefs": [
 
@@ -288,7 +304,7 @@ export const manifest = {
         },
         "modules.frame_update": {
           "status": "leaf",
-          "depth": 4,
+          "depth": 5,
           "immediateModuleCount": 0,
           "immediateModuleRefs": [
 
@@ -296,14 +312,14 @@ export const manifest = {
         }
       },
       "summary": {
-        "scopeCount": 24,
-        "expandedScopeCount": 5,
-        "completeExpandedScopeCount": 5,
+        "scopeCount": 26,
+        "expandedScopeCount": 7,
+        "completeExpandedScopeCount": 7,
         "partialScopeCount": 0,
         "leafFrontierCount": 19,
         "opaqueFrontierCount": 0,
         "partialFrontierCount": 0,
-        "maximumAuthoredDepth": 4
+        "maximumAuthoredDepth": 5
       },
       "opaqueFrontierRefs": [
 
@@ -320,7 +336,10 @@ export const manifest = {
           "status": "leaf"
         },
         "label": "Task Feature Builder",
-        "kind": "input_adapter",
+        "kind": "adapter",
+        "mechanisms": [
+          "task_featurization"
+        ],
         "role": "translate an unconditional, motif, or binder request into tokenization and conditioning features",
         "scale": "mixed",
         "evidence": {
@@ -341,7 +360,11 @@ export const manifest = {
           "status": "complete"
         },
         "label": "Genie 3 Diffusion Sampler",
-        "kind": "iterative_sampler",
+        "kind": "sampler",
+        "mechanisms": [
+          "reverse_diffusion",
+          "directional_ddim"
+        ],
         "role": "initialize random token coordinates and run the default 100-step directional DDIM reverse chain",
         "scale": "token",
         "repeats": 100,
@@ -390,7 +413,10 @@ export const manifest = {
           "status": "leaf"
         },
         "label": "Gaussian Coordinate Initializer",
-        "kind": "state_initializer",
+        "kind": "sampler",
+        "mechanisms": [
+          "gaussian_initialization"
+        ],
         "role": "sample one standard-normal coordinate for every active C-alpha or atomized heavy-atom token",
         "scale": "token",
         "evidence": {
@@ -410,14 +436,47 @@ export const manifest = {
         }
       },
       {
-        "id": "timestep_controller",
+        "id": "reverse_diffusion_step",
         "parent_ref": "modules.diffusion_sampler",
+        "decomposition": {
+          "status": "complete"
+        },
+        "label": "Directional DDIM Reverse Step",
+        "kind": "sampler",
+        "mechanisms": [
+          "directional_ddim"
+        ],
+        "role": "select one reverse timestep, rebuild frames, call the learned denoiser, recover predicted coordinate noise, and apply the fixed directional DDIM update",
+        "scale": "token",
+        "pseudocode_ref": "../../pseudocode/genie3.yaml",
+        "evidence": {
+          "status": "confirmed_from_code",
+          "refs": [
+            {
+              "source_ref": "genie3_sampler_code",
+              "role": "implementation_evidence",
+              "locator": "Sampler._sample"
+            },
+            {
+              "source_ref": "genie3_ddim_code",
+              "role": "implementation_evidence",
+              "locator": "DDIMSampler._step"
+            }
+          ]
+        }
+      },
+      {
+        "id": "timestep_controller",
+        "parent_ref": "modules.reverse_diffusion_step",
         "decomposition": {
           "status": "leaf"
         },
         "label": "Strided Timestep Controller",
-        "kind": "loop_controller",
-        "role": "select 100 descending noise levels from the 1000-step training schedule",
+        "kind": "controller",
+        "mechanisms": [
+          "timestep_schedule"
+        ],
+        "role": "provide the current reverse index from 100 descending noise levels selected from the 1000-step training schedule",
         "scale": "sample",
         "evidence": {
           "status": "confirmed_from_code",
@@ -437,12 +496,15 @@ export const manifest = {
       },
       {
         "id": "frenet_frame_builder",
-        "parent_ref": "modules.diffusion_sampler",
+        "parent_ref": "modules.reverse_diffusion_step",
         "decomposition": {
           "status": "leaf"
         },
         "label": "Branched Frenet Frame Builder",
-        "kind": "geometric_adapter",
+        "kind": "adapter",
+        "mechanisms": [
+          "frenet_frames"
+        ],
         "role": "derive rotations along C-alpha and atom14-ordered sidechain traces while preserving current coordinate translations",
         "scale": "token",
         "evidence": {
@@ -458,7 +520,7 @@ export const manifest = {
       },
       {
         "id": "denoiser",
-        "parent_ref": "modules.diffusion_sampler",
+        "parent_ref": "modules.reverse_diffusion_step",
         "decomposition": {
           "status": "complete"
         },
@@ -478,13 +540,47 @@ export const manifest = {
         }
       },
       {
+        "id": "directional_ddim_sampler_math",
+        "parent_ref": "modules.reverse_diffusion_step",
+        "decomposition": {
+          "status": "complete"
+        },
+        "label": "Fixed Directional DDIM Math",
+        "kind": "sampler",
+        "mechanisms": [
+          "vector_difference",
+          "directional_ddim",
+          "gaussian_noise"
+        ],
+        "role": "convert the denoiser coordinate estimate into a denoising direction and apply the fixed schedule formula to sample the next coordinate state",
+        "scale": "token",
+        "evidence": {
+          "status": "confirmed_from_code",
+          "refs": [
+            {
+              "source_ref": "genie3_sampler_code",
+              "role": "implementation_evidence",
+              "locator": "Sampler._sample"
+            },
+            {
+              "source_ref": "genie3_ddim_code",
+              "role": "implementation_evidence",
+              "locator": "DDIMSampler._step"
+            }
+          ]
+        }
+      },
+      {
         "id": "noise_readout",
-        "parent_ref": "modules.diffusion_sampler",
+        "parent_ref": "modules.directional_ddim_sampler_math",
         "decomposition": {
           "status": "leaf"
         },
         "label": "Coordinate Noise Readout",
-        "kind": "vector_difference",
+        "kind": "operator",
+        "mechanisms": [
+          "vector_difference"
+        ],
         "role": "subtract the denoiser coordinate estimate from x_t to recover predicted coordinate noise",
         "scale": "token",
         "evidence": {
@@ -505,12 +601,15 @@ export const manifest = {
       },
       {
         "id": "ddim_update",
-        "parent_ref": "modules.diffusion_sampler",
+        "parent_ref": "modules.directional_ddim_sampler_math",
         "decomposition": {
           "status": "leaf"
         },
         "label": "Directional DDIM Update",
-        "kind": "sampling_formula",
+        "kind": "operator",
+        "mechanisms": [
+          "directional_ddim"
+        ],
         "role": "combine reconstructed x_0, scaled denoising direction, and Gaussian noise into x_(t-10)",
         "scale": "token",
         "evidence": {
@@ -536,7 +635,10 @@ export const manifest = {
           "status": "leaf"
         },
         "label": "Optional Sequence Sampler",
-        "kind": "categorical_sampler",
+        "kind": "sampler",
+        "mechanisms": [
+          "categorical_sampling"
+        ],
         "role": "after structure sampling, make a final model call and sample residue identities when sequence prediction is enabled",
         "scale": "residue",
         "evidence": {
@@ -557,8 +659,8 @@ export const manifest = {
           "status": "leaf"
         },
         "label": "Single-Feature Embedder",
-        "kind": "feature_encoder",
-        "role": "project token, residue, chain, atom, timestep, and task-conditioning fields into 384-dimensional single features",
+        "kind": "encoder",
+        "role": "project token, residue, chain, atom, timestep, and task-conditioning metadata into 384-dimensional single features",
         "scale": "token",
         "evidence": {
           "status": "confirmed_from_code",
@@ -578,7 +680,7 @@ export const manifest = {
           "status": "leaf"
         },
         "label": "Pair-Feature Embedder",
-        "kind": "feature_encoder",
+        "kind": "encoder",
         "role": "combine single outer sums, relative indices, noisy frame geometry, and conditioned geometry into 128-dimensional pair features",
         "scale": "pair",
         "evidence": {
@@ -604,7 +706,12 @@ export const manifest = {
           "status": "complete"
         },
         "label": "Bidirectional Latent Transformer",
-        "kind": "coupled_single_pair_refiner",
+        "kind": "refiner",
+        "mechanisms": [
+          "attention",
+          "outer_product",
+          "triangular_multiplication"
+        ],
         "role": "refine single and pair states through five blocks with communication in both directions at every block",
         "scale": "mixed",
         "repeats": 5,
@@ -626,7 +733,10 @@ export const manifest = {
           "status": "leaf"
         },
         "label": "Optional Sequence Head",
-        "kind": "classifier",
+        "kind": "prediction_head",
+        "mechanisms": [
+          "classification"
+        ],
         "role": "map refined single features to 20 amino-acid logits per token",
         "scale": "token",
         "evidence": {
@@ -647,7 +757,11 @@ export const manifest = {
           "status": "complete"
         },
         "label": "SE(3)-Equivariant Structure Decoder",
-        "kind": "structure_refiner",
+        "kind": "refiner",
+        "mechanisms": [
+          "invariant_point_attention",
+          "rigid_transform"
+        ],
         "role": "use eight IPA layers to update invariant single states and compose rigid increments into the input frames",
         "scale": "token",
         "repeats": 8,
@@ -669,7 +783,10 @@ export const manifest = {
           "status": "leaf"
         },
         "label": "Global Token Adapter",
-        "kind": "latent_adapter",
+        "kind": "adapter",
+        "mechanisms": [
+          "global_tokens"
+        ],
         "role": "append ten zero-initialized global tokens and remove them after latent reasoning",
         "scale": "mixed",
         "evidence": {
@@ -691,6 +808,10 @@ export const manifest = {
         },
         "label": "Pair-Biased Single Attention",
         "kind": "attention",
+        "mechanisms": [
+          "pair_biased_attention",
+          "pair_value_injection"
+        ],
         "role": "update single features using pair-biased self-attention with pair-derived value injection and no frame geometry",
         "scale": "token",
         "attention": {
@@ -722,7 +843,10 @@ export const manifest = {
           "status": "leaf"
         },
         "label": "Single-to-Pair Outer Product",
-        "kind": "outer_product_update",
+        "kind": "operator",
+        "mechanisms": [
+          "outer_product"
+        ],
         "role": "project the updated single state into a residual pair update",
         "scale": "pair",
         "evidence": {
@@ -743,7 +867,10 @@ export const manifest = {
           "status": "leaf"
         },
         "label": "Outgoing + Incoming Triangle Updates",
-        "kind": "triangular_multiplicative_update",
+        "kind": "operator",
+        "mechanisms": [
+          "triangular_multiplication"
+        ],
         "role": "apply row-dropped outgoing and incoming triangular multiplication updates to the pair state",
         "scale": "pair",
         "evidence": {
@@ -785,7 +912,10 @@ export const manifest = {
           "status": "leaf"
         },
         "label": "Invariant Point Attention",
-        "kind": "geometric_attention",
+        "kind": "attention",
+        "mechanisms": [
+          "invariant_point_attention"
+        ],
         "role": "update the decoder single state using pair bias and points expressed in the current token frames",
         "scale": "token",
         "attention": {
@@ -838,7 +968,10 @@ export const manifest = {
           "status": "leaf"
         },
         "label": "Token Frame Update",
-        "kind": "rigid_transform_update",
+        "kind": "operator",
+        "mechanisms": [
+          "rigid_transform"
+        ],
         "role": "regress and compose a six-parameter rigid increment for every valid token frame",
         "scale": "token",
         "evidence": {
@@ -858,7 +991,7 @@ export const manifest = {
         "id": "design_request",
         "scale": "sample",
         "semantic_role": "unconditional, motif-scaffolding, or binder-design request",
-        "shape": "B x request fields",
+        "shape": "B x request metadata",
         "carries": [
           "target length or conditional structure specification",
           "optional motif groups, target chains, and hotspot/interface annotations"
@@ -878,7 +1011,7 @@ export const manifest = {
         "id": "feature_bundle",
         "scale": "mixed",
         "semantic_role": "token layout and task-dependent sequence, structure, atomization, and interface conditioning",
-        "shape": "B x N fields + B x N x N masks",
+        "shape": "B x N token metadata + B x N x N pairwise masks",
         "carries": [
           "token, residue, chain, entity, and atom identities",
           "atomization and valid-frame masks",
@@ -917,7 +1050,8 @@ export const manifest = {
               "locator": "create_np_features_from_chain"
             }
           ]
-        }
+        },
+        "glyph": "coordinates"
       },
       {
         "id": "token_frames",
@@ -937,7 +1071,8 @@ export const manifest = {
               "locator": "compute_noisy_structure_frames and compute_frenet_frames"
             }
           ]
-        }
+        },
+        "glyph": "frames"
       },
       {
         "id": "timestep",
@@ -1168,6 +1303,27 @@ export const manifest = {
         }
       },
       {
+        "id": "step_coordinates",
+        "representation_ref": "representations.token_coordinates",
+        "scope_ref": "modules.reverse_diffusion_step",
+        "role": "reverse_step_input",
+        "evidence": {
+          "status": "confirmed_from_code",
+          "refs": [
+            {
+              "source_ref": "genie3_sampler_code",
+              "role": "implementation_evidence",
+              "locator": "Sampler._sample"
+            },
+            {
+              "source_ref": "genie3_ddim_code",
+              "role": "implementation_evidence",
+              "locator": "DDIMSampler._step"
+            }
+          ]
+        }
+      },
+      {
         "id": "current_frames",
         "representation_ref": "representations.token_frames",
         "scope_ref": "modules.denoiser",
@@ -1186,7 +1342,7 @@ export const manifest = {
       {
         "id": "timestep",
         "representation_ref": "representations.timestep",
-        "scope_ref": "modules.diffusion_sampler",
+        "scope_ref": "modules.reverse_diffusion_step",
         "role": "loop_control",
         "evidence": {
           "status": "confirmed_from_code",
@@ -1221,9 +1377,30 @@ export const manifest = {
         }
       },
       {
+        "id": "sampler_step_coordinates",
+        "representation_ref": "representations.token_coordinates",
+        "scope_ref": "modules.directional_ddim_sampler_math",
+        "role": "fixed_sampler_math_input",
+        "evidence": {
+          "status": "confirmed_from_code",
+          "refs": [
+            {
+              "source_ref": "genie3_sampler_code",
+              "role": "implementation_evidence",
+              "locator": "Sampler._sample"
+            },
+            {
+              "source_ref": "genie3_ddim_code",
+              "role": "implementation_evidence",
+              "locator": "DDIMSampler._step"
+            }
+          ]
+        }
+      },
+      {
         "id": "predicted_noise",
         "representation_ref": "representations.coordinate_noise",
-        "scope_ref": "modules.diffusion_sampler",
+        "scope_ref": "modules.directional_ddim_sampler_math",
         "role": "model_prediction",
         "evidence": {
           "status": "confirmed_from_code",
@@ -1244,7 +1421,7 @@ export const manifest = {
       {
         "id": "fresh_step_noise",
         "representation_ref": "representations.coordinate_noise",
-        "scope_ref": "modules.diffusion_sampler",
+        "scope_ref": "modules.directional_ddim_sampler_math",
         "role": "stochastic_input",
         "evidence": {
           "status": "confirmed_from_code",
@@ -1345,7 +1522,7 @@ export const manifest = {
         "id": "single_with_global_tokens",
         "representation_ref": "representations.single_features",
         "scope_ref": "modules.latent_transformer",
-        "role": "expanded_single_state",
+        "role": "latent_block_single_state_read",
         "evidence": {
           "status": "confirmed_from_code",
           "refs": [
@@ -1361,7 +1538,7 @@ export const manifest = {
         "id": "pair_with_global_tokens",
         "representation_ref": "representations.pair_features",
         "scope_ref": "modules.latent_transformer",
-        "role": "expanded_pair_state",
+        "role": "latent_block_pair_state_read",
         "evidence": {
           "status": "confirmed_from_code",
           "refs": [
@@ -1377,7 +1554,7 @@ export const manifest = {
         "id": "single_after_pair_attention",
         "representation_ref": "representations.single_features",
         "scope_ref": "modules.latent_transformer",
-        "role": "pair_updated_single_state",
+        "role": "latent_block_single_state_write",
         "evidence": {
           "status": "confirmed_from_code",
           "refs": [
@@ -1410,6 +1587,22 @@ export const manifest = {
         "representation_ref": "representations.pair_features",
         "scope_ref": "modules.latent_transformer",
         "role": "triangle_updated_pair_state",
+        "evidence": {
+          "status": "confirmed_from_code",
+          "refs": [
+            {
+              "source_ref": "genie3_latent_transformer_code",
+              "role": "implementation_evidence",
+              "locator": "LatentTransformer.forward"
+            }
+          ]
+        }
+      },
+      {
+        "id": "pair_after_transition",
+        "representation_ref": "representations.pair_features",
+        "scope_ref": "modules.latent_transformer",
+        "role": "latent_block_pair_state_write",
         "evidence": {
           "status": "confirmed_from_code",
           "refs": [
@@ -1534,6 +1727,22 @@ export const manifest = {
         }
       },
       {
+        "id": "decoder_output_frames",
+        "representation_ref": "representations.token_frames",
+        "scope_ref": "modules.denoiser",
+        "role": "structure_decoder_output",
+        "evidence": {
+          "status": "confirmed_from_code",
+          "refs": [
+            {
+              "source_ref": "genie3_structure_code",
+              "role": "implementation_evidence",
+              "locator": "StructureNet.forward and StructureLayer.forward"
+            }
+          ]
+        }
+      },
+      {
         "id": "sequence_logits",
         "representation_ref": "representations.sequence_logits",
         "scope_ref": "modules.denoiser",
@@ -1642,18 +1851,30 @@ export const manifest = {
           "relations.next_coordinates_reenter_sampling_state"
         ],
         "outgoingRelationRefs": [
-          "relations.current_coordinates_enter_frame_builder",
-          "relations.current_coordinates_enter_noise_readout",
-          "relations.current_coordinates_enter_ddim_update"
+          "relations.current_coordinates_enter_reverse_step"
         ],
         "producerRefs": [
           "value_sites.initial_coordinates",
           "value_sites.next_coordinates"
         ],
         "consumerRefs": [
+          "value_sites.step_coordinates"
+        ]
+      },
+      "step_coordinates": {
+        "incomingRelationRefs": [
+          "relations.current_coordinates_enter_reverse_step"
+        ],
+        "outgoingRelationRefs": [
+          "relations.step_coordinates_enter_frame_builder",
+          "relations.step_coordinates_enter_sampler_math"
+        ],
+        "producerRefs": [
+          "value_sites.current_coordinates"
+        ],
+        "consumerRefs": [
           "modules.frenet_frame_builder",
-          "modules.noise_readout",
-          "modules.ddim_update"
+          "value_sites.sampler_step_coordinates"
         ]
       },
       "current_frames": {
@@ -1696,10 +1917,26 @@ export const manifest = {
           "relations.coordinate_prediction_enters_noise_readout"
         ],
         "producerRefs": [
-          "value_sites.updated_frames"
+          "value_sites.decoder_output_frames"
         ],
         "consumerRefs": [
           "modules.noise_readout"
+        ]
+      },
+      "sampler_step_coordinates": {
+        "incomingRelationRefs": [
+          "relations.step_coordinates_enter_sampler_math"
+        ],
+        "outgoingRelationRefs": [
+          "relations.sampler_coordinates_enter_noise_readout",
+          "relations.sampler_coordinates_enter_ddim_update"
+        ],
+        "producerRefs": [
+          "value_sites.step_coordinates"
+        ],
+        "consumerRefs": [
+          "modules.noise_readout",
+          "modules.ddim_update"
         ]
       },
       "predicted_noise": {
@@ -1795,7 +2032,7 @@ export const manifest = {
       "single_with_global_tokens": {
         "incomingRelationRefs": [
           "relations.global_adapter_produces_single_state",
-          "relations.refined_single_features_reenter_latent_stack"
+          "relations.block_single_output_reenters_next_latent_block"
         ],
         "outgoingRelationRefs": [
           "relations.single_with_global_tokens_enters_attention"
@@ -1811,7 +2048,7 @@ export const manifest = {
       "pair_with_global_tokens": {
         "incomingRelationRefs": [
           "relations.global_adapter_produces_pair_state",
-          "relations.refined_pair_features_reenter_latent_stack"
+          "relations.block_pair_output_reenters_next_latent_block"
         ],
         "outgoingRelationRefs": [
           "relations.pair_with_global_tokens_bias_attention",
@@ -1819,7 +2056,7 @@ export const manifest = {
         ],
         "producerRefs": [
           "modules.global_token_adapter",
-          "value_sites.refined_pair_features"
+          "value_sites.pair_after_transition"
         ],
         "consumerRefs": [
           "modules.pair_biased_attention_update",
@@ -1832,8 +2069,8 @@ export const manifest = {
         ],
         "outgoingRelationRefs": [
           "relations.single_after_pair_attention_enters_single_to_pair_update",
-          "relations.single_attention_state_becomes_refined_single_features",
-          "relations.refined_single_features_reenter_latent_stack"
+          "relations.block_single_output_becomes_refined_single_features",
+          "relations.block_single_output_reenters_next_latent_block"
         ],
         "producerRefs": [
           "modules.pair_biased_attention_update"
@@ -1872,9 +2109,25 @@ export const manifest = {
           "modules.pair_transition"
         ]
       },
+      "pair_after_transition": {
+        "incomingRelationRefs": [
+          "relations.pair_transition_produces_block_pair_output"
+        ],
+        "outgoingRelationRefs": [
+          "relations.block_pair_output_becomes_refined_pair_features",
+          "relations.block_pair_output_reenters_next_latent_block"
+        ],
+        "producerRefs": [
+          "modules.pair_transition"
+        ],
+        "consumerRefs": [
+          "value_sites.refined_pair_features",
+          "value_sites.pair_with_global_tokens"
+        ]
+      },
       "refined_single_features": {
         "incomingRelationRefs": [
-          "relations.single_attention_state_becomes_refined_single_features"
+          "relations.block_single_output_becomes_refined_single_features"
         ],
         "outgoingRelationRefs": [
           "relations.refined_single_features_enter_sequence_head",
@@ -1890,17 +2143,15 @@ export const manifest = {
       },
       "refined_pair_features": {
         "incomingRelationRefs": [
-          "relations.pair_transition_produces_refined_pair_features"
+          "relations.block_pair_output_becomes_refined_pair_features"
         ],
         "outgoingRelationRefs": [
-          "relations.refined_pair_features_reenter_latent_stack",
           "relations.refined_pair_features_bias_ipa"
         ],
         "producerRefs": [
-          "modules.pair_transition"
+          "value_sites.pair_after_transition"
         ],
         "consumerRefs": [
-          "value_sites.pair_with_global_tokens",
           "modules.invariant_point_attention"
         ]
       },
@@ -1974,13 +2225,27 @@ export const manifest = {
         ],
         "outgoingRelationRefs": [
           "relations.updated_frames_reenter_decoder",
-          "relations.updated_frames_produce_coordinate_prediction"
+          "relations.updated_frames_become_decoder_output_frames"
         ],
         "producerRefs": [
           "modules.frame_update"
         ],
         "consumerRefs": [
           "value_sites.decoder_frames",
+          "value_sites.decoder_output_frames"
+        ]
+      },
+      "decoder_output_frames": {
+        "incomingRelationRefs": [
+          "relations.updated_frames_become_decoder_output_frames"
+        ],
+        "outgoingRelationRefs": [
+          "relations.updated_frames_produce_coordinate_prediction"
+        ],
+        "producerRefs": [
+          "value_sites.updated_frames"
+        ],
+        "consumerRefs": [
           "value_sites.coordinate_prediction"
         ]
       },
@@ -2033,11 +2298,7 @@ export const manifest = {
           "id": "reverse_diffusion_loop",
           "repeats": 100,
           "reruns": [
-            "modules.timestep_controller",
-            "modules.frenet_frame_builder",
-            "modules.denoiser",
-            "modules.noise_readout",
-            "modules.ddim_update"
+            "modules.reverse_diffusion_step"
           ],
           "cached": [
             "value_sites.feature_bundle"
@@ -2075,7 +2336,8 @@ export const manifest = {
 
           ],
           "notes": [
-            "Every block communicates pair information into singles, then singles back into pairs before triangular pair refinement."
+            "Every block communicates pair information into singles, then singles back into pairs before triangular pair refinement.",
+            "One block maps the indexed state pair (s_i, z_i) to (s_(i+1), z_(i+1)); for the first four blocks those writes become the next block's reads, and global tokens are removed only after block five."
           ],
           "evidence": {
             "status": "confirmed_from_code",
@@ -2121,6 +2383,7 @@ export const manifest = {
         "value_site_refs": [
           "value_sites.initial_coordinates",
           "value_sites.current_coordinates",
+          "value_sites.step_coordinates",
           "value_sites.next_coordinates",
           "value_sites.final_coordinates"
         ],
@@ -2150,11 +2413,13 @@ export const manifest = {
         "value_site_refs": [
           "value_sites.current_frames",
           "value_sites.decoder_frames",
-          "value_sites.updated_frames"
+          "value_sites.updated_frames",
+          "value_sites.decoder_output_frames"
         ],
         "lifecycle": "derived_then_transformed_within_denoiser",
         "notes": [
-          "Current frames package x_t translations with Frenet rotations derived from x_t; frames are not independently noised."
+          "Current frames package x_t translations with Frenet rotations derived from x_t; frames are not independently noised.",
+          "Within one structure layer, decoder_frames is T_l and updated_frames is T_(l+1); only the eighth layer's write becomes decoder_output_frames, T_hat."
         ],
         "evidence": {
           "status": "confirmed_from_code",
@@ -2181,6 +2446,9 @@ export const manifest = {
           "value_sites.refined_single_features"
         ],
         "lifecycle": "transformed_within_denoiser",
+        "notes": [
+          "The global-token state entering one latent block is s_i and that block writes s_(i+1); only the fifth write becomes the globals-removed mature single output."
+        ],
         "evidence": {
           "status": "confirmed_from_code",
           "refs": [
@@ -2199,9 +2467,13 @@ export const manifest = {
           "value_sites.pair_with_global_tokens",
           "value_sites.pair_after_single_update",
           "value_sites.pair_after_triangle_updates",
+          "value_sites.pair_after_transition",
           "value_sites.refined_pair_features"
         ],
         "lifecycle": "transformed_within_denoiser",
+        "notes": [
+          "The global-row/column state entering one latent block is z_i and the pair transition writes z_(i+1); only the fifth write becomes the globals-removed mature pair output."
+        ],
         "evidence": {
           "status": "confirmed_from_code",
           "refs": [
@@ -2240,6 +2512,7 @@ export const manifest = {
         "value_site_refs": [
           "value_sites.initial_coordinates",
           "value_sites.current_coordinates",
+          "value_sites.step_coordinates",
           "value_sites.next_coordinates",
           "value_sites.final_coordinates"
         ],
@@ -2270,6 +2543,38 @@ export const manifest = {
         "value_site_refs": [
           "value_sites.initial_coordinates",
           "value_sites.current_coordinates",
+          "value_sites.step_coordinates",
+          "value_sites.next_coordinates",
+          "value_sites.final_coordinates"
+        ],
+        "lifecycle": "iterative_loop_state",
+        "notes": [
+          "Coordinates are the stochastic state; rotations are deterministically reconstructed from neighboring token coordinates.",
+          "A token is one C-alpha for an unatomized residue or one modeled heavy atom for an atomized known residue."
+        ],
+        "evidence": {
+          "status": "confirmed_from_code",
+          "refs": [
+            {
+              "source_ref": "genie3_sampler_code",
+              "role": "implementation_evidence",
+              "locator": "Sampler._sample"
+            },
+            {
+              "source_ref": "genie3_feature_code",
+              "role": "implementation_evidence",
+              "locator": "create_np_features_from_chain"
+            }
+          ]
+        },
+        "groupId": "diffusion_coordinates"
+      },
+      "step_coordinates": {
+        "representation_ref": "representations.token_coordinates",
+        "value_site_refs": [
+          "value_sites.initial_coordinates",
+          "value_sites.current_coordinates",
+          "value_sites.step_coordinates",
           "value_sites.next_coordinates",
           "value_sites.final_coordinates"
         ],
@@ -2300,6 +2605,7 @@ export const manifest = {
         "value_site_refs": [
           "value_sites.initial_coordinates",
           "value_sites.current_coordinates",
+          "value_sites.step_coordinates",
           "value_sites.next_coordinates",
           "value_sites.final_coordinates"
         ],
@@ -2330,6 +2636,7 @@ export const manifest = {
         "value_site_refs": [
           "value_sites.initial_coordinates",
           "value_sites.current_coordinates",
+          "value_sites.step_coordinates",
           "value_sites.next_coordinates",
           "value_sites.final_coordinates"
         ],
@@ -2360,11 +2667,13 @@ export const manifest = {
         "value_site_refs": [
           "value_sites.current_frames",
           "value_sites.decoder_frames",
-          "value_sites.updated_frames"
+          "value_sites.updated_frames",
+          "value_sites.decoder_output_frames"
         ],
         "lifecycle": "derived_then_transformed_within_denoiser",
         "notes": [
-          "Current frames package x_t translations with Frenet rotations derived from x_t; frames are not independently noised."
+          "Current frames package x_t translations with Frenet rotations derived from x_t; frames are not independently noised.",
+          "Within one structure layer, decoder_frames is T_l and updated_frames is T_(l+1); only the eighth layer's write becomes decoder_output_frames, T_hat."
         ],
         "evidence": {
           "status": "confirmed_from_code",
@@ -2388,11 +2697,13 @@ export const manifest = {
         "value_site_refs": [
           "value_sites.current_frames",
           "value_sites.decoder_frames",
-          "value_sites.updated_frames"
+          "value_sites.updated_frames",
+          "value_sites.decoder_output_frames"
         ],
         "lifecycle": "derived_then_transformed_within_denoiser",
         "notes": [
-          "Current frames package x_t translations with Frenet rotations derived from x_t; frames are not independently noised."
+          "Current frames package x_t translations with Frenet rotations derived from x_t; frames are not independently noised.",
+          "Within one structure layer, decoder_frames is T_l and updated_frames is T_(l+1); only the eighth layer's write becomes decoder_output_frames, T_hat."
         ],
         "evidence": {
           "status": "confirmed_from_code",
@@ -2416,11 +2727,43 @@ export const manifest = {
         "value_site_refs": [
           "value_sites.current_frames",
           "value_sites.decoder_frames",
-          "value_sites.updated_frames"
+          "value_sites.updated_frames",
+          "value_sites.decoder_output_frames"
         ],
         "lifecycle": "derived_then_transformed_within_denoiser",
         "notes": [
-          "Current frames package x_t translations with Frenet rotations derived from x_t; frames are not independently noised."
+          "Current frames package x_t translations with Frenet rotations derived from x_t; frames are not independently noised.",
+          "Within one structure layer, decoder_frames is T_l and updated_frames is T_(l+1); only the eighth layer's write becomes decoder_output_frames, T_hat."
+        ],
+        "evidence": {
+          "status": "confirmed_from_code",
+          "refs": [
+            {
+              "source_ref": "genie3_geometry_code",
+              "role": "implementation_evidence",
+              "locator": "compute_noisy_structure_frames"
+            },
+            {
+              "source_ref": "genie3_structure_code",
+              "role": "implementation_evidence",
+              "locator": "StructureNet.forward"
+            }
+          ]
+        },
+        "groupId": "denoiser_frames"
+      },
+      "decoder_output_frames": {
+        "representation_ref": "representations.token_frames",
+        "value_site_refs": [
+          "value_sites.current_frames",
+          "value_sites.decoder_frames",
+          "value_sites.updated_frames",
+          "value_sites.decoder_output_frames"
+        ],
+        "lifecycle": "derived_then_transformed_within_denoiser",
+        "notes": [
+          "Current frames package x_t translations with Frenet rotations derived from x_t; frames are not independently noised.",
+          "Within one structure layer, decoder_frames is T_l and updated_frames is T_(l+1); only the eighth layer's write becomes decoder_output_frames, T_hat."
         ],
         "evidence": {
           "status": "confirmed_from_code",
@@ -2448,6 +2791,9 @@ export const manifest = {
           "value_sites.refined_single_features"
         ],
         "lifecycle": "transformed_within_denoiser",
+        "notes": [
+          "The global-token state entering one latent block is s_i and that block writes s_(i+1); only the fifth write becomes the globals-removed mature single output."
+        ],
         "evidence": {
           "status": "confirmed_from_code",
           "refs": [
@@ -2469,6 +2815,9 @@ export const manifest = {
           "value_sites.refined_single_features"
         ],
         "lifecycle": "transformed_within_denoiser",
+        "notes": [
+          "The global-token state entering one latent block is s_i and that block writes s_(i+1); only the fifth write becomes the globals-removed mature single output."
+        ],
         "evidence": {
           "status": "confirmed_from_code",
           "refs": [
@@ -2490,6 +2839,9 @@ export const manifest = {
           "value_sites.refined_single_features"
         ],
         "lifecycle": "transformed_within_denoiser",
+        "notes": [
+          "The global-token state entering one latent block is s_i and that block writes s_(i+1); only the fifth write becomes the globals-removed mature single output."
+        ],
         "evidence": {
           "status": "confirmed_from_code",
           "refs": [
@@ -2511,6 +2863,9 @@ export const manifest = {
           "value_sites.refined_single_features"
         ],
         "lifecycle": "transformed_within_denoiser",
+        "notes": [
+          "The global-token state entering one latent block is s_i and that block writes s_(i+1); only the fifth write becomes the globals-removed mature single output."
+        ],
         "evidence": {
           "status": "confirmed_from_code",
           "refs": [
@@ -2530,9 +2885,13 @@ export const manifest = {
           "value_sites.pair_with_global_tokens",
           "value_sites.pair_after_single_update",
           "value_sites.pair_after_triangle_updates",
+          "value_sites.pair_after_transition",
           "value_sites.refined_pair_features"
         ],
         "lifecycle": "transformed_within_denoiser",
+        "notes": [
+          "The global-row/column state entering one latent block is z_i and the pair transition writes z_(i+1); only the fifth write becomes the globals-removed mature pair output."
+        ],
         "evidence": {
           "status": "confirmed_from_code",
           "refs": [
@@ -2552,9 +2911,13 @@ export const manifest = {
           "value_sites.pair_with_global_tokens",
           "value_sites.pair_after_single_update",
           "value_sites.pair_after_triangle_updates",
+          "value_sites.pair_after_transition",
           "value_sites.refined_pair_features"
         ],
         "lifecycle": "transformed_within_denoiser",
+        "notes": [
+          "The global-row/column state entering one latent block is z_i and the pair transition writes z_(i+1); only the fifth write becomes the globals-removed mature pair output."
+        ],
         "evidence": {
           "status": "confirmed_from_code",
           "refs": [
@@ -2574,9 +2937,13 @@ export const manifest = {
           "value_sites.pair_with_global_tokens",
           "value_sites.pair_after_single_update",
           "value_sites.pair_after_triangle_updates",
+          "value_sites.pair_after_transition",
           "value_sites.refined_pair_features"
         ],
         "lifecycle": "transformed_within_denoiser",
+        "notes": [
+          "The global-row/column state entering one latent block is z_i and the pair transition writes z_(i+1); only the fifth write becomes the globals-removed mature pair output."
+        ],
         "evidence": {
           "status": "confirmed_from_code",
           "refs": [
@@ -2596,9 +2963,39 @@ export const manifest = {
           "value_sites.pair_with_global_tokens",
           "value_sites.pair_after_single_update",
           "value_sites.pair_after_triangle_updates",
+          "value_sites.pair_after_transition",
           "value_sites.refined_pair_features"
         ],
         "lifecycle": "transformed_within_denoiser",
+        "notes": [
+          "The global-row/column state entering one latent block is z_i and the pair transition writes z_(i+1); only the fifth write becomes the globals-removed mature pair output."
+        ],
+        "evidence": {
+          "status": "confirmed_from_code",
+          "refs": [
+            {
+              "source_ref": "genie3_latent_transformer_code",
+              "role": "implementation_evidence",
+              "locator": "LatentTransformerBlock.forward"
+            }
+          ]
+        },
+        "groupId": "latent_pair_state"
+      },
+      "pair_after_transition": {
+        "representation_ref": "representations.pair_features",
+        "value_site_refs": [
+          "value_sites.initial_pair_features",
+          "value_sites.pair_with_global_tokens",
+          "value_sites.pair_after_single_update",
+          "value_sites.pair_after_triangle_updates",
+          "value_sites.pair_after_transition",
+          "value_sites.refined_pair_features"
+        ],
+        "lifecycle": "transformed_within_denoiser",
+        "notes": [
+          "The global-row/column state entering one latent block is z_i and the pair transition writes z_(i+1); only the fifth write becomes the globals-removed mature pair output."
+        ],
         "evidence": {
           "status": "confirmed_from_code",
           "refs": [
@@ -2618,9 +3015,13 @@ export const manifest = {
           "value_sites.pair_with_global_tokens",
           "value_sites.pair_after_single_update",
           "value_sites.pair_after_triangle_updates",
+          "value_sites.pair_after_transition",
           "value_sites.refined_pair_features"
         ],
         "lifecycle": "transformed_within_denoiser",
+        "notes": [
+          "The global-row/column state entering one latent block is z_i and the pair transition writes z_(i+1); only the fifth write becomes the globals-removed mature pair output."
+        ],
         "evidence": {
           "status": "confirmed_from_code",
           "refs": [
@@ -2964,8 +3365,33 @@ export const manifest = {
         }
       },
       {
-        "id": "current_coordinates_enter_frame_builder",
+        "id": "current_coordinates_enter_reverse_step",
         "from": "value_sites.current_coordinates",
+        "to": "value_sites.step_coordinates",
+        "kind": "data_flow",
+        "carries": [
+          "representations.token_coordinates"
+        ],
+        "operation": "read_current_reverse_state",
+        "evidence": {
+          "status": "confirmed_from_code",
+          "refs": [
+            {
+              "source_ref": "genie3_sampler_code",
+              "role": "implementation_evidence",
+              "locator": "Sampler._sample"
+            },
+            {
+              "source_ref": "genie3_ddim_code",
+              "role": "implementation_evidence",
+              "locator": "DDIMSampler._step"
+            }
+          ]
+        }
+      },
+      {
+        "id": "step_coordinates_enter_frame_builder",
+        "from": "value_sites.step_coordinates",
         "to": "modules.frenet_frame_builder",
         "kind": "data_flow",
         "carries": [
@@ -3449,14 +3875,14 @@ export const manifest = {
         }
       },
       {
-        "id": "pair_transition_produces_refined_pair_features",
+        "id": "pair_transition_produces_block_pair_output",
         "from": "modules.pair_transition",
-        "to": "value_sites.refined_pair_features",
+        "to": "value_sites.pair_after_transition",
         "kind": "state_update",
         "carries": [
           "representations.pair_features"
         ],
-        "operation": "remove_global_pair_tokens_after_final_block",
+        "operation": "residual_pair_transition",
         "evidence": {
           "status": "confirmed_from_code",
           "refs": [
@@ -3469,7 +3895,7 @@ export const manifest = {
         }
       },
       {
-        "id": "single_attention_state_becomes_refined_single_features",
+        "id": "block_single_output_becomes_refined_single_features",
         "from": "value_sites.single_after_pair_attention",
         "to": "value_sites.refined_single_features",
         "kind": "state_update",
@@ -3489,14 +3915,14 @@ export const manifest = {
         }
       },
       {
-        "id": "refined_single_features_reenter_latent_stack",
-        "from": "value_sites.single_after_pair_attention",
-        "to": "value_sites.single_with_global_tokens",
+        "id": "block_pair_output_becomes_refined_pair_features",
+        "from": "value_sites.pair_after_transition",
+        "to": "value_sites.refined_pair_features",
         "kind": "state_update",
         "carries": [
-          "representations.single_features"
+          "representations.pair_features"
         ],
-        "operation": "continue_latent_blocks",
+        "operation": "remove_global_pair_rows_and_columns_after_final_block",
         "evidence": {
           "status": "confirmed_from_code",
           "refs": [
@@ -3509,14 +3935,34 @@ export const manifest = {
         }
       },
       {
-        "id": "refined_pair_features_reenter_latent_stack",
-        "from": "value_sites.refined_pair_features",
+        "id": "block_single_output_reenters_next_latent_block",
+        "from": "value_sites.single_after_pair_attention",
+        "to": "value_sites.single_with_global_tokens",
+        "kind": "state_update",
+        "carries": [
+          "representations.single_features"
+        ],
+        "operation": "advance_latent_block_single_state",
+        "evidence": {
+          "status": "confirmed_from_code",
+          "refs": [
+            {
+              "source_ref": "genie3_latent_transformer_code",
+              "role": "implementation_evidence",
+              "locator": "LatentTransformer.forward and LatentTransformerBlock.forward"
+            }
+          ]
+        }
+      },
+      {
+        "id": "block_pair_output_reenters_next_latent_block",
+        "from": "value_sites.pair_after_transition",
         "to": "value_sites.pair_with_global_tokens",
         "kind": "state_update",
         "carries": [
           "representations.pair_features"
         ],
-        "operation": "continue_latent_blocks",
+        "operation": "advance_latent_block_pair_state",
         "evidence": {
           "status": "confirmed_from_code",
           "refs": [
@@ -3859,8 +4305,28 @@ export const manifest = {
         }
       },
       {
-        "id": "updated_frames_produce_coordinate_prediction",
+        "id": "updated_frames_become_decoder_output_frames",
         "from": "value_sites.updated_frames",
+        "to": "value_sites.decoder_output_frames",
+        "kind": "state_update",
+        "carries": [
+          "representations.token_frames"
+        ],
+        "operation": "expose_final_structure_layer_frames",
+        "evidence": {
+          "status": "confirmed_from_code",
+          "refs": [
+            {
+              "source_ref": "genie3_structure_code",
+              "role": "implementation_evidence",
+              "locator": "StructureNet.forward and StructureLayer.forward"
+            }
+          ]
+        }
+      },
+      {
+        "id": "updated_frames_produce_coordinate_prediction",
+        "from": "value_sites.decoder_output_frames",
         "to": "value_sites.coordinate_prediction",
         "kind": "data_flow",
         "carries": [
@@ -3879,8 +4345,33 @@ export const manifest = {
         }
       },
       {
-        "id": "current_coordinates_enter_noise_readout",
-        "from": "value_sites.current_coordinates",
+        "id": "step_coordinates_enter_sampler_math",
+        "from": "value_sites.step_coordinates",
+        "to": "value_sites.sampler_step_coordinates",
+        "kind": "data_flow",
+        "carries": [
+          "representations.token_coordinates"
+        ],
+        "operation": "prepare_fixed_sampler_math_input",
+        "evidence": {
+          "status": "confirmed_from_code",
+          "refs": [
+            {
+              "source_ref": "genie3_sampler_code",
+              "role": "implementation_evidence",
+              "locator": "Sampler._sample"
+            },
+            {
+              "source_ref": "genie3_ddim_code",
+              "role": "implementation_evidence",
+              "locator": "DDIMSampler._step"
+            }
+          ]
+        }
+      },
+      {
+        "id": "sampler_coordinates_enter_noise_readout",
+        "from": "value_sites.sampler_step_coordinates",
         "to": "modules.noise_readout",
         "kind": "data_flow",
         "carries": [
@@ -3954,10 +4445,10 @@ export const manifest = {
         }
       },
       {
-        "id": "current_coordinates_enter_ddim_update",
-        "from": "value_sites.current_coordinates",
+        "id": "sampler_coordinates_enter_ddim_update",
+        "from": "value_sites.sampler_step_coordinates",
         "to": "modules.ddim_update",
-        "kind": "state_update",
+        "kind": "data_flow",
         "carries": [
           "representations.token_coordinates"
         ],
@@ -4360,7 +4851,7 @@ export const manifest = {
         "id": "sampler_math_is_outside_the_denoiser",
         "statement": "The learned denoiser returns a coordinate estimate; subtraction into predicted noise and the directional DDIM update are fixed sampler operations outside the model.",
         "scope": {
-          "module_ref": "modules.diffusion_sampler"
+          "module_ref": "modules.reverse_diffusion_step"
         },
         "evidence": {
           "status": "confirmed_from_code",
@@ -4904,7 +5395,7 @@ export const manifest = {
         },
         {
           "id": "latent_transform",
-          "text": "append 10 globals; repeat 5: s += PairBiasedAttention(s,z); z += OuterProduct(s); z += TriMulOut(z) + TriMulIn(z); z += PairTransition(z); remove globals",
+          "text": "append 10 globals; for i in 0..4: s_(i+1) = SingleUpdate(s_i,z_i); z_outer = z_i + OuterProduct(s_(i+1)); z_tri = z_outer + TriMulOut(z_outer); z_tri += TriMulIn(z_tri); z_(i+1) = z_tri + PairTransition(z_tri); remove globals from s_5 and z_5",
           "refs": "LatentTransformer.forward and LatentTransformerBlock.forward",
           "architectureRefs": [
             "modules.latent_transformer",
@@ -5041,7 +5532,6 @@ export const manifest = {
             "prominence": "secondary",
             "treatment": "compact",
             "density": "compact",
-            "glyph": "matrix",
             "col": 5,
             "row": 2
           },
@@ -5405,6 +5895,7 @@ export const manifest = {
           "value_sites.current_coordinates": "collapsed:modules.diffusion_sampler",
           "value_sites.current_frames": "collapsed:modules.diffusion_sampler",
           "value_sites.decoder_frames": "collapsed:modules.diffusion_sampler",
+          "value_sites.decoder_output_frames": "collapsed:modules.diffusion_sampler",
           "value_sites.decoder_single_state": "collapsed:modules.diffusion_sampler",
           "value_sites.design_request": "visible",
           "value_sites.feature_bundle": "visible",
@@ -5416,17 +5907,20 @@ export const manifest = {
           "value_sites.initial_single_features": "collapsed:modules.diffusion_sampler",
           "value_sites.next_coordinates": "collapsed:modules.diffusion_sampler",
           "value_sites.pair_after_single_update": "collapsed:modules.diffusion_sampler",
+          "value_sites.pair_after_transition": "collapsed:modules.diffusion_sampler",
           "value_sites.pair_after_triangle_updates": "collapsed:modules.diffusion_sampler",
           "value_sites.pair_with_global_tokens": "collapsed:modules.diffusion_sampler",
           "value_sites.predicted_noise": "collapsed:modules.diffusion_sampler",
           "value_sites.predicted_sequence": "visible",
           "value_sites.refined_pair_features": "collapsed:modules.diffusion_sampler",
           "value_sites.refined_single_features": "collapsed:modules.diffusion_sampler",
+          "value_sites.sampler_step_coordinates": "collapsed:modules.diffusion_sampler",
           "value_sites.sequence_logits": "collapsed:modules.diffusion_sampler",
           "value_sites.single_after_ipa": "collapsed:modules.diffusion_sampler",
           "value_sites.single_after_pair_attention": "collapsed:modules.diffusion_sampler",
           "value_sites.single_after_transition": "collapsed:modules.diffusion_sampler",
           "value_sites.single_with_global_tokens": "collapsed:modules.diffusion_sampler",
+          "value_sites.step_coordinates": "collapsed:modules.diffusion_sampler",
           "value_sites.timestep": "collapsed:modules.diffusion_sampler",
           "value_sites.updated_frames": "collapsed:modules.diffusion_sampler"
         },
@@ -5435,16 +5929,32 @@ export const manifest = {
       {
         "id": "sampling_loop",
         "title": "100-Step Directional DDIM Sampling",
-        "summary": "Gaussian token coordinates initialize x_T. Each selected step rebuilds frames, calls the learned denoiser, reads coordinate noise, and applies fixed DDIM math; optional sequence sampling happens only after structure generation.",
+        "summary": "Gaussian token coordinates initialize x_T. One drillable reverse-step unit reruns 100 times with cached task features, then optional sequence sampling happens after the terminal coordinates are selected.",
         "parent": "design_overview",
         "subject_ref": "modules.diffusion_sampler",
         "expansion_depth": 1,
         "grid": {
-          "columns": 9,
-          "rows": 6,
+          "columns": 7,
+          "rows": 4,
           "column_sizing": "content",
-          "col_gap": 40
+          "col_gap": 44
         },
+        "regions": [
+          {
+            "id": "reverse_diffusion_iteration",
+            "kind": "repeat",
+            "execution_ref": "execution.loops.reverse_diffusion_loop",
+            "label": "one reverse step",
+            "node_ids": [
+              "current_coordinates",
+              "reverse_diffusion_step",
+              "next_coordinates"
+            ],
+            "iteration_relation_refs": [
+              "relations.next_coordinates_reenter_sampling_state"
+            ]
+          }
+        ],
         "nodes": [
           {
             "id": "feature_bundle",
@@ -5475,101 +5985,18 @@ export const manifest = {
             "prominence": "secondary",
             "treatment": "compact",
             "density": "compact",
-            "glyph": "matrix",
             "col": 2,
             "row": 3
           },
           {
-            "id": "timestep_controller",
-            "ref": "modules.timestep_controller",
-            "prominence": "secondary",
-            "treatment": "compact",
-            "density": "compact",
-            "col": 2,
-            "row": 1
-          },
-          {
-            "id": "timestep",
-            "ref": "value_sites.timestep",
-            "label": "selected timestep",
-            "notation": "t",
-            "prominence": "context",
-            "treatment": "chip",
-            "density": "micro",
-            "glyph": "scalar",
-            "col": 3,
-            "row": 1
-          },
-          {
-            "id": "frenet_frame_builder",
-            "ref": "modules.frenet_frame_builder",
-            "prominence": "secondary",
-            "treatment": "compact",
-            "density": "compact",
-            "col": 3,
-            "row": 3
-          },
-          {
-            "id": "current_frames",
-            "ref": "value_sites.current_frames",
-            "label": "derived token frames",
-            "notation": "T_t",
-            "prominence": "context",
-            "treatment": "compact",
-            "density": "compact",
-            "glyph": "matrix",
-            "col": 4,
-            "row": 4
-          },
-          {
-            "id": "denoiser",
-            "ref": "modules.denoiser",
+            "id": "reverse_diffusion_step",
+            "ref": "modules.reverse_diffusion_step",
+            "label": "Directional DDIM Reverse Step",
             "prominence": "primary",
             "treatment": "block",
-            "col": 4,
+            "col": 3,
             "row": 3,
-            "board_ref": "denoiser_forward"
-          },
-          {
-            "id": "coordinate_prediction",
-            "ref": "value_sites.coordinate_prediction",
-            "label": "denoised coordinate estimate",
-            "notation": "x_hat",
-            "prominence": "secondary",
-            "treatment": "compact",
-            "density": "compact",
-            "glyph": "matrix",
-            "col": 5,
-            "row": 3
-          },
-          {
-            "id": "noise_readout",
-            "ref": "modules.noise_readout",
-            "prominence": "secondary",
-            "treatment": "compact",
-            "density": "compact",
-            "col": 6,
-            "row": 3
-          },
-          {
-            "id": "predicted_noise",
-            "ref": "value_sites.predicted_noise",
-            "label": "predicted coordinate noise",
-            "notation": "epsilon_theta",
-            "prominence": "secondary",
-            "treatment": "compact",
-            "density": "compact",
-            "glyph": "matrix",
-            "col": 7,
-            "row": 3
-          },
-          {
-            "id": "ddim_update",
-            "ref": "modules.ddim_update",
-            "prominence": "primary",
-            "treatment": "block",
-            "col": 8,
-            "row": 3
+            "board_ref": "reverse_diffusion_step"
           },
           {
             "id": "next_coordinates",
@@ -5579,8 +6006,7 @@ export const manifest = {
             "prominence": "secondary",
             "treatment": "compact",
             "density": "compact",
-            "glyph": "matrix",
-            "col": 9,
+            "col": 4,
             "row": 3
           },
           {
@@ -5591,9 +6017,8 @@ export const manifest = {
             "prominence": "context",
             "treatment": "compact",
             "density": "compact",
-            "glyph": "matrix",
-            "col": 9,
-            "row": 5
+            "col": 5,
+            "row": 3
           },
           {
             "id": "sequence_sampler",
@@ -5601,8 +6026,8 @@ export const manifest = {
             "prominence": "context",
             "treatment": "compact",
             "density": "compact",
-            "col": 7,
-            "row": 5
+            "col": 6,
+            "row": 4
           },
           {
             "id": "predicted_sequence",
@@ -5613,41 +6038,50 @@ export const manifest = {
             "treatment": "chip",
             "density": "micro",
             "glyph": "vector",
-            "col": 8,
-            "row": 5
+            "col": 7,
+            "row": 4
           }
         ],
         "elide": [
           {
             "ref": "value_sites.initial_coordinates"
-          },
-          {
-            "ref": "value_sites.fresh_step_noise"
           }
         ],
         "exclude": [
           {
             "ref": "modules.single_feature_embedder",
-            "reason": "All feature and timestep uses inside the learned model are represented by the denoiser node on this board."
+            "reason": "Learned feature conditioning is expanded through the reverse-step and denoiser boards."
           },
           {
             "ref": "modules.pair_feature_embedder",
-            "reason": "Noisy frame geometry is expanded on the denoiser board."
+            "reason": "Learned pair-feature construction is expanded through the reverse-step and denoiser boards."
           },
           {
             "ref": "modules.invariant_point_attention",
-            "reason": "Frame-point attention is expanded on the structure-decoder board."
+            "reason": "Frame-point attention is expanded below the reverse-step board on the structure-decoder board."
           },
           {
             "ref": "modules.frame_update",
-            "reason": "The coordinate estimate summarizes the structure decoder's internal frame updates."
+            "reason": "Internal frame updates are summarized by the drillable reverse-step unit at this zoom level."
           },
           {
             "ref": "value_sites.sequence_logits",
-            "reason": "The sampling-loop board shows the optional terminal sequence rather than the denoiser's intermediate logits."
+            "reason": "The sampler overview shows the optional terminal sequence rather than intermediate model logits."
           }
         ],
         "edge_overrides": [
+          {
+            "match": {
+              "relation_ref": "relations.feature_bundle_sizes_coordinate_initializer"
+            },
+            "label": "active token layout",
+            "tone": "conditioning",
+            "connection": {
+              "title": "Coordinate-state shape",
+              "role": "initialization context",
+              "inside": "The cached token layout fixes the B by N by 3 tensor initialized at the start of sampling."
+            }
+          },
           {
             "match": {
               "relation_path": [
@@ -5664,57 +6098,47 @@ export const manifest = {
           },
           {
             "match": {
-              "relation_ref": "relations.frame_builder_produces_current_frames"
+              "relation_ref": "relations.feature_bundle_conditions_frame_builder"
             },
-            "label": "derived frames",
+            "label": "cached features",
+            "tone": "conditioning",
             "connection": {
-              "title": "Frames enter the denoiser",
-              "role": "derived geometric input",
-              "inside": "Frenet rotations are computed from x_t while the frame translations remain the current token coordinates."
+              "title": "Read-only step context",
+              "role": "repeated conditioning",
+              "inside": "Each reverse step reuses the cached neighbor indices and masks; the child boards expose the remaining learned feature uses."
             }
           },
           {
             "match": {
-              "relation_ref": "relations.coordinate_prediction_enters_noise_readout"
+              "relation_ref": "relations.current_coordinates_enter_reverse_step"
             },
-            "label": "x_hat",
+            "label": "x_t",
             "connection": {
-              "title": "Denoised coordinate estimate",
-              "role": "noise-readout input",
-              "inside": "The learned model returns updated frame translations as its coordinate estimate."
+              "title": "Current reverse state",
+              "role": "reverse-step input",
+              "inside": "The drillable step rebuilds geometry, invokes the learned model, and applies fixed sampler math to the current coordinate point cloud."
             }
           },
           {
             "match": {
-              "relation_ref": "relations.noise_readout_produces_predicted_noise"
+              "relation_ref": "relations.ddim_update_produces_next_coordinates"
             },
-            "label": "x_t - x_hat",
+            "label": "one reverse step",
             "connection": {
-              "title": "Predicted coordinate noise",
-              "role": "sampler parameter",
-              "inside": "Fixed subtraction outside the model converts the coordinate estimate into epsilon_theta."
+              "title": "Updated coordinate state",
+              "role": "reverse-step output",
+              "inside": "Directional DDIM math produces the coordinate point cloud for the next selected schedule index."
             }
           },
           {
             "match": {
-              "relation_ref": "relations.predicted_noise_enters_ddim_update"
+              "relation_ref": "relations.terminal_coordinates_become_final_coordinates"
             },
-            "label": "direction scale",
+            "label": "after final step",
             "connection": {
-              "title": "Directional DDIM update",
-              "role": "reverse-step parameter",
-              "inside": "The sampler reconstructs x_0 and scales the denoising direction independently from the stochastic noise term."
-            }
-          },
-          {
-            "match": {
-              "relation_ref": "relations.next_coordinates_reenter_sampling_state"
-            },
-            "label": "continue if steps remain",
-            "connection": {
-              "title": "Reverse-chain recurrence",
-              "role": "loop state update",
-              "inside": "The next point cloud becomes x_t for the next selected schedule index."
+              "title": "Terminal structure",
+              "role": "sampler output",
+              "inside": "When no selected timesteps remain, the next coordinate state is exposed as x_0."
             }
           },
           {
@@ -5726,7 +6150,7 @@ export const manifest = {
             "connection": {
               "title": "Optional sequence prediction",
               "role": "post-structure branch",
-              "inside": "When enabled, the sampler calls the model once more on the generated structure and samples residue identities."
+              "inside": "When enabled, the sampler calls the model once more on the generated structure before sampling residue identities."
             }
           }
         ],
@@ -5767,18 +6191,18 @@ export const manifest = {
             }
           },
           {
-            "id": "projection_7f2ec4d518ac",
-            "from": "coordinate_prediction",
-            "to": "noise_readout",
-            "projection": "direct",
+            "id": "projection_459d39a6b516",
+            "from": "current_coordinates",
+            "to": "reverse_diffusion_step",
+            "projection": "boundary",
             "origin": "canonical",
             "kind": "data_flow",
             "relation_path": [
-              "relations.coordinate_prediction_enters_noise_readout"
+              "relations.current_coordinates_enter_reverse_step"
             ],
             "provenance_hops": [
               {
-                "relation_ref": "relations.coordinate_prediction_enters_noise_readout"
+                "relation_ref": "relations.current_coordinates_enter_reverse_step"
               }
             ],
             "hidden_refs": [
@@ -5788,184 +6212,12 @@ export const manifest = {
               "representations.token_coordinates"
             ],
             "presentation": {
-              "label": "x_hat",
+              "label": "x_t",
               "connection": {
-                "title": "Denoised coordinate estimate",
-                "role": "noise-readout input",
-                "inside": "The learned model returns updated frame translations as its coordinate estimate."
+                "title": "Current reverse state",
+                "role": "reverse-step input",
+                "inside": "The drillable step rebuilds geometry, invokes the learned model, and applies fixed sampler math to the current coordinate point cloud."
               }
-            }
-          },
-          {
-            "id": "projection_a48c574ecb8e",
-            "from": "current_coordinates",
-            "to": "ddim_update",
-            "projection": "direct",
-            "origin": "canonical",
-            "kind": "state_update",
-            "relation_path": [
-              "relations.current_coordinates_enter_ddim_update"
-            ],
-            "provenance_hops": [
-              {
-                "relation_ref": "relations.current_coordinates_enter_ddim_update"
-              }
-            ],
-            "hidden_refs": [
-
-            ],
-            "carries": [
-              "representations.token_coordinates"
-            ],
-            "presentation": {
-            }
-          },
-          {
-            "id": "projection_6f1181f50581",
-            "from": "current_coordinates",
-            "to": "frenet_frame_builder",
-            "projection": "direct",
-            "origin": "canonical",
-            "kind": "data_flow",
-            "relation_path": [
-              "relations.current_coordinates_enter_frame_builder"
-            ],
-            "provenance_hops": [
-              {
-                "relation_ref": "relations.current_coordinates_enter_frame_builder"
-              }
-            ],
-            "hidden_refs": [
-
-            ],
-            "carries": [
-              "representations.token_coordinates"
-            ],
-            "presentation": {
-            }
-          },
-          {
-            "id": "projection_e648ec0e567b",
-            "from": "current_coordinates",
-            "to": "noise_readout",
-            "projection": "direct",
-            "origin": "canonical",
-            "kind": "data_flow",
-            "relation_path": [
-              "relations.current_coordinates_enter_noise_readout"
-            ],
-            "provenance_hops": [
-              {
-                "relation_ref": "relations.current_coordinates_enter_noise_readout"
-              }
-            ],
-            "hidden_refs": [
-
-            ],
-            "carries": [
-              "representations.token_coordinates"
-            ],
-            "presentation": {
-            }
-          },
-          {
-            "id": "projection_2a08227b3a1a",
-            "from": "current_frames",
-            "to": "denoiser",
-            "projection": "boundary",
-            "origin": "canonical",
-            "kind": "state_update",
-            "relation_path": [
-              "relations.current_frames_initialize_decoder_frames"
-            ],
-            "provenance_hops": [
-              {
-                "relation_ref": "relations.current_frames_initialize_decoder_frames"
-              }
-            ],
-            "hidden_refs": [
-
-            ],
-            "carries": [
-              "representations.token_frames"
-            ],
-            "presentation": {
-            }
-          },
-          {
-            "id": "projection_32578393a767",
-            "from": "ddim_update",
-            "to": "ddim_update",
-            "projection": "contracted",
-            "origin": "canonical",
-            "kind": "data_flow",
-            "relation_path": [
-              "relations.ddim_update_samples_fresh_noise",
-              "relations.fresh_noise_reenters_ddim_update"
-            ],
-            "provenance_hops": [
-              {
-                "relation_ref": "relations.ddim_update_samples_fresh_noise"
-              },
-              {
-                "relation_ref": "relations.fresh_noise_reenters_ddim_update"
-              }
-            ],
-            "hidden_refs": [
-              "value_sites.fresh_step_noise"
-            ],
-            "carries": [
-              "representations.coordinate_noise"
-            ],
-            "presentation": {
-            }
-          },
-          {
-            "id": "projection_b8016fdd8fac",
-            "from": "ddim_update",
-            "to": "next_coordinates",
-            "projection": "direct",
-            "origin": "canonical",
-            "kind": "state_update",
-            "relation_path": [
-              "relations.ddim_update_produces_next_coordinates"
-            ],
-            "provenance_hops": [
-              {
-                "relation_ref": "relations.ddim_update_produces_next_coordinates"
-              }
-            ],
-            "hidden_refs": [
-
-            ],
-            "carries": [
-              "representations.token_coordinates"
-            ],
-            "presentation": {
-            }
-          },
-          {
-            "id": "projection_82fe1ca673d2",
-            "from": "denoiser",
-            "to": "coordinate_prediction",
-            "projection": "boundary",
-            "origin": "canonical",
-            "kind": "data_flow",
-            "relation_path": [
-              "relations.updated_frames_produce_coordinate_prediction"
-            ],
-            "provenance_hops": [
-              {
-                "relation_ref": "relations.updated_frames_produce_coordinate_prediction"
-              }
-            ],
-            "hidden_refs": [
-
-            ],
-            "carries": [
-              "representations.token_coordinates"
-            ],
-            "presentation": {
             }
           },
           {
@@ -5990,13 +6242,20 @@ export const manifest = {
               "representations.feature_bundle"
             ],
             "presentation": {
+              "label": "active token layout",
+              "tone": "conditioning",
+              "connection": {
+                "title": "Coordinate-state shape",
+                "role": "initialization context",
+                "inside": "The cached token layout fixes the B by N by 3 tensor initialized at the start of sampling."
+              }
             }
           },
           {
-            "id": "projection_ee48aa752294",
+            "id": "projection_3f9a00a80242",
             "from": "feature_bundle",
-            "to": "frenet_frame_builder",
-            "projection": "direct",
+            "to": "reverse_diffusion_step",
+            "projection": "boundary",
             "origin": "canonical",
             "kind": "conditioning",
             "relation_path": [
@@ -6014,6 +6273,13 @@ export const manifest = {
               "representations.feature_bundle"
             ],
             "presentation": {
+              "label": "cached features",
+              "tone": "conditioning",
+              "connection": {
+                "title": "Read-only step context",
+                "role": "repeated conditioning",
+                "inside": "Each reverse step reuses the cached neighbor indices and masks; the child boards expose the remaining learned feature uses."
+              }
             }
           },
           {
@@ -6067,37 +6333,7 @@ export const manifest = {
               "connection": {
                 "title": "Optional sequence prediction",
                 "role": "post-structure branch",
-                "inside": "When enabled, the sampler calls the model once more on the generated structure and samples residue identities."
-              }
-            }
-          },
-          {
-            "id": "projection_f4bf0ac38f6f",
-            "from": "frenet_frame_builder",
-            "to": "current_frames",
-            "projection": "direct",
-            "origin": "canonical",
-            "kind": "data_flow",
-            "relation_path": [
-              "relations.frame_builder_produces_current_frames"
-            ],
-            "provenance_hops": [
-              {
-                "relation_ref": "relations.frame_builder_produces_current_frames"
-              }
-            ],
-            "hidden_refs": [
-
-            ],
-            "carries": [
-              "representations.token_frames"
-            ],
-            "presentation": {
-              "label": "derived frames",
-              "connection": {
-                "title": "Frames enter the denoiser",
-                "role": "derived geometric input",
-                "inside": "Frenet rotations are computed from x_t while the frame translations remain the current token coordinates."
+                "inside": "When enabled, the sampler calls the model once more on the generated structure before sampling residue identities."
               }
             }
           },
@@ -6123,12 +6359,6 @@ export const manifest = {
               "representations.token_coordinates"
             ],
             "presentation": {
-              "label": "continue if steps remain",
-              "connection": {
-                "title": "Reverse-chain recurrence",
-                "role": "loop state update",
-                "inside": "The next point cloud becomes x_t for the next selected schedule index."
-              }
             }
           },
           {
@@ -6153,65 +6383,41 @@ export const manifest = {
               "representations.token_coordinates"
             ],
             "presentation": {
+              "label": "after final step",
+              "connection": {
+                "title": "Terminal structure",
+                "role": "sampler output",
+                "inside": "When no selected timesteps remain, the next coordinate state is exposed as x_0."
+              }
             }
           },
           {
-            "id": "projection_d101c5d80bd0",
-            "from": "noise_readout",
-            "to": "predicted_noise",
-            "projection": "direct",
+            "id": "projection_6d21076d7ec3",
+            "from": "reverse_diffusion_step",
+            "to": "next_coordinates",
+            "projection": "boundary",
             "origin": "canonical",
-            "kind": "data_flow",
+            "kind": "state_update",
             "relation_path": [
-              "relations.noise_readout_produces_predicted_noise"
+              "relations.ddim_update_produces_next_coordinates"
             ],
             "provenance_hops": [
               {
-                "relation_ref": "relations.noise_readout_produces_predicted_noise"
+                "relation_ref": "relations.ddim_update_produces_next_coordinates"
               }
             ],
             "hidden_refs": [
 
             ],
             "carries": [
-              "representations.coordinate_noise"
+              "representations.token_coordinates"
             ],
             "presentation": {
-              "label": "x_t - x_hat",
+              "label": "one reverse step",
               "connection": {
-                "title": "Predicted coordinate noise",
-                "role": "sampler parameter",
-                "inside": "Fixed subtraction outside the model converts the coordinate estimate into epsilon_theta."
-              }
-            }
-          },
-          {
-            "id": "projection_00f9fb97d841",
-            "from": "predicted_noise",
-            "to": "ddim_update",
-            "projection": "direct",
-            "origin": "canonical",
-            "kind": "data_flow",
-            "relation_path": [
-              "relations.predicted_noise_enters_ddim_update"
-            ],
-            "provenance_hops": [
-              {
-                "relation_ref": "relations.predicted_noise_enters_ddim_update"
-              }
-            ],
-            "hidden_refs": [
-
-            ],
-            "carries": [
-              "representations.coordinate_noise"
-            ],
-            "presentation": {
-              "label": "direction scale",
-              "connection": {
-                "title": "Directional DDIM update",
-                "role": "reverse-step parameter",
-                "inside": "The sampler reconstructs x_0 and scales the denoising direction independently from the stochastic noise term."
+                "title": "Updated coordinate state",
+                "role": "reverse-step output",
+                "inside": "Directional DDIM math produces the coordinate point cloud for the next selected schedule index."
               }
             }
           },
@@ -6238,9 +6444,1045 @@ export const manifest = {
             ],
             "presentation": {
             }
+          }
+        ],
+        "classifications": {
+          "modules.coordinate_initializer": "visible",
+          "modules.ddim_update": "collapsed:modules.reverse_diffusion_step",
+          "modules.frame_update": "excluded",
+          "modules.frenet_frame_builder": "collapsed:modules.reverse_diffusion_step",
+          "modules.global_token_adapter": "collapsed:modules.reverse_diffusion_step",
+          "modules.invariant_point_attention": "excluded",
+          "modules.noise_readout": "collapsed:modules.reverse_diffusion_step",
+          "modules.pair_biased_attention_update": "collapsed:modules.reverse_diffusion_step",
+          "modules.pair_feature_embedder": "excluded",
+          "modules.pair_transition": "collapsed:modules.reverse_diffusion_step",
+          "modules.reverse_diffusion_step": "visible",
+          "modules.sequence_head": "collapsed:modules.reverse_diffusion_step",
+          "modules.sequence_sampler": "visible",
+          "modules.single_feature_embedder": "excluded",
+          "modules.single_to_pair_update": "collapsed:modules.reverse_diffusion_step",
+          "modules.structure_transition": "collapsed:modules.reverse_diffusion_step",
+          "modules.timestep_controller": "collapsed:modules.reverse_diffusion_step",
+          "modules.triangle_multiplication_stack": "collapsed:modules.reverse_diffusion_step",
+          "value_sites.coordinate_prediction": "collapsed:modules.reverse_diffusion_step",
+          "value_sites.current_coordinates": "visible",
+          "value_sites.current_frames": "collapsed:modules.reverse_diffusion_step",
+          "value_sites.decoder_frames": "collapsed:modules.reverse_diffusion_step",
+          "value_sites.decoder_output_frames": "collapsed:modules.reverse_diffusion_step",
+          "value_sites.decoder_single_state": "collapsed:modules.reverse_diffusion_step",
+          "value_sites.feature_bundle": "visible",
+          "value_sites.final_coordinates": "visible",
+          "value_sites.fresh_step_noise": "collapsed:modules.reverse_diffusion_step",
+          "value_sites.initial_coordinates": "elided",
+          "value_sites.initial_pair_features": "collapsed:modules.reverse_diffusion_step",
+          "value_sites.initial_single_features": "collapsed:modules.reverse_diffusion_step",
+          "value_sites.next_coordinates": "visible",
+          "value_sites.pair_after_single_update": "collapsed:modules.reverse_diffusion_step",
+          "value_sites.pair_after_transition": "collapsed:modules.reverse_diffusion_step",
+          "value_sites.pair_after_triangle_updates": "collapsed:modules.reverse_diffusion_step",
+          "value_sites.pair_with_global_tokens": "collapsed:modules.reverse_diffusion_step",
+          "value_sites.predicted_noise": "collapsed:modules.reverse_diffusion_step",
+          "value_sites.predicted_sequence": "visible",
+          "value_sites.refined_pair_features": "collapsed:modules.reverse_diffusion_step",
+          "value_sites.refined_single_features": "collapsed:modules.reverse_diffusion_step",
+          "value_sites.sampler_step_coordinates": "collapsed:modules.reverse_diffusion_step",
+          "value_sites.sequence_logits": "excluded",
+          "value_sites.single_after_ipa": "collapsed:modules.reverse_diffusion_step",
+          "value_sites.single_after_pair_attention": "collapsed:modules.reverse_diffusion_step",
+          "value_sites.single_after_transition": "collapsed:modules.reverse_diffusion_step",
+          "value_sites.single_with_global_tokens": "collapsed:modules.reverse_diffusion_step",
+          "value_sites.step_coordinates": "collapsed:modules.reverse_diffusion_step",
+          "value_sites.timestep": "collapsed:modules.reverse_diffusion_step",
+          "value_sites.updated_frames": "collapsed:modules.reverse_diffusion_step"
+        },
+        "projectionMode": "derived"
+      },
+      {
+        "id": "reverse_diffusion_step",
+        "title": "One Reverse Step",
+        "summary": "Each step does three things—build local geometry from the current coordinates, predict a cleaner structure with the learned model, and apply fixed DDIM math to produce the next coordinates.",
+        "parent": "sampling_loop",
+        "subject_ref": "modules.reverse_diffusion_step",
+        "expansion_depth": 1,
+        "grid": {
+          "columns": 6,
+          "rows": 3,
+          "column_sizing": "content",
+          "col_gap": 56
+        },
+        "nodes": [
+          {
+            "id": "feature_bundle",
+            "ref": "value_sites.feature_bundle",
+            "label": "cached task context",
+            "notation": "F",
+            "prominence": "context",
+            "treatment": "chip",
+            "density": "micro",
+            "col": 3,
+            "row": 1
           },
           {
-            "id": "projection_9d5b548158b4",
+            "id": "timestep",
+            "ref": "value_sites.timestep",
+            "label": "selected level",
+            "notation": "t",
+            "prominence": "context",
+            "treatment": "chip",
+            "density": "micro",
+            "glyph": "scalar",
+            "col": 5,
+            "row": 1
+          },
+          {
+            "id": "step_coordinates",
+            "ref": "value_sites.step_coordinates",
+            "label": "current coordinates",
+            "notation": "x_t",
+            "prominence": "secondary",
+            "treatment": "compact",
+            "density": "compact",
+            "col": 1,
+            "row": 2
+          },
+          {
+            "id": "frenet_frame_builder",
+            "ref": "modules.frenet_frame_builder",
+            "label": "Build local frames",
+            "prominence": "secondary",
+            "treatment": "compact",
+            "density": "compact",
+            "col": 2,
+            "row": 2
+          },
+          {
+            "id": "current_frames",
+            "ref": "value_sites.current_frames",
+            "label": "local frames",
+            "notation": "T_t",
+            "prominence": "context",
+            "treatment": "compact",
+            "density": "compact",
+            "col": 3,
+            "row": 2
+          },
+          {
+            "id": "denoiser",
+            "ref": "modules.denoiser",
+            "label": "Predict cleaner coordinates",
+            "prominence": "secondary",
+            "treatment": "block",
+            "col": 4,
+            "row": 2,
+            "board_ref": "denoiser_forward"
+          },
+          {
+            "id": "directional_ddim_sampler_math",
+            "ref": "modules.directional_ddim_sampler_math",
+            "label": "Apply fixed DDIM update",
+            "prominence": "primary",
+            "treatment": "block",
+            "col": 5,
+            "row": 2,
+            "board_ref": "directional_ddim_sampler_math"
+          },
+          {
+            "id": "next_coordinates",
+            "ref": "value_sites.next_coordinates",
+            "label": "next coordinates",
+            "notation": "x_(t-10)",
+            "prominence": "secondary",
+            "treatment": "compact",
+            "density": "compact",
+            "col": 6,
+            "row": 2
+          }
+        ],
+        "elide": [
+          {
+            "ref": "value_sites.coordinate_prediction"
+          }
+        ],
+        "exclude": [
+          {
+            "ref": "value_sites.current_coordinates",
+            "reason": "The step-local x_t value is shown explicitly; the sampler-level state handoff is already visible on the parent board."
+          },
+          {
+            "ref": "modules.timestep_controller",
+            "reason": "This board starts from the already-selected noise level; the enclosing 100-step sampling board owns the strided reverse schedule."
+          },
+          {
+            "ref": "modules.pair_feature_embedder",
+            "reason": "Noisy frame geometry is expanded on the denoiser board."
+          },
+          {
+            "ref": "modules.invariant_point_attention",
+            "reason": "Frame-point attention is expanded on the structure-decoder board."
+          },
+          {
+            "ref": "modules.frame_update",
+            "reason": "The coordinate estimate summarizes the structure decoder's internal frame updates."
+          },
+          {
+            "ref": "value_sites.sequence_logits",
+            "reason": "Optional sequence logits are sampled only after the reverse chain and are outside one coordinate-update step."
+          }
+        ],
+        "edge_overrides": [
+          {
+            "match": {
+              "relation_ref": "relations.step_coordinates_enter_frame_builder"
+            },
+            "label": "build geometry",
+            "connection": {
+              "title": "Build local geometry",
+              "role": "first step action",
+              "inside": "The current point cloud supplies translations for deterministic local frame construction."
+            }
+          },
+          {
+            "match": {
+              "relation_ref": "relations.feature_bundle_conditions_frame_builder"
+            },
+            "label": "token layout",
+            "tone": "conditioning",
+            "connection": {
+              "title": "Cached geometry context",
+              "role": "frame-building context",
+              "inside": "Neighbor indices and masks say which coordinates define each local frame."
+            }
+          },
+          {
+            "match": {
+              "relation_ref": "relations.timestep_conditions_single_embedder"
+            },
+            "label": "noise level",
+            "tone": "conditioning",
+            "connection": {
+              "title": "Model noise level",
+              "role": "learned-model context",
+              "inside": "The selected reverse index tells the denoiser how noisy the current coordinates are."
+            }
+          },
+          {
+            "match": {
+              "relation_ref": "relations.feature_bundle_conditions_single_embedder"
+            },
+            "label": "task context",
+            "tone": "conditioning",
+            "connection": {
+              "title": "Cached task context",
+              "role": "learned-model context",
+              "inside": "Token identity, masks, and design constraints condition the learned coordinate prediction."
+            }
+          },
+          {
+            "match": {
+              "relation_ref": "relations.frame_builder_produces_current_frames"
+            },
+            "label": "local frames",
+            "connection": {
+              "title": "Rebuilt local frames",
+              "role": "geometric intermediate",
+              "inside": "Deterministic rotations are rebuilt while translations remain the current token coordinates."
+            }
+          },
+          {
+            "match": {
+              "relation_ref": "relations.current_frames_initialize_decoder_frames"
+            },
+            "label": "use geometry",
+            "connection": {
+              "title": "Predict cleaner coordinates",
+              "role": "second step action",
+              "inside": "The learned model uses the rebuilt local frames to estimate cleaner token coordinates."
+            }
+          },
+          {
+            "match": {
+              "relation_path": [
+                "relations.updated_frames_produce_coordinate_prediction",
+                "relations.coordinate_prediction_enters_noise_readout"
+              ]
+            },
+            "label": "cleaner estimate",
+            "connection": {
+              "title": "Apply fixed sampler math",
+              "role": "third step action",
+              "inside": "Fixed sampler math compares the cleaner estimate with the current coordinates and constructs the next state."
+            }
+          },
+          {
+            "match": {
+              "relation_ref": "relations.step_coordinates_enter_sampler_math"
+            },
+            "label": "reuse x_t",
+            "route_side": "bottom",
+            "route_clearance": 46,
+            "connection": {
+              "title": "Current-state term",
+              "role": "fixed-math input",
+              "inside": "The DDIM formula also uses the current coordinates directly when reconstructing the next state."
+            }
+          },
+          {
+            "match": {
+              "relation_ref": "relations.timestep_enters_ddim_update"
+            },
+            "label": "schedule coefficients",
+            "tone": "conditioning",
+            "connection": {
+              "title": "Fixed schedule coefficients",
+              "role": "fixed-math context",
+              "inside": "The selected reverse index chooses the coefficients used by the directional DDIM formula."
+            }
+          },
+          {
+            "match": {
+              "relation_ref": "relations.ddim_update_produces_next_coordinates"
+            },
+            "label": "next state",
+            "connection": {
+              "title": "Next coordinate state",
+              "role": "reverse-step output",
+              "inside": "The fixed update emits the point cloud used by the following reverse step."
+            }
+          }
+        ],
+        "projection_mode": "derived",
+        "edges": [
+          {
+            "id": "projection_4985859b203d",
+            "from": "current_frames",
+            "to": "denoiser",
+            "projection": "boundary",
+            "origin": "canonical",
+            "kind": "state_update",
+            "relation_path": [
+              "relations.current_frames_initialize_decoder_frames"
+            ],
+            "provenance_hops": [
+              {
+                "relation_ref": "relations.current_frames_initialize_decoder_frames"
+              }
+            ],
+            "hidden_refs": [
+
+            ],
+            "carries": [
+              "representations.token_frames"
+            ],
+            "presentation": {
+              "label": "use geometry",
+              "connection": {
+                "title": "Predict cleaner coordinates",
+                "role": "second step action",
+                "inside": "The learned model uses the rebuilt local frames to estimate cleaner token coordinates."
+              }
+            }
+          },
+          {
+            "id": "projection_cbf66040d57b",
+            "from": "denoiser",
+            "to": "directional_ddim_sampler_math",
+            "projection": "contracted",
+            "origin": "canonical",
+            "kind": "data_flow",
+            "relation_path": [
+              "relations.updated_frames_produce_coordinate_prediction",
+              "relations.coordinate_prediction_enters_noise_readout"
+            ],
+            "provenance_hops": [
+              {
+                "relation_ref": "relations.updated_frames_produce_coordinate_prediction"
+              },
+              {
+                "relation_ref": "relations.coordinate_prediction_enters_noise_readout"
+              }
+            ],
+            "hidden_refs": [
+              "value_sites.coordinate_prediction"
+            ],
+            "carries": [
+              "representations.token_coordinates"
+            ],
+            "presentation": {
+              "label": "cleaner estimate",
+              "connection": {
+                "title": "Apply fixed sampler math",
+                "role": "third step action",
+                "inside": "Fixed sampler math compares the cleaner estimate with the current coordinates and constructs the next state."
+              }
+            }
+          },
+          {
+            "id": "projection_056b4566b846",
+            "from": "directional_ddim_sampler_math",
+            "to": "next_coordinates",
+            "projection": "boundary",
+            "origin": "canonical",
+            "kind": "state_update",
+            "relation_path": [
+              "relations.ddim_update_produces_next_coordinates"
+            ],
+            "provenance_hops": [
+              {
+                "relation_ref": "relations.ddim_update_produces_next_coordinates"
+              }
+            ],
+            "hidden_refs": [
+
+            ],
+            "carries": [
+              "representations.token_coordinates"
+            ],
+            "presentation": {
+              "label": "next state",
+              "connection": {
+                "title": "Next coordinate state",
+                "role": "reverse-step output",
+                "inside": "The fixed update emits the point cloud used by the following reverse step."
+              }
+            }
+          },
+          {
+            "id": "projection_d4a1c3249874",
+            "from": "feature_bundle",
+            "to": "denoiser",
+            "projection": "boundary",
+            "origin": "canonical",
+            "kind": "conditioning",
+            "relation_path": [
+              "relations.feature_bundle_conditions_single_embedder"
+            ],
+            "provenance_hops": [
+              {
+                "relation_ref": "relations.feature_bundle_conditions_single_embedder"
+              }
+            ],
+            "hidden_refs": [
+
+            ],
+            "carries": [
+              "representations.feature_bundle"
+            ],
+            "presentation": {
+              "label": "task context",
+              "tone": "conditioning",
+              "connection": {
+                "title": "Cached task context",
+                "role": "learned-model context",
+                "inside": "Token identity, masks, and design constraints condition the learned coordinate prediction."
+              }
+            }
+          },
+          {
+            "id": "projection_db706d71ad18",
+            "from": "feature_bundle",
+            "to": "frenet_frame_builder",
+            "projection": "direct",
+            "origin": "canonical",
+            "kind": "conditioning",
+            "relation_path": [
+              "relations.feature_bundle_conditions_frame_builder"
+            ],
+            "provenance_hops": [
+              {
+                "relation_ref": "relations.feature_bundle_conditions_frame_builder"
+              }
+            ],
+            "hidden_refs": [
+
+            ],
+            "carries": [
+              "representations.feature_bundle"
+            ],
+            "presentation": {
+              "label": "token layout",
+              "tone": "conditioning",
+              "connection": {
+                "title": "Cached geometry context",
+                "role": "frame-building context",
+                "inside": "Neighbor indices and masks say which coordinates define each local frame."
+              }
+            }
+          },
+          {
+            "id": "projection_2970c865c356",
+            "from": "frenet_frame_builder",
+            "to": "current_frames",
+            "projection": "direct",
+            "origin": "canonical",
+            "kind": "data_flow",
+            "relation_path": [
+              "relations.frame_builder_produces_current_frames"
+            ],
+            "provenance_hops": [
+              {
+                "relation_ref": "relations.frame_builder_produces_current_frames"
+              }
+            ],
+            "hidden_refs": [
+
+            ],
+            "carries": [
+              "representations.token_frames"
+            ],
+            "presentation": {
+              "label": "local frames",
+              "connection": {
+                "title": "Rebuilt local frames",
+                "role": "geometric intermediate",
+                "inside": "Deterministic rotations are rebuilt while translations remain the current token coordinates."
+              }
+            }
+          },
+          {
+            "id": "projection_82d09dc48642",
+            "from": "step_coordinates",
+            "to": "directional_ddim_sampler_math",
+            "projection": "boundary",
+            "origin": "canonical",
+            "kind": "data_flow",
+            "relation_path": [
+              "relations.step_coordinates_enter_sampler_math"
+            ],
+            "provenance_hops": [
+              {
+                "relation_ref": "relations.step_coordinates_enter_sampler_math"
+              }
+            ],
+            "hidden_refs": [
+
+            ],
+            "carries": [
+              "representations.token_coordinates"
+            ],
+            "presentation": {
+              "label": "reuse x_t",
+              "route_side": "bottom",
+              "route_clearance": 46,
+              "connection": {
+                "title": "Current-state term",
+                "role": "fixed-math input",
+                "inside": "The DDIM formula also uses the current coordinates directly when reconstructing the next state."
+              }
+            }
+          },
+          {
+            "id": "projection_1023040363ba",
+            "from": "step_coordinates",
+            "to": "frenet_frame_builder",
+            "projection": "direct",
+            "origin": "canonical",
+            "kind": "data_flow",
+            "relation_path": [
+              "relations.step_coordinates_enter_frame_builder"
+            ],
+            "provenance_hops": [
+              {
+                "relation_ref": "relations.step_coordinates_enter_frame_builder"
+              }
+            ],
+            "hidden_refs": [
+
+            ],
+            "carries": [
+              "representations.token_coordinates"
+            ],
+            "presentation": {
+              "label": "build geometry",
+              "connection": {
+                "title": "Build local geometry",
+                "role": "first step action",
+                "inside": "The current point cloud supplies translations for deterministic local frame construction."
+              }
+            }
+          },
+          {
+            "id": "projection_2eb9af868c1c",
+            "from": "timestep",
+            "to": "denoiser",
+            "projection": "boundary",
+            "origin": "canonical",
+            "kind": "conditioning",
+            "relation_path": [
+              "relations.timestep_conditions_single_embedder"
+            ],
+            "provenance_hops": [
+              {
+                "relation_ref": "relations.timestep_conditions_single_embedder"
+              }
+            ],
+            "hidden_refs": [
+
+            ],
+            "carries": [
+              "representations.timestep"
+            ],
+            "presentation": {
+              "label": "noise level",
+              "tone": "conditioning",
+              "connection": {
+                "title": "Model noise level",
+                "role": "learned-model context",
+                "inside": "The selected reverse index tells the denoiser how noisy the current coordinates are."
+              }
+            }
+          },
+          {
+            "id": "projection_cb818673035b",
+            "from": "timestep",
+            "to": "directional_ddim_sampler_math",
+            "projection": "boundary",
+            "origin": "canonical",
+            "kind": "control",
+            "relation_path": [
+              "relations.timestep_enters_ddim_update"
+            ],
+            "provenance_hops": [
+              {
+                "relation_ref": "relations.timestep_enters_ddim_update"
+              }
+            ],
+            "hidden_refs": [
+
+            ],
+            "carries": [
+              "representations.timestep"
+            ],
+            "presentation": {
+              "label": "schedule coefficients",
+              "tone": "conditioning",
+              "connection": {
+                "title": "Fixed schedule coefficients",
+                "role": "fixed-math context",
+                "inside": "The selected reverse index chooses the coefficients used by the directional DDIM formula."
+              }
+            }
+          }
+        ],
+        "classifications": {
+          "modules.ddim_update": "collapsed:modules.directional_ddim_sampler_math",
+          "modules.denoiser": "visible",
+          "modules.directional_ddim_sampler_math": "visible",
+          "modules.frame_update": "excluded",
+          "modules.frenet_frame_builder": "visible",
+          "modules.global_token_adapter": "collapsed:modules.denoiser",
+          "modules.invariant_point_attention": "excluded",
+          "modules.noise_readout": "collapsed:modules.directional_ddim_sampler_math",
+          "modules.pair_biased_attention_update": "collapsed:modules.denoiser",
+          "modules.pair_feature_embedder": "excluded",
+          "modules.pair_transition": "collapsed:modules.denoiser",
+          "modules.sequence_head": "collapsed:modules.denoiser",
+          "modules.single_feature_embedder": "collapsed:modules.denoiser",
+          "modules.single_to_pair_update": "collapsed:modules.denoiser",
+          "modules.structure_transition": "collapsed:modules.denoiser",
+          "modules.timestep_controller": "excluded",
+          "modules.triangle_multiplication_stack": "collapsed:modules.denoiser",
+          "value_sites.coordinate_prediction": "elided",
+          "value_sites.current_coordinates": "excluded",
+          "value_sites.current_frames": "visible",
+          "value_sites.decoder_frames": "collapsed:modules.denoiser",
+          "value_sites.decoder_output_frames": "collapsed:modules.denoiser",
+          "value_sites.decoder_single_state": "collapsed:modules.denoiser",
+          "value_sites.feature_bundle": "visible",
+          "value_sites.fresh_step_noise": "collapsed:modules.directional_ddim_sampler_math",
+          "value_sites.initial_pair_features": "collapsed:modules.denoiser",
+          "value_sites.initial_single_features": "collapsed:modules.denoiser",
+          "value_sites.next_coordinates": "visible",
+          "value_sites.pair_after_single_update": "collapsed:modules.denoiser",
+          "value_sites.pair_after_transition": "collapsed:modules.denoiser",
+          "value_sites.pair_after_triangle_updates": "collapsed:modules.denoiser",
+          "value_sites.pair_with_global_tokens": "collapsed:modules.denoiser",
+          "value_sites.predicted_noise": "collapsed:modules.directional_ddim_sampler_math",
+          "value_sites.refined_pair_features": "collapsed:modules.denoiser",
+          "value_sites.refined_single_features": "collapsed:modules.denoiser",
+          "value_sites.sampler_step_coordinates": "collapsed:modules.directional_ddim_sampler_math",
+          "value_sites.sequence_logits": "excluded",
+          "value_sites.single_after_ipa": "collapsed:modules.denoiser",
+          "value_sites.single_after_pair_attention": "collapsed:modules.denoiser",
+          "value_sites.single_after_transition": "collapsed:modules.denoiser",
+          "value_sites.single_with_global_tokens": "collapsed:modules.denoiser",
+          "value_sites.step_coordinates": "visible",
+          "value_sites.timestep": "visible",
+          "value_sites.updated_frames": "collapsed:modules.denoiser"
+        },
+        "projectionMode": "derived"
+      },
+      {
+        "id": "directional_ddim_sampler_math",
+        "title": "Fixed Directional DDIM Math",
+        "summary": "This board exposes the non-learned part of one reverse step. It converts the model's cleaner-coordinate estimate into a denoising direction, selects fixed schedule coefficients, and optionally adds fresh Gaussian noise.",
+        "parent": "reverse_diffusion_step",
+        "subject_ref": "modules.directional_ddim_sampler_math",
+        "expansion_depth": 1,
+        "grid": {
+          "columns": 5,
+          "rows": 4,
+          "column_sizing": "content",
+          "col_gap": 46
+        },
+        "nodes": [
+          {
+            "id": "timestep",
+            "ref": "value_sites.timestep",
+            "label": "selected noise level",
+            "notation": "t",
+            "prominence": "context",
+            "treatment": "chip",
+            "density": "micro",
+            "glyph": "scalar",
+            "col": 1,
+            "row": 1
+          },
+          {
+            "id": "step_coordinates",
+            "ref": "value_sites.sampler_step_coordinates",
+            "label": "current coordinates",
+            "notation": "x_t",
+            "prominence": "secondary",
+            "treatment": "compact",
+            "density": "compact",
+            "col": 1,
+            "row": 3
+          },
+          {
+            "id": "coordinate_prediction",
+            "ref": "value_sites.coordinate_prediction",
+            "label": "cleaner coordinate estimate",
+            "notation": "x_hat",
+            "prominence": "secondary",
+            "treatment": "compact",
+            "density": "compact",
+            "col": 1,
+            "row": 2
+          },
+          {
+            "id": "noise_readout",
+            "ref": "modules.noise_readout",
+            "label": "Compute denoising direction",
+            "prominence": "secondary",
+            "treatment": "compact",
+            "density": "compact",
+            "col": 2,
+            "row": 2
+          },
+          {
+            "id": "predicted_noise",
+            "ref": "value_sites.predicted_noise",
+            "label": "denoising direction",
+            "notation": "epsilon_theta",
+            "prominence": "secondary",
+            "treatment": "compact",
+            "density": "compact",
+            "glyph": "matrix",
+            "col": 3,
+            "row": 2
+          },
+          {
+            "id": "ddim_update",
+            "ref": "modules.ddim_update",
+            "label": "Combine schedule terms",
+            "prominence": "primary",
+            "treatment": "block",
+            "col": 4,
+            "row": 2
+          },
+          {
+            "id": "next_coordinates",
+            "ref": "value_sites.next_coordinates",
+            "label": "next coordinates",
+            "notation": "x_(t-10)",
+            "prominence": "secondary",
+            "treatment": "compact",
+            "density": "compact",
+            "col": 5,
+            "row": 2
+          }
+        ],
+        "exclude": [
+          {
+            "ref": "value_sites.step_coordinates",
+            "reason": "The sampler-math-local coordinate occurrence is shown explicitly; the enclosing reverse-step handoff is visible on the parent board."
+          },
+          {
+            "ref": "value_sites.fresh_step_noise",
+            "reason": "The optional fresh Gaussian term is summarized by the fixed update; drawing its internal module-to-value-to-module loop would obscure the main formula."
+          }
+        ],
+        "edge_overrides": [
+          {
+            "match": {
+              "relation_ref": "relations.sampler_coordinates_enter_noise_readout"
+            },
+            "label": "x_t",
+            "connection": {
+              "title": "Current coordinate input",
+              "role": "direction calculation",
+              "inside": "The fixed readout retains the current coordinates for comparison with the model estimate."
+            }
+          },
+          {
+            "match": {
+              "relation_ref": "relations.coordinate_prediction_enters_noise_readout"
+            },
+            "label": "x_hat",
+            "connection": {
+              "title": "Cleaner estimate input",
+              "role": "direction calculation",
+              "inside": "The fixed readout subtracts the cleaner estimate from the current coordinates."
+            }
+          },
+          {
+            "match": {
+              "relation_ref": "relations.noise_readout_produces_predicted_noise"
+            },
+            "label": "x_t - x_hat",
+            "connection": {
+              "title": "Denoising direction",
+              "role": "fixed intermediate",
+              "inside": "Coordinate subtraction produces the direction used by the DDIM update."
+            }
+          },
+          {
+            "match": {
+              "relation_ref": "relations.predicted_noise_enters_ddim_update"
+            },
+            "label": "direction",
+            "connection": {
+              "title": "Directional term",
+              "role": "update input",
+              "inside": "The update scales the denoising direction separately from the stochastic noise term."
+            }
+          },
+          {
+            "match": {
+              "relation_ref": "relations.sampler_coordinates_enter_ddim_update"
+            },
+            "label": "current state",
+            "route_side": "bottom",
+            "route_clearance": 42,
+            "connection": {
+              "title": "Current-state term",
+              "role": "update input",
+              "inside": "The formula uses x_t directly when reconstructing the clean-coordinate estimate."
+            }
+          },
+          {
+            "match": {
+              "relation_ref": "relations.timestep_enters_ddim_update"
+            },
+            "label": "coefficients",
+            "tone": "conditioning",
+            "route_side": "top",
+            "route_clearance": 42,
+            "connection": {
+              "title": "Schedule coefficients",
+              "role": "update control",
+              "inside": "The selected reverse index chooses the fixed alpha and sigma coefficients."
+            }
+          },
+          {
+            "match": {
+              "relation_ref": "relations.ddim_update_produces_next_coordinates"
+            },
+            "label": "next state",
+            "connection": {
+              "title": "Updated coordinates",
+              "role": "reverse-step output",
+              "inside": "The reconstructed clean estimate, scaled direction, and optional Gaussian term produce the next point cloud."
+            }
+          }
+        ],
+        "projection_mode": "derived",
+        "edges": [
+          {
+            "id": "projection_dfe4cd5721a0",
+            "from": "coordinate_prediction",
+            "to": "noise_readout",
+            "projection": "direct",
+            "origin": "canonical",
+            "kind": "data_flow",
+            "relation_path": [
+              "relations.coordinate_prediction_enters_noise_readout"
+            ],
+            "provenance_hops": [
+              {
+                "relation_ref": "relations.coordinate_prediction_enters_noise_readout"
+              }
+            ],
+            "hidden_refs": [
+
+            ],
+            "carries": [
+              "representations.token_coordinates"
+            ],
+            "presentation": {
+              "label": "x_hat",
+              "connection": {
+                "title": "Cleaner estimate input",
+                "role": "direction calculation",
+                "inside": "The fixed readout subtracts the cleaner estimate from the current coordinates."
+              }
+            }
+          },
+          {
+            "id": "projection_5d450cbd251a",
+            "from": "ddim_update",
+            "to": "next_coordinates",
+            "projection": "direct",
+            "origin": "canonical",
+            "kind": "state_update",
+            "relation_path": [
+              "relations.ddim_update_produces_next_coordinates"
+            ],
+            "provenance_hops": [
+              {
+                "relation_ref": "relations.ddim_update_produces_next_coordinates"
+              }
+            ],
+            "hidden_refs": [
+
+            ],
+            "carries": [
+              "representations.token_coordinates"
+            ],
+            "presentation": {
+              "label": "next state",
+              "connection": {
+                "title": "Updated coordinates",
+                "role": "reverse-step output",
+                "inside": "The reconstructed clean estimate, scaled direction, and optional Gaussian term produce the next point cloud."
+              }
+            }
+          },
+          {
+            "id": "projection_e8d268c4e6e0",
+            "from": "noise_readout",
+            "to": "predicted_noise",
+            "projection": "direct",
+            "origin": "canonical",
+            "kind": "data_flow",
+            "relation_path": [
+              "relations.noise_readout_produces_predicted_noise"
+            ],
+            "provenance_hops": [
+              {
+                "relation_ref": "relations.noise_readout_produces_predicted_noise"
+              }
+            ],
+            "hidden_refs": [
+
+            ],
+            "carries": [
+              "representations.coordinate_noise"
+            ],
+            "presentation": {
+              "label": "x_t - x_hat",
+              "connection": {
+                "title": "Denoising direction",
+                "role": "fixed intermediate",
+                "inside": "Coordinate subtraction produces the direction used by the DDIM update."
+              }
+            }
+          },
+          {
+            "id": "projection_58ff2aa7c10f",
+            "from": "predicted_noise",
+            "to": "ddim_update",
+            "projection": "direct",
+            "origin": "canonical",
+            "kind": "data_flow",
+            "relation_path": [
+              "relations.predicted_noise_enters_ddim_update"
+            ],
+            "provenance_hops": [
+              {
+                "relation_ref": "relations.predicted_noise_enters_ddim_update"
+              }
+            ],
+            "hidden_refs": [
+
+            ],
+            "carries": [
+              "representations.coordinate_noise"
+            ],
+            "presentation": {
+              "label": "direction",
+              "connection": {
+                "title": "Directional term",
+                "role": "update input",
+                "inside": "The update scales the denoising direction separately from the stochastic noise term."
+              }
+            }
+          },
+          {
+            "id": "projection_4fdf3abb249b",
+            "from": "step_coordinates",
+            "to": "ddim_update",
+            "projection": "direct",
+            "origin": "canonical",
+            "kind": "data_flow",
+            "relation_path": [
+              "relations.sampler_coordinates_enter_ddim_update"
+            ],
+            "provenance_hops": [
+              {
+                "relation_ref": "relations.sampler_coordinates_enter_ddim_update"
+              }
+            ],
+            "hidden_refs": [
+
+            ],
+            "carries": [
+              "representations.token_coordinates"
+            ],
+            "presentation": {
+              "label": "current state",
+              "route_side": "bottom",
+              "route_clearance": 42,
+              "connection": {
+                "title": "Current-state term",
+                "role": "update input",
+                "inside": "The formula uses x_t directly when reconstructing the clean-coordinate estimate."
+              }
+            }
+          },
+          {
+            "id": "projection_1cbb011679f2",
+            "from": "step_coordinates",
+            "to": "noise_readout",
+            "projection": "direct",
+            "origin": "canonical",
+            "kind": "data_flow",
+            "relation_path": [
+              "relations.sampler_coordinates_enter_noise_readout"
+            ],
+            "provenance_hops": [
+              {
+                "relation_ref": "relations.sampler_coordinates_enter_noise_readout"
+              }
+            ],
+            "hidden_refs": [
+
+            ],
+            "carries": [
+              "representations.token_coordinates"
+            ],
+            "presentation": {
+              "label": "x_t",
+              "connection": {
+                "title": "Current coordinate input",
+                "role": "direction calculation",
+                "inside": "The fixed readout retains the current coordinates for comparison with the model estimate."
+              }
+            }
+          },
+          {
+            "id": "projection_6058fc899c92",
             "from": "timestep",
             "to": "ddim_update",
             "projection": "direct",
@@ -6261,78 +7503,28 @@ export const manifest = {
               "representations.timestep"
             ],
             "presentation": {
-            }
-          },
-          {
-            "id": "projection_f8f49300f3a2",
-            "from": "timestep_controller",
-            "to": "timestep",
-            "projection": "direct",
-            "origin": "canonical",
-            "kind": "control",
-            "relation_path": [
-              "relations.timestep_controller_produces_timestep"
-            ],
-            "provenance_hops": [
-              {
-                "relation_ref": "relations.timestep_controller_produces_timestep"
+              "label": "coefficients",
+              "tone": "conditioning",
+              "route_side": "top",
+              "route_clearance": 42,
+              "connection": {
+                "title": "Schedule coefficients",
+                "role": "update control",
+                "inside": "The selected reverse index chooses the fixed alpha and sigma coefficients."
               }
-            ],
-            "hidden_refs": [
-
-            ],
-            "carries": [
-              "representations.timestep"
-            ],
-            "presentation": {
             }
           }
         ],
         "classifications": {
-          "modules.coordinate_initializer": "visible",
           "modules.ddim_update": "visible",
-          "modules.denoiser": "visible",
-          "modules.frame_update": "excluded",
-          "modules.frenet_frame_builder": "visible",
-          "modules.global_token_adapter": "collapsed:modules.denoiser",
-          "modules.invariant_point_attention": "excluded",
           "modules.noise_readout": "visible",
-          "modules.pair_biased_attention_update": "collapsed:modules.denoiser",
-          "modules.pair_feature_embedder": "excluded",
-          "modules.pair_transition": "collapsed:modules.denoiser",
-          "modules.sequence_head": "collapsed:modules.denoiser",
-          "modules.sequence_sampler": "visible",
-          "modules.single_feature_embedder": "excluded",
-          "modules.single_to_pair_update": "collapsed:modules.denoiser",
-          "modules.structure_transition": "collapsed:modules.denoiser",
-          "modules.timestep_controller": "visible",
-          "modules.triangle_multiplication_stack": "collapsed:modules.denoiser",
           "value_sites.coordinate_prediction": "visible",
-          "value_sites.current_coordinates": "visible",
-          "value_sites.current_frames": "visible",
-          "value_sites.decoder_frames": "collapsed:modules.denoiser",
-          "value_sites.decoder_single_state": "collapsed:modules.denoiser",
-          "value_sites.feature_bundle": "visible",
-          "value_sites.final_coordinates": "visible",
-          "value_sites.fresh_step_noise": "elided",
-          "value_sites.initial_coordinates": "elided",
-          "value_sites.initial_pair_features": "collapsed:modules.denoiser",
-          "value_sites.initial_single_features": "collapsed:modules.denoiser",
+          "value_sites.fresh_step_noise": "excluded",
           "value_sites.next_coordinates": "visible",
-          "value_sites.pair_after_single_update": "collapsed:modules.denoiser",
-          "value_sites.pair_after_triangle_updates": "collapsed:modules.denoiser",
-          "value_sites.pair_with_global_tokens": "collapsed:modules.denoiser",
           "value_sites.predicted_noise": "visible",
-          "value_sites.predicted_sequence": "visible",
-          "value_sites.refined_pair_features": "collapsed:modules.denoiser",
-          "value_sites.refined_single_features": "collapsed:modules.denoiser",
-          "value_sites.sequence_logits": "excluded",
-          "value_sites.single_after_ipa": "collapsed:modules.denoiser",
-          "value_sites.single_after_pair_attention": "collapsed:modules.denoiser",
-          "value_sites.single_after_transition": "collapsed:modules.denoiser",
-          "value_sites.single_with_global_tokens": "collapsed:modules.denoiser",
-          "value_sites.timestep": "visible",
-          "value_sites.updated_frames": "collapsed:modules.denoiser"
+          "value_sites.sampler_step_coordinates": "visible",
+          "value_sites.step_coordinates": "excluded",
+          "value_sites.timestep": "visible"
         },
         "projectionMode": "derived"
       },
@@ -6340,15 +7532,40 @@ export const manifest = {
         "id": "denoiser_forward",
         "title": "V1 Denoiser Forward Path",
         "summary": "Task and timestep features form invariant single and pair states. A five-block transformer exchanges information in both directions, then an eight-layer equivariant decoder predicts coordinates while a parallel head emits optional sequence logits.",
-        "parent": "sampling_loop",
+        "parent": "reverse_diffusion_step",
         "subject_ref": "modules.denoiser",
         "expansion_depth": 1,
         "grid": {
-          "columns": 8,
-          "rows": 6,
+          "columns": 7,
+          "rows": 5,
           "column_sizing": "content",
-          "col_gap": 42
+          "row_sizing": "content",
+          "col_gap": 36,
+          "row_gap": 24
         },
+        "lanes": [
+          {
+            "id": "single_stream",
+            "label": "single representations",
+            "kind": "representation",
+            "row": 2,
+            "representation_refs": [
+              "representations.single_features",
+              "representations.sequence_logits"
+            ],
+            "glyph": "single"
+          },
+          {
+            "id": "pair_stream",
+            "label": "pair representations",
+            "kind": "representation",
+            "row": 4,
+            "representation_refs": [
+              "representations.pair_features"
+            ],
+            "glyph": "pair"
+          }
+        ],
         "nodes": [
           {
             "id": "feature_bundle",
@@ -6358,8 +7575,7 @@ export const manifest = {
             "prominence": "secondary",
             "treatment": "compact",
             "density": "compact",
-            "glyph": "pair",
-            "col": 1,
+            "col": 2,
             "row": 1
           },
           {
@@ -6372,7 +7588,7 @@ export const manifest = {
             "density": "micro",
             "glyph": "scalar",
             "col": 1,
-            "row": 2
+            "row": 1
           },
           {
             "id": "current_frames",
@@ -6382,9 +7598,8 @@ export const manifest = {
             "prominence": "secondary",
             "treatment": "compact",
             "density": "compact",
-            "glyph": "matrix",
             "col": 1,
-            "row": 4
+            "row": 5
           },
           {
             "id": "single_feature_embedder",
@@ -6399,7 +7614,7 @@ export const manifest = {
             "ref": "modules.pair_feature_embedder",
             "prominence": "primary",
             "treatment": "block",
-            "col": 3,
+            "col": 2,
             "row": 4
           },
           {
@@ -6407,7 +7622,7 @@ export const manifest = {
             "ref": "modules.latent_transformer",
             "prominence": "primary",
             "treatment": "block",
-            "col": 4,
+            "col": 3,
             "row": 3,
             "board_ref": "latent_transformer"
           },
@@ -6419,8 +7634,7 @@ export const manifest = {
             "prominence": "secondary",
             "treatment": "compact",
             "density": "compact",
-            "glyph": "matrix",
-            "col": 5,
+            "col": 4,
             "row": 2
           },
           {
@@ -6432,7 +7646,7 @@ export const manifest = {
             "treatment": "compact",
             "density": "compact",
             "glyph": "pair",
-            "col": 5,
+            "col": 4,
             "row": 4
           },
           {
@@ -6440,20 +7654,19 @@ export const manifest = {
             "ref": "modules.structure_decoder",
             "prominence": "primary",
             "treatment": "block",
-            "col": 6,
-            "row": 4,
+            "col": 5,
+            "row": 3,
             "board_ref": "structure_decoder"
           },
           {
             "id": "updated_frames",
-            "ref": "value_sites.updated_frames",
+            "ref": "value_sites.decoder_output_frames",
             "label": "updated token frames",
             "notation": "T_hat",
             "prominence": "context",
             "treatment": "compact",
             "density": "compact",
-            "glyph": "matrix",
-            "col": 7,
+            "col": 6,
             "row": 5
           },
           {
@@ -6464,9 +7677,8 @@ export const manifest = {
             "prominence": "secondary",
             "treatment": "compact",
             "density": "compact",
-            "glyph": "matrix",
-            "col": 8,
-            "row": 4
+            "col": 7,
+            "row": 5
           },
           {
             "id": "sequence_head",
@@ -6475,7 +7687,7 @@ export const manifest = {
             "treatment": "compact",
             "density": "compact",
             "col": 6,
-            "row": 1
+            "row": 2
           },
           {
             "id": "sequence_logits",
@@ -6485,9 +7697,8 @@ export const manifest = {
             "prominence": "context",
             "treatment": "compact",
             "density": "compact",
-            "glyph": "matrix",
             "col": 7,
-            "row": 1
+            "row": 2
           }
         ],
         "elide": [
@@ -6513,7 +7724,7 @@ export const manifest = {
             "match": {
               "relation_ref": "relations.feature_bundle_conditions_single_embedder"
             },
-            "label": "token + task fields",
+            "label": "token + task metadata",
             "tone": "conditioning",
             "connection": {
               "title": "Single-feature inputs",
@@ -6687,7 +7898,7 @@ export const manifest = {
               "representations.feature_bundle"
             ],
             "presentation": {
-              "label": "token + task fields",
+              "label": "token + task metadata",
               "tone": "conditioning",
               "connection": {
                 "title": "Single-feature inputs",
@@ -6721,18 +7932,18 @@ export const manifest = {
             }
           },
           {
-            "id": "projection_291b9d2aa0cb",
+            "id": "projection_5750bbfb9ba1",
             "from": "latent_transformer",
             "to": "refined_pair_features",
             "projection": "boundary",
             "origin": "canonical",
             "kind": "state_update",
             "relation_path": [
-              "relations.pair_transition_produces_refined_pair_features"
+              "relations.block_pair_output_becomes_refined_pair_features"
             ],
             "provenance_hops": [
               {
-                "relation_ref": "relations.pair_transition_produces_refined_pair_features"
+                "relation_ref": "relations.block_pair_output_becomes_refined_pair_features"
               }
             ],
             "hidden_refs": [
@@ -6745,18 +7956,18 @@ export const manifest = {
             }
           },
           {
-            "id": "projection_e46b73ec09d2",
+            "id": "projection_73e0a465c195",
             "from": "latent_transformer",
             "to": "refined_single_features",
             "projection": "boundary",
             "origin": "canonical",
             "kind": "state_update",
             "relation_path": [
-              "relations.single_attention_state_becomes_refined_single_features"
+              "relations.block_single_output_becomes_refined_single_features"
             ],
             "provenance_hops": [
               {
-                "relation_ref": "relations.single_attention_state_becomes_refined_single_features"
+                "relation_ref": "relations.block_single_output_becomes_refined_single_features"
               }
             ],
             "hidden_refs": [
@@ -6789,30 +8000,6 @@ export const manifest = {
             ],
             "hidden_refs": [
               "value_sites.initial_pair_features"
-            ],
-            "carries": [
-              "representations.pair_features"
-            ],
-            "presentation": {
-            }
-          },
-          {
-            "id": "projection_ef19560f2357",
-            "from": "refined_pair_features",
-            "to": "latent_transformer",
-            "projection": "boundary",
-            "origin": "canonical",
-            "kind": "state_update",
-            "relation_path": [
-              "relations.refined_pair_features_reenter_latent_stack"
-            ],
-            "provenance_hops": [
-              {
-                "relation_ref": "relations.refined_pair_features_reenter_latent_stack"
-              }
-            ],
-            "hidden_refs": [
-
             ],
             "carries": [
               "representations.pair_features"
@@ -6985,18 +8172,18 @@ export const manifest = {
             }
           },
           {
-            "id": "projection_fc0fc79a75ee",
+            "id": "projection_3de50b35db7d",
             "from": "structure_decoder",
             "to": "updated_frames",
             "projection": "boundary",
             "origin": "canonical",
             "kind": "state_update",
             "relation_path": [
-              "relations.frame_update_produces_updated_frames"
+              "relations.updated_frames_become_decoder_output_frames"
             ],
             "provenance_hops": [
               {
-                "relation_ref": "relations.frame_update_produces_updated_frames"
+                "relation_ref": "relations.updated_frames_become_decoder_output_frames"
               }
             ],
             "hidden_refs": [
@@ -7061,30 +8248,6 @@ export const manifest = {
                 "inside": "The decoder exposes the translation component of its final updated frames."
               }
             }
-          },
-          {
-            "id": "projection_206f02730ddc",
-            "from": "updated_frames",
-            "to": "structure_decoder",
-            "projection": "boundary",
-            "origin": "canonical",
-            "kind": "state_update",
-            "relation_path": [
-              "relations.updated_frames_reenter_decoder"
-            ],
-            "provenance_hops": [
-              {
-                "relation_ref": "relations.updated_frames_reenter_decoder"
-              }
-            ],
-            "hidden_refs": [
-
-            ],
-            "carries": [
-              "representations.token_frames"
-            ],
-            "presentation": {
-            }
           }
         ],
         "classifications": {
@@ -7106,11 +8269,13 @@ export const manifest = {
           "value_sites.coordinate_prediction": "visible",
           "value_sites.current_frames": "visible",
           "value_sites.decoder_frames": "collapsed:modules.structure_decoder",
+          "value_sites.decoder_output_frames": "visible",
           "value_sites.decoder_single_state": "collapsed:modules.structure_decoder",
           "value_sites.feature_bundle": "visible",
           "value_sites.initial_pair_features": "elided",
           "value_sites.initial_single_features": "elided",
           "value_sites.pair_after_single_update": "collapsed:modules.latent_transformer",
+          "value_sites.pair_after_transition": "collapsed:modules.latent_transformer",
           "value_sites.pair_after_triangle_updates": "collapsed:modules.latent_transformer",
           "value_sites.pair_with_global_tokens": "collapsed:modules.latent_transformer",
           "value_sites.refined_pair_features": "visible",
@@ -7121,23 +8286,47 @@ export const manifest = {
           "value_sites.single_after_transition": "collapsed:modules.structure_decoder",
           "value_sites.single_with_global_tokens": "collapsed:modules.latent_transformer",
           "value_sites.timestep": "visible",
-          "value_sites.updated_frames": "visible"
+          "value_sites.updated_frames": "collapsed:modules.structure_decoder"
         },
         "projectionMode": "derived"
       },
       {
         "id": "latent_transformer",
         "title": "Five-Block Bidirectional Latent Transformer",
-        "summary": "Ten global tokens are appended. In each block, pairs update singles through pair-biased attention, the updated singles feed back through an outer product, and triangular operations refine the pair state.",
+        "summary": "Ten global tokens are appended once. The repeated region shows one block, where pairs update singles through pair-biased attention, the updated singles feed pairs through an outer product, and triangle plus transition operations update the pair state. The block outputs become the next block inputs; after block five, global entries are removed to form the mature outputs.",
         "parent": "denoiser_forward",
         "subject_ref": "modules.latent_transformer",
         "expansion_depth": 1,
         "grid": {
-          "columns": 8,
-          "rows": 6,
+          "columns": 11,
+          "rows": 4,
           "column_sizing": "content",
-          "col_gap": 42
+          "col_gap": 24
         },
+        "regions": [
+          {
+            "id": "latent_block_iteration",
+            "kind": "repeat",
+            "execution_ref": "execution.loops.latent_reasoning_stack",
+            "label": "one latent block",
+            "node_ids": [
+              "single_with_global_tokens",
+              "pair_with_global_tokens",
+              "pair_biased_attention_update",
+              "single_after_pair_attention",
+              "single_to_pair_update",
+              "pair_after_single_update",
+              "triangle_multiplication_stack",
+              "pair_after_triangle_updates",
+              "pair_transition",
+              "pair_after_transition"
+            ],
+            "iteration_relation_refs": [
+              "relations.block_single_output_reenters_next_latent_block",
+              "relations.block_pair_output_reenters_next_latent_block"
+            ]
+          }
+        ],
         "nodes": [
           {
             "id": "initial_single_features",
@@ -7147,7 +8336,6 @@ export const manifest = {
             "prominence": "secondary",
             "treatment": "compact",
             "density": "compact",
-            "glyph": "matrix",
             "col": 1,
             "row": 2
           },
@@ -7175,20 +8363,19 @@ export const manifest = {
           {
             "id": "single_with_global_tokens",
             "ref": "value_sites.single_with_global_tokens",
-            "label": "singles + 10 globals",
-            "notation": "s_plus",
+            "label": "block-input singles + globals",
+            "notation": "s_i",
             "prominence": "context",
             "treatment": "compact",
             "density": "compact",
-            "glyph": "matrix",
             "col": 3,
             "row": 2
           },
           {
             "id": "pair_with_global_tokens",
             "ref": "value_sites.pair_with_global_tokens",
-            "label": "pairs + global rows/cols",
-            "notation": "z_plus",
+            "label": "block-input pairs + globals",
+            "notation": "z_i",
             "prominence": "context",
             "treatment": "compact",
             "density": "compact",
@@ -7207,12 +8394,11 @@ export const manifest = {
           {
             "id": "single_after_pair_attention",
             "ref": "value_sites.single_after_pair_attention",
-            "label": "pair-updated singles",
-            "notation": "s_prime",
+            "label": "next-block singles",
+            "notation": "s_(i+1)",
             "prominence": "secondary",
             "treatment": "compact",
             "density": "compact",
-            "glyph": "matrix",
             "col": 5,
             "row": 2
           },
@@ -7264,8 +8450,20 @@ export const manifest = {
             "prominence": "secondary",
             "treatment": "compact",
             "density": "compact",
-            "col": 8,
-            "row": 5
+            "col": 9,
+            "row": 4
+          },
+          {
+            "id": "pair_after_transition",
+            "ref": "value_sites.pair_after_transition",
+            "label": "next-block pairs",
+            "notation": "z_(i+1)",
+            "prominence": "secondary",
+            "treatment": "compact",
+            "density": "compact",
+            "glyph": "pair",
+            "col": 10,
+            "row": 4
           },
           {
             "id": "refined_single_features",
@@ -7275,9 +8473,8 @@ export const manifest = {
             "prominence": "context",
             "treatment": "compact",
             "density": "compact",
-            "glyph": "matrix",
-            "col": 8,
-            "row": 1
+            "col": 11,
+            "row": 2
           },
           {
             "id": "refined_pair_features",
@@ -7288,8 +8485,8 @@ export const manifest = {
             "treatment": "compact",
             "density": "compact",
             "glyph": "pair",
-            "col": 8,
-            "row": 6
+            "col": 11,
+            "row": 4
           }
         ],
         "edge_overrides": [
@@ -7325,17 +8522,6 @@ export const manifest = {
               "title": "Triangular pair reasoning",
               "role": "pair refinement",
               "inside": "Outgoing and incoming triangular multiplication propagate information around three-token paths before the pair MLP."
-            }
-          },
-          {
-            "match": {
-              "relation_ref": "relations.refined_pair_features_reenter_latent_stack"
-            },
-            "label": "repeat x5",
-            "connection": {
-              "title": "Five latent blocks",
-              "role": "repeated state",
-              "inside": "The refined pair state becomes the pair input to the next bidirectional block; global tokens are removed only after block five."
             }
           }
         ],
@@ -7462,6 +8648,54 @@ export const manifest = {
             }
           },
           {
+            "id": "projection_9cae0bd08deb",
+            "from": "pair_after_transition",
+            "to": "pair_with_global_tokens",
+            "projection": "direct",
+            "origin": "canonical",
+            "kind": "state_update",
+            "relation_path": [
+              "relations.block_pair_output_reenters_next_latent_block"
+            ],
+            "provenance_hops": [
+              {
+                "relation_ref": "relations.block_pair_output_reenters_next_latent_block"
+              }
+            ],
+            "hidden_refs": [
+
+            ],
+            "carries": [
+              "representations.pair_features"
+            ],
+            "presentation": {
+            }
+          },
+          {
+            "id": "projection_a62c21b61028",
+            "from": "pair_after_transition",
+            "to": "refined_pair_features",
+            "projection": "direct",
+            "origin": "canonical",
+            "kind": "state_update",
+            "relation_path": [
+              "relations.block_pair_output_becomes_refined_pair_features"
+            ],
+            "provenance_hops": [
+              {
+                "relation_ref": "relations.block_pair_output_becomes_refined_pair_features"
+              }
+            ],
+            "hidden_refs": [
+
+            ],
+            "carries": [
+              "representations.pair_features"
+            ],
+            "presentation": {
+            }
+          },
+          {
             "id": "projection_67fc06360f07",
             "from": "pair_after_triangle_updates",
             "to": "pair_transition",
@@ -7510,18 +8744,18 @@ export const manifest = {
             }
           },
           {
-            "id": "projection_27e5ae66f16b",
+            "id": "projection_8c948afbc236",
             "from": "pair_transition",
-            "to": "refined_pair_features",
+            "to": "pair_after_transition",
             "projection": "direct",
             "origin": "canonical",
             "kind": "state_update",
             "relation_path": [
-              "relations.pair_transition_produces_refined_pair_features"
+              "relations.pair_transition_produces_block_pair_output"
             ],
             "provenance_hops": [
               {
-                "relation_ref": "relations.pair_transition_produces_refined_pair_features"
+                "relation_ref": "relations.pair_transition_produces_block_pair_output"
               }
             ],
             "hidden_refs": [
@@ -7589,48 +8823,18 @@ export const manifest = {
             }
           },
           {
-            "id": "projection_888ec7810e93",
-            "from": "refined_pair_features",
-            "to": "pair_with_global_tokens",
-            "projection": "direct",
-            "origin": "canonical",
-            "kind": "state_update",
-            "relation_path": [
-              "relations.refined_pair_features_reenter_latent_stack"
-            ],
-            "provenance_hops": [
-              {
-                "relation_ref": "relations.refined_pair_features_reenter_latent_stack"
-              }
-            ],
-            "hidden_refs": [
-
-            ],
-            "carries": [
-              "representations.pair_features"
-            ],
-            "presentation": {
-              "label": "repeat x5",
-              "connection": {
-                "title": "Five latent blocks",
-                "role": "repeated state",
-                "inside": "The refined pair state becomes the pair input to the next bidirectional block; global tokens are removed only after block five."
-              }
-            }
-          },
-          {
-            "id": "projection_052dbdf296c8",
+            "id": "projection_add6fbfbdc4c",
             "from": "single_after_pair_attention",
             "to": "refined_single_features",
             "projection": "direct",
             "origin": "canonical",
             "kind": "state_update",
             "relation_path": [
-              "relations.single_attention_state_becomes_refined_single_features"
+              "relations.block_single_output_becomes_refined_single_features"
             ],
             "provenance_hops": [
               {
-                "relation_ref": "relations.single_attention_state_becomes_refined_single_features"
+                "relation_ref": "relations.block_single_output_becomes_refined_single_features"
               }
             ],
             "hidden_refs": [
@@ -7673,18 +8877,18 @@ export const manifest = {
             }
           },
           {
-            "id": "projection_5241921d370f",
+            "id": "projection_218279fbbaa7",
             "from": "single_after_pair_attention",
             "to": "single_with_global_tokens",
             "projection": "direct",
             "origin": "canonical",
             "kind": "state_update",
             "relation_path": [
-              "relations.refined_single_features_reenter_latent_stack"
+              "relations.block_single_output_reenters_next_latent_block"
             ],
             "provenance_hops": [
               {
-                "relation_ref": "relations.refined_single_features_reenter_latent_stack"
+                "relation_ref": "relations.block_single_output_reenters_next_latent_block"
               }
             ],
             "hidden_refs": [
@@ -7784,6 +8988,7 @@ export const manifest = {
           "value_sites.initial_pair_features": "visible",
           "value_sites.initial_single_features": "visible",
           "value_sites.pair_after_single_update": "visible",
+          "value_sites.pair_after_transition": "visible",
           "value_sites.pair_after_triangle_updates": "visible",
           "value_sites.pair_with_global_tokens": "visible",
           "value_sites.refined_pair_features": "visible",
@@ -7801,11 +9006,34 @@ export const manifest = {
         "subject_ref": "modules.structure_decoder",
         "expansion_depth": 1,
         "grid": {
-          "columns": 7,
+          "columns": 8,
           "rows": 5,
           "column_sizing": "content",
-          "col_gap": 42
+          "col_gap": 32
         },
+        "regions": [
+          {
+            "id": "structure_layer_iteration",
+            "kind": "repeat",
+            "execution_ref": "execution.loops.structure_refinement_stack",
+            "label": "one structure layer",
+            "node_ids": [
+              "decoder_single_state",
+              "refined_pair_features",
+              "decoder_frames",
+              "invariant_point_attention",
+              "single_after_ipa",
+              "structure_transition",
+              "single_after_transition",
+              "frame_update",
+              "updated_frames"
+            ],
+            "iteration_relation_refs": [
+              "relations.transition_state_reenters_decoder",
+              "relations.updated_frames_reenter_decoder"
+            ]
+          }
+        ],
         "nodes": [
           {
             "id": "feature_bundle",
@@ -7827,7 +9055,6 @@ export const manifest = {
             "prominence": "secondary",
             "treatment": "compact",
             "density": "compact",
-            "glyph": "matrix",
             "col": 1,
             "row": 2
           },
@@ -7851,7 +9078,6 @@ export const manifest = {
             "prominence": "secondary",
             "treatment": "compact",
             "density": "compact",
-            "glyph": "matrix",
             "col": 1,
             "row": 4
           },
@@ -7871,7 +9097,6 @@ export const manifest = {
             "prominence": "secondary",
             "treatment": "compact",
             "density": "compact",
-            "glyph": "matrix",
             "col": 4,
             "row": 3
           },
@@ -7892,7 +9117,6 @@ export const manifest = {
             "prominence": "secondary",
             "treatment": "compact",
             "density": "compact",
-            "glyph": "matrix",
             "col": 6,
             "row": 3
           },
@@ -7913,21 +9137,19 @@ export const manifest = {
             "prominence": "secondary",
             "treatment": "compact",
             "density": "compact",
-            "glyph": "matrix",
             "col": 7,
             "row": 4
           },
           {
-            "id": "coordinate_prediction",
-            "ref": "value_sites.coordinate_prediction",
-            "label": "final translations",
-            "notation": "x_hat",
+            "id": "decoder_output_frames",
+            "ref": "value_sites.decoder_output_frames",
+            "label": "final decoder frames",
+            "notation": "T_hat",
             "prominence": "context",
             "treatment": "compact",
             "density": "compact",
-            "glyph": "matrix",
-            "col": 7,
-            "row": 2
+            "col": 8,
+            "row": 4
           }
         ],
         "exclude": [
@@ -7978,24 +9200,13 @@ export const manifest = {
           },
           {
             "match": {
-              "relation_ref": "relations.updated_frames_reenter_decoder"
+              "relation_ref": "relations.updated_frames_become_decoder_output_frames"
             },
-            "label": "repeat x8",
+            "label": "after layer 8",
             "connection": {
-              "title": "Frame recurrence",
-              "role": "repeated state",
-              "inside": "Updated frames become the geometric reference for the next of eight structure layers."
-            }
-          },
-          {
-            "match": {
-              "relation_ref": "relations.updated_frames_produce_coordinate_prediction"
-            },
-            "label": "translations",
-            "connection": {
-              "title": "Coordinate readout",
+              "title": "Final decoder frames",
               "role": "decoder output",
-              "inside": "After layer eight, the translation component of every active token frame is returned as the denoised coordinate estimate."
+              "inside": "The eighth layer's updated frame state leaves the repeated decoder as the final frame estimate; coordinate readout happens on the parent board."
             }
           }
         ],
@@ -8286,36 +9497,6 @@ export const manifest = {
             }
           },
           {
-            "id": "projection_0ac01399c8a1",
-            "from": "updated_frames",
-            "to": "coordinate_prediction",
-            "projection": "direct",
-            "origin": "canonical",
-            "kind": "data_flow",
-            "relation_path": [
-              "relations.updated_frames_produce_coordinate_prediction"
-            ],
-            "provenance_hops": [
-              {
-                "relation_ref": "relations.updated_frames_produce_coordinate_prediction"
-              }
-            ],
-            "hidden_refs": [
-
-            ],
-            "carries": [
-              "representations.token_coordinates"
-            ],
-            "presentation": {
-              "label": "translations",
-              "connection": {
-                "title": "Coordinate readout",
-                "role": "decoder output",
-                "inside": "After layer eight, the translation component of every active token frame is returned as the denoised coordinate estimate."
-              }
-            }
-          },
-          {
             "id": "projection_e6e037484cef",
             "from": "updated_frames",
             "to": "decoder_frames",
@@ -8337,11 +9518,35 @@ export const manifest = {
               "representations.token_frames"
             ],
             "presentation": {
-              "label": "repeat x8",
+            }
+          },
+          {
+            "id": "projection_d75b76a327c4",
+            "from": "updated_frames",
+            "to": "decoder_output_frames",
+            "projection": "direct",
+            "origin": "canonical",
+            "kind": "state_update",
+            "relation_path": [
+              "relations.updated_frames_become_decoder_output_frames"
+            ],
+            "provenance_hops": [
+              {
+                "relation_ref": "relations.updated_frames_become_decoder_output_frames"
+              }
+            ],
+            "hidden_refs": [
+
+            ],
+            "carries": [
+              "representations.token_frames"
+            ],
+            "presentation": {
+              "label": "after layer 8",
               "connection": {
-                "title": "Frame recurrence",
-                "role": "repeated state",
-                "inside": "Updated frames become the geometric reference for the next of eight structure layers."
+                "title": "Final decoder frames",
+                "role": "decoder output",
+                "inside": "The eighth layer's updated frame state leaves the repeated decoder as the final frame estimate; coordinate readout happens on the parent board."
               }
             }
           }
@@ -8350,9 +9555,9 @@ export const manifest = {
           "modules.frame_update": "visible",
           "modules.invariant_point_attention": "visible",
           "modules.structure_transition": "visible",
-          "value_sites.coordinate_prediction": "visible",
           "value_sites.current_frames": "excluded",
           "value_sites.decoder_frames": "visible",
+          "value_sites.decoder_output_frames": "visible",
           "value_sites.decoder_single_state": "visible",
           "value_sites.feature_bundle": "visible",
           "value_sites.refined_pair_features": "visible",

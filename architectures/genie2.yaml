@@ -319,6 +319,7 @@ representations:
         - source_ref: genie2_sampler_code
           role: implementation_evidence
           locator: BaseSampler._sample
+    glyph: coordinates
   - id: residue_frames
     scale: residue
     semantic_role: derived per-residue rigid frames whose translations are C-alpha coordinates and whose rotations are reconstructed from the trace
@@ -332,6 +333,7 @@ representations:
         - source_ref: genie2_sampler_code
           role: implementation_evidence
           locator: BaseSampler._sample
+    glyph: frames
   - id: timestep
     scale: sample
     semantic_role: current diffusion step
@@ -531,7 +533,8 @@ modules:
     decomposition:
       status: leaf
     label: Sampling Feature Builder
-    kind: input_adapter
+    kind: adapter
+    mechanisms: [task_featurization]
     role: turn a target length or motif PDB specification into residue layout, masks, and optional motif sequence and geometry constraints
     scale: mixed
     evidence: *request_evidence
@@ -540,7 +543,8 @@ modules:
     decomposition:
       status: complete
     label: Genie 2 Reverse Diffusion
-    kind: iterative_sampler
+    kind: sampler
+    mechanisms: [reverse_diffusion, ddpm]
     role: initialize random C-alpha coordinates and run all 1000 denoising and posterior-update steps
     scale: residue
     repeats: 1000
@@ -565,7 +569,8 @@ modules:
     decomposition:
       status: leaf
     label: Gaussian Coordinate Initializer
-    kind: state_initializer
+    kind: sampler
+    mechanisms: [gaussian_initialization]
     role: sample standard-normal C-alpha coordinates with the requested residue count
     scale: residue
     evidence: *sampler_value_evidence
@@ -574,7 +579,8 @@ modules:
     decomposition:
       status: leaf
     label: Reverse Timestep Controller
-    kind: loop_controller
+    kind: controller
+    mechanisms: [timestep_schedule]
     role: enumerate diffusion steps from 1000 down to 1
     scale: sample
     evidence: *sampler_value_evidence
@@ -583,7 +589,8 @@ modules:
     decomposition:
       status: leaf
     label: Frenet Frame Construction
-    kind: geometric_adapter
+    kind: adapter
+    mechanisms: [frenet_frames]
     role: derive residue rotations from the current C-alpha trace and package them with the unchanged x_t translations for the denoiser
     scale: residue
     evidence: *sampler_value_evidence
@@ -606,7 +613,8 @@ modules:
     decomposition:
       status: leaf
     label: Step Noise Sampler
-    kind: stochastic_source
+    kind: sampler
+    mechanisms: [gaussian_noise]
     role: draw fresh Gaussian translation noise for every nonfinal reverse step
     scale: residue
     evidence: *sampler_value_evidence
@@ -615,7 +623,8 @@ modules:
     decomposition:
       status: leaf
     label: DDPM Coordinate Update
-    kind: sampling_formula
+    kind: operator
+    mechanisms: [ddpm]
     role: combine current C-alpha coordinates, predicted noise, schedule coefficients, and fresh noise into the next C-alpha coordinates
     scale: residue
     evidence: *sampler_value_evidence
@@ -624,7 +633,8 @@ modules:
     decomposition:
       status: complete
     label: SE(3)-Invariant Feature Encoder
-    kind: multimodal_encoder
+    kind: encoder
+    mechanisms: [invariant_geometry]
     role: construct and refine residue and residue-pair states from indices, noisy-frame geometry, timestep, and optional motif constraints
     scale: mixed
     evidence: *model_module_evidence
@@ -633,7 +643,8 @@ modules:
     decomposition:
       status: complete
     label: SE(3)-Equivariant Structure Decoder
-    kind: structure_refiner
+    kind: refiner
+    mechanisms: [invariant_point_attention, rigid_transform]
     role: use invariant point attention to update single features and compose learned rigid increments into the noisy residue frames
     scale: residue
     repeats: 8
@@ -648,7 +659,8 @@ modules:
     decomposition:
       status: leaf
     label: Translation Displacement Readout
-    kind: vector_difference
+    kind: operator
+    mechanisms: [vector_difference]
     role: subtract updated translations from the input noisy translations to obtain the predicted diffusion noise
     scale: residue
     evidence: *model_module_evidence
@@ -657,7 +669,7 @@ modules:
     decomposition:
       status: leaf
     label: Single-Feature Network
-    kind: feature_encoder
+    kind: encoder
     role: concatenate residue, chain, timestep, motif-sequence, and mask encodings and project them to 384-dimensional per-residue features
     scale: residue
     evidence:
@@ -671,7 +683,7 @@ modules:
     decomposition:
       status: leaf
     label: Pair-Feature Network
-    kind: feature_encoder
+    kind: encoder
     role: combine the single-feature outer sum, relative positions, noisy-frame distances and orientations, and masked motif distances into 128-dimensional pair features
     scale: pair
     evidence:
@@ -685,7 +697,8 @@ modules:
     decomposition:
       status: complete
     label: Pair Transform Stack
-    kind: pair_refiner
+    kind: refiner
+    mechanisms: [triangular_multiplication]
     role: refine pair features through five residual layers of outgoing and incoming triangular multiplication followed by pair transition
     scale: pair
     repeats: 5
@@ -703,7 +716,8 @@ modules:
     decomposition:
       status: leaf
     label: Triangle Multiplication Outgoing
-    kind: triangular_multiplicative_update
+    kind: operator
+    mechanisms: [triangular_multiplication]
     role: update each pair edge through outgoing two-edge paths and add the row-dropout result residually
     scale: pair
     evidence: &pair_module_evidence
@@ -717,7 +731,8 @@ modules:
     decomposition:
       status: leaf
     label: Triangle Multiplication Incoming
-    kind: triangular_multiplicative_update
+    kind: operator
+    mechanisms: [triangular_multiplication]
     role: update each pair edge through incoming two-edge paths and add the row-dropout result residually
     scale: pair
     evidence: *pair_module_evidence
@@ -735,7 +750,8 @@ modules:
     decomposition:
       status: leaf
     label: Invariant Point Attention
-    kind: geometric_attention
+    kind: attention
+    mechanisms: [invariant_point_attention]
     role: update the single state using single features, pair features, and query/key/value points expressed in current residue frames
     scale: residue
     attention:
@@ -762,7 +778,8 @@ modules:
     decomposition:
       status: leaf
     label: Backbone Frame Update
-    kind: rigid_transform_update
+    kind: operator
+    mechanisms: [rigid_transform]
     role: project each residue state to a six-parameter rigid increment and compose it into the current frame
     scale: residue
     evidence: *structure_module_evidence

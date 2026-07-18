@@ -20,7 +20,7 @@ symbols:
   - id: feature_bundle
     name: features
     type: input
-    shape: "B x N token fields + pair masks"
+    shape: "B x N token metadata + B x N x N pairwise masks"
     architecture_ref: representations.feature_bundle
   - id: current_coordinates
     name: x_t
@@ -118,7 +118,7 @@ lines:
       - source: model_code
         locator: V1Denoiser.forward
   - id: latent_transform
-    text: "append 10 globals; repeat 5: s += PairBiasedAttention(s,z); z += OuterProduct(s); z += TriMulOut(z) + TriMulIn(z); z += PairTransition(z); remove globals"
+    text: "append 10 globals; for i in 0..4: s_(i+1) = SingleUpdate(s_i,z_i); z_outer = z_i + OuterProduct(s_(i+1)); z_tri = z_outer + TriMulOut(z_outer); z_tri += TriMulIn(z_tri); z_(i+1) = z_tri + PairTransition(z_tri); remove globals from s_5 and z_5"
     operation: bidirectional_single_pair_refinement
     inputs: [single_features, pair_features]
     outputs: [single_features, pair_features]

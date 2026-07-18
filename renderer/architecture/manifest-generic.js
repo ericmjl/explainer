@@ -4,7 +4,7 @@ export const manifest = {
     "generator": "architecture-manifest-builder-v0.4.1",
     "inputDigests": {
       "references/bibliography.yaml": "2c238cc39ff866cfb41c1b60c3e7a142df5707d3a9292efb8051aabbd5c8f336",
-      "architectures/generic-feature-refinement.yaml": "45dc5937fdd244243d8cce75f99a8f65067336c7eab029d725dbad2335e4c782",
+      "architectures/generic-feature-refinement.yaml": "fcd92a6f2be8daec21d58a929a33281da81c38fa4e92821312059836fb1065a9",
       "views/generic-semantic-zoom.view.yaml": "2ba5ffea9e7fe359c00888011bd86b1572c3bc6fe9958ef39f3f2f0156c8e999",
       "pseudocode/generic-feature-refinement.yaml": "61fc56702628c377477bb6f25122b8770ec5d10dba3c7f8da9215400e0103086",
       "standard_blocks/pair-biased-attention.yaml": "a816db9cc6b12a80afbc76af81c1ec3cd99b3dd6fdc525070256fd9561f850ff",
@@ -171,7 +171,10 @@ export const manifest = {
           "status": "leaf"
         },
         "label": "Input Adapter",
-        "kind": "feature_adapter",
+        "kind": "adapter",
+        "mechanisms": [
+          "input_featurization"
+        ],
         "role": "embed raw records and build initial item state, conditioning signal, masks, and grouping indices",
         "scale": "item",
         "evidence": {
@@ -191,7 +194,10 @@ export const manifest = {
           "status": "leaf"
         },
         "label": "Context Builder",
-        "kind": "pair_context_builder",
+        "kind": "encoder",
+        "mechanisms": [
+          "pair_context"
+        ],
         "role": "construct pair/context features used later as attention bias",
         "scale": "item_pair",
         "evidence": {
@@ -211,7 +217,11 @@ export const manifest = {
           "status": "complete"
         },
         "label": "Item Encoder",
-        "kind": "attention_stack",
+        "kind": "encoder",
+        "mechanisms": [
+          "attention",
+          "adaptive_normalization"
+        ],
         "role": "update fine-scale item state with local attention and per-item conditioning",
         "scale": "item",
         "repeats": 3,
@@ -237,7 +247,10 @@ export const manifest = {
           "status": "leaf"
         },
         "label": "Per-item AdaLN",
-        "kind": "adaptive_normalization",
+        "kind": "normalization",
+        "mechanisms": [
+          "adaptive_normalization"
+        ],
         "role": "produce shift, scale, and gate for each item update",
         "scale": "item",
         "standard_block_ref": "../../standard_blocks/per-item-adaln-conditioning.yaml",
@@ -258,7 +271,10 @@ export const manifest = {
           "status": "leaf"
         },
         "label": "Local Attention Stack",
-        "kind": "attention_update",
+        "kind": "attention",
+        "mechanisms": [
+          "local_attention"
+        ],
         "role": "apply local attention and feedforward updates to the modulated item stream",
         "scale": "item",
         "attention": {
@@ -289,7 +305,10 @@ export const manifest = {
           "status": "leaf"
         },
         "label": "Item-to-Group Pool",
-        "kind": "scale_transition",
+        "kind": "adapter",
+        "mechanisms": [
+          "pooling"
+        ],
         "role": "compress item states into group states using an ownership index",
         "scale": "group",
         "evidence": {
@@ -309,7 +328,11 @@ export const manifest = {
           "status": "complete"
         },
         "label": "Group Refiner",
-        "kind": "attention_stack",
+        "kind": "refiner",
+        "mechanisms": [
+          "attention",
+          "pair_biased_attention"
+        ],
         "role": "update compressed group state with full attention and pair/context bias",
         "scale": "group",
         "repeats": 6,
@@ -335,7 +358,10 @@ export const manifest = {
           "status": "leaf"
         },
         "label": "Pair-biased Attention",
-        "kind": "attention_update",
+        "kind": "attention",
+        "mechanisms": [
+          "pair_biased_attention"
+        ],
         "role": "update group state with full attention and pair/context logit bias",
         "scale": "group",
         "standard_block_ref": "../../standard_blocks/pair-biased-attention.yaml",
@@ -388,7 +414,7 @@ export const manifest = {
           "status": "leaf"
         },
         "label": "Output Heads",
-        "kind": "prediction_heads",
+        "kind": "prediction_head",
         "role": "project decoded item state to task-specific predictions",
         "scale": "output",
         "evidence": {

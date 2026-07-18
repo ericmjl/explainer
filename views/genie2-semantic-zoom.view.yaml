@@ -56,7 +56,6 @@ boards:
         prominence: secondary
         treatment: compact
         density: compact
-        glyph: matrix
         col: 5
         row: 2
       - id: pdb_exporter
@@ -161,7 +160,6 @@ boards:
         prominence: secondary
         treatment: compact
         density: compact
-        glyph: matrix
         col: 2
         row: 3
       - id: timestep_controller
@@ -236,7 +234,6 @@ boards:
         prominence: secondary
         treatment: compact
         density: compact
-        glyph: matrix
         col: 7
         row: 3
       - id: final_coordinates
@@ -246,7 +243,6 @@ boards:
         prominence: context
         treatment: compact
         density: compact
-        glyph: matrix
         col: 8
         row: 3
     elide:
@@ -398,7 +394,6 @@ boards:
         prominence: secondary
         treatment: compact
         density: compact
-        glyph: volume
         col: 1
         row: 4
       - id: invariant_feature_encoder
@@ -422,7 +417,6 @@ boards:
         prominence: secondary
         treatment: compact
         density: compact
-        glyph: volume
         col: 5
         row: 4
       - id: noise_readout
@@ -556,7 +550,6 @@ boards:
         prominence: secondary
         treatment: compact
         density: compact
-        glyph: volume
         col: 1
         row: 5
       - id: single_feature_net
@@ -572,7 +565,6 @@ boards:
         prominence: secondary
         treatment: compact
         density: compact
-        glyph: matrix
         col: 4
         row: 2
       - id: pair_feature_net
@@ -787,7 +779,6 @@ boards:
         prominence: secondary
         treatment: compact
         density: compact
-        glyph: matrix
         col: 1
         row: 2
       - id: refined_pair_features
@@ -807,7 +798,6 @@ boards:
         prominence: secondary
         treatment: compact
         density: compact
-        glyph: volume
         col: 1
         row: 4
       - id: feature_bundle
@@ -833,7 +823,6 @@ boards:
         prominence: secondary
         treatment: compact
         density: compact
-        glyph: matrix
         col: 4
         row: 3
       - id: structure_transition
@@ -850,7 +839,6 @@ boards:
         prominence: secondary
         treatment: compact
         density: compact
-        glyph: matrix
         col: 6
         row: 3
       - id: backbone_update
@@ -866,7 +854,6 @@ boards:
         prominence: secondary
         treatment: compact
         density: compact
-        glyph: volume
         col: 7
         row: 5
     exclude:

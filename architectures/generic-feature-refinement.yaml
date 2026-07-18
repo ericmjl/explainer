@@ -338,7 +338,8 @@ modules:
     decomposition:
       status: leaf
     label: Input Adapter
-    kind: feature_adapter
+    kind: adapter
+    mechanisms: [input_featurization]
     role: embed raw records and build initial item state, conditioning signal, masks, and grouping indices
     scale: item
     evidence:
@@ -351,7 +352,8 @@ modules:
     decomposition:
       status: leaf
     label: Context Builder
-    kind: pair_context_builder
+    kind: encoder
+    mechanisms: [pair_context]
     role: construct pair/context features used later as attention bias
     scale: item_pair
     evidence:
@@ -364,7 +366,8 @@ modules:
     decomposition:
       status: complete
     label: Item Encoder
-    kind: attention_stack
+    kind: encoder
+    mechanisms: [attention, adaptive_normalization]
     role: update fine-scale item state with local attention and per-item conditioning
     scale: item
     repeats: 3
@@ -382,7 +385,8 @@ modules:
     decomposition:
       status: leaf
     label: Per-item AdaLN
-    kind: adaptive_normalization
+    kind: normalization
+    mechanisms: [adaptive_normalization]
     role: produce shift, scale, and gate for each item update
     scale: item
     standard_block_ref: standard_blocks/per-item-adaln-conditioning.yaml
@@ -396,7 +400,8 @@ modules:
     decomposition:
       status: leaf
     label: Local Attention Stack
-    kind: attention_update
+    kind: attention
+    mechanisms: [local_attention]
     role: apply local attention and feedforward updates to the modulated item stream
     scale: item
     attention:
@@ -418,7 +423,8 @@ modules:
     decomposition:
       status: leaf
     label: Item-to-Group Pool
-    kind: scale_transition
+    kind: adapter
+    mechanisms: [pooling]
     role: compress item states into group states using an ownership index
     scale: group
     evidence:
@@ -431,7 +437,8 @@ modules:
     decomposition:
       status: complete
     label: Group Refiner
-    kind: attention_stack
+    kind: refiner
+    mechanisms: [attention, pair_biased_attention]
     role: update compressed group state with full attention and pair/context bias
     scale: group
     repeats: 6
@@ -449,7 +456,8 @@ modules:
     decomposition:
       status: leaf
     label: Pair-biased Attention
-    kind: attention_update
+    kind: attention
+    mechanisms: [pair_biased_attention]
     role: update group state with full attention and pair/context logit bias
     scale: group
     standard_block_ref: standard_blocks/pair-biased-attention.yaml
@@ -486,7 +494,7 @@ modules:
     decomposition:
       status: leaf
     label: Output Heads
-    kind: prediction_heads
+    kind: prediction_head
     role: project decoded item state to task-specific predictions
     scale: output
     evidence:
