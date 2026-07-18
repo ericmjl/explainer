@@ -1,0 +1,22 @@
+# Draft request: run `prepare` to bind it to current source digests before
+# applying. `show` may preview this draft directly without writing anything.
+schema_version: architecture-edit-v0.1
+id: clarify_timestep_embedder
+target:
+  source_set: dit
+intent: Clarify the timestep embedder and create a canonical drill-down board.
+operations:
+  - op: update_entity
+    ref: modules.timestep_embedder
+    expect:
+      label: Timestep Embedder
+    set:
+      label: Diffusion Timestep Embedder
+  - op: scaffold_board
+    board:
+      id: timestep_embedder_detail
+      title: Diffusion Timestep Embedder
+      summary: Show how the scalar diffusion timestep becomes a conditioning vector.
+      subject_ref: modules.timestep_embedder
+      expansion_depth: 1
+      columns: 4

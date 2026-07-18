@@ -1,0 +1,149 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://explainer.local/schemas/architecture-edit-v0.1.schema.json",
+  "title": "Architecture Edit Plan v0.1",
+  "type": "object",
+  "required": ["schema_version", "id", "target", "intent", "operations"],
+  "properties": {
+    "schema_version": { "const": "architecture-edit-v0.1" },
+    "id": { "$ref": "#/$defs/id" },
+    "target": { "$ref": "#/$defs/target" },
+    "intent": { "$ref": "#/$defs/nonEmptyString" },
+    "operations": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "oneOf": [
+          { "$ref": "#/$defs/addModule" },
+          { "$ref": "#/$defs/addRepresentation" },
+          { "$ref": "#/$defs/addValueSite" },
+          { "$ref": "#/$defs/addRelation" },
+          { "$ref": "#/$defs/updateEntity" },
+          { "$ref": "#/$defs/scaffoldBoard" }
+        ]
+      }
+    }
+  },
+  "additionalProperties": false,
+  "$defs": {
+    "id": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9_]*$"
+    },
+    "nonEmptyString": {
+      "type": "string",
+      "minLength": 1
+    },
+    "sha256": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$"
+    },
+    "moduleRef": {
+      "type": "string",
+      "pattern": "^modules\\.[a-z][a-z0-9_]*$"
+    },
+    "nodeRef": {
+      "type": "string",
+      "pattern": "^(modules|value_sites)\\.[a-z][a-z0-9_]*$"
+    },
+    "entityRef": {
+      "type": "string",
+      "pattern": "^(modules|representations|value_sites|relations)\\.[a-z][a-z0-9_]*$"
+    },
+    "payload": {
+      "type": "object",
+      "additionalProperties": true
+    },
+    "target": {
+      "type": "object",
+      "required": ["source_set"],
+      "properties": {
+        "source_set": { "$ref": "#/$defs/id" },
+        "architecture_sha256": { "$ref": "#/$defs/sha256" },
+        "view_sha256": { "$ref": "#/$defs/sha256" }
+      },
+      "additionalProperties": false
+    },
+    "addModule": {
+      "type": "object",
+      "required": ["op", "module"],
+      "properties": {
+        "op": { "const": "add_module" },
+        "module": { "$ref": "#/$defs/payload" }
+      },
+      "additionalProperties": false
+    },
+    "addRepresentation": {
+      "type": "object",
+      "required": ["op", "representation"],
+      "properties": {
+        "op": { "const": "add_representation" },
+        "representation": { "$ref": "#/$defs/payload" }
+      },
+      "additionalProperties": false
+    },
+    "addValueSite": {
+      "type": "object",
+      "required": ["op", "value_site"],
+      "properties": {
+        "op": { "const": "add_value_site" },
+        "value_site": { "$ref": "#/$defs/payload" }
+      },
+      "additionalProperties": false
+    },
+    "addRelation": {
+      "type": "object",
+      "required": ["op", "relation"],
+      "properties": {
+        "op": { "const": "add_relation" },
+        "relation": { "$ref": "#/$defs/payload" }
+      },
+      "additionalProperties": false
+    },
+    "updateEntity": {
+      "type": "object",
+      "required": ["op", "ref", "set"],
+      "properties": {
+        "op": { "const": "update_entity" },
+        "ref": { "$ref": "#/$defs/entityRef" },
+        "expect": { "$ref": "#/$defs/payload" },
+        "set": { "$ref": "#/$defs/payload" }
+      },
+      "additionalProperties": false
+    },
+    "scaffoldBoardSpec": {
+      "type": "object",
+      "required": ["id", "title", "summary", "subject_ref"],
+      "properties": {
+        "id": { "$ref": "#/$defs/id" },
+        "title": { "$ref": "#/$defs/nonEmptyString" },
+        "summary": { "$ref": "#/$defs/nonEmptyString" },
+        "parent": { "$ref": "#/$defs/id" },
+        "subject_ref": {
+          "oneOf": [
+            { "const": "architecture" },
+            { "$ref": "#/$defs/moduleRef" }
+          ]
+        },
+        "expansion_depth": { "type": "integer", "minimum": 0 },
+        "columns": { "type": "integer", "minimum": 1 },
+        "node_refs": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": { "$ref": "#/$defs/nodeRef" }
+        }
+      },
+      "additionalProperties": false
+    },
+    "scaffoldBoard": {
+      "type": "object",
+      "required": ["op", "board"],
+      "properties": {
+        "op": { "const": "scaffold_board" },
+        "board": { "$ref": "#/$defs/scaffoldBoardSpec" }
+      },
+      "additionalProperties": false
+    }
+  }
+}
