@@ -68,6 +68,11 @@ modules:
     parent_ref: architecture
     decomposition:
       status: leaf
+    label: Pair-Biased Attention
+    kind: attention
+    mechanisms: [pair_biased_attention]
+    role: update group features with pair/context logit bias
+    scale: group
     standard_block_ref: standard_blocks/pair-biased-attention.yaml
     attention:
       pattern: full

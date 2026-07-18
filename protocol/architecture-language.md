@@ -140,6 +140,43 @@ representations:
           locator: relevant_symbol
 ```
 
+`glyph` is an optional reusable visual classification. Prefer it when a
+representation has semantic geometry that shape rank alone cannot identify:
+
+```yaml
+representations:
+  - id: token_coordinates
+    scale: token
+    semantic_role: three-dimensional token positions
+    shape: "B x N x 3"
+    glyph: coordinates
+    carries: [one Euclidean position per token]
+    evidence:
+      status: confirmed_from_code
+      refs:
+        - source_ref: implementation_source
+          role: shape_evidence
+          locator: coordinate_state
+
+  - id: token_frames
+    scale: token
+    semantic_role: oriented local frames with translations
+    shape: "B x N x (3 x 3 + 3)"
+    glyph: frames
+    carries: [one rotation and translation per token]
+    evidence:
+      status: confirmed_from_code
+      refs:
+        - source_ref: implementation_source
+          role: shape_evidence
+          locator: local_frames
+```
+
+Own a reusable classification on the representation instead of repeating it
+on every value-site occurrence. A trailing axis of size three is not enough
+evidence: RGB channels and displacement vectors are not coordinate point
+clouds.
+
 A value site describes one concrete architectural occurrence of that type:
 
 ```yaml
@@ -171,14 +208,28 @@ Split mutable before/after values into distinct sites. Never express a state
 update as an ambiguous self-edge. Task-native inputs and outputs use
 `scope_ref: architecture` and `boundary: input|output`.
 
-`representations` own reusable shape, scale, and meaning. `value_sites` own
-occurrence scope, boundary, and local role. Producers and consumers are
-derived from relations.
+`representations` own reusable shape, scale, meaning, and any semantic glyph.
+`value_sites` own occurrence scope, boundary, and local role. Producers and
+consumers are derived from relations.
 
 ## Modules
 
-Modules are semantic processing units: adapters, stacks, formulas, samplers,
-heads, decoders, or reusable mechanism occurrences.
+Modules are semantic processing units. Their `kind` is one controlled broad
+architectural role:
+
+`adapter`, `attention`, `controller`, `decoder`, `denoiser`, `encoder`,
+`feed_forward`, `normalization`, `operator`, `prediction_head`, `refiner`,
+`residual_update`, `sampler`, or `serializer`.
+
+Use the optional `mechanisms` list for searchable implementation detail such
+as `directional_ddim`, `invariant_point_attention`, or
+`triangular_multiplication`. Do not encode granularity or reuse metadata in
+`kind`: hierarchy and `decomposition` identify containers, `repeats` identifies
+iteration, and `standard_block_ref` identifies reusable block occurrences.
+Discovery should match both fields: an `attention` query finds modules whose
+kind is `attention` and composite modules that list `attention` as a mechanism.
+Prefer reusable mechanism names; keep direction, placement, and other
+occurrence-specific detail in the module label and role.
 
 ```yaml
 modules:
@@ -187,7 +238,8 @@ modules:
     decomposition:
       status: leaf
     label: DDPM Sampling Formula
-    kind: sampling_formula
+    kind: operator
+    mechanisms: [ddpm]
     role: combine the current latent and model prediction into the next latent
     scale: spatial
     evidence:
@@ -198,7 +250,7 @@ modules:
           locator: relevant_symbol
 ```
 
-Optional module fields include `repeats`, `depth`, `attention`,
+Optional module fields include `mechanisms`, `repeats`, `depth`, `attention`,
 `standard_block_ref`, `pseudocode_ref`, and `frozen`. Do not author module
 `inputs` or `outputs`; canonical relations define the interface.
 

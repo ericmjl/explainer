@@ -38,7 +38,7 @@ projected board graph
                          |
                          v
 browser renderer
-  layout + wire geometry + interaction
+  measured tracks + wire geometry + interaction
 ```
 
 The first implementation uses these constraints deliberately:
@@ -60,7 +60,8 @@ The first implementation uses these constraints deliberately:
 | Architecture | Canonical objects, hierarchy, value identity, relations, semantics, evidence and typed citation roles |
 | Board/view | Subject, relative depth, visible occurrences, layout, navigation, elide/exclude choices, presentation overrides |
 | Projector | Visible graph derivation, collapse, contraction, boundary preservation, provenance, validation |
-| Renderer | Node presentation, geometric layout, wire routing, pan/zoom, inspector and navigation interaction |
+| Semantic layout compiler | Optional projected-graph-to-grid placement under a versioned policy |
+| Renderer | Node presentation, measured track sizing, wire routing, pan/zoom, inspector and navigation interaction |
 
 A board may choose whether a relation is visible through its node selection,
 but it may not create or redefine an architectural relation.
@@ -825,7 +826,8 @@ sources contain no `view_only` flow.
 - automatic board-node frontier generation when `nodes` is omitted;
 - arbitrary port-level type checking beyond canonical value sites;
 - automatic semantic aggregation of heterogeneous relation paths;
-- layout generation from architecture hierarchy; and
+- unconstrained hierarchy-only layout that bypasses projected board
+  occurrences (the implemented semantic compiler works after projection); and
 - authored summary relations without explicit refinement provenance.
 
 These are deferred so the first implementation stays deterministic, curated,

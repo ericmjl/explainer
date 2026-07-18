@@ -77,12 +77,24 @@ Use `views/generic-semantic-zoom.view.yaml` as the current reference pattern.
   layout. Avoid hardcoding module positions in renderer JavaScript. An
   experimental ELK layered layout exists behind `?layout=elk` (needs visual
   polish before becoming default).
+- Use the versioned `semantic_flow_v1` compiler for new board scaffolds and
+  reviewed existing-board reflows. It places the compute spine in the middle,
+  ordinary flow left to right, conditioning above its consumers, and
+  loop-carried state below. Treat its output as a deterministic starting
+  layout that remains curatable in view YAML. See
+  `protocol/semantic-layout.md`.
 - Keep the browser renderer as one canonical audience view. Do not add
   query-driven edit, tuning, or alternate UI modes; make durable authoring
   changes in the sources or generic renderer rules and validate them normally.
 - Use `grid.column_sizing: content` when authored columns should define visible
   order/alignment without reserving full-width holes for empty or elided
   columns. Keep the uniform grid when blank ranks intentionally define lanes.
+- Use typed representation lanes only when a board deliberately aligns
+  canonical streams. `representation_refs` must name canonical types, and
+  every visible value-site occurrence of a mapped type must occupy the lane's
+  authored `row`. Edge hue and unambiguous module accents are derived from
+  projected relation `carries`; do not encode single/pair family through
+  `tone` or duplicate it in the view.
 - Every visualization-v0.4 board declares `subject_ref`, relative
   `expansion_depth`, and an exact curated `nodes` list. Nodes bind through a
   typed `ref` (`modules.*` or `value_sites.*`).
@@ -104,10 +116,14 @@ Use `views/generic-semantic-zoom.view.yaml` as the current reference pattern.
   must not form a component with both multiple visible inputs and multiple
   visible outputs. Contracted edges retain their complete ordered relation
   provenance. See `protocol/architecture-projection-model.md`.
-- Representation nodes render as tensor-shaped boxes (scalar/vector/matrix/
-  pair/volume) derived from the representation's `shape`. All ranks place the
-  math symbol above the box; non-scalars place dims inside, and a short
-  human-readable variable name below. Override only via `glyph:` when the
+- Representation nodes render as generic tensor shapes
+  (scalar/vector/single/matrix/pair/volume) or semantic geometry illustrations
+  (`coordinates`/`frames`). Shape inference supplies generic glyphs; canonical
+  representation-level `glyph` owns geometric meaning that rank alone cannot
+  prove. Single-feature tracks, pair features, coordinates, and frames use
+  distinct colors. All ranks place the math symbol above the box; non-scalars
+  place dims inside, and a short human-readable variable name below. Use a
+  view-node override only for an occurrence-specific presentation or when the
   shape parses wrong. See
   `protocol/visualization-language.md`.
 
@@ -142,7 +158,40 @@ editing the scripts. Current sets:
 Shared infrastructure:
 
 - Executable schemas: `schemas/*.schema.json` (strict current architecture,
-  visualization, and bibliography structure shared with future frontends).
+  visualization, bibliography, and architecture-edit structure shared with
+  future frontends).
+- Architecture edit planner: `scripts/architecture_edit.rb` and
+  `protocol/architecture-edit-language.md` (typed source-set operations,
+  semantic prepare/show/apply review, SHA-256 stale-plan protection, and
+  transactional validation).
+- Local architecture review workspace: `scripts/architecture_review.rb`,
+  `lib/architecture_review.rb`, and `review/` (the audience renderer beside a
+  source-aware editor that stages architecture-edit plans; loopback-only and
+  never part of the published static interface).
+- Architecture verifier: `scripts/verify_architecture.rb` and
+  `lib/architecture_verifier.rb` (read-only source-set checks with focused
+  board diagnostics, JSON output, and manifest freshness verification).
+- Semantic layout compiler: `lib/architecture_semantic_layout.rb` (shared by
+  board scaffolding and the reviewed architecture-edit-v0.2 `layout_board`
+  operation) plus `renderer/architecture/semantic-routing.mjs` for measured
+  automatic feedback rails.
+- Edge annotation placement: `renderer/architecture/edge-annotations.mjs`
+  measures each label plus its conditioning badges as one block and chooses a
+  collision-free horizontal or vertical route segment.
+- Static deep-link state: `renderer/architecture/deep-link-state.mjs`
+  reconstructs board breadcrumbs and local node selection from stable URL
+  parameters without persisting transient pan, zoom, or hover state.
+- Orthogonal route geometry: `renderer/architecture/orthogonal-routing.mjs`
+  reserves readable arrow landings and separates parallel rails without
+  consuming endpoint approach segments.
+- Repeat-region contract: `lib/architecture_view_regions.rb` validates typed
+  execution-backed enclosures, while
+  `renderer/architecture/repeat-regions.mjs` measures their generic dashed
+  presentation and replaces selected long recurrence wires with indexed ports.
+- Representation-flow contract: `lib/architecture_view_lanes.rb` validates
+  typed row lanes, while `renderer/architecture/flow-families.mjs` derives
+  single, pair, coordinate, and frame edge/module accents from canonical
+  carried representations.
 - Strict YAML loader: `lib/strict_yaml.rb` (rejects duplicate mapping keys).
 - Source contract validator: `lib/source_contract.rb` plus
   `lib/evidence_contract.rb` (structural and cross-source evidence checks).
@@ -158,6 +207,10 @@ Shared infrastructure:
   guessed percentage).
 - Renderer manifest builder: `renderer/architecture/build-manifest.rb`
   (emits one `manifest-<id>.js` per registry entry plus `manifest-index.js`).
+- Landing directory: `index.html` plus `landing.js` (derives architecture
+  cards from the generated manifests; `directory_role` in
+  `architectures/index.yaml` separates model architectures from language
+  references).
 - Browser renderer: `renderer/architecture/renderer.js` (architecture chosen
   via `?arch=<id>`, default is the first registry entry).
 
@@ -173,7 +226,73 @@ When the user provides architecture knowledge:
 5. If evidence is not known, keep the scaffold but mark details as inferred or
    open.
 6. Regenerate the renderer manifest after YAML/view changes.
-7. Validate syntax and renderer checks before reporting completion.
+7. Run the source-set verifier, then any infrastructure-level regression tests
+   appropriate to the change before reporting completion.
+
+For a bounded multi-fact architecture/view edit, use an
+`architecture-edit-v0.2` plan whenever its supported operations cover the
+change. Legacy `architecture-edit-v0.1` plans remain accepted.
+
+The plan targets a registry `source_set`; prepare it to bind the current
+architecture and view digests, inspect the semantic diff, then apply it:
+
+```bash
+ruby scripts/architecture_edit.rb prepare edits/change.yaml --out /tmp/change.prepared.yaml
+ruby scripts/architecture_edit.rb show /tmp/change.prepared.yaml
+ruby scripts/architecture_edit.rb apply /tmp/change.prepared.yaml
+ruby scripts/verify_architecture.rb --source-set <id>
+```
+
+### Porting a Method Architecture
+
+When the user asks to "port an architecture," first identify both repositories:
+
+- The **method repository** is the codebase being explained. Treat it as
+  read-only evidence, record its local path or Git URL, and pin the inspected
+  revision when citing code.
+- The **explainer repository** is this source-first workspace, where canonical
+  architecture, view, pseudocode, bibliography, and generated manifest files
+  live.
+
+Then distinguish these two cases:
+
+1. **The target source set is already registered.** Inspect the method code,
+   paper, configs, and documentation; translate supported changes into an
+   `architecture-edit-v0.2` draft; run `prepare`, inspect `show`, and use
+   `apply` to commit the validated source and manifest changes. Then run the
+   unscoped source-set verifier before handoff. Preserve code symbols or line
+   ranges as evidence locators, and mark interpretations that are not directly
+   proven as `inferred` or `open_question`.
+2. **The method is not registered yet.** Architecture edit v0.2 cannot ingest
+   an arbitrary repository or create a new source set. Bootstrap its
+   bibliography entry, architecture YAML, root view, pseudocode source, and
+   `architectures/index.yaml` registration through the normal source-first
+   workflow. State explicitly that this onboarding step is outside the current
+   transpiler, and run the unscoped source-set verifier after registration.
+   Once the source set exists, use edit plans for every supported follow-up
+   operation.
+
+For supported operations, an agent or LLM proposes the draft plan; it does not
+bypass the plan by rewriting existing canonical YAML directly. The
+deterministic editor owns reference resolution, source and evidence
+validation, stale-plan checks, board projection, manifest generation, and
+transactional writes. Unsupported edits and new-source-set onboarding still
+use carefully reviewed declarative YAML followed by the full validation
+workflow. See `protocol/architecture-edit-language.md` for the exact boundary.
+
+The mandatory final source-set gate is:
+
+```bash
+ruby scripts/verify_architecture.rb --source-set <id>
+```
+
+Use `--board <board_id>` and optionally `--format json` for focused repair
+diagnostics while authoring. A board-scoped run narrows layout and projection
+checks; it does not replace the final unscoped run. The manifest-freshness
+subcheck is repository-wide, so its diagnostic may identify another registered
+source set. When schemas, validators, projection, manifest compilation, or
+renderer infrastructure changes, also run the repository-wide regression
+suite.
 
 Regenerate with:
 
@@ -193,9 +312,43 @@ ruby -Ilib:test test/bibliography_test.rb
 ruby -Ilib:test test/strict_yaml_test.rb
 ruby -Ilib:test test/source_contract_test.rb
 ruby -Ilib:test test/evidence_contract_test.rb
+ruby -Ilib:test test/architecture_edit_contract_test.rb
+ruby -Ilib:test test/architecture_edit_v2_contract_test.rb
+ruby -Ilib:test test/yaml_source_patch_test.rb
+ruby -Ilib:test test/architecture_view_scaffold_test.rb
+ruby -Ilib:test test/architecture_semantic_layout_test.rb
+ruby -Ilib:test test/architecture_view_lanes_test.rb
+ruby -Ilib:test test/architecture_view_regions_test.rb
+ruby -Ilib:test test/architecture_edit_test.rb
+ruby -Ilib:test test/architecture_edit_v2_test.rb
+ruby -Ilib:test test/architecture_edit_scaffold_test.rb
+ruby -Ilib:test test/architecture_edit_apply_test.rb
+ruby -Ilib:test test/architecture_edit_cli_test.rb
+ruby -Ilib:test test/architecture_verifier_test.rb
+ruby -Ilib:test test/architecture_verifier_cli_test.rb
+ruby -Ilib:test test/architecture_review_test.rb
+ruby -Ilib:test test/renderer_model_test.rb
+ruby -Ilib:test test/renderer_deep_link_chrome_test.rb
+ruby -Ilib:test test/renderer_deep_link_state_test.rb
+ruby -Ilib:test test/renderer_deep_link_integration_test.rb
+ruby -Ilib:test test/renderer_edge_annotations_test.rb
+ruby -Ilib:test test/renderer_flow_family_test.rb
+ruby -Ilib:test test/renderer_orthogonal_routing_test.rb
+ruby -Ilib:test test/renderer_question_context_test.rb
+ruby -Ilib:test test/renderer_representation_glyph_test.rb
+ruby -Ilib:test test/renderer_snappiness_test.rb
+ruby -Ilib:test test/renderer_stacking_test.rb
+ruby -Ilib:test test/renderer_semantic_routing_test.rb
+ruby -Ilib:test test/renderer_repeat_region_test.rb
+ruby -Ilib:test test/renderer_workspace_selection_test.rb
+ruby -Ilib:test test/renderer_workspace_test.rb
+ruby -Ilib:test test/review_audience_location_test.rb
+ruby -Ilib:test test/review_frontend_performance_test.rb
+ruby -Ilib:test test/review_model_test.rb
 ruby -Ilib:test test/manifest_reproducibility_test.rb
 ruby -Ilib:test test/documentation_test.rb
 ruby scripts/lint_sources.rb
+ruby scripts/verify_architecture.rb --source-set <id>
 ruby -c renderer/architecture/build-manifest.rb
 ```
 
@@ -210,6 +363,10 @@ modules — they use `export` and top-level `await`, so `node --check` needs an
   in YAML.
 - Renderer code may define interaction behavior, styling hooks, and generic
   rendering rules.
+- Question handoff packets are disposable projections of manifest facts. Keep
+  their builder generic and preserve typed refs, ordered relation provenance,
+  and evidence certainty; never author separate question-context facts in
+  architecture or view YAML.
 - Renderer code should not be the only place where module order, module names,
   or internal architecture relations are defined.
 - If a visual needs a new concept, add it to the view language first unless it

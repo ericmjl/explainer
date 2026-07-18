@@ -127,6 +127,50 @@ occurrence_bindings:
 The binding selects local occurrences. It does not redefine architecture
 endpoints.
 
+## Repeat Regions
+
+A board may enclose one rendered iteration of a canonical execution loop with
+a typed repeat region:
+
+```yaml
+regions:
+  - id: one_refinement_iteration
+    kind: repeat
+    execution_ref: execution.loops.refinement_loop
+    label: one refinement iteration
+    node_ids:
+      - input_adapter
+      - item_state
+      - item_encoder
+      - group_refiner
+      - output_decoder
+    iteration_relation_refs:
+      - relations.input_adapter_initializes_item_state
+```
+
+`node_ids` are local board occurrence IDs because enclosure membership is
+presentation. `execution_ref` owns the iteration identity and repeat count; the
+view must not copy `x5`, `x8`, or another count into its label. The renderer
+derives that annotation from the referenced loop and measures the member node
+boxes after layout. Authors do not provide region coordinates, padding, dash
+styles, or other raw geometry. An enclosure is painted only after every
+declared member has a measured box; a partial measurement never produces a
+smaller, misleading region.
+
+Every visible occurrence of a module named in the loop's canonical `reruns`
+list must belong to the region. Optional `iteration_relation_refs` identify
+canonical relations that visually explain one iteration; each must project as
+exactly one direct edge whose two local endpoints are region members. They do
+not author new flow. They select existing direct recurrence relations for the
+enclosure to represent instead of drawing long feedback wires; the canonical
+relation and its provenance remain available to inspectors and question
+context.
+
+Region IDs and member IDs are unique. Multiple regions must be disjoint or
+strictly nested; partially overlapping and identical member sets are rejected.
+The only current region kind is `repeat`. Add another typed kind only when it
+has stable semantics rather than using regions as arbitrary drawing layers.
+
 ## Grid and Spacing
 
 `grid.columns` and `grid.rows` define authored ranks. The default grid uses
@@ -141,17 +185,52 @@ alignment without reserving full-width holes. The renderer then:
 - builds content-width tracks with edge-to-edge gutters; and
 - centers or fits the intrinsic graph without stretching internal whitespace.
 
-`grid.min_col` and `grid.col_gap` tune dense boards generically. Module pixel
-positions and architecture-specific ranks must not be hardcoded in renderer
-JavaScript.
+Label-aware gutters start with the authored base gap, run one preliminary
+orthogonal-route pass, and add only the measured text deficit plus a compact
+safety margin. Horizontal room already supplied by node widths, track slack,
+and routing counts toward the requirement, so a small context value does not
+stretch every row. Ordinary edge labels appear when their measured text fits
+the available segment; contracted and conditioning labels remain visible
+because their remaining clearance participates in the bounded second pass.
+Long derived conditioning badges wrap into two balanced lines before they are
+allowed to widen a shared column boundary.
+
+At paint time, an edge label and its conditioning badges form one measured
+annotation block. The renderer tries clear interior route segments first,
+then other horizontal or vertical segments, and rejects positions that touch
+a node or an already placed annotation. Horizontal rails host the block above
+or below; vertical rails host it to either side. This keeps dense fan-outs
+legible without view-specific pixel offsets.
+
+Use `grid.row_sizing: content` only when a board has deliberately aligned
+vertical streams whose dense annotations need measured breathing room. The
+renderer measures the tallest node in every authored row and starts each
+boundary at `grid.row_gap`. For a labeled, same-column edge between adjacent
+rows, only that boundary grows by the remaining height needed for the label
+and its derived conditioning badge plus compact safety padding. Unrelated row
+boundaries retain their authored gap; non-adjacent and unlabelled edges do not
+stretch the board. Typed representation lanes remain bound to their authored
+row when content-sized row tracks are compiled.
+
+`grid.min_col`, `grid.col_gap`, and `grid.row_gap` tune dense boards
+generically. Module pixel positions and architecture-specific ranks must not
+be hardcoded in renderer JavaScript.
+
+New boards and opt-in existing-board reflows use the deterministic
+`semantic_flow_v1` authoring policy in `protocol/semantic-layout.md`. The
+compiler writes ordinary `col`/`row` ranks: primary computation occupies the
+middle band, information flow advances left to right, context values sit above
+the median of their consumers, and loop-carried values sit below. These ranks
+remain editable presentation source; the policy does not override a later
+curated layout.
 
 ELK remains an experimental layout implementation behind `?layout=elk`; it is
 not a separate authoring or audience mode.
 
-## Optional Lane Guides
+## Optional Lanes
 
-The canvas has no default lane ontology. A board may add named horizontal
-guides only when they clarify that architecture:
+The canvas has no default lane ontology. A board may add a plain horizontal
+guide when a lightweight visual landmark clarifies that architecture:
 
 ```yaml
 lanes:
@@ -164,8 +243,49 @@ lanes:
 ```
 
 `position` is a percentage from the top of the drawable region and must be
-between 0 and 100. Omit `lanes` for the normal unbanded canvas. The old
-`scale_lanes` flag is retired because it exposed a hardcoded renderer ontology.
+between 0 and 100.
+
+When a board intentionally aligns canonical representation families into
+rows, use the typed representation variant instead of an ungrounded percentage
+guide:
+
+```yaml
+lanes:
+  - id: single_stream
+    label: single representation
+    kind: representation
+    row: 2
+    representation_refs:
+      - representations.single_features
+    glyph: single
+  - id: pair_stream
+    label: pair representation
+    kind: representation
+    row: 4
+    representation_refs:
+      - representations.pair_features
+    glyph: pair
+```
+
+`row` is an authored grid rank, not a pixel coordinate. Each mapped
+`representations.*` ref must exist, may belong to only one lane, and every
+visible value-site occurrence of that representation sits on the declared
+row. A board may declare at most one lane for each representation-family
+glyph. The current lane glyphs are `single`, `pair`, `coordinates`, and
+`frames`; they reuse the renderer's standard representation colors rather than
+authoring arbitrary color values. A lane that maps neither a visible value
+site nor a carried representation on any projected edge is invalid stale
+presentation.
+
+Representation lanes do not re-author edge semantics. Projected relation
+`carries` remains the source of truth for which matching family flows along an
+edge. The renderer may use that fact for edge hue and for a module's
+unambiguous stream accent, while relation kind/tone continues to determine
+dash semantics such as conditioning or skip flow. Mixed-family flow stays
+visually mixed or neutral rather than being forced into one lane.
+
+Omit `lanes` for the normal unbanded canvas. The old `scale_lanes` flag is
+retired because it exposed a hardcoded renderer ontology.
 
 ## Edges Are Derived
 
@@ -273,14 +393,37 @@ After dropping a leading batch axis, the generic shape heuristic is:
 
 - zero axes: `scalar`;
 - one axis: `vector`;
-- two axes: `matrix`;
+- two axes whose trailing axis is feature-like (for example `N x 384`,
+  `N x d`, or `N x output_fields`): `single`;
+- other two-axis shapes, including an unclassified `N x 3`: `matrix`;
 - three or more axes with equal first two dimensions: `pair`; and
 - other three-or-more-axis shapes: `volume`.
 
-Override parsing only when necessary with
-`glyph: scalar|vector|matrix|pair|volume`. Pseudocode symbols provide preferred
-paper notation through `architecture_ref`; the renderer falls back to the node
-label and representation ID.
+Single-feature tracks use a thin line glyph and the single-representation
+color. Pair features use a square glyph and a separate pair-representation
+color, so `N x d` and `N x N x d_pair` remain visually distinct even when
+both occur at token scale.
+
+Shape rank does not establish geometric meaning. A reusable representation may
+therefore declare one of two semantic geometry glyphs:
+
+- `coordinates`: indexed entities each carry a Euclidean position; the glyph
+  shows unconnected 3D points and a labeled axis triad;
+- `frames`: indexed entities each carry an orientation and translation; the
+  glyph shows repeated local axis triads.
+
+Both retain their exact dimensions inside the illustration and use distinct
+colors. Do not classify RGB channels, logits, noise, or displacement vectors
+as coordinates merely because their shape ends in three.
+
+The full vocabulary is
+`glyph: scalar|vector|single|matrix|pair|volume|coordinates|frames`. Put a
+reusable semantic classification on the canonical architecture
+representation. A view-node override is reserved for a genuinely
+occurrence-specific presentation or a shape that parses incorrectly.
+Pseudocode symbols provide preferred paper notation through
+`architecture_ref`; the renderer falls back to the node label and
+representation ID.
 
 ## Operator Modules
 
@@ -300,7 +443,14 @@ relations.
 The renderer measures placed nodes and routes orthogonal polylines with rounded
 corners. It chooses facing docks, separates shared ports and parallel segments,
 snaps near-aligned neighbors, and searches straight, channel, and detour paths
-that avoid node boxes.
+that avoid node boxes. When two box faces share a clear horizontal or vertical
+corridor, that direct facing-port route is authoritative; the general router
+must not replace it with an outside U-turn.
+
+Cycle-closing `state_update` edges that regress against the left-to-right flow
+are inferred as feedback and allocated to non-overlapping bottom rails.
+Disjoint feedback spans may reuse a rail. Forward state writes stay in the main
+flow, and an explicit route hint always takes precedence over inference.
 
 Tone controls meaning and appearance, not geometry. Most edges require no
 route hints. Use `route_side` and `route_clearance` sparingly for deliberate

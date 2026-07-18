@@ -19,12 +19,17 @@ Source layers:
   attribution, and provenance-graph rules.
 - `protocol/architecture-language.md`: YAML vocabulary for methods, modules,
   representations, attention patterns, relations, claims, and evidence.
+- `protocol/architecture-edit-language.md`: deterministic typed edit plans,
+  semantic diffs, stale-plan protection, and transactional application.
 - `protocol/source-validation.md`: strict YAML parsing, executable schemas,
   semantic checks, and deterministic manifest compilation.
 - `protocol/id-evolution.md`: stable-ID compatibility and atomic refactors.
 - `protocol/architecture-projection-model.md`: current projection contract for
   architecture hierarchy, scoped board projection, automatic edges, elision,
   provenance, and migration.
+- `protocol/semantic-layout.md`: deterministic placement rules for a middle
+  compute spine, top conditioning, left/right task boundaries, and bottom
+  feedback rails.
 - `protocol/fact-ownership.md`: architecture-v0.4 one-owner rules and the
   interfaces derived from canonical relations.
 - `protocol/architecture-coverage.md`: explicit top-down breadth closure,
@@ -74,6 +79,51 @@ and renderer validation commands. The browser is the canonical audience
 experience, not an authoring surface: update YAML or Markdown sources and
 regenerate the manifests instead of editing a board in the page.
 
+For bounded multi-fact edits, the architecture-edit plan language provides a
+safer authoring boundary: a wizard or LLM may propose typed operations, while the
+deterministic editor prepares source digests, shows a semantic diff, and
+applies only a fully validated transaction. The plan never replaces canonical
+YAML. See `protocol/architecture-edit-language.md`.
+The previewable draft in
+`examples/architecture-edits/clarify-timestep-embedder.yaml` exercises both a
+field update and deterministic child-board scaffolding.
+
+Board scaffolding now shares the versioned `semantic_flow_v1` layout compiler.
+To reflow an existing board through the same reviewed boundary, include a
+`layout_board` operation in an architecture-edit-v0.2 plan, then prepare, show,
+and apply it normally. The compiler updates only declarative grid positions;
+the browser measures cards and automatically routes cycle-closing state
+updates through bottom feedback rails.
+
+For human review after a draft exists, run:
+
+```bash
+ruby scripts/architecture_review.rb
+```
+
+The loopback-only review workspace embeds the exact published renderer, lets a
+reviewer stage explanation and board-presentation corrections, and exposes
+Preview/Validate and Apply as separate actions. It submits typed plans to the
+same deterministic compiler; it is not an `?edit` mode and is not part of the
+static audience experience. See `protocol/architecture-review-workspace.md`.
+
+When porting a method, keep the method codebase and this explainer workspace
+distinct. The method repository is read-only evidence; the edit plan targets
+an existing source set registered in `architectures/index.yaml`. The current
+transpiler does not analyze an arbitrary code repository or create a new
+source set. New methods must first be registered through the source-first
+workflow, after which supported follow-up changes should use edit plans.
+
+## Architecture Directory
+
+The repository root is a registry-driven architecture directory. It loads
+`renderer/architecture/manifest-index.js` and the registered manifests, then
+derives each card's family, task modes, root-board summary, topology preview,
+semantic depth, module count, and breadth status. Do not hand-author model
+cards in `index.html`. Register the source set in `architectures/index.yaml`
+and set `directory_role` to `architecture` or `reference`; the generated
+directory will update with the manifests.
+
 ## Current Demo
 
 Path: `renderer/architecture/`
@@ -99,16 +149,35 @@ dropdown or a `?arch=<id>` query parameter:
   DDIM sampling, bidirectional single/pair latent reasoning, and equivariant
   structure decoding.
 
-There is one renderer interface: the audience view. Navigation, location,
-hover explanations, focus details, pan, and zoom all belong to that same
-experience. The former legacy, edit, and tuning UI variants are retired;
-`?arch=` remains the normal way to deep-link to an architecture, while
-`?layout=elk` remains an experimental layout implementation rather than a
-separate interface.
+There is one renderer interface: the audience view. Node hover or keyboard
+focus traces nearby connectivity without duplicating the detail panel; edge
+hover or focus provides a transient connection explanation. Selecting either
+pins its full details in the right inspector. Dragging pans the canvas, while
+a two-finger scroll or mouse wheel zooms around the pointer. Navigation and
+location belong to that same experience. The former legacy, edit, and tuning
+UI variants are retired. Shareable static-site links use stable source, board,
+and optional board-local node IDs, for example
+`?arch=genie3&board=latent_transformer&node=pair_biased_attention_update`.
+The board breadcrumb's **Copy link** button copies the current canonical URL;
+browser Back and Forward restore semantic navigation, while pan, zoom, hover,
+and transient arrow state stay local. `?arch=` by itself still opens an
+architecture's root board, and `?layout=elk` remains an experimental layout
+implementation rather than a separate interface.
+
+Nodes and arrows also expose question handoff actions. Right-click, use the
+keyboard context-menu shortcut, or select an element and open `...` in the
+detail header. `Copy reference` produces a short typed locator;
+`Copy question context` produces a versioned packet with the current board,
+surrounding arrows, canonical relation paths, and evidence for pasting into a
+conversation. This is a local clipboard handoff, not an embedded chat backend.
 
 Conditioning badges on edges (adaLN-Zero, pair bias, per-item AdaLN) are
 derived from the architecture `conditioning` section, never hand-authored in
 views.
+
+Single, pair, coordinate, and frame colors are likewise derived from canonical
+carried representations. Boards may optionally align those families into
+typed rows without re-authoring flow semantics.
 
 All registered demos are compiled through the semantic projector. The generic
 demo models a feature-refinement pipeline:
@@ -132,6 +201,7 @@ After changing YAML/view sources:
 
 ```bash
 ruby renderer/architecture/build-manifest.rb   # regenerates manifest-<id>.js per registry entry
+ruby scripts/verify_architecture.rb --source-set <id>
 ruby renderer/architecture/build-manifest.rb --check
 ruby -Ilib:test test/architecture_projection_test.rb
 ruby -Ilib:test test/architecture_ownership_test.rb
@@ -141,11 +211,48 @@ ruby -Ilib:test test/bibliography_test.rb
 ruby -Ilib:test test/strict_yaml_test.rb
 ruby -Ilib:test test/source_contract_test.rb
 ruby -Ilib:test test/evidence_contract_test.rb
+ruby -Ilib:test test/architecture_edit_contract_test.rb
+ruby -Ilib:test test/yaml_source_patch_test.rb
+ruby -Ilib:test test/architecture_view_scaffold_test.rb
+ruby -Ilib:test test/architecture_edit_test.rb
+ruby -Ilib:test test/architecture_edit_scaffold_test.rb
+ruby -Ilib:test test/architecture_edit_apply_test.rb
+ruby -Ilib:test test/architecture_edit_cli_test.rb
+ruby -Ilib:test test/architecture_verifier_test.rb
+ruby -Ilib:test test/architecture_verifier_cli_test.rb
+ruby -Ilib:test test/renderer_content_grid_test.rb
+ruby -Ilib:test test/renderer_question_context_test.rb
 ruby -Ilib:test test/manifest_reproducibility_test.rb
 ruby -Ilib:test test/documentation_test.rb
 ruby scripts/lint_sources.rb
 ruby -c renderer/architecture/build-manifest.rb
 ```
+
+An architecture edit plan uses an explicit review cycle before the same
+validation pipeline:
+
+```bash
+ruby scripts/architecture_edit.rb prepare edits/change.yaml --out /tmp/change.prepared.yaml
+ruby scripts/architecture_edit.rb show /tmp/change.prepared.yaml
+ruby scripts/architecture_edit.rb apply /tmp/change.prepared.yaml
+```
+
+`apply` requires current SHA-256 digests for both the target architecture and
+view; if either source changed after preparation, the plan is stale and no
+files are written.
+
+The source-set verifier is the concise final gate for an architecture port or
+edit:
+
+```bash
+ruby scripts/verify_architecture.rb --source-set genie3
+ruby scripts/verify_architecture.rb --source-set genie3 \
+  --board reverse_diffusion_step --format json
+```
+
+The second command is for focused repair diagnostics. Rerun without `--board`
+before handoff. Repository-wide tests remain necessary when changing schemas,
+validators, projection, compilation, or renderer infrastructure.
 
 If a JS runtime is available, also syntax-check the ES modules (they use
 `export` and top-level `await`, so check them as modules, e.g. via an `.mjs`

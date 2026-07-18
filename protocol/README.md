@@ -9,11 +9,14 @@ the design in detail.
 | Document | Scope |
 | --- | --- |
 | `architecture-language.md` | architecture-v0.4 source vocabulary |
-| `source-validation.md` | strict parsing, executable schemas, semantic validation, and deterministic compilation |
+| `architecture-edit-language.md` | backwards-compatible architecture-edit-v0.1/v0.2 prepare/show/apply plans |
+| `architecture-review-workspace.md` | loopback-only human review UX over typed edit plans |
+| `source-validation.md` | strict parsing, schemas, semantic checks, source-set verification, and deterministic compilation |
 | `id-evolution.md` | stable-ID compatibility and atomic refactor policy |
 | `fact-ownership.md` | one-owner rules and derived interfaces |
 | `architecture-coverage.md` | top-down decomposition closure and compiled breadth/depth frontiers |
 | `architecture-projection-model.md` | visualization-v0.4 semantic projection and migration behavior |
+| `semantic-layout.md` | deterministic semantic-flow placement and feedback-rail policy |
 | `visualization-language.md` | current board authoring, visibility, layout, and presentation overrides |
 | `bibliography.md` | central source metadata and typed evidence refs |
 | `pseudocode-language.md` | code/algorithm traces linked to architecture refs |
@@ -32,6 +35,12 @@ architecture-v0.4 + visualization-v0.4
 
 Generated manifests are deterministic internal compiler output with input
 digests. YAML and Markdown remain the durable sources.
+
+Architecture edit plans are optional transactional authoring instructions.
+They resolve one registered source set, show a semantic diff, and write
+canonical YAML only after stale-plan and full source validation succeed.
+The local review workspace is a browser client of that same compiler; it is
+not an editable copy of the audience manifest.
 
 ## Proposed Contract
 
