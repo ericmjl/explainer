@@ -350,6 +350,7 @@ registry.fetch("source_sets").each do |config|
   index_entries << {
     "id" => set_id,
     "name" => config["label"] || manifest.dig("architecture", "name"),
+    "role" => config.fetch("directory_role"),
     "file" => "manifest-#{set_id}.js",
   }
 end

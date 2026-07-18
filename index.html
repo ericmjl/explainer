@@ -3,109 +3,105 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Architecture Explainer</title>
+    <title>Architecture Directory</title>
     <link rel="stylesheet" href="./styles.css" />
   </head>
-  <body class="landing-page">
-    <main class="landing-shell">
-      <header class="landing-header">
-        <p class="eyebrow">Source-first architecture notebook</p>
-        <h1>Architecture explainers</h1>
-        <p>
-          A generic design-language prototype for turning YAML architecture
-          sources into semantic-zoom diagrams, focus panels, evidence notes,
-          and reusable standard-block views.
-        </p>
+  <body class="landing-page directory-page">
+    <main class="landing-shell directory-shell">
+      <header class="directory-hero">
+        <div class="directory-hero-copy">
+          <p class="eyebrow">Source-backed model atlas</p>
+          <h1>Architecture directory</h1>
+          <p>
+            Explore how real systems turn task inputs into outputs. Every entry
+            starts at the complete system boundary, then lets you descend into
+            sampling loops, model blocks, conditioning, and update equations.
+          </p>
+        </div>
+        <dl class="directory-summary" aria-label="Directory summary">
+          <div>
+            <dt id="architectureCount">—</dt>
+            <dd>architectures</dd>
+          </div>
+          <div>
+            <dt id="familyCount">—</dt>
+            <dd>model families</dd>
+          </div>
+          <div>
+            <dt>YAML</dt>
+            <dd>source of truth</dd>
+          </div>
+        </dl>
       </header>
 
-      <section class="story-grid" aria-label="Available pages">
-        <a class="story-card is-ready" href="./renderer/architecture/">
-          <span class="story-status">prototype</span>
-          <p class="eyebrow">Generated renderer</p>
-          <h2>Generic Feature Refinement</h2>
-          <p>
-            A neutral end-to-end architecture map generated from architecture,
-            view, pseudocode, and standard-block YAML sources.
-          </p>
-          <span class="story-meta">semantic zoom prototype</span>
-        </a>
+      <section class="directory-section" aria-labelledby="modelDirectoryTitle">
+        <div class="directory-section-heading">
+          <div>
+            <p class="eyebrow">Browse the atlas</p>
+            <h2 id="modelDirectoryTitle">Model architectures</h2>
+            <p>Compare task scope first; open an architecture when its question matches yours.</p>
+          </div>
+          <label class="directory-search">
+            <span>Find an architecture</span>
+            <input id="directorySearch" type="search" placeholder="Search models, tasks, or families" />
+          </label>
+        </div>
 
-        <a class="story-card is-ready" href="./renderer/architecture/?arch=dit">
-          <span class="story-status">prototype</span>
-          <p class="eyebrow">Generated renderer</p>
-          <h2>Diffusion Transformer (DiT)</h2>
-          <p>
-            A real architecture rendered from evidence-graded YAML sources:
-            adaLN-Zero conditioning badges, elided featurization edges, and
-            block-level drilldown.
-          </p>
-          <span class="story-meta">semantic zoom + elision</span>
-        </a>
+        <div class="directory-toolbar">
+          <div id="familyFilters" class="directory-filters" aria-label="Filter by model family"></div>
+          <p id="directoryResultCount" class="directory-result-count" aria-live="polite"></p>
+        </div>
 
-        <a class="story-card is-ready" href="./protocol/architecture-language.md">
-          <span class="story-status">protocol</span>
-          <p class="eyebrow">Architecture language</p>
-          <h2>Architecture DSL</h2>
-          <p>
-            A source-first YAML vocabulary for modules, representations,
-            attention patterns, evidence, and architecture comparisons.
-          </p>
-          <span class="story-meta">protocol source</span>
-        </a>
-
-        <a class="story-card is-ready" href="./protocol/pseudocode-language.md">
-          <span class="story-status">protocol</span>
-          <p class="eyebrow">Pseudocode language</p>
-          <h2>Algorithm Trace DSL</h2>
-          <p>
-            A line-level source format for algorithms, symbols, source
-            references, claims, and visualization hooks.
-          </p>
-          <span class="story-meta">protocol source</span>
-        </a>
-
-        <a class="story-card is-ready" href="./protocol/visualization-language.md">
-          <span class="story-status">protocol</span>
-          <p class="eyebrow">Visualization language</p>
-          <h2>Semantic-Zoom Renderer</h2>
-          <p>
-            A board language for architecture maps, hover peeks, click focus,
-            compact nodes, pseudocode traces, and evidence summaries.
-          </p>
-          <span class="story-meta">renderer source</span>
-        </a>
-
-        <a class="story-card is-ready" href="./standard_blocks/pair-biased-attention.yaml">
-          <span class="story-status">block</span>
-          <p class="eyebrow">Standard block</p>
-          <h2>Pair-Biased Attention</h2>
-          <p>
-            A reusable attention motif: QK logits plus projected pair/context
-            bias, then mask, softmax, and value gathering.
-          </p>
-          <span class="story-meta">canonical block spec</span>
-        </a>
-
-        <a class="story-card is-ready" href="./standard_blocks/per-item-adaln-conditioning.yaml">
-          <span class="story-status">block</span>
-          <p class="eyebrow">Standard block</p>
-          <h2>Per-Item AdaLN</h2>
-          <p>
-            A reusable conditioning motif where each item receives its own
-            adaptive normalization shift, scale, and gate.
-          </p>
-          <span class="story-meta">canonical block spec</span>
-        </a>
-      </section>
-
-      <section class="landing-notes" aria-label="Working pattern">
-        <h2>How this grows</h2>
-        <p>
-          New architecture notes start as source-backed YAML. The renderer
-          should stay generic; domain facts belong in architecture, view,
-          pseudocode, and story sources.
+        <div id="architectureGrid" class="architecture-directory-grid" aria-live="polite">
+          <div class="directory-loading">Loading registered architectures…</div>
+        </div>
+        <p id="directoryEmpty" class="directory-empty" hidden>
+          No registered architecture matches that search.
         </p>
       </section>
+
+      <section class="directory-reference" aria-labelledby="referenceTitle">
+        <div>
+          <p class="eyebrow">Language reference</p>
+          <h2 id="referenceTitle">Understand the diagram grammar</h2>
+          <p>
+            The neutral reference pipeline demonstrates semantic zoom, tensor
+            glyphs, pair conditioning, scale changes, and architecture-derived wiring.
+          </p>
+        </div>
+        <div id="referenceGrid" class="reference-directory-grid"></div>
+      </section>
+
+      <nav class="directory-resources" aria-label="Authoring resources">
+        <div>
+          <p class="eyebrow">Build and inspect</p>
+          <h2>Authoring resources</h2>
+        </div>
+        <a href="./protocol/architecture-language.md">
+          <span>Architecture language</span>
+          <small>Canonical modules, values, relations, and evidence</small>
+        </a>
+        <a href="./protocol/visualization-language.md">
+          <span>Visualization language</span>
+          <small>Boards, semantic zoom, tensor glyphs, and presentation</small>
+        </a>
+        <a href="./protocol/architecture-projection-model.md">
+          <span>Projection model</span>
+          <small>How curated boards derive canonical connections</small>
+        </a>
+        <a href="./architectures/index.yaml">
+          <span>Source registry</span>
+          <small>The directory’s declarative source of truth</small>
+        </a>
+      </nav>
+
+      <noscript>
+        <p class="directory-error">
+          JavaScript is required to build this directory from the registered architecture manifests.
+          You can still open the <a href="./renderer/architecture/">architecture renderer</a>.
+        </p>
+      </noscript>
     </main>
+    <script type="module" src="./landing.js"></script>
   </body>
 </html>
