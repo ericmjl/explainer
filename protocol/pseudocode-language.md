@@ -193,6 +193,14 @@ carry two meanings within one statement, and a write lexeme may occur only
 once. Split a compound or mutable statement when those rules would be
 ambiguous.
 
+A bare assignment must also remain meaningful after symbol typesetting. If
+distinct source lexemes share one display alias, a line such as
+`x_step = x_t` would render as `x_t = x_t`; validation rejects that line as a
+presentation-only handoff. Keep the canonical state-transfer relation in the
+architecture, but begin the audience trace with the first actual operation.
+Repeated notation inside a real expression, such as `x_t = update(x_t)`, is
+not treated as a no-op.
+
 The compiler emits each binding as:
 
 ```yaml

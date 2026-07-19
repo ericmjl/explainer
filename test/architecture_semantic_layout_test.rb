@@ -138,7 +138,7 @@ class ArchitectureSemanticLayoutTest < Minitest::Test
     assert_equal "unknown_endpoint", error.code
   end
 
-  def test_genie3_denoiser_places_context_north_and_internalizes_decoder_recurrence
+  def test_genie3_denoiser_keeps_feature_flow_main_and_internalizes_decoder_recurrence
     result, projection = compile_real_board("genie3", "denoiser_forward")
 
     feedback_refs = result.feedback_edge_indexes.flat_map do |index|
@@ -152,7 +152,7 @@ class ArchitectureSemanticLayoutTest < Minitest::Test
       edge.fetch("relation_path") == ["relations.updated_frames_become_decoder_output_frames"] &&
         edge.fetch("from") == "structure_decoder" && edge.fetch("to") == "updated_frames"
     }
-    assert_equal "context", result.lanes.fetch("feature_bundle")
+    assert_equal "main", result.lanes.fetch("feature_bundle")
     assert_equal "context", result.lanes.fetch("timestep")
     assert_equal "context", result.lanes.fetch("refined_pair_features")
     assert_equal "main", result.lanes.fetch("updated_frames")

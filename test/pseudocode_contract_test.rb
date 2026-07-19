@@ -19,19 +19,37 @@ class PseudocodeContractTest < Minitest::Test
   end
 
   def test_genie3_reverse_step_uses_concrete_coordinate_occurrences
-    enter_step = line("enter_reverse_step")
     derive_frames = line("derive_frames")
     denoiser = line("run_denoiser")
-    enter_sampler = line("prepare_sampler_math")
     read_noise = line("read_noise")
     ddim_step = line("ddim_step")
 
-    assert_equal "relations.current_coordinates_enter_reverse_step", enter_step.fetch("statement_ref")
+    presentation_only_handoffs = %w[enter_reverse_step prepare_sampler_math]
+    refute @program.fetch("lines").any? { |item| presentation_only_handoffs.include?(item.fetch("id")) }
     assert_equal ["step_coordinates"], derive_frames.fetch("inputs") & coordinate_symbol_ids
     assert_empty denoiser.fetch("inputs") & coordinate_symbol_ids
-    assert_equal "relations.step_coordinates_enter_sampler_math", enter_sampler.fetch("statement_ref")
     assert_equal ["sampler_step_coordinates"], read_noise.fetch("inputs") & coordinate_symbol_ids
     assert_equal ["sampler_step_coordinates"], ddim_step.fetch("inputs") & coordinate_symbol_ids
+  end
+
+  def test_rejects_bare_assignment_when_bound_symbols_render_identically
+    program = deep_copy(@program)
+    next_coordinates = program.fetch("symbols").find { |symbol| symbol.fetch("id") == "next_coordinates" }
+    next_coordinates["tex"] = "x_t"
+
+    diagnostics = PseudocodeContract.errors(program, architecture: @architecture)
+    assert_code diagnostics, "rendered_noop_assignment"
+  end
+
+  def test_allows_repeated_notation_inside_a_real_update_expression
+    program = deep_copy(@program)
+    next_coordinates = program.fetch("symbols").find { |symbol| symbol.fetch("id") == "next_coordinates" }
+    next_coordinates["tex"] = "x_t"
+    update = program.fetch("lines").find { |candidate| candidate.fetch("id") == "advance_sampling_state" }
+    update["text"] = "x_t = update(x_next)"
+
+    diagnostics = PseudocodeContract.errors(program, architecture: @architecture)
+    refute diagnostics.any? { |item| item.code == "rendered_noop_assignment" }, diagnostics.join("\n")
   end
 
   def test_v02_symbols_cannot_copy_canonical_shape_facts

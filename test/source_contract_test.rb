@@ -261,6 +261,31 @@ class SourceContractTest < Minitest::Test
     refute occurrence.key?("notation"), "the occurrence should not imply one tensor named F"
   end
 
+  def test_genie3_dictionary_fields_are_not_recast_as_whole_tensor_occurrences
+    architecture = load_yaml("architectures/genie3.yaml")
+    view = load_yaml("views/genie3-semantic-zoom.view.yaml")
+    representations = architecture.fetch("representations").to_h { |item| [item.fetch("id"), item] }
+    structure_board = view.fetch("boards").find { |item| item.fetch("id") == "structure_decoder" }
+    feature_dictionary = structure_board.fetch("nodes").find { |node| node.fetch("id") == "feature_bundle" }
+    frame_mask = structure_board.fetch("nodes").find { |node| node.fetch("id") == "token_structure_frame_mask" }
+    ipa_instance = architecture.fetch("block_instances").find { |item| item.fetch("id") == "structure_ipa" }
+    mask_binding = ipa_instance.fetch("port_bindings").find { |item| item.fetch("port_ref") == "ports.mask" }
+
+    assert_equal "dictionary", representations.fetch("sample_feature_dictionary").fetch("glyph")
+    assert_equal "value_sites.feature_bundle", feature_dictionary.fetch("ref")
+    refute feature_dictionary.key?("glyph")
+    refute feature_dictionary.key?("notation")
+    assert_equal "value_sites.token_structure_frame_mask", frame_mask.fetch("ref")
+    assert_equal "vector", frame_mask.fetch("glyph")
+    assert_equal ["relations.token_structure_frame_mask_masks_ipa"], mask_binding.fetch("relation_refs")
+    refute mask_binding.key?("selector"), "the mask port now binds the selected value directly"
+
+    dictionary_occurrences = view.fetch("boards").flat_map do |board|
+      board.fetch("nodes", []).select { |node| node["ref"] == "value_sites.feature_bundle" }
+    end
+    refute dictionary_occurrences.any? { |node| node["notation"] == "F" }
+  end
+
   def test_rejects_parentheses_as_tex_subscript_grouping
     view = deep_copy(load_yaml("views/genie3-semantic-zoom.view.yaml"))
     view.fetch("boards").first.fetch("nodes").first["notation"] = "x_(t-10)"

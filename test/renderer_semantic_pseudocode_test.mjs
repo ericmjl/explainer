@@ -226,13 +226,11 @@ test("Genie 3 boards select one semantic scope without leaking child statements"
       "finish_sampling_state",
     ],
     reverse_diffusion_step: [
-      "enter_reverse_step",
       "derive_frames",
       "run_denoiser",
       "run_sampler_math",
     ],
     directional_ddim_sampler_math: [
-      "prepare_sampler_math",
       "read_noise",
       "ddim_step",
     ],

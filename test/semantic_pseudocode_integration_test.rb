@@ -48,8 +48,8 @@ class SemanticPseudocodeIntegrationTest < Minitest::Test
   end
 
   def test_reverse_step_preserves_coordinate_occurrence_boundaries
-    entry = line("enter_reverse_step")
-    assert_equal "relations.current_coordinates_enter_reverse_step", entry.fetch("statementRef")
+    presentation_only_handoffs = %w[enter_reverse_step prepare_sampler_math]
+    refute @program.fetch("lines").any? { |item| presentation_only_handoffs.include?(item.fetch("id")) }
 
     derive_frames = read_binding(line("derive_frames"), "step_coordinates")
     assert_equal "value_sites.step_coordinates", derive_frames.fetch("architectureRef")
@@ -62,10 +62,6 @@ class SemanticPseudocodeIntegrationTest < Minitest::Test
     sampler_call = line("run_sampler_math")
     assert_equal "modules.directional_ddim_sampler_math", sampler_call.fetch("statementRef")
     assert_equal "scopes.sampler_math", sampler_call.fetch("calleeScopeRef")
-
-    sampler_entry = line("prepare_sampler_math")
-    assert_equal "scopes.sampler_math", sampler_entry.fetch("scopeRef")
-    assert_equal "relations.step_coordinates_enter_sampler_math", sampler_entry.fetch("statementRef")
 
     %w[read_noise ddim_step].each do |line_id|
       assert_equal "scopes.sampler_math", line(line_id).fetch("scopeRef"), line_id

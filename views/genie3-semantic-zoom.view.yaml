@@ -300,8 +300,7 @@ boards:
     nodes:
     - id: feature_bundle
       ref: value_sites.feature_bundle
-      label: cached task context
-      notation: F
+      label: cached feature dictionary
       prominence: context
       treatment: chip
       density: micro
@@ -618,8 +617,7 @@ boards:
     nodes:
     - id: feature_bundle
       ref: value_sites.feature_bundle
-      label: task features
-      notation: F
+      label: task feature dictionary
       prominence: secondary
       treatment: compact
       density: compact
@@ -969,6 +967,8 @@ boards:
       rows: 5
       column_sizing: content
       col_gap: 32
+      row_sizing: content
+      row_gap: 28
     regions:
       - id: structure_layer_iteration
         kind: repeat
@@ -990,13 +990,21 @@ boards:
     nodes:
       - id: feature_bundle
         ref: value_sites.feature_bundle
+        label: feature dictionary
+        prominence: context
+        treatment: chip
+        density: micro
+        col: 1
+        row: 1
+      - id: token_structure_frame_mask
+        ref: value_sites.token_structure_frame_mask
         label: valid-frame mask
         notation: M
         prominence: context
         treatment: chip
         density: micro
         glyph: vector
-        col: 1
+        col: 2
         row: 1
       - id: decoder_single_state
         ref: value_sites.decoder_single_state
@@ -1089,6 +1097,19 @@ boards:
       - ref: value_sites.refined_single_features
         reason: The explicit decoder single-state site represents the initialized and recurrent structure-layer state.
     edge_overrides:
+      - match: { relation_ref: relations.feature_bundle_exposes_token_structure_frame_mask }
+        label: select mask
+        connection:
+          title: Dictionary field selection
+          role: token-frame validity
+          inside: The structure layer reads token_struct_frame_mask from the cached feature dictionary as one binary value per token.
+      - match: { relation_ref: relations.token_structure_frame_mask_masks_ipa }
+        label: valid frames
+        tone: conditioning
+        connection:
+          title: IPA validity mask
+          role: attention-logit masking
+          inside: Invalid token frames are excluded before IPA normalizes its combined scalar, point-distance, and pair-bias logits.
       - match: { relation_ref: relations.refined_pair_features_bias_ipa }
         label: pair bias
         tone: conditioning
