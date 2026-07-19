@@ -91,84 +91,147 @@ steps:
     inputs: [ports.single_state]
     outputs: [values.scalar_terms]
     code: "q_s, k_s, v_s = project_scalar_qkv(single_state)"
+    code_bindings:
+      - { lexeme: q_s, ref: values.scalar_terms, access: write }
+      - { lexeme: k_s, ref: values.scalar_terms, access: write }
+      - { lexeme: v_s, ref: values.scalar_terms, access: write }
+      - { lexeme: single_state, ref: ports.single_state, access: read }
   - id: project_local_points
     label: Project local Q/K/V points
     operation: point_qkv_projection
     inputs: [ports.single_state]
     outputs: [values.local_points]
-    code: "q_p, k_p, v_p = project_point_qkv(single_state)"
+    code: "q_p_local, k_p_local, v_p_local = project_point_qkv(single_state)"
+    code_bindings:
+      - { lexeme: q_p_local, ref: values.local_points, access: write }
+      - { lexeme: k_p_local, ref: values.local_points, access: write }
+      - { lexeme: v_p_local, ref: values.local_points, access: write }
+      - { lexeme: single_state, ref: ports.single_state, access: read }
   - id: transform_points_to_global
     label: Express points in global frame
     operation: rigid_apply
     inputs: [values.local_points, ports.frames]
     outputs: [values.global_points]
-    code: "q_p, k_p, v_p = frames.apply(q_p, k_p, v_p)"
+    code: "q_p_global, k_p_global, v_p_global = frames.apply(q_p_local, k_p_local, v_p_local)"
+    code_bindings:
+      - { lexeme: q_p_global, ref: values.global_points, access: write }
+      - { lexeme: k_p_global, ref: values.global_points, access: write }
+      - { lexeme: v_p_global, ref: values.global_points, access: write }
+      - { lexeme: frames, ref: ports.frames, access: read }
+      - { lexeme: q_p_local, ref: values.local_points, access: read }
+      - { lexeme: k_p_local, ref: values.local_points, access: read }
+      - { lexeme: v_p_local, ref: values.local_points, access: read }
   - id: scalar_attention_logits
     label: Form scalar logits
     operation: attention_logits
     inputs: [values.scalar_terms]
     outputs: [values.scalar_logits]
     code: "scalar_logits = dot(q_s, k_s) * scalar_scale"
+    code_bindings:
+      - { lexeme: scalar_logits, ref: values.scalar_logits, access: write }
+      - { lexeme: q_s, ref: values.scalar_terms, access: read }
+      - { lexeme: k_s, ref: values.scalar_terms, access: read }
   - id: point_distance_logits
     label: Form point-distance logits
     operation: invariant_point_distance
     inputs: [values.global_points]
     outputs: [values.point_logits]
-    code: "point_logits = -0.5 * point_weight * squared_distance(q_p, k_p)"
+    code: "point_logits = -0.5 * point_weight * squared_distance(q_p_global, k_p_global)"
+    code_bindings:
+      - { lexeme: point_logits, ref: values.point_logits, access: write }
+      - { lexeme: q_p_global, ref: values.global_points, access: read }
+      - { lexeme: k_p_global, ref: values.global_points, access: read }
   - id: project_pair_bias
     label: Project pair bias
     operation: pair_bias_projection
     inputs: [ports.pair_context]
     outputs: [values.pair_bias]
     code: "pair_bias = linear_b(pair_context)"
+    code_bindings:
+      - { lexeme: pair_bias, ref: values.pair_bias, access: write }
+      - { lexeme: pair_context, ref: ports.pair_context, access: read }
   - id: combine_and_mask_logits
     label: Combine logits and apply mask
     operation: ipa_logit_composition
     inputs: [values.scalar_logits, values.point_logits, values.pair_bias, ports.mask]
     outputs: [values.combined_logits]
-    code: "combined_logits = mask(scalar_logits + point_logits + pair_bias)"
+    code: "combined_logits = apply_mask(scalar_logits + point_logits + pair_bias, mask)"
+    code_bindings:
+      - { lexeme: combined_logits, ref: values.combined_logits, access: write }
+      - { lexeme: scalar_logits, ref: values.scalar_logits, access: read }
+      - { lexeme: point_logits, ref: values.point_logits, access: read }
+      - { lexeme: pair_bias, ref: values.pair_bias, access: read }
+      - { lexeme: mask, ref: ports.mask, access: read }
   - id: softmax_attention
     label: Normalize over keys
     operation: softmax
     inputs: [values.combined_logits]
     outputs: [values.attention_weights]
-    code: "attention = softmax(attention_logits, dim=keys)"
+    code: "attention = softmax(combined_logits, dim=keys)"
+    code_bindings:
+      - { lexeme: attention, ref: values.attention_weights, access: write }
+      - { lexeme: combined_logits, ref: values.combined_logits, access: read }
   - id: aggregate_scalar_values
     label: Aggregate scalar values
     operation: weighted_sum
     inputs: [values.attention_weights, values.scalar_terms]
     outputs: [values.scalar_context]
     code: "scalar_context = weighted_sum(attention, v_s)"
+    code_bindings:
+      - { lexeme: scalar_context, ref: values.scalar_context, access: write }
+      - { lexeme: attention, ref: values.attention_weights, access: read }
+      - { lexeme: v_s, ref: values.scalar_terms, access: read }
   - id: aggregate_global_points
     label: Aggregate value points
     operation: weighted_point_sum
     inputs: [values.attention_weights, values.global_points]
     outputs: [values.global_point_context]
     code: "global_point_context = weighted_sum(attention, v_p_global)"
+    code_bindings:
+      - { lexeme: global_point_context, ref: values.global_point_context, access: write }
+      - { lexeme: attention, ref: values.attention_weights, access: read }
+      - { lexeme: v_p_global, ref: values.global_points, access: read }
   - id: return_points_to_local_frame
     label: Return points to query frame
     operation: rigid_inverse_apply
     inputs: [values.global_point_context, ports.frames]
     outputs: [values.local_point_context]
-    code: "local_point_context = concat(frames.invert_apply(global_points), point_norms)"
+    code: "local_point_context = concat(frames.invert_apply(global_point_context), point_norms(global_point_context))"
+    code_bindings:
+      - { lexeme: local_point_context, ref: values.local_point_context, access: write }
+      - { lexeme: frames, ref: ports.frames, access: read }
+      - { lexeme: global_point_context, ref: values.global_point_context, access: read }
   - id: aggregate_pair_values
     label: Aggregate pair values
     operation: pair_value_aggregation
     inputs: [values.attention_weights, ports.pair_context]
     outputs: [values.pair_value_context]
     code: "pair_value_context = weighted_sum(attention, pair_context)"
+    code_bindings:
+      - { lexeme: pair_value_context, ref: values.pair_value_context, access: write }
+      - { lexeme: attention, ref: values.attention_weights, access: read }
+      - { lexeme: pair_context, ref: ports.pair_context, access: read }
   - id: project_ipa_delta
     label: Fuse IPA outputs
     operation: output_projection
     inputs: [values.scalar_context, values.local_point_context, values.pair_value_context]
     outputs: [values.ipa_delta]
-    code: "ipa_delta = output_projection(concat(scalar_context, local_points, pair_values))"
+    code: "ipa_delta = output_projection(concat(scalar_context, local_point_context, pair_value_context))"
+    code_bindings:
+      - { lexeme: ipa_delta, ref: values.ipa_delta, access: write }
+      - { lexeme: scalar_context, ref: values.scalar_context, access: read }
+      - { lexeme: local_point_context, ref: values.local_point_context, access: read }
+      - { lexeme: pair_value_context, ref: values.pair_value_context, access: read }
   - id: residual_norm
     label: Residual, dropout, and norm
     operation: residual_normalization
     inputs: [ports.single_state, values.ipa_delta]
     outputs: [ports.updated_single_state]
     code: "updated_single_state = layer_norm(single_state + dropout(ipa_delta))"
+    code_bindings:
+      - { lexeme: updated_single_state, ref: ports.updated_single_state, access: write }
+      - { lexeme: single_state, ref: ports.single_state, access: read }
+      - { lexeme: ipa_delta, ref: values.ipa_delta, access: read }
 visual_template:
   grid:
     columns: 12

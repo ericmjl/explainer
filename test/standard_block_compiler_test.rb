@@ -98,6 +98,64 @@ class StandardBlockCompilerTest < Minitest::Test
       "value extraction should follow the shared attention-weight hinge"
   end
 
+  def test_ipa_semantic_code_bindings_compile_to_template_and_instance_facts
+    path = "standard_blocks/invariant-point-attention.yaml"
+    architecture = load_yaml("architectures/genie2.yaml")
+    instance = catalog_for(path).compile_instances(
+      architecture,
+      registered_blocks: [path],
+    ).find { |candidate| candidate.fetch("id") == "structure_ipa" }
+
+    assert instance.fetch("pseudocode").all? { |step| !step.fetch("codeBindings").empty? }
+    softmax = instance.fetch("pseudocode").find { |step| step.fetch("id") == "softmax_attention" }
+    attention = softmax.fetch("codeBindings").find { |binding| binding.fetch("lexeme") == "attention" }
+    assert_equal "write", attention.fetch("access")
+    assert_equal "values.attention_weights", attention.fetch("localRef")
+    assert_equal "standard_blocks.invariant_point_attention.values.attention_weights",
+      attention.fetch("templateFactRef")
+    assert_equal "block_instances.structure_ipa.values.attention_weights",
+      attention.fetch("instanceFactRef")
+    occurrence = attention.fetch("occurrences").fetch(0)
+    assert_equal "attention", softmax.fetch("code")[occurrence.fetch("start")...occurrence.fetch("end")]
+
+    localize = instance.fetch("pseudocode").find do |step|
+      step.fetch("id") == "return_points_to_local_frame"
+    end
+    repeated = localize.fetch("codeBindings").find do |binding|
+      binding.fetch("lexeme") == "global_point_context"
+    end
+    assert_equal 2, repeated.fetch("occurrences").length
+
+    visible_fact_refs = instance.dig("scene", "nodes").map { |node| node.fetch("instance_fact_ref") }.to_set
+    compiled_binding_refs = instance.fetch("pseudocode").flat_map do |step|
+      step.fetch("codeBindings").map { |binding| binding.fetch("instanceFactRef") }
+    end
+    assert_empty compiled_binding_refs.to_set - visible_fact_refs
+  end
+
+  def test_variant_filtering_does_not_emit_inactive_semantic_code_bindings
+    path = "standard_blocks/invariant-point-attention.yaml"
+    block = load_yaml(path)
+    block.fetch("variants") << {
+      "id" => "scalar_projection_only",
+      "label" => "Scalar projection only",
+      "description" => "Test-only variant containing one active semantic step.",
+      "step_refs" => ["steps.project_scalar_terms"],
+    }
+    architecture = load_yaml("architectures/genie2.yaml")
+    architecture.fetch("block_instances").find do |candidate|
+      candidate.fetch("id") == "structure_ipa"
+    end["variant"] = "scalar_projection_only"
+    instance = StandardBlockCompiler::Catalog.new(blocks_by_path: { path => block }).compile_instances(
+      architecture,
+      registered_blocks: [path],
+    ).find { |candidate| candidate.fetch("id") == "structure_ipa" }
+
+    assert_equal ["project_scalar_terms"], instance.fetch("pseudocode").map { |step| step.fetch("id") }
+    assert_equal %w[k_s q_s single_state v_s],
+      instance.dig("pseudocode", 0, "codeBindings").map { |binding| binding.fetch("lexeme") }.sort
+  end
+
   private
 
   def catalog_for(*paths)

@@ -76,6 +76,7 @@ class DocumentationTest < Minitest::Test
       architecture-comparison-v0.1.schema.json
       comparison-registry-v0.1.schema.json
       standard-block-v0.2.schema.json
+      pseudocode-v0.2.schema.json
     ].each do |name|
       schema = JsonSchemaSubset.load(File.join(ROOT, "schemas", name))
       assert_equal "https://json-schema.org/draft/2020-12/schema", schema.fetch("$schema"), name

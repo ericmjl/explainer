@@ -1,7 +1,7 @@
 export const manifest = {
   "schemaVersion": "architecture-manifest-v0.4",
   "build": {
-    "generator": "architecture-manifest-builder-v0.4.2",
+    "generator": "architecture-manifest-builder-v0.4.5",
     "inputDigests": {
       "references/bibliography.yaml": "8ddccafa8ac6452643f652d69730c06644298c00bde10cbcca4a9f557a8f95c7",
       "architectures/diffusion-transformer.yaml": "5d7c09d2a97999cd526241976db9881acc2499d98abbe3624520562a53510aad",
@@ -3939,7 +3939,10 @@ export const manifest = {
   },
   "pseudocode": {
     "diffusion_transformer": {
-      "sourceYaml": "../../pseudocode/diffusion-transformer.yaml",
+      "schemaVersion": "pseudocode-v0.1",
+      "compilerVersion": "semantic-pseudocode-compiler-v0.3",
+      "id": "diffusion_transformer",
+      "title": "DiT Forward Pass Trace",
       "sources": [
         {
           "id": "dit_paper",
@@ -3950,83 +3953,142 @@ export const manifest = {
           "source_ref": "dit_models_code"
         }
       ],
+      "scopes": [
+
+      ],
       "symbols": [
         {
           "id": "initial_noise",
           "name": "x_T",
           "tex": "x_T",
+          "type": "input",
+          "shape": "B x 4 x I x I (I = image_size / 8)",
+          "representationRef": "representations.initial_noise",
+          "scale": "spatial",
           "architectureRef": "representations.initial_noise"
         },
         {
           "id": "step_noise",
           "name": "xi",
           "tex": "\\xi",
+          "type": "input",
+          "shape": "B x 4 x I x I",
+          "representationRef": "representations.step_noise",
+          "scale": "spatial",
           "architectureRef": "representations.step_noise"
         },
         {
           "id": "input_latent",
           "name": "x",
+          "type": "input",
+          "shape": "B x 4 x I x I (I = 32 for 256^2 images)",
+          "representationRef": "representations.input_latent",
+          "scale": "spatial",
           "architectureRef": "representations.input_latent"
         },
         {
           "id": "final_latent",
           "name": "x_0",
           "tex": "x_0",
+          "type": "output",
+          "shape": "B x 4 x I x I",
+          "representationRef": "representations.final_latent",
+          "scale": "spatial",
           "architectureRef": "representations.final_latent"
         },
         {
           "id": "vae_decode_latent",
           "name": "z_vae",
           "tex": "z_{\\mathrm{vae}}",
+          "type": "representation",
+          "shape": "B x 4 x I x I",
+          "representationRef": "representations.vae_decode_latent",
+          "scale": "spatial",
           "architectureRef": "representations.vae_decode_latent"
         },
         {
           "id": "generated_image",
           "name": "x_hat",
           "tex": "\\hat{x}",
+          "type": "output",
+          "shape": "B x 3 x H x W, H = W = 8I",
+          "representationRef": "representations.generated_image",
+          "scale": "output",
           "architectureRef": "representations.generated_image"
         },
         {
           "id": "timestep",
           "name": "t",
+          "type": "input",
+          "shape": "B",
+          "representationRef": "representations.timestep",
+          "scale": "sample",
           "architectureRef": "representations.timestep"
         },
         {
           "id": "class_label",
           "name": "y",
+          "type": "input",
+          "shape": "B",
+          "representationRef": "representations.class_label",
+          "scale": "sample",
           "architectureRef": "representations.class_label"
         },
         {
           "id": "t_embedding",
           "name": "t_emb",
           "tex": "t_{\\mathrm{emb}}",
+          "type": "representation",
+          "shape": "B x d",
+          "representationRef": "representations.t_embedding",
+          "scale": "sample",
           "architectureRef": "representations.t_embedding"
         },
         {
           "id": "y_embedding",
           "name": "y_emb",
           "tex": "y_{\\mathrm{emb}}",
+          "type": "representation",
+          "shape": "B x d",
+          "representationRef": "representations.y_embedding",
+          "scale": "sample",
           "architectureRef": "representations.y_embedding"
         },
         {
           "id": "cond_vector",
           "name": "c",
+          "type": "representation",
+          "shape": "B x d",
+          "representationRef": "representations.cond_vector",
+          "scale": "sample",
           "architectureRef": "representations.cond_vector"
         },
         {
           "id": "token_state",
           "name": "h",
+          "type": "representation",
+          "shape": "B x T x d, T = (I/p)^2",
+          "representationRef": "representations.token_state",
+          "scale": "token",
           "architectureRef": "representations.token_state"
         },
         {
           "id": "output_tokens",
           "name": "u",
+          "type": "representation",
+          "shape": "B x T x (p * p * C_out), C_out = 2C if learn_sigma else C",
+          "representationRef": "representations.output_tokens",
+          "scale": "token",
           "architectureRef": "representations.output_tokens"
         },
         {
           "id": "noise_prediction",
           "name": "ε, v",
           "tex": "\\varepsilon_\\theta, v_\\theta",
+          "type": "output",
+          "shape": "B x C_out x I x I, C_out = 2C if learn_sigma else C",
+          "representationRef": "representations.noise_prediction",
+          "scale": "spatial",
           "architectureRef": "representations.noise_prediction"
         }
       ],
@@ -4035,6 +4097,12 @@ export const manifest = {
           "id": "patchify_tokens",
           "text": "h = PatchEmbed(x) + pos_embed  # fixed 2D sin-cos",
           "refs": "DiT.forward",
+          "sourceRefs": [
+            {
+              "source": "dit_code",
+              "locator": "DiT.forward"
+            }
+          ],
           "architectureRefs": [
             "modules.patchify"
           ],
@@ -4050,6 +4118,12 @@ export const manifest = {
           "id": "embed_timestep",
           "text": "t_emb = MLP(SinCosEmbed_256(t))",
           "refs": "TimestepEmbedder",
+          "sourceRefs": [
+            {
+              "source": "dit_code",
+              "locator": "TimestepEmbedder"
+            }
+          ],
           "architectureRefs": [
             "modules.timestep_embedder"
           ],
@@ -4065,6 +4139,12 @@ export const manifest = {
           "id": "embed_label",
           "text": "y_emb = Embedding(maybe_drop_to_null(y))  # training-only dropout; CFG supplies null labels at inference",
           "refs": "LabelEmbedder",
+          "sourceRefs": [
+            {
+              "source": "dit_code",
+              "locator": "LabelEmbedder"
+            }
+          ],
           "architectureRefs": [
             "modules.label_embedder"
           ],
@@ -4080,6 +4160,12 @@ export const manifest = {
           "id": "combine_conditioning",
           "text": "c = t_emb + y_emb",
           "refs": "DiT.forward",
+          "sourceRefs": [
+            {
+              "source": "dit_code",
+              "locator": "DiT.forward"
+            }
+          ],
           "architectureRefs": [
             "modules.cond_combiner",
             "claims.conditioning_is_per_sample"
@@ -4097,6 +4183,12 @@ export const manifest = {
           "id": "run_blocks",
           "text": "for block in blocks: h = DiTBlock(h, c)  # adaLN-Zero, 28 blocks in DiT-XL",
           "refs": "DiTBlock",
+          "sourceRefs": [
+            {
+              "source": "dit_code",
+              "locator": "DiTBlock"
+            }
+          ],
           "architectureRefs": [
             "modules.dit_blocks",
             "claims.adaln_zero_beats_alternatives"
@@ -4122,6 +4214,12 @@ export const manifest = {
           "id": "decode_tokens",
           "text": "shift, scale = Linear(SiLU(c)); u = Linear((1 + scale) * LayerNorm(h) + shift)",
           "refs": "FinalLayer",
+          "sourceRefs": [
+            {
+              "source": "dit_code",
+              "locator": "FinalLayer"
+            }
+          ],
           "architectureRefs": [
             "modules.final_layer"
           ],
@@ -4138,6 +4236,12 @@ export const manifest = {
           "id": "unpatchify_output",
           "text": "out = Unpatchify(u); eps, var_values = split(out) if learn_sigma else (out, None)",
           "refs": "DiT.unpatchify",
+          "sourceRefs": [
+            {
+              "source": "dit_code",
+              "locator": "DiT.unpatchify"
+            }
+          ],
           "architectureRefs": [
             "modules.unpatchify"
           ],
@@ -4170,7 +4274,8 @@ export const manifest = {
             ]
           }
         }
-      ]
+      ],
+      "sourceYaml": "../../pseudocode/diffusion-transformer.yaml"
     }
   },
   "boards": {

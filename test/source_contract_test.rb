@@ -21,6 +21,7 @@ class SourceContractTest < Minitest::Test
       architectures/generic-feature-refinement.yaml
       views/dit-semantic-zoom.view.yaml
       views/generic-semantic-zoom.view.yaml
+      pseudocode/genie3.yaml
       standard_blocks/pair-biased-attention.yaml
       standard_blocks/invariant-point-attention.yaml
     ]
@@ -188,6 +189,17 @@ class SourceContractTest < Minitest::Test
     view.fetch("boards").first.fetch("nodes").first["glyph"] = "rigid_transform"
     assert_diagnostic SourceContract.errors(architecture), "schema_enum", /representations\[2\].glyph/
     assert_diagnostic SourceContract.errors(view), "schema_enum", /boards\[0\].nodes\[0\].glyph/
+  end
+
+  def test_rejects_parentheses_as_tex_subscript_grouping
+    view = deep_copy(load_yaml("views/genie3-semantic-zoom.view.yaml"))
+    view.fetch("boards").first.fetch("nodes").first["notation"] = "x_(t-10)"
+
+    assert_diagnostic(
+      SourceContract.errors(view),
+      "schema_pattern",
+      /boards\[0\]\.nodes\[0\]\.notation/,
+    )
   end
 
   def test_architecture_and_view_schemas_share_the_representation_glyph_vocabulary

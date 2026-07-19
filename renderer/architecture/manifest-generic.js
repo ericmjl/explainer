@@ -1,7 +1,7 @@
 export const manifest = {
   "schemaVersion": "architecture-manifest-v0.4",
   "build": {
-    "generator": "architecture-manifest-builder-v0.4.2",
+    "generator": "architecture-manifest-builder-v0.4.5",
     "inputDigests": {
       "references/bibliography.yaml": "8ddccafa8ac6452643f652d69730c06644298c00bde10cbcca4a9f557a8f95c7",
       "architectures/generic-feature-refinement.yaml": "60b45e458ee2037560fc3011507148f3f236d19d8957b9d1826fa7b5a2e0cc0e",
@@ -3030,47 +3030,81 @@ export const manifest = {
   },
   "pseudocode": {
     "generic_feature_refinement": {
-      "sourceYaml": "../../pseudocode/generic-feature-refinement.yaml",
+      "schemaVersion": "pseudocode-v0.1",
+      "compilerVersion": "semantic-pseudocode-compiler-v0.3",
+      "id": "generic_feature_refinement",
+      "title": "Generic Feature Refinement Trace",
       "sources": [
         {
           "id": "demo_source",
           "source_ref": "generic_feature_refinement_source"
         }
       ],
+      "scopes": [
+
+      ],
       "symbols": [
         {
           "id": "raw_records",
           "name": "raw_records",
+          "type": "input",
+          "shape": "B x N_item x input_fields",
+          "representationRef": "representations.raw_records",
+          "scale": "item",
           "architectureRef": "representations.raw_records"
         },
         {
           "id": "item_state",
           "name": "x",
+          "type": "representation",
+          "shape": "B x N_item x d_item",
+          "representationRef": "representations.item_state",
+          "scale": "item",
           "architectureRef": "representations.item_state"
         },
         {
           "id": "conditioning_signal",
           "name": "s",
+          "type": "representation",
+          "shape": "B x N_item x d_cond",
+          "representationRef": "representations.conditioning_signal",
+          "scale": "item",
           "architectureRef": "representations.conditioning_signal"
         },
         {
           "id": "pair_context",
           "name": "c",
+          "type": "representation",
+          "shape": "B x N_group x N_group x d_pair",
+          "representationRef": "representations.pair_context",
+          "scale": "item_pair",
           "architectureRef": "representations.pair_context"
         },
         {
           "id": "group_state",
           "name": "g",
+          "type": "representation",
+          "shape": "B x N_group x d_group",
+          "representationRef": "representations.group_state",
+          "scale": "group",
           "architectureRef": "representations.group_state"
         },
         {
           "id": "item_output_state",
           "name": "o",
+          "type": "representation",
+          "shape": "B x N_item x d_out",
+          "representationRef": "representations.item_output_state",
+          "scale": "item",
           "architectureRef": "representations.item_output_state"
         },
         {
           "id": "predictions",
           "name": "y",
+          "type": "output",
+          "shape": "B x N_item x output_fields",
+          "representationRef": "representations.predictions",
+          "scale": "output",
           "architectureRef": "representations.predictions"
         }
       ],
@@ -3079,6 +3113,12 @@ export const manifest = {
           "id": "adapt_inputs",
           "text": "x, s, item_to_group = InputAdapter(raw_records)",
           "refs": "input_adapter",
+          "sourceRefs": [
+            {
+              "source": "demo_source",
+              "locator": "input_adapter"
+            }
+          ],
           "architectureRefs": [
             "modules.input_adapter"
           ],
@@ -3095,6 +3135,12 @@ export const manifest = {
           "id": "build_context",
           "text": "c = ContextBuilder(x, item_to_group)",
           "refs": "context_builder",
+          "sourceRefs": [
+            {
+              "source": "demo_source",
+              "locator": "context_builder"
+            }
+          ],
           "architectureRefs": [
             "modules.context_builder",
             "representations.pair_context"
@@ -3111,6 +3157,12 @@ export const manifest = {
           "id": "item_adaln",
           "text": "x = ItemEncoder(x, cond=s)",
           "refs": "item_encoder",
+          "sourceRefs": [
+            {
+              "source": "demo_source",
+              "locator": "item_encoder"
+            }
+          ],
           "architectureRefs": [
             "modules.item_encoder"
           ],
@@ -3135,6 +3187,12 @@ export const manifest = {
           "id": "pool_groups",
           "text": "g = scatter_mean(Project(x), item_to_group)",
           "refs": "item_to_group_pool",
+          "sourceRefs": [
+            {
+              "source": "demo_source",
+              "locator": "item_to_group_pool"
+            }
+          ],
           "architectureRefs": [
             "modules.item_to_group_pool",
             "representations.group_state"
@@ -3151,6 +3209,12 @@ export const manifest = {
           "id": "pair_bias_refine",
           "text": "g = GroupRefiner(g, pair_bias=Linear(LayerNorm(c)))",
           "refs": "group_refiner",
+          "sourceRefs": [
+            {
+              "source": "demo_source",
+              "locator": "group_refiner"
+            }
+          ],
           "architectureRefs": [
             "modules.group_refiner",
             "claims.context_bias_is_read_only"
@@ -3169,6 +3233,12 @@ export const manifest = {
           "id": "broadcast_groups",
           "text": "o = OutputDecoder(gather(g, item_to_group), skip=x)",
           "refs": "output_decoder",
+          "sourceRefs": [
+            {
+              "source": "demo_source",
+              "locator": "output_decoder"
+            }
+          ],
           "architectureRefs": [
             "modules.output_decoder",
             "claims.compression_is_explicit"
@@ -3186,6 +3256,12 @@ export const manifest = {
           "id": "predict",
           "text": "y = OutputHeads(o)",
           "refs": "output_heads",
+          "sourceRefs": [
+            {
+              "source": "demo_source",
+              "locator": "output_heads"
+            }
+          ],
           "architectureRefs": [
             "modules.output_heads"
           ],
@@ -3232,7 +3308,8 @@ export const manifest = {
             ]
           }
         }
-      ]
+      ],
+      "sourceYaml": "../../pseudocode/generic-feature-refinement.yaml"
     }
   },
   "boards": {

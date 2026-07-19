@@ -133,6 +133,36 @@ class StandardBlockContractTest < Minitest::Test
     assert_code diagnostics, "overlapping_visual_segments"
   end
 
+  def test_semantic_code_bindings_validate_lexemes_access_and_complete_step_interface
+    block = load_yaml("standard_blocks/invariant-point-attention.yaml")
+    step = block.fetch("steps").find { |candidate| candidate.fetch("id") == "softmax_attention" }
+    write_binding, read_binding = step.fetch("code_bindings")
+    write_binding["lexeme"] = "not_in_the_statement"
+    read_binding["access"] = "write"
+
+    diagnostics = StandardBlockContract.definition_errors(block)
+    assert_code diagnostics, "missing_code_binding_lexeme"
+    assert_code diagnostics, "invalid_code_binding_access"
+    assert_code diagnostics, "missing_code_binding"
+  end
+
+  def test_semantic_code_bindings_reject_unknown_ambiguous_and_inactive_facts
+    block = load_yaml("standard_blocks/invariant-point-attention.yaml")
+    step = block.fetch("steps").find { |candidate| candidate.fetch("id") == "softmax_attention" }
+    step.fetch("code_bindings").first["ref"] = "values.not_declared"
+    step.fetch("code_bindings") << {
+      "lexeme" => "combined_logits",
+      "ref" => "values.attention_weights",
+      "access" => "write",
+    }
+    block.fetch("variants").first.fetch("step_refs").delete("steps.softmax_attention")
+
+    diagnostics = StandardBlockContract.definition_errors(block)
+    assert_code diagnostics, "unknown_code_binding_ref"
+    assert_code diagnostics, "ambiguous_code_binding_lexeme"
+    assert_code diagnostics, "inactive_code_binding_step"
+  end
+
   private
 
   def load_yaml(path)

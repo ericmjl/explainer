@@ -9,13 +9,15 @@ require_relative "../../lib/architecture_comparison_compiler"
 require_relative "../../lib/architecture_coverage"
 require_relative "../../lib/architecture_projection"
 require_relative "../../lib/architecture_ownership"
+require_relative "../../lib/pseudocode_compiler"
+require_relative "../../lib/pseudocode_contract"
 require_relative "../../lib/source_contract"
 require_relative "../../lib/standard_block_compiler"
 require_relative "../../lib/strict_yaml"
 
 ROOT = File.expand_path("../..", __dir__)
 REGISTRY = "architectures/index.yaml"
-GENERATOR_VERSION = "architecture-manifest-builder-v0.4.2"
+GENERATOR_VERSION = "architecture-manifest-builder-v0.4.5"
 CHECK_MODE = ARGV.delete("--check")
 abort "usage: ruby #{__FILE__} [--check]" unless ARGV.empty?
 
@@ -226,40 +228,19 @@ def standard_block_manifest(paths, blocks_by_path)
   end
 end
 
-def pseudocode_symbols(pseudocode)
-  Array(pseudocode["symbols"]).map do |symbol|
-    {
-      "id" => symbol["id"],
-      "name" => symbol["name"],
-      "tex" => symbol["tex"],
-      "architectureRef" => symbol["architecture_ref"],
-    }.compact
-  end
-end
-
-def pseudocode_lines(pseudocode)
-  pseudocode.fetch("lines").map do |line|
-    {
-      "id" => line.fetch("id"),
-      "text" => line.fetch("text"),
-      "refs" => Array(line["source_refs"]).map { |ref| ref["lines"] || ref["locator"] }.compact.join(", "),
-      "architectureRefs" => Array(line["architecture_refs"]),
-      "standardBlockRef" => web_ref(line["standard_block_ref"]),
-      "blockInstanceRef" => line["block_instance_ref"],
-      "operation" => line["operation"],
-      "inputs" => Array(line["inputs"]),
-      "outputs" => Array(line["outputs"]),
-      "visual" => line["visual"],
-    }.compact
-  end
-end
-
 def build_manifest(config, bibliography, bibliography_path)
   architecture = load_yaml(config.fetch("architecture"))
   SourceContract.validate!(architecture) if architecture["schema_version"] == "architecture-v0.4"
   ArchitectureOwnership.validate!(architecture)
   ArchitectureCoverage.validate!(architecture)
   pseudocode = load_yaml(config.fetch("pseudocode"))
+  if pseudocode["schema_version"] == "pseudocode-v0.2"
+    PseudocodeContract.validate!(pseudocode, architecture: architecture)
+  end
+  compiled_pseudocode = PseudocodeCompiler.compile(pseudocode, architecture: architecture)
+  compiled_pseudocode.fetch("lines").each do |line|
+    line["standardBlockRef"] = web_ref(line["standardBlockRef"]) if line["standardBlockRef"]
+  end
   semantic_zoom = load_yaml(config.fetch("view"))
   SourceContract.validate!(semantic_zoom) if semantic_zoom["schema_version"] == "visualization-v0.4"
   modules = architecture.fetch("modules").map { |mod| normalize_module_refs(mod) }
@@ -344,13 +325,9 @@ def build_manifest(config, bibliography, bibliography_path)
     "bibliography" => bibliography_manifest(bibliography, bibliography_path),
     "standardBlocks" => standard_block_manifest(config.fetch("standard_blocks"), blocks_by_path),
     "pseudocode" => {
-      pseudocode.fetch("id") => {
+      pseudocode.fetch("id") => compiled_pseudocode.merge(
         "sourceYaml" => web_ref(config.fetch("pseudocode")),
-        "sources" => pseudocode["sources"] || [],
-        "symbols" => pseudocode_symbols(pseudocode),
-        "lines" => pseudocode_lines(pseudocode),
-        "claims" => pseudocode["claims"] || [],
-      },
+      ),
     },
     "boards" => {
       "schemaVersion" => semantic_zoom.fetch("schema_version"),

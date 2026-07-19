@@ -12,6 +12,7 @@ require_relative "architecture_projection"
 require_relative "architecture_view_lanes"
 require_relative "architecture_view_regions"
 require_relative "evidence_contract"
+require_relative "pseudocode_contract"
 require_relative "source_contract"
 require_relative "standard_block_contract"
 require_relative "strict_yaml"
@@ -125,6 +126,7 @@ module ArchitectureVerifier
       contract_check = source_contract_check(
         architecture,
         view,
+        pseudocode,
         bibliography,
         source_set,
         registry.fetch("bibliography"),
@@ -245,13 +247,17 @@ module ArchitectureVerifier
       [documents, diagnostics]
     end
 
-    def source_contract_check(architecture, view, bibliography, source_set, bibliography_file, documents)
+    def source_contract_check(architecture, view, pseudocode, bibliography, source_set, bibliography_file, documents)
       diagnostics = []
-      {
+      contracted_documents = {
         source_set.fetch("architecture") => architecture,
         source_set.fetch("view") => view,
         bibliography_file => bibliography,
-      }.each do |file, document|
+      }
+      if SourceContract::SCHEMAS.key?(pseudocode["schema_version"])
+        contracted_documents[source_set.fetch("pseudocode")] = pseudocode
+      end
+      contracted_documents.each do |file, document|
         SourceContract.errors(document).each do |item|
           diagnostics << diagnostic(
             "source_contract", item.code, item.message,
@@ -337,6 +343,14 @@ module ArchitectureVerifier
           "source_semantics", item.code, item.message,
           file: architecture_file, path: item.path
         )
+      end
+      if pseudocode["schema_version"] == "pseudocode-v0.2"
+        PseudocodeContract.errors(pseudocode, architecture: architecture).each do |item|
+          diagnostics << diagnostic(
+            "source_semantics", item.code, item.message,
+            file: source_set.fetch("pseudocode"), path: item.path
+          )
+        end
       end
       {
         architecture_file => architecture,

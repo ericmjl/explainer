@@ -1,4 +1,4 @@
-schema_version: pseudocode-v0.1
+schema_version: pseudocode-v0.2
 id: genie3
 title: Genie 3 Sampling and Denoiser Trace
 sources:
@@ -16,162 +16,631 @@ sources:
     source_ref: genie3_latent_transformer_code
   - id: structure_code
     source_ref: genie3_structure_code
+  - id: export_code
+    source_ref: genie3_export_code
+root_scope: inference
+scopes:
+  - id: inference
+    label: Genie 3 inference
+    kind: program
+    parent_ref: pseudocode
+    subject_ref: architecture
+  - id: sampling
+    label: Directional DDIM sampling
+    kind: loop
+    parent_ref: scopes.inference
+    subject_ref: modules.diffusion_sampler
+    execution_ref: execution.loops.reverse_diffusion_loop
+  - id: reverse_step
+    label: One reverse-diffusion step
+    kind: module
+    parent_ref: scopes.sampling
+    subject_ref: modules.reverse_diffusion_step
+  - id: denoiser
+    label: Coordinate denoiser
+    kind: module
+    parent_ref: scopes.reverse_step
+    subject_ref: modules.denoiser
+  - id: sampler_math
+    label: Fixed directional DDIM math
+    kind: module
+    parent_ref: scopes.reverse_step
+    subject_ref: modules.directional_ddim_sampler_math
 symbols:
+  - id: design_request
+    name: request
+    type: input
+    scope_ref: scopes.inference
+    architecture_ref: value_sites.design_request
   - id: feature_bundle
     name: features
     type: input
-    shape: "B x N token metadata + B x N x N pairwise masks"
-    architecture_ref: representations.feature_bundle
+    scope_ref: scopes.inference
+    architecture_ref: value_sites.feature_bundle
   - id: current_coordinates
     name: x_t
     tex: 'x_t'
     type: state
-    shape: "B x N x 3"
-    architecture_ref: representations.token_coordinates
+    scope_ref: scopes.sampling
+    architecture_ref: value_sites.current_coordinates
+  - id: step_coordinates
+    name: x_step
+    tex: 'x_t'
+    type: state
+    scope_ref: scopes.reverse_step
+    architecture_ref: value_sites.step_coordinates
+  - id: sampler_step_coordinates
+    name: x_sampler
+    tex: 'x_t'
+    type: state
+    scope_ref: scopes.reverse_step
+    architecture_ref: value_sites.sampler_step_coordinates
+  - id: final_coordinates
+    name: x_0
+    tex: 'x_0'
+    type: output
+    scope_ref: scopes.inference
+    architecture_ref: value_sites.final_coordinates
+  - id: generated_design_pdb
+    name: design_pdb
+    type: output
+    scope_ref: scopes.inference
+    architecture_ref: value_sites.generated_design_pdb
+  - id: initial_coordinates
+    name: x_T
+    tex: 'x_T'
+    type: state
+    scope_ref: scopes.sampling
+    architecture_ref: value_sites.initial_coordinates
   - id: current_frames
     name: T_t
     tex: 'T_t'
     type: representation
-    shape: "B x N frames"
-    architecture_ref: representations.token_frames
+    scope_ref: scopes.reverse_step
+    architecture_ref: value_sites.current_frames
   - id: timestep
     name: t
-    type: input
-    shape: "B"
-    architecture_ref: representations.timestep
-  - id: single_features
-    name: s
+    type: control
+    scope_ref: scopes.sampling
+    architecture_ref: value_sites.timestep
+  - id: initial_single_features
+    name: s_0
+    tex: 's_0'
     type: representation
-    shape: "B x N x 384"
-    architecture_ref: representations.single_features
-  - id: pair_features
-    name: z
+    scope_ref: scopes.denoiser
+    architecture_ref: value_sites.initial_single_features
+  - id: initial_pair_features
+    name: z_0
+    tex: 'z_0'
     type: representation
-    shape: "B x N x N x 128"
-    architecture_ref: representations.pair_features
+    scope_ref: scopes.denoiser
+    architecture_ref: value_sites.initial_pair_features
+  - id: refined_single_features
+    name: s_5
+    tex: 's_5'
+    type: representation
+    scope_ref: scopes.denoiser
+    architecture_ref: value_sites.refined_single_features
+  - id: refined_pair_features
+    name: z_5
+    tex: 'z_5'
+    type: representation
+    scope_ref: scopes.denoiser
+    architecture_ref: value_sites.refined_pair_features
   - id: coordinate_prediction
     name: x_hat
     tex: '\hat{x}_0'
     type: output
-    shape: "B x N x 3"
-    architecture_ref: representations.token_coordinates
+    scope_ref: scopes.reverse_step
+    architecture_ref: value_sites.coordinate_prediction
   - id: predicted_noise
     name: epsilon_theta
     tex: '\epsilon_\theta'
     type: output
-    shape: "B x N x 3"
-    architecture_ref: representations.coordinate_noise
+    scope_ref: scopes.reverse_step
+    architecture_ref: value_sites.predicted_noise
   - id: next_coordinates
-    name: x_(t-10)
+    name: x_next
     tex: 'x_{t-10}'
     type: state
-    shape: "B x N x 3"
-    architecture_ref: representations.token_coordinates
+    scope_ref: scopes.sampling
+    architecture_ref: value_sites.next_coordinates
   - id: sequence_logits
     name: sequence_logits
     tex: '\ell_{aa}'
     type: output
-    shape: "B x N x 20"
-    architecture_ref: representations.sequence_logits
+    scope_ref: scopes.reverse_step
+    architecture_ref: value_sites.sequence_logits
 lines:
   - id: prepare_tokens
-    text: "features = tokenize(request)  # C-alpha per unknown residue; atom14 heavy atoms only for known atomized residues"
+    text: "features = tokenize(request)"
+    comment: C-alpha per unknown residue; atom14 heavy atoms only for known atomized residues.
+    scope_ref: scopes.inference
+    statement_ref: modules.feature_builder
     operation: task_dependent_partial_atomization
-    inputs: []
+    inputs: [design_request]
     outputs: [feature_bundle]
     architecture_refs:
-      - modules.feature_builder
       - claims.atomization_is_task_dependent
     source_refs:
       - source: feature_code
         locator: create_np_features_from_chain and create_np_features_from_length
+    code_bindings:
+      - lexeme: features
+        symbol_ref: feature_bundle
+        access: write
+      - lexeme: tokenize
+        architecture_ref: modules.feature_builder
+        access: call
+      - lexeme: request
+        symbol_ref: design_request
+        access: read
+  - id: run_diffusion_sampler
+    text: "x_0 = DiffusionSampler(features)"
+    scope_ref: scopes.inference
+    statement_ref: modules.diffusion_sampler
+    callee_scope_ref: scopes.sampling
+    operation: directional_ddim_sampling
+    inputs: [feature_bundle]
+    outputs: [final_coordinates]
+    architecture_refs: []
+    source_refs:
+      - source: sampler_code
+        locator: Sampler.sample and Sampler._sample
+    code_bindings:
+      - lexeme: x_0
+        symbol_ref: final_coordinates
+        access: write
+      - lexeme: DiffusionSampler
+        architecture_ref: modules.diffusion_sampler
+        access: call
+      - lexeme: features
+        symbol_ref: feature_bundle
+        access: read
   - id: initialize_coordinates
-    text: "x_t = randn_like(features.gt_atom_positions)"
+    text: "x_T = randn_like(features.gt_atom_positions)"
+    scope_ref: scopes.sampling
+    statement_ref: modules.coordinate_initializer
     operation: gaussian_coordinate_initialization
     inputs: [feature_bundle]
-    outputs: [current_coordinates]
-    architecture_refs:
-      - modules.coordinate_initializer
+    outputs: [initial_coordinates]
+    architecture_refs: []
     source_refs:
       - source: sampler_code
         locator: Sampler._sample
+    code_bindings:
+      - lexeme: x_T
+        symbol_ref: initial_coordinates
+        access: write
+      - lexeme: randn_like
+        architecture_ref: modules.coordinate_initializer
+        access: call
+      - lexeme: features
+        symbol_ref: feature_bundle
+        access: read
+  - id: begin_sampling_state
+    text: "x_t = x_T"
+    scope_ref: scopes.sampling
+    statement_ref: relations.initial_coordinates_begin_sampling_state
+    operation: initialize_sampling_state
+    inputs: [initial_coordinates]
+    outputs: [current_coordinates]
+    architecture_refs: []
+    source_refs:
+      - source: sampler_code
+        locator: Sampler._sample
+    code_bindings:
+      - lexeme: x_t
+        symbol_ref: current_coordinates
+        access: write
+      - lexeme: x_T
+        symbol_ref: initial_coordinates
+        access: read
+  - id: select_timestep
+    text: "t = SelectTimestep()"
+    scope_ref: scopes.sampling
+    statement_ref: modules.timestep_controller
+    operation: select_sampling_timestep
+    inputs: []
+    outputs: [timestep]
+    architecture_refs:
+      - execution.loops.reverse_diffusion_loop
+    source_refs:
+      - source: sampler_code
+        locator: Sampler._sample
+    code_bindings:
+      - lexeme: t
+        symbol_ref: timestep
+        access: write
+      - lexeme: SelectTimestep
+        architecture_ref: modules.timestep_controller
+        access: call
+  - id: run_reverse_step
+    text: "x_next = ReverseDiffusionStep(x_t, features, t)"
+    scope_ref: scopes.sampling
+    statement_ref: modules.reverse_diffusion_step
+    callee_scope_ref: scopes.reverse_step
+    operation: reverse_diffusion_step
+    inputs: [current_coordinates, feature_bundle, timestep]
+    outputs: [next_coordinates]
+    architecture_refs:
+      - execution.loops.reverse_diffusion_loop
+    source_refs:
+      - source: sampler_code
+        locator: Sampler._sample
+    code_bindings:
+      - lexeme: x_next
+        symbol_ref: next_coordinates
+        access: write
+      - lexeme: ReverseDiffusionStep
+        architecture_ref: modules.reverse_diffusion_step
+        access: call
+      - lexeme: x_t
+        symbol_ref: current_coordinates
+        access: read
+      - lexeme: features
+        symbol_ref: feature_bundle
+        access: read
+      - lexeme: t
+        symbol_ref: timestep
+        access: read
+  - id: enter_reverse_step
+    text: "x_step = x_t"
+    scope_ref: scopes.reverse_step
+    statement_ref: relations.current_coordinates_enter_reverse_step
+    operation: read_current_reverse_state
+    inputs: [current_coordinates]
+    outputs: [step_coordinates]
+    architecture_refs: []
+    source_refs:
+      - source: sampler_code
+        locator: Sampler._sample
+    code_bindings:
+      - lexeme: x_step
+        symbol_ref: step_coordinates
+        access: write
+      - lexeme: x_t
+        symbol_ref: current_coordinates
+        access: read
   - id: derive_frames
-    text: "T_t = FrenetFrames(x_t, features.left_center_right_indices)"
+    text: "T_t = FrenetFrames(x_step, features.left_center_right_indices)"
+    scope_ref: scopes.reverse_step
+    statement_ref: modules.frenet_frame_builder
     operation: derive_branched_frenet_frames
-    inputs: [current_coordinates, feature_bundle]
+    inputs: [step_coordinates, feature_bundle]
     outputs: [current_frames]
     architecture_refs:
-      - modules.frenet_frame_builder
       - claims.frames_are_derived_not_diffused
     source_refs:
       - source: geometry_code
         locator: compute_noisy_structure_frames
-  - id: embed_single_pair
-    text: "s = SingleEmbedder(features, t); z = PairEmbedder(features, T_t, s)"
-    operation: invariant_input_embedding
-    inputs: [feature_bundle, timestep, current_frames]
-    outputs: [single_features, pair_features]
-    architecture_refs:
-      - modules.single_feature_embedder
-      - modules.pair_feature_embedder
+    code_bindings:
+      - lexeme: T_t
+        symbol_ref: current_frames
+        access: write
+      - lexeme: FrenetFrames
+        architecture_ref: modules.frenet_frame_builder
+        access: call
+      - lexeme: x_step
+        symbol_ref: step_coordinates
+        access: read
+      - lexeme: features
+        symbol_ref: feature_bundle
+        access: read
+  - id: run_denoiser
+    text: "x_hat, sequence_logits = Denoiser(T_t, features, t)"
+    scope_ref: scopes.reverse_step
+    statement_ref: modules.denoiser
+    callee_scope_ref: scopes.denoiser
+    operation: coordinate_denoising
+    inputs: [current_frames, feature_bundle, timestep]
+    outputs: [coordinate_prediction, sequence_logits]
+    architecture_refs: []
     source_refs:
       - source: model_code
         locator: V1Denoiser.forward
+    code_bindings:
+      - lexeme: x_hat
+        symbol_ref: coordinate_prediction
+        access: write
+      - lexeme: sequence_logits
+        symbol_ref: sequence_logits
+        access: write
+      - lexeme: Denoiser
+        architecture_ref: modules.denoiser
+        access: call
+      - lexeme: T_t
+        symbol_ref: current_frames
+        access: read
+      - lexeme: features
+        symbol_ref: feature_bundle
+        access: read
+      - lexeme: t
+        symbol_ref: timestep
+        access: read
+  - id: embed_single
+    text: "s_0 = SingleFeatureEmbedder(features, t)"
+    scope_ref: scopes.denoiser
+    statement_ref: modules.single_feature_embedder
+    operation: single_feature_embedding
+    inputs: [feature_bundle, timestep]
+    outputs: [initial_single_features]
+    architecture_refs: []
+    source_refs:
+      - source: model_code
+        locator: V1Denoiser.forward
+    code_bindings:
+      - lexeme: s_0
+        symbol_ref: initial_single_features
+        access: write
+      - lexeme: SingleFeatureEmbedder
+        architecture_ref: modules.single_feature_embedder
+        access: call
+      - lexeme: features
+        symbol_ref: feature_bundle
+        access: read
+      - lexeme: t
+        symbol_ref: timestep
+        access: read
+  - id: embed_pair
+    text: "z_0 = PairFeatureEmbedder(features, T_t, s_0)"
+    scope_ref: scopes.denoiser
+    statement_ref: modules.pair_feature_embedder
+    operation: pair_feature_embedding
+    inputs: [feature_bundle, current_frames, initial_single_features]
+    outputs: [initial_pair_features]
+    architecture_refs: []
+    source_refs:
+      - source: model_code
+        locator: V1Denoiser.forward
+    code_bindings:
+      - lexeme: z_0
+        symbol_ref: initial_pair_features
+        access: write
+      - lexeme: PairFeatureEmbedder
+        architecture_ref: modules.pair_feature_embedder
+        access: call
+      - lexeme: features
+        symbol_ref: feature_bundle
+        access: read
+      - lexeme: T_t
+        symbol_ref: current_frames
+        access: read
+      - lexeme: s_0
+        symbol_ref: initial_single_features
+        access: read
   - id: latent_transform
-    text: "append 10 globals; for i in 0..4: s_(i+1) = SingleUpdate(s_i,z_i); z_outer = z_i + OuterProduct(s_(i+1)); z_tri = z_outer + TriMulOut(z_outer); z_tri += TriMulIn(z_tri); z_(i+1) = z_tri + PairTransition(z_tri); remove globals from s_5 and z_5"
+    text: "s_5, z_5 = LatentTransformer(s_0, z_0)"
+    scope_ref: scopes.denoiser
+    statement_ref: modules.latent_transformer
     operation: bidirectional_single_pair_refinement
-    inputs: [single_features, pair_features]
-    outputs: [single_features, pair_features]
+    inputs: [initial_single_features, initial_pair_features]
+    outputs: [refined_single_features, refined_pair_features]
     architecture_refs:
-      - modules.latent_transformer
       - claims.latent_communication_is_bidirectional_per_block
     source_refs:
       - source: latent_code
         locator: LatentTransformer.forward and LatentTransformerBlock.forward
+    code_bindings:
+      - lexeme: s_5
+        symbol_ref: refined_single_features
+        access: write
+      - lexeme: z_5
+        symbol_ref: refined_pair_features
+        access: write
+      - lexeme: LatentTransformer
+        architecture_ref: modules.latent_transformer
+        access: call
+      - lexeme: s_0
+        symbol_ref: initial_single_features
+        access: read
+      - lexeme: z_0
+        symbol_ref: initial_pair_features
+        access: read
   - id: decode_structure
-    text: "repeat 8: s = Transition(LayerNorm(s + IPA(s,z,T_t))); T_t = T_t.compose(BackboneUpdate(s)); x_hat = T_t.trans"
+    text: "x_hat = StructureDecoder(s_5, z_5, T_t)"
+    scope_ref: scopes.denoiser
+    statement_ref: modules.structure_decoder
     operation: equivariant_structure_refinement
-    inputs: [single_features, pair_features, current_frames]
+    inputs: [refined_single_features, refined_pair_features, current_frames]
     outputs: [coordinate_prediction]
-    architecture_refs:
-      - modules.structure_decoder
+    architecture_refs: []
     source_refs:
       - source: structure_code
         locator: StructureNet.forward and StructureLayer.forward
+    code_bindings:
+      - lexeme: x_hat
+        symbol_ref: coordinate_prediction
+        access: write
+      - lexeme: StructureDecoder
+        architecture_ref: modules.structure_decoder
+        access: call
+      - lexeme: s_5
+        symbol_ref: refined_single_features
+        access: read
+      - lexeme: z_5
+        symbol_ref: refined_pair_features
+        access: read
+      - lexeme: T_t
+        symbol_ref: current_frames
+        access: read
   - id: predict_sequence
-    text: "sequence_logits = SequenceHead(s)  # sampled only when predict_sequence is enabled"
+    text: "sequence_logits = SequenceHead(s_5)"
+    comment: Sampled only when predict_sequence is enabled.
+    scope_ref: scopes.denoiser
+    statement_ref: modules.sequence_head
     operation: optional_sequence_prediction
-    inputs: [single_features]
+    inputs: [refined_single_features]
     outputs: [sequence_logits]
-    architecture_refs:
-      - modules.sequence_head
-      - modules.sequence_sampler
+    architecture_refs: []
     source_refs:
       - source: model_code
         locator: V1Denoiser.forward
       - source: ddim_code
         locator: DDIMSampler._sample_sequence
+    code_bindings:
+      - lexeme: sequence_logits
+        symbol_ref: sequence_logits
+        access: write
+      - lexeme: SequenceHead
+        architecture_ref: modules.sequence_head
+        access: call
+      - lexeme: s_5
+        symbol_ref: refined_single_features
+        access: read
+  - id: run_sampler_math
+    text: "x_next = DirectionalDDIMMath(x_step, x_hat, t)"
+    scope_ref: scopes.reverse_step
+    statement_ref: modules.directional_ddim_sampler_math
+    callee_scope_ref: scopes.sampler_math
+    operation: fixed_directional_ddim_math
+    inputs: [step_coordinates, coordinate_prediction, timestep]
+    outputs: [next_coordinates]
+    architecture_refs: []
+    source_refs:
+      - source: ddim_code
+        locator: DDIMSampler._step
+    code_bindings:
+      - lexeme: x_next
+        symbol_ref: next_coordinates
+        access: write
+      - lexeme: DirectionalDDIMMath
+        architecture_ref: modules.directional_ddim_sampler_math
+        access: call
+      - lexeme: x_step
+        symbol_ref: step_coordinates
+        access: read
+      - lexeme: x_hat
+        symbol_ref: coordinate_prediction
+        access: read
+      - lexeme: t
+        symbol_ref: timestep
+        access: read
+  - id: prepare_sampler_math
+    text: "x_sampler = x_step"
+    scope_ref: scopes.sampler_math
+    statement_ref: relations.step_coordinates_enter_sampler_math
+    operation: prepare_fixed_sampler_math_input
+    inputs: [step_coordinates]
+    outputs: [sampler_step_coordinates]
+    architecture_refs: []
+    source_refs:
+      - source: ddim_code
+        locator: DDIMSampler._step
+    code_bindings:
+      - lexeme: x_sampler
+        symbol_ref: sampler_step_coordinates
+        access: write
+      - lexeme: x_step
+        symbol_ref: step_coordinates
+        access: read
   - id: read_noise
-    text: "epsilon_theta = x_t - x_hat"
+    text: "epsilon_theta = x_sampler - x_hat"
+    scope_ref: scopes.sampler_math
+    statement_ref: modules.noise_readout
     operation: coordinate_displacement_readout
-    inputs: [current_coordinates, coordinate_prediction]
+    inputs: [sampler_step_coordinates, coordinate_prediction]
     outputs: [predicted_noise]
     architecture_refs:
-      - modules.noise_readout
       - claims.sampler_math_is_outside_the_denoiser
     source_refs:
       - source: ddim_code
         locator: DDIMSampler._step
+    code_bindings:
+      - lexeme: epsilon_theta
+        symbol_ref: predicted_noise
+        access: write
+      - lexeme: x_sampler
+        symbol_ref: sampler_step_coordinates
+        access: read
+      - lexeme: x_hat
+        symbol_ref: coordinate_prediction
+        access: read
   - id: ddim_step
-    text: "x_(t-10) = sqrt(alpha_bar_prev)*x0_hat + direction_scale*direction(epsilon_theta) + noise_scale*sigma*z"
+    text: "x_next = DDIMUpdate(x_sampler, epsilon_theta, t)"
+    scope_ref: scopes.sampler_math
+    statement_ref: modules.ddim_update
     operation: directional_ddim_update
-    inputs: [current_coordinates, predicted_noise, timestep]
+    inputs: [sampler_step_coordinates, predicted_noise, timestep]
     outputs: [next_coordinates]
-    architecture_refs:
-      - modules.ddim_update
+    architecture_refs: []
     source_refs:
       - source: ddim_code
         locator: DDIMSampler._step
+    code_bindings:
+      - lexeme: x_next
+        symbol_ref: next_coordinates
+        access: write
+      - lexeme: DDIMUpdate
+        architecture_ref: modules.ddim_update
+        access: call
+      - lexeme: x_sampler
+        symbol_ref: sampler_step_coordinates
+        access: read
+      - lexeme: epsilon_theta
+        symbol_ref: predicted_noise
+        access: read
+      - lexeme: t
+        symbol_ref: timestep
+        access: read
+  - id: advance_sampling_state
+    text: "x_t = x_next"
+    scope_ref: scopes.sampling
+    statement_ref: relations.next_coordinates_reenter_sampling_state
+    operation: advance_sampling_state
+    inputs: [next_coordinates]
+    outputs: [current_coordinates]
+    architecture_refs:
+      - execution.loops.reverse_diffusion_loop
+    source_refs:
+      - source: sampler_code
+        locator: Sampler._sample
+    code_bindings:
+      - lexeme: x_t
+        symbol_ref: current_coordinates
+        access: write
+      - lexeme: x_next
+        symbol_ref: next_coordinates
+        access: read
+  - id: finish_sampling_state
+    text: "x_0 = x_next"
+    scope_ref: scopes.sampling
+    statement_ref: relations.terminal_coordinates_become_final_coordinates
+    operation: select_terminal_coordinates
+    inputs: [next_coordinates]
+    outputs: [final_coordinates]
+    architecture_refs: []
+    source_refs:
+      - source: sampler_code
+        locator: Sampler._sample
+    code_bindings:
+      - lexeme: x_0
+        symbol_ref: final_coordinates
+        access: write
+      - lexeme: x_next
+        symbol_ref: next_coordinates
+        access: read
+  - id: export_structure
+    text: "design_pdb = ExportPDB(x_0)"
+    scope_ref: scopes.inference
+    statement_ref: modules.pdb_exporter
+    operation: serialize_pdb
+    inputs: [final_coordinates]
+    outputs: [generated_design_pdb]
+    architecture_refs: []
+    source_refs:
+      - source: export_code
+        locator: PostProcessor.save and PostProcessor._update_structure
+    code_bindings:
+      - lexeme: design_pdb
+        symbol_ref: generated_design_pdb
+        access: write
+      - lexeme: ExportPDB
+        architecture_ref: modules.pdb_exporter
+        access: call
+      - lexeme: x_0
+        symbol_ref: final_coordinates
+        access: read
 claims:
   - id: point_cloud_is_the_diffusion_state
     statement: Genie 3 samples a coordinate point cloud. Frenet frames are a derived denoiser representation, even though the paper describes the reverse process in frame-cloud terms.

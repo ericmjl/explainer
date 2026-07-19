@@ -10,6 +10,7 @@ require_relative "../lib/architecture_view_lanes"
 require_relative "../lib/architecture_view_regions"
 require_relative "../lib/architecture_ownership"
 require_relative "../lib/evidence_contract"
+require_relative "../lib/pseudocode_contract"
 require_relative "../lib/source_contract"
 require_relative "../lib/standard_block_contract"
 require_relative "../lib/strict_yaml"
@@ -696,7 +697,13 @@ def lint_view(view, arch, module_ids, rep_ids, relations_by_id)
   end
 end
 
-def lint_pseudocode(program, module_ids, rep_ids, value_site_ids, claim_ids, relation_ids, standard_blocks, block_instance_ids)
+def lint_pseudocode(program, architecture, module_ids, rep_ids, value_site_ids, claim_ids, relation_ids, standard_blocks, block_instance_ids)
+  semantic_v2 = program["schema_version"] == "pseudocode-v0.2"
+  if semantic_v2
+    PseudocodeContract.errors(program, architecture: architecture).each do |diagnostic|
+      @errors << "pseudocode #{program['id'] || 'unknown'} #{diagnostic}"
+    end
+  end
   lint_source_ref_targets(program, "pseudocode #{program['id'] || 'unknown'}")
   source_ids = require_unique_ids("pseudocode source", program["sources"])
   symbol_ids = require_unique_ids("pseudocode symbol", program["symbols"])
@@ -707,6 +714,8 @@ def lint_pseudocode(program, module_ids, rep_ids, value_site_ids, claim_ids, rel
   end
 
   Array(program["symbols"]).each do |symbol|
+    next if semantic_v2
+
     ref = symbol["architecture_ref"]
     next unless ref
     @errors << "symbol #{symbol['id']} has bad architecture_ref #{ref}" unless architecture_ref_exists?(ref, module_ids, rep_ids, value_site_ids, claim_ids, relation_ids)
@@ -722,6 +731,8 @@ def lint_pseudocode(program, module_ids, rep_ids, value_site_ids, claim_ids, rel
       @errors << "line #{line['id']} output #{output} is neither a symbol nor a module id"
     end
     Array(line["architecture_refs"]).each do |ref|
+      next if semantic_v2
+
       @errors << "line #{line['id']} has bad architecture_ref #{ref}" unless architecture_ref_exists?(ref, module_ids, rep_ids, value_site_ids, claim_ids, relation_ids)
     end
     Array(line["source_refs"]).each do |source_ref|
@@ -810,7 +821,7 @@ Array(registry["source_sets"]).each do |source_set|
   end
   lint_view(view, arch, module_ids, rep_ids, relations_by_id)
   block_instance_ids = Set.new(Array(arch["block_instances"]).filter_map { |instance| instance["id"] })
-  lint_pseudocode(program, module_ids, rep_ids, value_site_ids, claim_ids, relation_ids, standard_blocks, block_instance_ids)
+  lint_pseudocode(program, arch, module_ids, rep_ids, value_site_ids, claim_ids, relation_ids, standard_blocks, block_instance_ids)
 rescue StandardError => e
   @errors << "#{source_set.fetch('id')} lint failed: #{e.class}: #{e.message}"
 end

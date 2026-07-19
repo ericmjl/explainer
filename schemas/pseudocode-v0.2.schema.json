@@ -1,0 +1,267 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://explainer.local/schemas/pseudocode-v0.2.schema.json",
+  "title": "Semantic Pseudocode v0.2",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "id",
+    "title",
+    "sources",
+    "root_scope",
+    "scopes",
+    "symbols",
+    "lines",
+    "claims"
+  ],
+  "properties": {
+    "schema_version": { "const": "pseudocode-v0.2" },
+    "id": { "$ref": "#/$defs/id" },
+    "title": { "$ref": "#/$defs/nonEmptyString" },
+    "sources": {
+      "type": "array",
+      "minItems": 1,
+      "items": { "$ref": "#/$defs/sourceAlias" }
+    },
+    "root_scope": { "$ref": "#/$defs/id" },
+    "scopes": {
+      "type": "array",
+      "minItems": 1,
+      "items": { "$ref": "#/$defs/scope" }
+    },
+    "symbols": {
+      "type": "array",
+      "minItems": 1,
+      "items": { "$ref": "#/$defs/symbol" }
+    },
+    "lines": {
+      "type": "array",
+      "minItems": 1,
+      "items": { "$ref": "#/$defs/line" }
+    },
+    "claims": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/claim" }
+    }
+  },
+  "additionalProperties": false,
+  "$defs": {
+    "id": { "type": "string", "pattern": "^[a-z][a-z0-9_]*$" },
+    "nonEmptyString": { "type": "string", "minLength": 1 },
+    "texString": {
+      "type": "string",
+      "minLength": 1,
+      "pattern": "^(?!.*_\\().+$"
+    },
+    "codeIdentifier": { "type": "string", "pattern": "^[A-Za-z_][A-Za-z0-9_]*$" },
+    "scopeRef": { "type": "string", "pattern": "^scopes\\.[a-z][a-z0-9_]*$" },
+    "symbolId": { "$ref": "#/$defs/id" },
+    "symbolFactRef": {
+      "type": "string",
+      "pattern": "^(representations|value_sites)\\.[a-z][a-z0-9_]*$"
+    },
+    "architectureFactRef": {
+      "type": "string",
+      "pattern": "^(modules|representations|value_sites|relations|claims|block_instances)\\.[a-z][a-z0-9_]*$|^execution\\.loops\\.[a-z][a-z0-9_]*$|^architecture$"
+    },
+    "statementRef": {
+      "type": "string",
+      "pattern": "^(modules|value_sites|relations|block_instances)\\.[a-z][a-z0-9_]*$"
+    },
+    "scopeSubjectRef": {
+      "type": "string",
+      "pattern": "^architecture$|^(modules|block_instances)\\.[a-z][a-z0-9_]*$"
+    },
+    "sourceAlias": {
+      "type": "object",
+      "required": ["id", "source_ref"],
+      "properties": {
+        "id": { "$ref": "#/$defs/id" },
+        "source_ref": { "$ref": "#/$defs/id" }
+      },
+      "additionalProperties": false
+    },
+    "scope": {
+      "type": "object",
+      "required": ["id", "label", "kind", "parent_ref", "subject_ref"],
+      "properties": {
+        "id": { "$ref": "#/$defs/id" },
+        "label": { "$ref": "#/$defs/nonEmptyString" },
+        "kind": { "enum": ["program", "module", "loop", "block", "function"] },
+        "parent_ref": {
+          "type": "string",
+          "pattern": "^pseudocode$|^scopes\\.[a-z][a-z0-9_]*$"
+        },
+        "subject_ref": { "$ref": "#/$defs/scopeSubjectRef" },
+        "execution_ref": {
+          "type": "string",
+          "pattern": "^execution\\.loops\\.[a-z][a-z0-9_]*$"
+        }
+      },
+      "additionalProperties": false
+    },
+    "symbol": {
+      "type": "object",
+      "required": ["id", "name", "type", "scope_ref", "architecture_ref"],
+      "properties": {
+        "id": { "$ref": "#/$defs/id" },
+        "name": { "$ref": "#/$defs/nonEmptyString" },
+        "tex": { "$ref": "#/$defs/texString" },
+        "type": {
+          "enum": ["input", "state", "representation", "conditioning", "mask", "index_map", "parameter", "control", "output"]
+        },
+        "scope_ref": { "$ref": "#/$defs/scopeRef" },
+        "architecture_ref": { "$ref": "#/$defs/symbolFactRef" }
+      },
+      "additionalProperties": false
+    },
+    "line": {
+      "type": "object",
+      "required": [
+        "id",
+        "text",
+        "scope_ref",
+        "statement_ref",
+        "operation",
+        "inputs",
+        "outputs",
+        "architecture_refs",
+        "source_refs",
+        "code_bindings"
+      ],
+      "properties": {
+        "id": { "$ref": "#/$defs/id" },
+        "text": { "$ref": "#/$defs/nonEmptyString" },
+        "comment": { "$ref": "#/$defs/nonEmptyString" },
+        "scope_ref": { "$ref": "#/$defs/scopeRef" },
+        "statement_ref": { "$ref": "#/$defs/statementRef" },
+        "callee_scope_ref": { "$ref": "#/$defs/scopeRef" },
+        "operation": { "$ref": "#/$defs/id" },
+        "inputs": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": { "$ref": "#/$defs/symbolId" }
+        },
+        "outputs": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": { "$ref": "#/$defs/symbolId" }
+        },
+        "architecture_refs": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": { "$ref": "#/$defs/architectureFactRef" }
+        },
+        "source_refs": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "$ref": "#/$defs/lineSourceRef" }
+        },
+        "code_bindings": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "$ref": "#/$defs/codeBinding" }
+        },
+        "standard_block_ref": { "$ref": "#/$defs/nonEmptyString" },
+        "block_instance_ref": {
+          "type": "string",
+          "pattern": "^block_instances\\.[a-z][a-z0-9_]*$"
+        },
+        "visual": { "$ref": "#/$defs/visual" }
+      },
+      "additionalProperties": false
+    },
+    "symbolBinding": {
+      "type": "object",
+      "required": ["lexeme", "symbol_ref", "access"],
+      "properties": {
+        "lexeme": { "$ref": "#/$defs/codeIdentifier" },
+        "symbol_ref": { "$ref": "#/$defs/symbolId" },
+        "access": { "enum": ["read", "write"] }
+      },
+      "additionalProperties": false
+    },
+    "callBinding": {
+      "type": "object",
+      "required": ["lexeme", "architecture_ref", "access"],
+      "properties": {
+        "lexeme": { "$ref": "#/$defs/codeIdentifier" },
+        "architecture_ref": {
+          "type": "string",
+          "pattern": "^(modules|block_instances)\\.[a-z][a-z0-9_]*$"
+        },
+        "access": { "const": "call" }
+      },
+      "additionalProperties": false
+    },
+    "codeBinding": {
+      "oneOf": [
+        { "$ref": "#/$defs/symbolBinding" },
+        { "$ref": "#/$defs/callBinding" }
+      ]
+    },
+    "lineSourceRef": {
+      "type": "object",
+      "required": ["source", "locator"],
+      "properties": {
+        "source": { "$ref": "#/$defs/id" },
+        "locator": { "$ref": "#/$defs/nonEmptyString" }
+      },
+      "additionalProperties": false
+    },
+    "visual": {
+      "type": "object",
+      "required": ["block", "slots"],
+      "properties": {
+        "block": { "$ref": "#/$defs/id" },
+        "slots": {
+          "type": "object",
+          "additionalProperties": { "$ref": "#/$defs/symbolId" }
+        }
+      },
+      "additionalProperties": false
+    },
+    "claim": {
+      "type": "object",
+      "required": ["id", "statement", "line_refs", "evidence"],
+      "properties": {
+        "id": { "$ref": "#/$defs/id" },
+        "statement": { "$ref": "#/$defs/nonEmptyString" },
+        "line_refs": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": { "$ref": "#/$defs/id" }
+        },
+        "evidence": { "$ref": "#/$defs/evidence" }
+      },
+      "additionalProperties": false
+    },
+    "evidence": {
+      "type": "object",
+      "required": ["status", "refs"],
+      "properties": {
+        "status": {
+          "enum": ["confirmed_from_code", "confirmed_from_paper", "confirmed_from_docs", "inferred", "open_question"]
+        },
+        "refs": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "$ref": "#/$defs/evidenceRef" }
+        }
+      },
+      "additionalProperties": false
+    },
+    "evidenceRef": {
+      "type": "object",
+      "required": ["source_ref", "role", "locator"],
+      "properties": {
+        "source_ref": { "$ref": "#/$defs/id" },
+        "role": { "$ref": "#/$defs/id" },
+        "locator": { "$ref": "#/$defs/nonEmptyString" },
+        "note": { "$ref": "#/$defs/nonEmptyString" }
+      },
+      "additionalProperties": false
+    }
+  }
+}

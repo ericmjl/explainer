@@ -230,7 +230,7 @@ boards:
       - id: next_coordinates
         ref: value_sites.next_coordinates
         label: next C-alpha coordinates
-        notation: x_(t-1)
+        notation: 'x_{t-1}'
         prominence: secondary
         treatment: compact
         density: compact

@@ -227,6 +227,9 @@ module StandardBlockContract
         )
       end
     end
+    active_variant_step_refs = Array(block["variants"])
+      .flat_map { |variant| Array(variant["step_refs"]) }
+      .to_set
     Array(block["steps"]).each_with_index do |step, index|
       Array(step["inputs"]).each_with_index do |ref, ref_index|
         next if local_refs.include?(ref) && !ref.start_with?("steps.")
@@ -243,6 +246,70 @@ module StandardBlockContract
           "invalid_step_output", "$.steps[#{index}].outputs[#{ref_index}]",
           "#{ref.inspect} must resolve to a port or value",
         )
+      end
+      bindings = Array(step["code_bindings"])
+      next if bindings.empty?
+
+      step_ref = "steps.#{step['id']}"
+      unless active_variant_step_refs.include?(step_ref)
+        diagnostics << diagnostic(
+          "inactive_code_binding_step", "$.steps[#{index}].code_bindings",
+          "#{step_ref} has semantic code bindings but is not active in any variant",
+        )
+      end
+      duplicate_lexemes = bindings.filter_map do |binding|
+        lexeme = binding["lexeme"] if binding.is_a?(Hash)
+        lexeme if lexeme.is_a?(String)
+      end.tally.select { |_lexeme, count| count > 1 }.keys
+      duplicate_lexemes.sort.each do |lexeme|
+        diagnostics << diagnostic(
+          "ambiguous_code_binding_lexeme", "$.steps[#{index}].code_bindings",
+          "#{lexeme.inspect} is bound more than once in one code statement",
+        )
+      end
+
+      bindings.each_with_index do |binding, binding_index|
+        next unless binding.is_a?(Hash)
+
+        binding_path = "$.steps[#{index}].code_bindings[#{binding_index}]"
+        ref = binding["ref"]
+        lexeme = binding["lexeme"]
+        access = binding["access"]
+        unless ports.key?(ref) || values.key?(ref)
+          diagnostics << diagnostic(
+            "unknown_code_binding_ref", "#{binding_path}.ref",
+            "cannot resolve #{ref.inspect} to a port or value",
+          )
+        end
+        expected_refs = access == "write" ? Array(step["outputs"]) : Array(step["inputs"])
+        if %w[read write].include?(access) && !expected_refs.include?(ref)
+          diagnostics << diagnostic(
+            "invalid_code_binding_access", binding_path,
+            "#{access} binding #{ref.inspect} must appear in the step's #{access == 'write' ? 'outputs' : 'inputs'}",
+          )
+        end
+        next unless lexeme.is_a?(String) && !lexeme.empty? && step["code"].is_a?(String)
+        next if code_identifier_occurrences(step["code"], lexeme).any?
+
+        diagnostics << diagnostic(
+          "missing_code_binding_lexeme", "#{binding_path}.lexeme",
+          "#{lexeme.inspect} does not occur as an identifier in the step code",
+        )
+      end
+
+      {
+        "read" => Array(step["inputs"]),
+        "write" => Array(step["outputs"]),
+      }.each do |access, expected_refs|
+        bound_refs = bindings.filter_map do |binding|
+          binding["ref"] if binding.is_a?(Hash) && binding["access"] == access
+        end.to_set
+        (expected_refs.to_set - bound_refs).sort.each do |ref|
+          diagnostics << diagnostic(
+            "missing_code_binding", "$.steps[#{index}].code_bindings",
+            "#{ref} needs at least one #{access} binding",
+          )
+        end
       end
     end
     visual_refs = visual_nodes.filter_map { |node| node["ref"] }
@@ -298,6 +365,15 @@ module StandardBlockContract
     diagnostics
   end
   private_class_method :semantic_definition_errors
+
+  def code_identifier_occurrences(code, lexeme)
+    pattern = /(?<![A-Za-z0-9_])#{Regexp.escape(lexeme)}(?![A-Za-z0-9_])/
+    code.to_enum(:scan, pattern).map do
+      match = Regexp.last_match
+      [match.begin(0), match.end(0)]
+    end
+  end
+  private_class_method :code_identifier_occurrences
 
   def duplicate_id_errors(items, path, label)
     items.filter_map { |item| item.is_a?(Hash) ? item["id"] : nil }

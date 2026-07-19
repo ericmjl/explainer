@@ -29,7 +29,7 @@ export const comparisonIndex = {
   "compilerVersion": "architecture-comparison-compiler-v0.1",
   "sourceYaml": "../../comparisons/index.yaml",
   "build": {
-    "generator": "architecture-manifest-builder-v0.4.2",
+    "generator": "architecture-manifest-builder-v0.4.5",
     "inputDigests": {
       "comparisons/index.yaml": "54059100527b7b47f0096e90227ce5668a3d2693e0b48c8af971a200feed97e4",
       "comparisons/genie3-reduced-vs-full-ipa.yaml": "4b7a986fb8a30349e8f3117f43e09be7f26eaa15a489929ad0b7addcb3fcbfc9",
@@ -44,10 +44,10 @@ export const comparisonIndex = {
       "standard_blocks/adaln-zero-conditioning.yaml": "33cd9afbe3b6867c4ce328c25d41a33210a5e387a195a93b19bc8696ee9e0b32",
       "standard_blocks/sinusoidal-timestep-embedding.yaml": "8cb2d467fe967e9a83da657ef85940406be89836de502d24cb7f557152763039",
       "architectures/genie2.yaml": "d5fbf1c1a91ef74dcef47388855e83b7e5571deb7d63a5eb2657177355c2f96a",
-      "views/genie2-semantic-zoom.view.yaml": "ef8da5bf79917ffcda1b4ecc749c93380c26a4f5679847586d35834cd8c60ed0",
-      "standard_blocks/invariant-point-attention.yaml": "cae45ff984b74aef017c9562a5231f344fab7fb41dca60818ff338afd0848176",
+      "views/genie2-semantic-zoom.view.yaml": "8b8fe70a2866cad0051913e38e4d2a5b0fef68b0aeb14127c4d27eb36d353158",
+      "standard_blocks/invariant-point-attention.yaml": "a88d3bd473e6bbfeb6846085f7d5091e6e8b0e33fbbd8292af4d578df22b2c27",
       "architectures/genie3.yaml": "fbdf1ce7f0d0683abbb37d5ce86e1be9d3c1cbac69df71105fbf6a37308b830a",
-      "views/genie3-semantic-zoom.view.yaml": "706ee8b722eec577564b58f9f9aeba4ded7f99c6071517c377b25326d6888a41"
+      "views/genie3-semantic-zoom.view.yaml": "0234d7ffa56d5ddc8225626c86d00f477710396adf270305a301ad9b8996a473"
     }
   },
   "items": [

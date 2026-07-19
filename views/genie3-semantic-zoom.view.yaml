@@ -104,7 +104,6 @@ boards:
           role: task boundary input
           inside: The request selects unconditional generation, motif scaffolding, or binder design and supplies the corresponding length or structural constraints.
       - match: { relation_ref: relations.feature_builder_produces_feature_bundle }
-        label: partial atomization
         tone: conditioning
         connection:
           title: Task-dependent tokenization
@@ -196,7 +195,7 @@ boards:
       - id: next_coordinates
         ref: value_sites.next_coordinates
         label: next coordinate point cloud
-        notation: x_(t-10)
+        notation: 'x_{t-10}'
         prominence: secondary
         treatment: compact
         density: compact
@@ -367,7 +366,7 @@ boards:
     - id: next_coordinates
       ref: value_sites.next_coordinates
       label: next coordinates
-      notation: x_(t-10)
+      notation: 'x_{t-10}'
       prominence: secondary
       treatment: compact
       density: compact
@@ -502,7 +501,6 @@ boards:
       - id: coordinate_prediction
         ref: value_sites.coordinate_prediction
         label: cleaner coordinate estimate
-        notation: x_hat
         prominence: secondary
         treatment: compact
         density: compact
@@ -519,7 +517,6 @@ boards:
       - id: predicted_noise
         ref: value_sites.predicted_noise
         label: denoising direction
-        notation: epsilon_theta
         prominence: secondary
         treatment: compact
         density: compact
@@ -536,7 +533,7 @@ boards:
       - id: next_coordinates
         ref: value_sites.next_coordinates
         label: next coordinates
-        notation: x_(t-10)
+        notation: 'x_{t-10}'
         prominence: secondary
         treatment: compact
         density: compact
@@ -708,7 +705,6 @@ boards:
     - id: coordinate_prediction
       ref: value_sites.coordinate_prediction
       label: coordinate estimate
-      notation: x_hat
       prominence: secondary
       treatment: compact
       density: compact
@@ -724,7 +720,6 @@ boards:
     - id: sequence_logits
       ref: value_sites.sequence_logits
       label: optional amino-acid logits
-      notation: l_aa
       prominence: context
       treatment: compact
       density: compact
@@ -870,7 +865,7 @@ boards:
       - id: single_after_pair_attention
         ref: value_sites.single_after_pair_attention
         label: next-block singles
-        notation: s_(i+1)
+        notation: 's_{i+1}'
         prominence: secondary
         treatment: compact
         density: compact
@@ -920,7 +915,7 @@ boards:
       - id: pair_after_transition
         ref: value_sites.pair_after_transition
         label: next-block pairs
-        notation: z_(i+1)
+        notation: 'z_{i+1}'
         prominence: secondary
         treatment: compact
         density: compact
@@ -1061,7 +1056,7 @@ boards:
       - id: single_after_transition
         ref: value_sites.single_after_transition
         label: transitioned singles
-        notation: s_(l+1)
+        notation: 's_{l+1}'
         prominence: secondary
         treatment: compact
         density: compact
@@ -1077,7 +1072,7 @@ boards:
       - id: updated_frames
         ref: value_sites.updated_frames
         label: updated token frames
-        notation: T_(l+1)
+        notation: 'T_{l+1}'
         prominence: secondary
         treatment: compact
         density: compact

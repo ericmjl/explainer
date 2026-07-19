@@ -27,6 +27,11 @@
   "$defs": {
     "id": { "type": "string", "pattern": "^[a-z][a-z0-9_]*$" },
     "nonEmptyString": { "type": "string", "minLength": 1 },
+    "notationString": {
+      "type": "string",
+      "minLength": 1,
+      "pattern": "^(?!.*_\\().+$"
+    },
     "representationGlyph": {
       "enum": ["scalar", "vector", "single", "matrix", "pair", "volume", "coordinates", "frames"]
     },
@@ -151,7 +156,7 @@
         "id": { "$ref": "#/$defs/id" },
         "ref": { "$ref": "#/$defs/nodeRef" },
         "label": { "$ref": "#/$defs/nonEmptyString" },
-        "notation": { "$ref": "#/$defs/nonEmptyString" },
+        "notation": { "$ref": "#/$defs/notationString" },
         "role": { "$ref": "#/$defs/nonEmptyString" },
         "detail": { "$ref": "#/$defs/nonEmptyString" },
         "scale": { "$ref": "#/$defs/id" },
@@ -252,7 +257,7 @@
       "properties": {
         "match": { "$ref": "#/$defs/pathMatch" },
         "label": { "$ref": "#/$defs/nonEmptyString" },
-        "notation": { "$ref": "#/$defs/nonEmptyString" },
+        "notation": { "$ref": "#/$defs/notationString" },
         "tone": { "$ref": "#/$defs/id" },
         "connection": { "$ref": "#/$defs/connection" },
         "route_side": { "enum": ["top", "bottom", "left", "right"] },

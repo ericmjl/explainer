@@ -52,9 +52,22 @@
   "$defs": {
     "id": { "type": "string", "pattern": "^[a-z][a-z0-9_]*$" },
     "nonEmptyString": { "type": "string", "minLength": 1 },
+    "texString": {
+      "type": "string",
+      "minLength": 1,
+      "pattern": "^(?!.*_\\().+$"
+    },
     "localRef": {
       "type": "string",
       "pattern": "^(ports|values|steps)\\.[a-z][a-z0-9_]*$"
+    },
+    "dataRef": {
+      "type": "string",
+      "pattern": "^(ports|values)\\.[a-z][a-z0-9_]*$"
+    },
+    "codeIdentifier": {
+      "type": "string",
+      "pattern": "^[A-Za-z_][A-Za-z0-9_]*$"
     },
     "portRef": {
       "type": "string",
@@ -86,7 +99,7 @@
         "scale": { "$ref": "#/$defs/id" },
         "glyph": { "$ref": "#/$defs/representationGlyph" },
         "shape": { "$ref": "#/$defs/nonEmptyString" },
-        "notation": { "$ref": "#/$defs/nonEmptyString" },
+        "notation": { "$ref": "#/$defs/texString" },
         "role": { "$ref": "#/$defs/nonEmptyString" }
       },
       "additionalProperties": false
@@ -117,7 +130,7 @@
         "scale": { "$ref": "#/$defs/id" },
         "glyph": { "$ref": "#/$defs/representationGlyph" },
         "shape": { "$ref": "#/$defs/nonEmptyString" },
-        "notation": { "$ref": "#/$defs/nonEmptyString" },
+        "notation": { "$ref": "#/$defs/texString" },
         "role": { "$ref": "#/$defs/nonEmptyString" }
       },
       "additionalProperties": false
@@ -142,8 +155,24 @@
           "items": { "$ref": "#/$defs/localRef" }
         },
         "code": { "$ref": "#/$defs/nonEmptyString" },
-        "tex": { "$ref": "#/$defs/nonEmptyString" },
+        "code_bindings": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": { "$ref": "#/$defs/codeBinding" }
+        },
+        "tex": { "$ref": "#/$defs/texString" },
         "role": { "$ref": "#/$defs/nonEmptyString" }
+      },
+      "additionalProperties": false
+    },
+    "codeBinding": {
+      "type": "object",
+      "required": ["lexeme", "ref", "access"],
+      "properties": {
+        "lexeme": { "$ref": "#/$defs/codeIdentifier" },
+        "ref": { "$ref": "#/$defs/dataRef" },
+        "access": { "enum": ["read", "write"] }
       },
       "additionalProperties": false
     },

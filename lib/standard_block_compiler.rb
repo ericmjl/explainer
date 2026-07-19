@@ -141,6 +141,7 @@ module StandardBlockCompiler
             "tex" => step["tex"],
             "inputs" => step.fetch("inputs"),
             "outputs" => step.fetch("outputs"),
+            "codeBindings" => compile_code_bindings(block, instance, step),
           }.compact
         end,
         "scene" => scene,
@@ -166,6 +167,24 @@ module StandardBlockCompiler
           "selector" => binding["selector"],
           "relations" => relations,
         }.compact
+      end
+    end
+
+    def compile_code_bindings(block, instance, step)
+      bindings = Array(step["code_bindings"])
+      return nil if bindings.empty?
+
+      code = step.fetch("code")
+      bindings.map do |binding|
+        namespace, local_id = binding.fetch("ref").split(".", 2)
+        {
+          "lexeme" => binding.fetch("lexeme"),
+          "access" => binding.fetch("access"),
+          "localRef" => binding.fetch("ref"),
+          "templateFactRef" => template_fact_ref(block, namespace, local_id),
+          "instanceFactRef" => "block_instances.#{instance.fetch('id')}.#{namespace}.#{local_id}",
+          "occurrences" => code_identifier_occurrences(code, binding.fetch("lexeme")),
+        }
       end
     end
 
@@ -340,6 +359,14 @@ module StandardBlockCompiler
       return "frame" if glyph == "frames"
 
       nil
+    end
+
+    def code_identifier_occurrences(code, lexeme)
+      pattern = /(?<![A-Za-z0-9_])#{Regexp.escape(lexeme)}(?![A-Za-z0-9_])/
+      code.to_enum(:scan, pattern).map do
+        match = Regexp.last_match
+        { "start" => match.begin(0), "end" => match.end(0) }
+      end
     end
 
     def template_fact_ref(block, collection, id)

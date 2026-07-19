@@ -13,6 +13,7 @@ module SourceContract
     "visualization-v0.4" => "schemas/visualization-v0.4.schema.json",
     "bibliography-v0.1" => "schemas/bibliography-v0.1.schema.json",
     "standard-block-v0.2" => "schemas/standard-block-v0.2.schema.json",
+    "pseudocode-v0.2" => "schemas/pseudocode-v0.2.schema.json",
     "architecture-comparison-v0.1" => "schemas/architecture-comparison-v0.1.schema.json",
     "comparison-registry-v0.1" => "schemas/comparison-registry-v0.1.schema.json",
   }.freeze

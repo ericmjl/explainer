@@ -440,6 +440,11 @@ Pseudocode symbols provide preferred paper notation through
 `architecture_ref`; the renderer falls back to the node label and
 representation ID.
 
+When a view needs occurrence-specific mathematical notation, author
+`notation` as TeX. Multi-token subscripts use braces (`x_{t-10}`,
+`s_{i+1}`), because parentheses do not group a TeX subscript. Compact
+non-mathematical notation such as `.pdb` remains plain text.
+
 ## Operator Modules
 
 Cheap elementwise modules render as circuit-style operators rather than full

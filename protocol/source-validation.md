@@ -45,6 +45,7 @@ The implementation-independent source schemas are:
 - `schemas/visualization-v0.4.schema.json`;
 - `schemas/bibliography-v0.1.schema.json`;
 - `schemas/standard-block-v0.2.schema.json`;
+- `schemas/pseudocode-v0.2.schema.json`;
 - `schemas/comparison-registry-v0.1.schema.json`; and
 - `schemas/architecture-comparison-v0.1.schema.json`.
 
@@ -77,6 +78,8 @@ document's JSON Schema:
   without overlapping refs or ambiguous family glyphs;
 - reusable-block ports, active variants, instance bindings, and compiled
   internal-detail boards agree;
+- semantic-pseudocode scopes form one lexical tree, statements and symbols
+  resolve canonical facts, and code lexemes cover declared reads and writes;
 - comparison subjects resolve to registered boards, aligned facts are visible
   and scoped to the correct subject, relationship side rules hold, and
   comparative evidence is compatible;
@@ -134,6 +137,12 @@ local refs, variant step membership, visual coverage, and output production.
 Architecture block instances additionally validate their subject, required
 ports, relation direction/kind/cardinality, exact interface coverage, honest
 non-exact differences, and usage evidence.
+
+Registered `pseudocode-v0.2` inputs compile through
+`semantic-pseudocode-compiler-v0.3`. The compiler records scope and statement
+identity plus deterministic variable/call lexeme ranges; it does not parse raw
+code or invent graph associations. Legacy v0.1 traces remain readable while
+they are migrated.
 
 Registered comparisons are schema-checked and resolved against the same
 compiled reusable boards emitted to the browser. This rejects foreign,

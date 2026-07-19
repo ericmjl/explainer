@@ -1,13 +1,13 @@
 export const manifest = {
   "schemaVersion": "architecture-manifest-v0.4",
   "build": {
-    "generator": "architecture-manifest-builder-v0.4.2",
+    "generator": "architecture-manifest-builder-v0.4.5",
     "inputDigests": {
       "references/bibliography.yaml": "8ddccafa8ac6452643f652d69730c06644298c00bde10cbcca4a9f557a8f95c7",
       "architectures/genie2.yaml": "d5fbf1c1a91ef74dcef47388855e83b7e5571deb7d63a5eb2657177355c2f96a",
-      "views/genie2-semantic-zoom.view.yaml": "ef8da5bf79917ffcda1b4ecc749c93380c26a4f5679847586d35834cd8c60ed0",
+      "views/genie2-semantic-zoom.view.yaml": "8b8fe70a2866cad0051913e38e4d2a5b0fef68b0aeb14127c4d27eb36d353158",
       "pseudocode/genie2.yaml": "b78ca953f8ebed98a688501d7485e3b2e79fb50b2e9434d876012c1ee4289bd0",
-      "standard_blocks/invariant-point-attention.yaml": "cae45ff984b74aef017c9562a5231f344fab7fb41dca60818ff338afd0848176"
+      "standard_blocks/invariant-point-attention.yaml": "a88d3bd473e6bbfeb6846085f7d5091e6e8b0e33fbbd8292af4d578df22b2c27"
     }
   },
   "architecture": {
@@ -939,6 +939,60 @@ export const manifest = {
             ],
             "outputs": [
               "values.scalar_terms"
+            ],
+            "codeBindings": [
+              {
+                "lexeme": "q_s",
+                "access": "write",
+                "localRef": "values.scalar_terms",
+                "templateFactRef": "standard_blocks.invariant_point_attention.values.scalar_terms",
+                "instanceFactRef": "block_instances.structure_ipa.values.scalar_terms",
+                "occurrences": [
+                  {
+                    "start": 0,
+                    "end": 3
+                  }
+                ]
+              },
+              {
+                "lexeme": "k_s",
+                "access": "write",
+                "localRef": "values.scalar_terms",
+                "templateFactRef": "standard_blocks.invariant_point_attention.values.scalar_terms",
+                "instanceFactRef": "block_instances.structure_ipa.values.scalar_terms",
+                "occurrences": [
+                  {
+                    "start": 5,
+                    "end": 8
+                  }
+                ]
+              },
+              {
+                "lexeme": "v_s",
+                "access": "write",
+                "localRef": "values.scalar_terms",
+                "templateFactRef": "standard_blocks.invariant_point_attention.values.scalar_terms",
+                "instanceFactRef": "block_instances.structure_ipa.values.scalar_terms",
+                "occurrences": [
+                  {
+                    "start": 10,
+                    "end": 13
+                  }
+                ]
+              },
+              {
+                "lexeme": "single_state",
+                "access": "read",
+                "localRef": "ports.single_state",
+                "templateFactRef": "standard_blocks.invariant_point_attention.ports.single_state",
+                "instanceFactRef": "block_instances.structure_ipa.ports.single_state",
+                "occurrences": [
+                  {
+                    "start": 35,
+                    "end": 47
+                  }
+                ]
+              }
             ]
           },
           {
@@ -947,12 +1001,66 @@ export const manifest = {
             "instanceFactRef": "block_instances.structure_ipa.steps.project_local_points",
             "label": "Project local Q/K/V points",
             "operation": "point_qkv_projection",
-            "code": "q_p, k_p, v_p = project_point_qkv(single_state)",
+            "code": "q_p_local, k_p_local, v_p_local = project_point_qkv(single_state)",
             "inputs": [
               "ports.single_state"
             ],
             "outputs": [
               "values.local_points"
+            ],
+            "codeBindings": [
+              {
+                "lexeme": "q_p_local",
+                "access": "write",
+                "localRef": "values.local_points",
+                "templateFactRef": "standard_blocks.invariant_point_attention.values.local_points",
+                "instanceFactRef": "block_instances.structure_ipa.values.local_points",
+                "occurrences": [
+                  {
+                    "start": 0,
+                    "end": 9
+                  }
+                ]
+              },
+              {
+                "lexeme": "k_p_local",
+                "access": "write",
+                "localRef": "values.local_points",
+                "templateFactRef": "standard_blocks.invariant_point_attention.values.local_points",
+                "instanceFactRef": "block_instances.structure_ipa.values.local_points",
+                "occurrences": [
+                  {
+                    "start": 11,
+                    "end": 20
+                  }
+                ]
+              },
+              {
+                "lexeme": "v_p_local",
+                "access": "write",
+                "localRef": "values.local_points",
+                "templateFactRef": "standard_blocks.invariant_point_attention.values.local_points",
+                "instanceFactRef": "block_instances.structure_ipa.values.local_points",
+                "occurrences": [
+                  {
+                    "start": 22,
+                    "end": 31
+                  }
+                ]
+              },
+              {
+                "lexeme": "single_state",
+                "access": "read",
+                "localRef": "ports.single_state",
+                "templateFactRef": "standard_blocks.invariant_point_attention.ports.single_state",
+                "instanceFactRef": "block_instances.structure_ipa.ports.single_state",
+                "occurrences": [
+                  {
+                    "start": 52,
+                    "end": 64
+                  }
+                ]
+              }
             ]
           },
           {
@@ -961,13 +1069,106 @@ export const manifest = {
             "instanceFactRef": "block_instances.structure_ipa.steps.transform_points_to_global",
             "label": "Express points in global frame",
             "operation": "rigid_apply",
-            "code": "q_p, k_p, v_p = frames.apply(q_p, k_p, v_p)",
+            "code": "q_p_global, k_p_global, v_p_global = frames.apply(q_p_local, k_p_local, v_p_local)",
             "inputs": [
               "values.local_points",
               "ports.frames"
             ],
             "outputs": [
               "values.global_points"
+            ],
+            "codeBindings": [
+              {
+                "lexeme": "q_p_global",
+                "access": "write",
+                "localRef": "values.global_points",
+                "templateFactRef": "standard_blocks.invariant_point_attention.values.global_points",
+                "instanceFactRef": "block_instances.structure_ipa.values.global_points",
+                "occurrences": [
+                  {
+                    "start": 0,
+                    "end": 10
+                  }
+                ]
+              },
+              {
+                "lexeme": "k_p_global",
+                "access": "write",
+                "localRef": "values.global_points",
+                "templateFactRef": "standard_blocks.invariant_point_attention.values.global_points",
+                "instanceFactRef": "block_instances.structure_ipa.values.global_points",
+                "occurrences": [
+                  {
+                    "start": 12,
+                    "end": 22
+                  }
+                ]
+              },
+              {
+                "lexeme": "v_p_global",
+                "access": "write",
+                "localRef": "values.global_points",
+                "templateFactRef": "standard_blocks.invariant_point_attention.values.global_points",
+                "instanceFactRef": "block_instances.structure_ipa.values.global_points",
+                "occurrences": [
+                  {
+                    "start": 24,
+                    "end": 34
+                  }
+                ]
+              },
+              {
+                "lexeme": "frames",
+                "access": "read",
+                "localRef": "ports.frames",
+                "templateFactRef": "standard_blocks.invariant_point_attention.ports.frames",
+                "instanceFactRef": "block_instances.structure_ipa.ports.frames",
+                "occurrences": [
+                  {
+                    "start": 37,
+                    "end": 43
+                  }
+                ]
+              },
+              {
+                "lexeme": "q_p_local",
+                "access": "read",
+                "localRef": "values.local_points",
+                "templateFactRef": "standard_blocks.invariant_point_attention.values.local_points",
+                "instanceFactRef": "block_instances.structure_ipa.values.local_points",
+                "occurrences": [
+                  {
+                    "start": 50,
+                    "end": 59
+                  }
+                ]
+              },
+              {
+                "lexeme": "k_p_local",
+                "access": "read",
+                "localRef": "values.local_points",
+                "templateFactRef": "standard_blocks.invariant_point_attention.values.local_points",
+                "instanceFactRef": "block_instances.structure_ipa.values.local_points",
+                "occurrences": [
+                  {
+                    "start": 61,
+                    "end": 70
+                  }
+                ]
+              },
+              {
+                "lexeme": "v_p_local",
+                "access": "read",
+                "localRef": "values.local_points",
+                "templateFactRef": "standard_blocks.invariant_point_attention.values.local_points",
+                "instanceFactRef": "block_instances.structure_ipa.values.local_points",
+                "occurrences": [
+                  {
+                    "start": 72,
+                    "end": 81
+                  }
+                ]
+              }
             ]
           },
           {
@@ -982,6 +1183,47 @@ export const manifest = {
             ],
             "outputs": [
               "values.scalar_logits"
+            ],
+            "codeBindings": [
+              {
+                "lexeme": "scalar_logits",
+                "access": "write",
+                "localRef": "values.scalar_logits",
+                "templateFactRef": "standard_blocks.invariant_point_attention.values.scalar_logits",
+                "instanceFactRef": "block_instances.structure_ipa.values.scalar_logits",
+                "occurrences": [
+                  {
+                    "start": 0,
+                    "end": 13
+                  }
+                ]
+              },
+              {
+                "lexeme": "q_s",
+                "access": "read",
+                "localRef": "values.scalar_terms",
+                "templateFactRef": "standard_blocks.invariant_point_attention.values.scalar_terms",
+                "instanceFactRef": "block_instances.structure_ipa.values.scalar_terms",
+                "occurrences": [
+                  {
+                    "start": 20,
+                    "end": 23
+                  }
+                ]
+              },
+              {
+                "lexeme": "k_s",
+                "access": "read",
+                "localRef": "values.scalar_terms",
+                "templateFactRef": "standard_blocks.invariant_point_attention.values.scalar_terms",
+                "instanceFactRef": "block_instances.structure_ipa.values.scalar_terms",
+                "occurrences": [
+                  {
+                    "start": 25,
+                    "end": 28
+                  }
+                ]
+              }
             ]
           },
           {
@@ -990,12 +1232,53 @@ export const manifest = {
             "instanceFactRef": "block_instances.structure_ipa.steps.point_distance_logits",
             "label": "Form point-distance logits",
             "operation": "invariant_point_distance",
-            "code": "point_logits = -0.5 * point_weight * squared_distance(q_p, k_p)",
+            "code": "point_logits = -0.5 * point_weight * squared_distance(q_p_global, k_p_global)",
             "inputs": [
               "values.global_points"
             ],
             "outputs": [
               "values.point_logits"
+            ],
+            "codeBindings": [
+              {
+                "lexeme": "point_logits",
+                "access": "write",
+                "localRef": "values.point_logits",
+                "templateFactRef": "standard_blocks.invariant_point_attention.values.point_logits",
+                "instanceFactRef": "block_instances.structure_ipa.values.point_logits",
+                "occurrences": [
+                  {
+                    "start": 0,
+                    "end": 12
+                  }
+                ]
+              },
+              {
+                "lexeme": "q_p_global",
+                "access": "read",
+                "localRef": "values.global_points",
+                "templateFactRef": "standard_blocks.invariant_point_attention.values.global_points",
+                "instanceFactRef": "block_instances.structure_ipa.values.global_points",
+                "occurrences": [
+                  {
+                    "start": 54,
+                    "end": 64
+                  }
+                ]
+              },
+              {
+                "lexeme": "k_p_global",
+                "access": "read",
+                "localRef": "values.global_points",
+                "templateFactRef": "standard_blocks.invariant_point_attention.values.global_points",
+                "instanceFactRef": "block_instances.structure_ipa.values.global_points",
+                "occurrences": [
+                  {
+                    "start": 66,
+                    "end": 76
+                  }
+                ]
+              }
             ]
           },
           {
@@ -1010,6 +1293,34 @@ export const manifest = {
             ],
             "outputs": [
               "values.pair_bias"
+            ],
+            "codeBindings": [
+              {
+                "lexeme": "pair_bias",
+                "access": "write",
+                "localRef": "values.pair_bias",
+                "templateFactRef": "standard_blocks.invariant_point_attention.values.pair_bias",
+                "instanceFactRef": "block_instances.structure_ipa.values.pair_bias",
+                "occurrences": [
+                  {
+                    "start": 0,
+                    "end": 9
+                  }
+                ]
+              },
+              {
+                "lexeme": "pair_context",
+                "access": "read",
+                "localRef": "ports.pair_context",
+                "templateFactRef": "standard_blocks.invariant_point_attention.ports.pair_context",
+                "instanceFactRef": "block_instances.structure_ipa.ports.pair_context",
+                "occurrences": [
+                  {
+                    "start": 21,
+                    "end": 33
+                  }
+                ]
+              }
             ]
           },
           {
@@ -1018,7 +1329,7 @@ export const manifest = {
             "instanceFactRef": "block_instances.structure_ipa.steps.combine_and_mask_logits",
             "label": "Combine logits and apply mask",
             "operation": "ipa_logit_composition",
-            "code": "combined_logits = mask(scalar_logits + point_logits + pair_bias)",
+            "code": "combined_logits = apply_mask(scalar_logits + point_logits + pair_bias, mask)",
             "inputs": [
               "values.scalar_logits",
               "values.point_logits",
@@ -1027,6 +1338,73 @@ export const manifest = {
             ],
             "outputs": [
               "values.combined_logits"
+            ],
+            "codeBindings": [
+              {
+                "lexeme": "combined_logits",
+                "access": "write",
+                "localRef": "values.combined_logits",
+                "templateFactRef": "standard_blocks.invariant_point_attention.values.combined_logits",
+                "instanceFactRef": "block_instances.structure_ipa.values.combined_logits",
+                "occurrences": [
+                  {
+                    "start": 0,
+                    "end": 15
+                  }
+                ]
+              },
+              {
+                "lexeme": "scalar_logits",
+                "access": "read",
+                "localRef": "values.scalar_logits",
+                "templateFactRef": "standard_blocks.invariant_point_attention.values.scalar_logits",
+                "instanceFactRef": "block_instances.structure_ipa.values.scalar_logits",
+                "occurrences": [
+                  {
+                    "start": 29,
+                    "end": 42
+                  }
+                ]
+              },
+              {
+                "lexeme": "point_logits",
+                "access": "read",
+                "localRef": "values.point_logits",
+                "templateFactRef": "standard_blocks.invariant_point_attention.values.point_logits",
+                "instanceFactRef": "block_instances.structure_ipa.values.point_logits",
+                "occurrences": [
+                  {
+                    "start": 45,
+                    "end": 57
+                  }
+                ]
+              },
+              {
+                "lexeme": "pair_bias",
+                "access": "read",
+                "localRef": "values.pair_bias",
+                "templateFactRef": "standard_blocks.invariant_point_attention.values.pair_bias",
+                "instanceFactRef": "block_instances.structure_ipa.values.pair_bias",
+                "occurrences": [
+                  {
+                    "start": 60,
+                    "end": 69
+                  }
+                ]
+              },
+              {
+                "lexeme": "mask",
+                "access": "read",
+                "localRef": "ports.mask",
+                "templateFactRef": "standard_blocks.invariant_point_attention.ports.mask",
+                "instanceFactRef": "block_instances.structure_ipa.ports.mask",
+                "occurrences": [
+                  {
+                    "start": 71,
+                    "end": 75
+                  }
+                ]
+              }
             ]
           },
           {
@@ -1035,12 +1413,40 @@ export const manifest = {
             "instanceFactRef": "block_instances.structure_ipa.steps.softmax_attention",
             "label": "Normalize over keys",
             "operation": "softmax",
-            "code": "attention = softmax(attention_logits, dim=keys)",
+            "code": "attention = softmax(combined_logits, dim=keys)",
             "inputs": [
               "values.combined_logits"
             ],
             "outputs": [
               "values.attention_weights"
+            ],
+            "codeBindings": [
+              {
+                "lexeme": "attention",
+                "access": "write",
+                "localRef": "values.attention_weights",
+                "templateFactRef": "standard_blocks.invariant_point_attention.values.attention_weights",
+                "instanceFactRef": "block_instances.structure_ipa.values.attention_weights",
+                "occurrences": [
+                  {
+                    "start": 0,
+                    "end": 9
+                  }
+                ]
+              },
+              {
+                "lexeme": "combined_logits",
+                "access": "read",
+                "localRef": "values.combined_logits",
+                "templateFactRef": "standard_blocks.invariant_point_attention.values.combined_logits",
+                "instanceFactRef": "block_instances.structure_ipa.values.combined_logits",
+                "occurrences": [
+                  {
+                    "start": 20,
+                    "end": 35
+                  }
+                ]
+              }
             ]
           },
           {
@@ -1056,6 +1462,47 @@ export const manifest = {
             ],
             "outputs": [
               "values.scalar_context"
+            ],
+            "codeBindings": [
+              {
+                "lexeme": "scalar_context",
+                "access": "write",
+                "localRef": "values.scalar_context",
+                "templateFactRef": "standard_blocks.invariant_point_attention.values.scalar_context",
+                "instanceFactRef": "block_instances.structure_ipa.values.scalar_context",
+                "occurrences": [
+                  {
+                    "start": 0,
+                    "end": 14
+                  }
+                ]
+              },
+              {
+                "lexeme": "attention",
+                "access": "read",
+                "localRef": "values.attention_weights",
+                "templateFactRef": "standard_blocks.invariant_point_attention.values.attention_weights",
+                "instanceFactRef": "block_instances.structure_ipa.values.attention_weights",
+                "occurrences": [
+                  {
+                    "start": 30,
+                    "end": 39
+                  }
+                ]
+              },
+              {
+                "lexeme": "v_s",
+                "access": "read",
+                "localRef": "values.scalar_terms",
+                "templateFactRef": "standard_blocks.invariant_point_attention.values.scalar_terms",
+                "instanceFactRef": "block_instances.structure_ipa.values.scalar_terms",
+                "occurrences": [
+                  {
+                    "start": 41,
+                    "end": 44
+                  }
+                ]
+              }
             ]
           },
           {
@@ -1071,6 +1518,47 @@ export const manifest = {
             ],
             "outputs": [
               "values.global_point_context"
+            ],
+            "codeBindings": [
+              {
+                "lexeme": "global_point_context",
+                "access": "write",
+                "localRef": "values.global_point_context",
+                "templateFactRef": "standard_blocks.invariant_point_attention.values.global_point_context",
+                "instanceFactRef": "block_instances.structure_ipa.values.global_point_context",
+                "occurrences": [
+                  {
+                    "start": 0,
+                    "end": 20
+                  }
+                ]
+              },
+              {
+                "lexeme": "attention",
+                "access": "read",
+                "localRef": "values.attention_weights",
+                "templateFactRef": "standard_blocks.invariant_point_attention.values.attention_weights",
+                "instanceFactRef": "block_instances.structure_ipa.values.attention_weights",
+                "occurrences": [
+                  {
+                    "start": 36,
+                    "end": 45
+                  }
+                ]
+              },
+              {
+                "lexeme": "v_p_global",
+                "access": "read",
+                "localRef": "values.global_points",
+                "templateFactRef": "standard_blocks.invariant_point_attention.values.global_points",
+                "instanceFactRef": "block_instances.structure_ipa.values.global_points",
+                "occurrences": [
+                  {
+                    "start": 47,
+                    "end": 57
+                  }
+                ]
+              }
             ]
           },
           {
@@ -1079,13 +1567,58 @@ export const manifest = {
             "instanceFactRef": "block_instances.structure_ipa.steps.return_points_to_local_frame",
             "label": "Return points to query frame",
             "operation": "rigid_inverse_apply",
-            "code": "local_point_context = concat(frames.invert_apply(global_points), point_norms)",
+            "code": "local_point_context = concat(frames.invert_apply(global_point_context), point_norms(global_point_context))",
             "inputs": [
               "values.global_point_context",
               "ports.frames"
             ],
             "outputs": [
               "values.local_point_context"
+            ],
+            "codeBindings": [
+              {
+                "lexeme": "local_point_context",
+                "access": "write",
+                "localRef": "values.local_point_context",
+                "templateFactRef": "standard_blocks.invariant_point_attention.values.local_point_context",
+                "instanceFactRef": "block_instances.structure_ipa.values.local_point_context",
+                "occurrences": [
+                  {
+                    "start": 0,
+                    "end": 19
+                  }
+                ]
+              },
+              {
+                "lexeme": "frames",
+                "access": "read",
+                "localRef": "ports.frames",
+                "templateFactRef": "standard_blocks.invariant_point_attention.ports.frames",
+                "instanceFactRef": "block_instances.structure_ipa.ports.frames",
+                "occurrences": [
+                  {
+                    "start": 29,
+                    "end": 35
+                  }
+                ]
+              },
+              {
+                "lexeme": "global_point_context",
+                "access": "read",
+                "localRef": "values.global_point_context",
+                "templateFactRef": "standard_blocks.invariant_point_attention.values.global_point_context",
+                "instanceFactRef": "block_instances.structure_ipa.values.global_point_context",
+                "occurrences": [
+                  {
+                    "start": 49,
+                    "end": 69
+                  },
+                  {
+                    "start": 84,
+                    "end": 104
+                  }
+                ]
+              }
             ]
           },
           {
@@ -1101,6 +1634,47 @@ export const manifest = {
             ],
             "outputs": [
               "values.pair_value_context"
+            ],
+            "codeBindings": [
+              {
+                "lexeme": "pair_value_context",
+                "access": "write",
+                "localRef": "values.pair_value_context",
+                "templateFactRef": "standard_blocks.invariant_point_attention.values.pair_value_context",
+                "instanceFactRef": "block_instances.structure_ipa.values.pair_value_context",
+                "occurrences": [
+                  {
+                    "start": 0,
+                    "end": 18
+                  }
+                ]
+              },
+              {
+                "lexeme": "attention",
+                "access": "read",
+                "localRef": "values.attention_weights",
+                "templateFactRef": "standard_blocks.invariant_point_attention.values.attention_weights",
+                "instanceFactRef": "block_instances.structure_ipa.values.attention_weights",
+                "occurrences": [
+                  {
+                    "start": 34,
+                    "end": 43
+                  }
+                ]
+              },
+              {
+                "lexeme": "pair_context",
+                "access": "read",
+                "localRef": "ports.pair_context",
+                "templateFactRef": "standard_blocks.invariant_point_attention.ports.pair_context",
+                "instanceFactRef": "block_instances.structure_ipa.ports.pair_context",
+                "occurrences": [
+                  {
+                    "start": 45,
+                    "end": 57
+                  }
+                ]
+              }
             ]
           },
           {
@@ -1109,7 +1683,7 @@ export const manifest = {
             "instanceFactRef": "block_instances.structure_ipa.steps.project_ipa_delta",
             "label": "Fuse IPA outputs",
             "operation": "output_projection",
-            "code": "ipa_delta = output_projection(concat(scalar_context, local_points, pair_values))",
+            "code": "ipa_delta = output_projection(concat(scalar_context, local_point_context, pair_value_context))",
             "inputs": [
               "values.scalar_context",
               "values.local_point_context",
@@ -1117,6 +1691,60 @@ export const manifest = {
             ],
             "outputs": [
               "values.ipa_delta"
+            ],
+            "codeBindings": [
+              {
+                "lexeme": "ipa_delta",
+                "access": "write",
+                "localRef": "values.ipa_delta",
+                "templateFactRef": "standard_blocks.invariant_point_attention.values.ipa_delta",
+                "instanceFactRef": "block_instances.structure_ipa.values.ipa_delta",
+                "occurrences": [
+                  {
+                    "start": 0,
+                    "end": 9
+                  }
+                ]
+              },
+              {
+                "lexeme": "scalar_context",
+                "access": "read",
+                "localRef": "values.scalar_context",
+                "templateFactRef": "standard_blocks.invariant_point_attention.values.scalar_context",
+                "instanceFactRef": "block_instances.structure_ipa.values.scalar_context",
+                "occurrences": [
+                  {
+                    "start": 37,
+                    "end": 51
+                  }
+                ]
+              },
+              {
+                "lexeme": "local_point_context",
+                "access": "read",
+                "localRef": "values.local_point_context",
+                "templateFactRef": "standard_blocks.invariant_point_attention.values.local_point_context",
+                "instanceFactRef": "block_instances.structure_ipa.values.local_point_context",
+                "occurrences": [
+                  {
+                    "start": 53,
+                    "end": 72
+                  }
+                ]
+              },
+              {
+                "lexeme": "pair_value_context",
+                "access": "read",
+                "localRef": "values.pair_value_context",
+                "templateFactRef": "standard_blocks.invariant_point_attention.values.pair_value_context",
+                "instanceFactRef": "block_instances.structure_ipa.values.pair_value_context",
+                "occurrences": [
+                  {
+                    "start": 74,
+                    "end": 92
+                  }
+                ]
+              }
             ]
           },
           {
@@ -1132,6 +1760,47 @@ export const manifest = {
             ],
             "outputs": [
               "ports.updated_single_state"
+            ],
+            "codeBindings": [
+              {
+                "lexeme": "updated_single_state",
+                "access": "write",
+                "localRef": "ports.updated_single_state",
+                "templateFactRef": "standard_blocks.invariant_point_attention.ports.updated_single_state",
+                "instanceFactRef": "block_instances.structure_ipa.ports.updated_single_state",
+                "occurrences": [
+                  {
+                    "start": 0,
+                    "end": 20
+                  }
+                ]
+              },
+              {
+                "lexeme": "single_state",
+                "access": "read",
+                "localRef": "ports.single_state",
+                "templateFactRef": "standard_blocks.invariant_point_attention.ports.single_state",
+                "instanceFactRef": "block_instances.structure_ipa.ports.single_state",
+                "occurrences": [
+                  {
+                    "start": 34,
+                    "end": 46
+                  }
+                ]
+              },
+              {
+                "lexeme": "ipa_delta",
+                "access": "read",
+                "localRef": "values.ipa_delta",
+                "templateFactRef": "standard_blocks.invariant_point_attention.values.ipa_delta",
+                "instanceFactRef": "block_instances.structure_ipa.values.ipa_delta",
+                "occurrences": [
+                  {
+                    "start": 57,
+                    "end": 66
+                  }
+                ]
+              }
             ]
           }
         ]
@@ -3921,12 +4590,12 @@ export const manifest = {
         },
         {
           "id": "project_local_points",
-          "text": "q_p, k_p, v_p = project_point_qkv(single_state)",
+          "text": "q_p_local, k_p_local, v_p_local = project_point_qkv(single_state)",
           "operation": "point_qkv_projection"
         },
         {
           "id": "transform_points_to_global",
-          "text": "q_p, k_p, v_p = frames.apply(q_p, k_p, v_p)",
+          "text": "q_p_global, k_p_global, v_p_global = frames.apply(q_p_local, k_p_local, v_p_local)",
           "operation": "rigid_apply"
         },
         {
@@ -3936,7 +4605,7 @@ export const manifest = {
         },
         {
           "id": "point_distance_logits",
-          "text": "point_logits = -0.5 * point_weight * squared_distance(q_p, k_p)",
+          "text": "point_logits = -0.5 * point_weight * squared_distance(q_p_global, k_p_global)",
           "operation": "invariant_point_distance"
         },
         {
@@ -3946,12 +4615,12 @@ export const manifest = {
         },
         {
           "id": "combine_and_mask_logits",
-          "text": "combined_logits = mask(scalar_logits + point_logits + pair_bias)",
+          "text": "combined_logits = apply_mask(scalar_logits + point_logits + pair_bias, mask)",
           "operation": "ipa_logit_composition"
         },
         {
           "id": "softmax_attention",
-          "text": "attention = softmax(attention_logits, dim=keys)",
+          "text": "attention = softmax(combined_logits, dim=keys)",
           "operation": "softmax"
         },
         {
@@ -3966,7 +4635,7 @@ export const manifest = {
         },
         {
           "id": "return_points_to_local_frame",
-          "text": "local_point_context = concat(frames.invert_apply(global_points), point_norms)",
+          "text": "local_point_context = concat(frames.invert_apply(global_point_context), point_norms(global_point_context))",
           "operation": "rigid_inverse_apply"
         },
         {
@@ -3976,7 +4645,7 @@ export const manifest = {
         },
         {
           "id": "project_ipa_delta",
-          "text": "ipa_delta = output_projection(concat(scalar_context, local_points, pair_values))",
+          "text": "ipa_delta = output_projection(concat(scalar_context, local_point_context, pair_value_context))",
           "operation": "output_projection"
         },
         {
@@ -4187,7 +4856,29 @@ export const manifest = {
           "outputs": [
             "values.scalar_terms"
           ],
-          "code": "q_s, k_s, v_s = project_scalar_qkv(single_state)"
+          "code": "q_s, k_s, v_s = project_scalar_qkv(single_state)",
+          "code_bindings": [
+            {
+              "lexeme": "q_s",
+              "ref": "values.scalar_terms",
+              "access": "write"
+            },
+            {
+              "lexeme": "k_s",
+              "ref": "values.scalar_terms",
+              "access": "write"
+            },
+            {
+              "lexeme": "v_s",
+              "ref": "values.scalar_terms",
+              "access": "write"
+            },
+            {
+              "lexeme": "single_state",
+              "ref": "ports.single_state",
+              "access": "read"
+            }
+          ]
         },
         {
           "id": "project_local_points",
@@ -4199,7 +4890,29 @@ export const manifest = {
           "outputs": [
             "values.local_points"
           ],
-          "code": "q_p, k_p, v_p = project_point_qkv(single_state)"
+          "code": "q_p_local, k_p_local, v_p_local = project_point_qkv(single_state)",
+          "code_bindings": [
+            {
+              "lexeme": "q_p_local",
+              "ref": "values.local_points",
+              "access": "write"
+            },
+            {
+              "lexeme": "k_p_local",
+              "ref": "values.local_points",
+              "access": "write"
+            },
+            {
+              "lexeme": "v_p_local",
+              "ref": "values.local_points",
+              "access": "write"
+            },
+            {
+              "lexeme": "single_state",
+              "ref": "ports.single_state",
+              "access": "read"
+            }
+          ]
         },
         {
           "id": "transform_points_to_global",
@@ -4212,7 +4925,44 @@ export const manifest = {
           "outputs": [
             "values.global_points"
           ],
-          "code": "q_p, k_p, v_p = frames.apply(q_p, k_p, v_p)"
+          "code": "q_p_global, k_p_global, v_p_global = frames.apply(q_p_local, k_p_local, v_p_local)",
+          "code_bindings": [
+            {
+              "lexeme": "q_p_global",
+              "ref": "values.global_points",
+              "access": "write"
+            },
+            {
+              "lexeme": "k_p_global",
+              "ref": "values.global_points",
+              "access": "write"
+            },
+            {
+              "lexeme": "v_p_global",
+              "ref": "values.global_points",
+              "access": "write"
+            },
+            {
+              "lexeme": "frames",
+              "ref": "ports.frames",
+              "access": "read"
+            },
+            {
+              "lexeme": "q_p_local",
+              "ref": "values.local_points",
+              "access": "read"
+            },
+            {
+              "lexeme": "k_p_local",
+              "ref": "values.local_points",
+              "access": "read"
+            },
+            {
+              "lexeme": "v_p_local",
+              "ref": "values.local_points",
+              "access": "read"
+            }
+          ]
         },
         {
           "id": "scalar_attention_logits",
@@ -4224,7 +4974,24 @@ export const manifest = {
           "outputs": [
             "values.scalar_logits"
           ],
-          "code": "scalar_logits = dot(q_s, k_s) * scalar_scale"
+          "code": "scalar_logits = dot(q_s, k_s) * scalar_scale",
+          "code_bindings": [
+            {
+              "lexeme": "scalar_logits",
+              "ref": "values.scalar_logits",
+              "access": "write"
+            },
+            {
+              "lexeme": "q_s",
+              "ref": "values.scalar_terms",
+              "access": "read"
+            },
+            {
+              "lexeme": "k_s",
+              "ref": "values.scalar_terms",
+              "access": "read"
+            }
+          ]
         },
         {
           "id": "point_distance_logits",
@@ -4236,7 +5003,24 @@ export const manifest = {
           "outputs": [
             "values.point_logits"
           ],
-          "code": "point_logits = -0.5 * point_weight * squared_distance(q_p, k_p)"
+          "code": "point_logits = -0.5 * point_weight * squared_distance(q_p_global, k_p_global)",
+          "code_bindings": [
+            {
+              "lexeme": "point_logits",
+              "ref": "values.point_logits",
+              "access": "write"
+            },
+            {
+              "lexeme": "q_p_global",
+              "ref": "values.global_points",
+              "access": "read"
+            },
+            {
+              "lexeme": "k_p_global",
+              "ref": "values.global_points",
+              "access": "read"
+            }
+          ]
         },
         {
           "id": "project_pair_bias",
@@ -4248,7 +5032,19 @@ export const manifest = {
           "outputs": [
             "values.pair_bias"
           ],
-          "code": "pair_bias = linear_b(pair_context)"
+          "code": "pair_bias = linear_b(pair_context)",
+          "code_bindings": [
+            {
+              "lexeme": "pair_bias",
+              "ref": "values.pair_bias",
+              "access": "write"
+            },
+            {
+              "lexeme": "pair_context",
+              "ref": "ports.pair_context",
+              "access": "read"
+            }
+          ]
         },
         {
           "id": "combine_and_mask_logits",
@@ -4263,7 +5059,34 @@ export const manifest = {
           "outputs": [
             "values.combined_logits"
           ],
-          "code": "combined_logits = mask(scalar_logits + point_logits + pair_bias)"
+          "code": "combined_logits = apply_mask(scalar_logits + point_logits + pair_bias, mask)",
+          "code_bindings": [
+            {
+              "lexeme": "combined_logits",
+              "ref": "values.combined_logits",
+              "access": "write"
+            },
+            {
+              "lexeme": "scalar_logits",
+              "ref": "values.scalar_logits",
+              "access": "read"
+            },
+            {
+              "lexeme": "point_logits",
+              "ref": "values.point_logits",
+              "access": "read"
+            },
+            {
+              "lexeme": "pair_bias",
+              "ref": "values.pair_bias",
+              "access": "read"
+            },
+            {
+              "lexeme": "mask",
+              "ref": "ports.mask",
+              "access": "read"
+            }
+          ]
         },
         {
           "id": "softmax_attention",
@@ -4275,7 +5098,19 @@ export const manifest = {
           "outputs": [
             "values.attention_weights"
           ],
-          "code": "attention = softmax(attention_logits, dim=keys)"
+          "code": "attention = softmax(combined_logits, dim=keys)",
+          "code_bindings": [
+            {
+              "lexeme": "attention",
+              "ref": "values.attention_weights",
+              "access": "write"
+            },
+            {
+              "lexeme": "combined_logits",
+              "ref": "values.combined_logits",
+              "access": "read"
+            }
+          ]
         },
         {
           "id": "aggregate_scalar_values",
@@ -4288,7 +5123,24 @@ export const manifest = {
           "outputs": [
             "values.scalar_context"
           ],
-          "code": "scalar_context = weighted_sum(attention, v_s)"
+          "code": "scalar_context = weighted_sum(attention, v_s)",
+          "code_bindings": [
+            {
+              "lexeme": "scalar_context",
+              "ref": "values.scalar_context",
+              "access": "write"
+            },
+            {
+              "lexeme": "attention",
+              "ref": "values.attention_weights",
+              "access": "read"
+            },
+            {
+              "lexeme": "v_s",
+              "ref": "values.scalar_terms",
+              "access": "read"
+            }
+          ]
         },
         {
           "id": "aggregate_global_points",
@@ -4301,7 +5153,24 @@ export const manifest = {
           "outputs": [
             "values.global_point_context"
           ],
-          "code": "global_point_context = weighted_sum(attention, v_p_global)"
+          "code": "global_point_context = weighted_sum(attention, v_p_global)",
+          "code_bindings": [
+            {
+              "lexeme": "global_point_context",
+              "ref": "values.global_point_context",
+              "access": "write"
+            },
+            {
+              "lexeme": "attention",
+              "ref": "values.attention_weights",
+              "access": "read"
+            },
+            {
+              "lexeme": "v_p_global",
+              "ref": "values.global_points",
+              "access": "read"
+            }
+          ]
         },
         {
           "id": "return_points_to_local_frame",
@@ -4314,7 +5183,24 @@ export const manifest = {
           "outputs": [
             "values.local_point_context"
           ],
-          "code": "local_point_context = concat(frames.invert_apply(global_points), point_norms)"
+          "code": "local_point_context = concat(frames.invert_apply(global_point_context), point_norms(global_point_context))",
+          "code_bindings": [
+            {
+              "lexeme": "local_point_context",
+              "ref": "values.local_point_context",
+              "access": "write"
+            },
+            {
+              "lexeme": "frames",
+              "ref": "ports.frames",
+              "access": "read"
+            },
+            {
+              "lexeme": "global_point_context",
+              "ref": "values.global_point_context",
+              "access": "read"
+            }
+          ]
         },
         {
           "id": "aggregate_pair_values",
@@ -4327,7 +5213,24 @@ export const manifest = {
           "outputs": [
             "values.pair_value_context"
           ],
-          "code": "pair_value_context = weighted_sum(attention, pair_context)"
+          "code": "pair_value_context = weighted_sum(attention, pair_context)",
+          "code_bindings": [
+            {
+              "lexeme": "pair_value_context",
+              "ref": "values.pair_value_context",
+              "access": "write"
+            },
+            {
+              "lexeme": "attention",
+              "ref": "values.attention_weights",
+              "access": "read"
+            },
+            {
+              "lexeme": "pair_context",
+              "ref": "ports.pair_context",
+              "access": "read"
+            }
+          ]
         },
         {
           "id": "project_ipa_delta",
@@ -4341,7 +5244,29 @@ export const manifest = {
           "outputs": [
             "values.ipa_delta"
           ],
-          "code": "ipa_delta = output_projection(concat(scalar_context, local_points, pair_values))"
+          "code": "ipa_delta = output_projection(concat(scalar_context, local_point_context, pair_value_context))",
+          "code_bindings": [
+            {
+              "lexeme": "ipa_delta",
+              "ref": "values.ipa_delta",
+              "access": "write"
+            },
+            {
+              "lexeme": "scalar_context",
+              "ref": "values.scalar_context",
+              "access": "read"
+            },
+            {
+              "lexeme": "local_point_context",
+              "ref": "values.local_point_context",
+              "access": "read"
+            },
+            {
+              "lexeme": "pair_value_context",
+              "ref": "values.pair_value_context",
+              "access": "read"
+            }
+          ]
         },
         {
           "id": "residual_norm",
@@ -4354,7 +5279,24 @@ export const manifest = {
           "outputs": [
             "ports.updated_single_state"
           ],
-          "code": "updated_single_state = layer_norm(single_state + dropout(ipa_delta))"
+          "code": "updated_single_state = layer_norm(single_state + dropout(ipa_delta))",
+          "code_bindings": [
+            {
+              "lexeme": "updated_single_state",
+              "ref": "ports.updated_single_state",
+              "access": "write"
+            },
+            {
+              "lexeme": "single_state",
+              "ref": "ports.single_state",
+              "access": "read"
+            },
+            {
+              "lexeme": "ipa_delta",
+              "ref": "values.ipa_delta",
+              "access": "read"
+            }
+          ]
         }
       ],
       "visualTemplate": {
@@ -4684,7 +5626,10 @@ export const manifest = {
   },
   "pseudocode": {
     "genie2": {
-      "sourceYaml": "../../pseudocode/genie2.yaml",
+      "schemaVersion": "pseudocode-v0.1",
+      "compilerVersion": "semantic-pseudocode-compiler-v0.3",
+      "id": "genie2",
+      "title": "Genie 2 Sampling and Denoiser Trace",
       "sources": [
         {
           "id": "sampler_code",
@@ -4711,66 +5656,118 @@ export const manifest = {
           "source_ref": "genie2_structure_code"
         }
       ],
+      "scopes": [
+
+      ],
       "symbols": [
         {
           "id": "feature_bundle",
           "name": "features",
+          "type": "input",
+          "shape": "B x N fields + B x N x N masks",
+          "representationRef": "representations.feature_bundle",
+          "scale": "mixed",
           "architectureRef": "representations.feature_bundle"
         },
         {
           "id": "current_coordinates",
           "name": "x_t",
           "tex": "x_t",
+          "type": "state",
+          "shape": "B x N x 3",
+          "representationRef": "representations.ca_coordinates",
+          "scale": "residue",
+          "glyph": "coordinates",
           "architectureRef": "representations.ca_coordinates"
         },
         {
           "id": "current_frames",
           "name": "T_t",
           "tex": "T_t",
+          "type": "representation",
+          "shape": "B x N x (3 x 3 + 3)",
+          "representationRef": "representations.residue_frames",
+          "scale": "residue",
+          "glyph": "frames",
           "architectureRef": "representations.residue_frames"
         },
         {
           "id": "timestep",
           "name": "t",
+          "type": "input",
+          "shape": "B",
+          "representationRef": "representations.timestep",
+          "scale": "sample",
           "architectureRef": "representations.timestep"
         },
         {
           "id": "single_features",
           "name": "s",
+          "type": "representation",
+          "shape": "B x N x 384",
+          "representationRef": "representations.single_features",
+          "scale": "residue",
           "architectureRef": "representations.single_features"
         },
         {
           "id": "pair_features",
           "name": "p",
+          "type": "representation",
+          "shape": "B x N x N x 128",
+          "representationRef": "representations.pair_features",
+          "scale": "pair",
           "architectureRef": "representations.pair_features"
         },
         {
           "id": "updated_frames",
           "name": "T_hat",
           "tex": "\\hat{T}",
+          "type": "representation",
+          "shape": "B x N x (3 x 3 + 3)",
+          "representationRef": "representations.residue_frames",
+          "scale": "residue",
+          "glyph": "frames",
           "architectureRef": "representations.residue_frames"
         },
         {
           "id": "predicted_noise",
           "name": "z_theta",
           "tex": "z_\\theta",
+          "type": "output",
+          "shape": "B x N x 3",
+          "representationRef": "representations.coordinate_noise",
+          "scale": "residue",
           "architectureRef": "representations.coordinate_noise"
         },
         {
           "id": "step_noise",
           "name": "z",
+          "type": "input",
+          "shape": "B x N x 3",
+          "representationRef": "representations.coordinate_noise",
+          "scale": "residue",
           "architectureRef": "representations.coordinate_noise"
         },
         {
           "id": "next_coordinates",
           "name": "x_(t-1)",
           "tex": "x_{t-1}",
+          "type": "state",
+          "shape": "B x N x 3",
+          "representationRef": "representations.ca_coordinates",
+          "scale": "residue",
+          "glyph": "coordinates",
           "architectureRef": "representations.ca_coordinates"
         },
         {
           "id": "final_coordinates",
           "name": "x_0",
           "tex": "x_0",
+          "type": "output",
+          "shape": "B x N x 3",
+          "representationRef": "representations.ca_coordinates",
+          "scale": "residue",
+          "glyph": "coordinates",
           "architectureRef": "representations.ca_coordinates"
         }
       ],
@@ -4779,6 +5776,12 @@ export const manifest = {
           "id": "initialize_coordinates",
           "text": "x_t = randn_like(features.atom_positions)",
           "refs": "BaseSampler._sample",
+          "sourceRefs": [
+            {
+              "source": "sampler_code",
+              "locator": "BaseSampler._sample"
+            }
+          ],
           "architectureRefs": [
             "modules.coordinate_initializer"
           ],
@@ -4794,6 +5797,12 @@ export const manifest = {
           "id": "derive_current_frames",
           "text": "T_t = Frames(rotation=Frenet(x_t, chain_index, mask), translation=x_t)",
           "refs": "BaseSampler._sample",
+          "sourceRefs": [
+            {
+              "source": "sampler_code",
+              "locator": "BaseSampler._sample"
+            }
+          ],
           "architectureRefs": [
             "modules.frenet_frame_builder"
           ],
@@ -4810,6 +5819,12 @@ export const manifest = {
           "id": "encode_single_state",
           "text": "s = Linear(concat(residue_pos, chain_pos, time(t), masked_motif_aatype, masks))",
           "refs": "SingleFeatureNet.forward",
+          "sourceRefs": [
+            {
+              "source": "single_code",
+              "locator": "SingleFeatureNet.forward"
+            }
+          ],
           "architectureRefs": [
             "modules.single_feature_net"
           ],
@@ -4826,6 +5841,12 @@ export const manifest = {
           "id": "encode_pair_state",
           "text": "p = OuterSum(s) + RelPos(features) + NoisyFrameTemplate(T_t) + MaskedMotifDistances(features)",
           "refs": "PairFeatureNet.forward",
+          "sourceRefs": [
+            {
+              "source": "pair_code",
+              "locator": "PairFeatureNet.forward"
+            }
+          ],
           "architectureRefs": [
             "modules.pair_feature_net",
             "claims.motif_geometry_is_intra_group"
@@ -4844,6 +5865,12 @@ export const manifest = {
           "id": "refine_pair_state",
           "text": "repeat 5: p += TriMulOutgoing(p); p += TriMulIncoming(p); p += PairTransition(p)",
           "refs": "PairTransformLayer.forward",
+          "sourceRefs": [
+            {
+              "source": "pair_transform_code",
+              "locator": "PairTransformLayer.forward"
+            }
+          ],
           "architectureRefs": [
             "modules.pair_transform_stack",
             "claims.base_model_omits_triangle_attention"
@@ -4860,6 +5887,12 @@ export const manifest = {
           "id": "update_structure",
           "text": "repeat 8: s = Transition(LayerNorm(s + IPA(s, p, T_t))); T_t = T_t.compose(BackboneUpdate(s))",
           "refs": "StructureLayer.forward and StructureNet.forward",
+          "sourceRefs": [
+            {
+              "source": "structure_code",
+              "locator": "StructureLayer.forward and StructureNet.forward"
+            }
+          ],
           "architectureRefs": [
             "modules.equivariant_structure_decoder"
           ],
@@ -4877,6 +5910,12 @@ export const manifest = {
           "id": "read_noise",
           "text": "z_theta = input_frames.trans - updated_frames.trans",
           "refs": "Denoiser.forward",
+          "sourceRefs": [
+            {
+              "source": "model_code",
+              "locator": "Denoiser.forward"
+            }
+          ],
           "architectureRefs": [
             "modules.noise_readout"
           ],
@@ -4893,6 +5932,12 @@ export const manifest = {
           "id": "reverse_step",
           "text": "mean = (x_t - ((1 - alpha_t) / sqrt(1 - alpha_bar_t)) * z_theta) / sqrt(alpha_t); x_(t-1) = mean if t == 1 else mean + scale * sqrt(beta_t) * z",
           "refs": "BaseSampler._sample",
+          "sourceRefs": [
+            {
+              "source": "sampler_code",
+              "locator": "BaseSampler._sample"
+            }
+          ],
           "architectureRefs": [
             "modules.step_noise_sampler",
             "modules.reverse_diffusion_update"
@@ -4912,6 +5957,12 @@ export const manifest = {
           "id": "emit_backbone",
           "text": "final_coordinates = x_(t-1)  # at t = 1; serialized as C-alpha PDB records",
           "refs": "BaseSampler._sample",
+          "sourceRefs": [
+            {
+              "source": "sampler_code",
+              "locator": "BaseSampler._sample"
+            }
+          ],
           "architectureRefs": [
             "modules.pdb_exporter",
             "claims.model_is_sequence_agnostic"
@@ -4950,7 +6001,8 @@ export const manifest = {
             ]
           }
         }
-      ]
+      ],
+      "sourceYaml": "../../pseudocode/genie2.yaml"
     }
   },
   "boards": {
@@ -5487,7 +6539,7 @@ export const manifest = {
             "id": "next_coordinates",
             "ref": "value_sites.next_coordinates",
             "label": "next C-alpha coordinates",
-            "notation": "x_(t-1)",
+            "notation": "x_{t-1}",
             "prominence": "secondary",
             "treatment": "compact",
             "density": "compact",
@@ -8461,7 +9513,7 @@ export const manifest = {
             "kind": "operation",
             "scale": "operation",
             "detail": "point_qkv_projection",
-            "code": "q_p, k_p, v_p = project_point_qkv(single_state)",
+            "code": "q_p_local, k_p_local, v_p_local = project_point_qkv(single_state)",
             "operation": "point_qkv_projection"
           },
           {
@@ -8497,7 +9549,7 @@ export const manifest = {
             "kind": "operation",
             "scale": "operation",
             "detail": "rigid_apply",
-            "code": "q_p, k_p, v_p = frames.apply(q_p, k_p, v_p)",
+            "code": "q_p_global, k_p_global, v_p_global = frames.apply(q_p_local, k_p_local, v_p_local)",
             "operation": "rigid_apply"
           },
           {
@@ -8533,7 +9585,7 @@ export const manifest = {
             "kind": "operation",
             "scale": "operation",
             "detail": "invariant_point_distance",
-            "code": "point_logits = -0.5 * point_weight * squared_distance(q_p, k_p)",
+            "code": "point_logits = -0.5 * point_weight * squared_distance(q_p_global, k_p_global)",
             "operation": "invariant_point_distance"
           },
           {
@@ -8605,7 +9657,7 @@ export const manifest = {
             "kind": "operation",
             "scale": "operation",
             "detail": "ipa_logit_composition",
-            "code": "combined_logits = mask(scalar_logits + point_logits + pair_bias)",
+            "code": "combined_logits = apply_mask(scalar_logits + point_logits + pair_bias, mask)",
             "operation": "ipa_logit_composition"
           },
           {
@@ -8641,7 +9693,7 @@ export const manifest = {
             "kind": "operation",
             "scale": "operation",
             "detail": "softmax",
-            "code": "attention = softmax(attention_logits, dim=keys)",
+            "code": "attention = softmax(combined_logits, dim=keys)",
             "operation": "softmax"
           },
           {
@@ -8785,7 +9837,7 @@ export const manifest = {
             "kind": "operation",
             "scale": "operation",
             "detail": "rigid_inverse_apply",
-            "code": "local_point_context = concat(frames.invert_apply(global_points), point_norms)",
+            "code": "local_point_context = concat(frames.invert_apply(global_point_context), point_norms(global_point_context))",
             "operation": "rigid_inverse_apply"
           },
           {
@@ -8821,7 +9873,7 @@ export const manifest = {
             "kind": "operation",
             "scale": "operation",
             "detail": "output_projection",
-            "code": "ipa_delta = output_projection(concat(scalar_context, local_points, pair_values))",
+            "code": "ipa_delta = output_projection(concat(scalar_context, local_point_context, pair_value_context))",
             "operation": "output_projection"
           },
           {
@@ -8928,7 +9980,7 @@ export const manifest = {
             "connection": {
               "title": "Project local Q/K/V points",
               "role": "reusable step input",
-              "inside": "q_p, k_p, v_p = project_point_qkv(single_state)"
+              "inside": "q_p_local, k_p_local, v_p_local = project_point_qkv(single_state)"
             }
           },
           {
@@ -8949,7 +10001,7 @@ export const manifest = {
             "connection": {
               "title": "Project local Q/K/V points",
               "role": "reusable step output",
-              "inside": "q_p, k_p, v_p = project_point_qkv(single_state)"
+              "inside": "q_p_local, k_p_local, v_p_local = project_point_qkv(single_state)"
             }
           },
           {
@@ -8970,7 +10022,7 @@ export const manifest = {
             "connection": {
               "title": "Express points in global frame",
               "role": "reusable step input",
-              "inside": "q_p, k_p, v_p = frames.apply(q_p, k_p, v_p)"
+              "inside": "q_p_global, k_p_global, v_p_global = frames.apply(q_p_local, k_p_local, v_p_local)"
             }
           },
           {
@@ -8995,7 +10047,7 @@ export const manifest = {
             "connection": {
               "title": "Express points in global frame",
               "role": "reusable step input",
-              "inside": "q_p, k_p, v_p = frames.apply(q_p, k_p, v_p)"
+              "inside": "q_p_global, k_p_global, v_p_global = frames.apply(q_p_local, k_p_local, v_p_local)"
             }
           },
           {
@@ -9016,7 +10068,7 @@ export const manifest = {
             "connection": {
               "title": "Express points in global frame",
               "role": "reusable step output",
-              "inside": "q_p, k_p, v_p = frames.apply(q_p, k_p, v_p)"
+              "inside": "q_p_global, k_p_global, v_p_global = frames.apply(q_p_local, k_p_local, v_p_local)"
             }
           },
           {
@@ -9079,7 +10131,7 @@ export const manifest = {
             "connection": {
               "title": "Form point-distance logits",
               "role": "reusable step input",
-              "inside": "point_logits = -0.5 * point_weight * squared_distance(q_p, k_p)"
+              "inside": "point_logits = -0.5 * point_weight * squared_distance(q_p_global, k_p_global)"
             }
           },
           {
@@ -9100,7 +10152,7 @@ export const manifest = {
             "connection": {
               "title": "Form point-distance logits",
               "role": "reusable step output",
-              "inside": "point_logits = -0.5 * point_weight * squared_distance(q_p, k_p)"
+              "inside": "point_logits = -0.5 * point_weight * squared_distance(q_p_global, k_p_global)"
             }
           },
           {
@@ -9167,7 +10219,7 @@ export const manifest = {
             "connection": {
               "title": "Combine logits and apply mask",
               "role": "reusable step input",
-              "inside": "combined_logits = mask(scalar_logits + point_logits + pair_bias)"
+              "inside": "combined_logits = apply_mask(scalar_logits + point_logits + pair_bias, mask)"
             }
           },
           {
@@ -9188,7 +10240,7 @@ export const manifest = {
             "connection": {
               "title": "Combine logits and apply mask",
               "role": "reusable step input",
-              "inside": "combined_logits = mask(scalar_logits + point_logits + pair_bias)"
+              "inside": "combined_logits = apply_mask(scalar_logits + point_logits + pair_bias, mask)"
             }
           },
           {
@@ -9209,7 +10261,7 @@ export const manifest = {
             "connection": {
               "title": "Combine logits and apply mask",
               "role": "reusable step input",
-              "inside": "combined_logits = mask(scalar_logits + point_logits + pair_bias)"
+              "inside": "combined_logits = apply_mask(scalar_logits + point_logits + pair_bias, mask)"
             }
           },
           {
@@ -9234,7 +10286,7 @@ export const manifest = {
             "connection": {
               "title": "Combine logits and apply mask",
               "role": "reusable step input",
-              "inside": "combined_logits = mask(scalar_logits + point_logits + pair_bias)"
+              "inside": "combined_logits = apply_mask(scalar_logits + point_logits + pair_bias, mask)"
             }
           },
           {
@@ -9255,7 +10307,7 @@ export const manifest = {
             "connection": {
               "title": "Combine logits and apply mask",
               "role": "reusable step output",
-              "inside": "combined_logits = mask(scalar_logits + point_logits + pair_bias)"
+              "inside": "combined_logits = apply_mask(scalar_logits + point_logits + pair_bias, mask)"
             }
           },
           {
@@ -9276,7 +10328,7 @@ export const manifest = {
             "connection": {
               "title": "Normalize over keys",
               "role": "reusable step input",
-              "inside": "attention = softmax(attention_logits, dim=keys)"
+              "inside": "attention = softmax(combined_logits, dim=keys)"
             }
           },
           {
@@ -9297,7 +10349,7 @@ export const manifest = {
             "connection": {
               "title": "Normalize over keys",
               "role": "reusable step output",
-              "inside": "attention = softmax(attention_logits, dim=keys)"
+              "inside": "attention = softmax(combined_logits, dim=keys)"
             }
           },
           {
@@ -9444,7 +10496,7 @@ export const manifest = {
             "connection": {
               "title": "Return points to query frame",
               "role": "reusable step input",
-              "inside": "local_point_context = concat(frames.invert_apply(global_points), point_norms)"
+              "inside": "local_point_context = concat(frames.invert_apply(global_point_context), point_norms(global_point_context))"
             }
           },
           {
@@ -9469,7 +10521,7 @@ export const manifest = {
             "connection": {
               "title": "Return points to query frame",
               "role": "reusable step input",
-              "inside": "local_point_context = concat(frames.invert_apply(global_points), point_norms)"
+              "inside": "local_point_context = concat(frames.invert_apply(global_point_context), point_norms(global_point_context))"
             }
           },
           {
@@ -9490,7 +10542,7 @@ export const manifest = {
             "connection": {
               "title": "Return points to query frame",
               "role": "reusable step output",
-              "inside": "local_point_context = concat(frames.invert_apply(global_points), point_norms)"
+              "inside": "local_point_context = concat(frames.invert_apply(global_point_context), point_norms(global_point_context))"
             }
           },
           {
@@ -9578,7 +10630,7 @@ export const manifest = {
             "connection": {
               "title": "Fuse IPA outputs",
               "role": "reusable step input",
-              "inside": "ipa_delta = output_projection(concat(scalar_context, local_points, pair_values))"
+              "inside": "ipa_delta = output_projection(concat(scalar_context, local_point_context, pair_value_context))"
             }
           },
           {
@@ -9599,7 +10651,7 @@ export const manifest = {
             "connection": {
               "title": "Fuse IPA outputs",
               "role": "reusable step input",
-              "inside": "ipa_delta = output_projection(concat(scalar_context, local_points, pair_values))"
+              "inside": "ipa_delta = output_projection(concat(scalar_context, local_point_context, pair_value_context))"
             }
           },
           {
@@ -9620,7 +10672,7 @@ export const manifest = {
             "connection": {
               "title": "Fuse IPA outputs",
               "role": "reusable step input",
-              "inside": "ipa_delta = output_projection(concat(scalar_context, local_points, pair_values))"
+              "inside": "ipa_delta = output_projection(concat(scalar_context, local_point_context, pair_value_context))"
             }
           },
           {
@@ -9641,7 +10693,7 @@ export const manifest = {
             "connection": {
               "title": "Fuse IPA outputs",
               "role": "reusable step output",
-              "inside": "ipa_delta = output_projection(concat(scalar_context, local_points, pair_values))"
+              "inside": "ipa_delta = output_projection(concat(scalar_context, local_point_context, pair_value_context))"
             }
           },
           {
@@ -9785,6 +10837,60 @@ export const manifest = {
             ],
             "outputs": [
               "values.scalar_terms"
+            ],
+            "codeBindings": [
+              {
+                "lexeme": "q_s",
+                "access": "write",
+                "localRef": "values.scalar_terms",
+                "templateFactRef": "standard_blocks.invariant_point_attention.values.scalar_terms",
+                "instanceFactRef": "block_instances.structure_ipa.values.scalar_terms",
+                "occurrences": [
+                  {
+                    "start": 0,
+                    "end": 3
+                  }
+                ]
+              },
+              {
+                "lexeme": "k_s",
+                "access": "write",
+                "localRef": "values.scalar_terms",
+                "templateFactRef": "standard_blocks.invariant_point_attention.values.scalar_terms",
+                "instanceFactRef": "block_instances.structure_ipa.values.scalar_terms",
+                "occurrences": [
+                  {
+                    "start": 5,
+                    "end": 8
+                  }
+                ]
+              },
+              {
+                "lexeme": "v_s",
+                "access": "write",
+                "localRef": "values.scalar_terms",
+                "templateFactRef": "standard_blocks.invariant_point_attention.values.scalar_terms",
+                "instanceFactRef": "block_instances.structure_ipa.values.scalar_terms",
+                "occurrences": [
+                  {
+                    "start": 10,
+                    "end": 13
+                  }
+                ]
+              },
+              {
+                "lexeme": "single_state",
+                "access": "read",
+                "localRef": "ports.single_state",
+                "templateFactRef": "standard_blocks.invariant_point_attention.ports.single_state",
+                "instanceFactRef": "block_instances.structure_ipa.ports.single_state",
+                "occurrences": [
+                  {
+                    "start": 35,
+                    "end": 47
+                  }
+                ]
+              }
             ]
           },
           {
@@ -9793,12 +10899,66 @@ export const manifest = {
             "instanceFactRef": "block_instances.structure_ipa.steps.project_local_points",
             "label": "Project local Q/K/V points",
             "operation": "point_qkv_projection",
-            "code": "q_p, k_p, v_p = project_point_qkv(single_state)",
+            "code": "q_p_local, k_p_local, v_p_local = project_point_qkv(single_state)",
             "inputs": [
               "ports.single_state"
             ],
             "outputs": [
               "values.local_points"
+            ],
+            "codeBindings": [
+              {
+                "lexeme": "q_p_local",
+                "access": "write",
+                "localRef": "values.local_points",
+                "templateFactRef": "standard_blocks.invariant_point_attention.values.local_points",
+                "instanceFactRef": "block_instances.structure_ipa.values.local_points",
+                "occurrences": [
+                  {
+                    "start": 0,
+                    "end": 9
+                  }
+                ]
+              },
+              {
+                "lexeme": "k_p_local",
+                "access": "write",
+                "localRef": "values.local_points",
+                "templateFactRef": "standard_blocks.invariant_point_attention.values.local_points",
+                "instanceFactRef": "block_instances.structure_ipa.values.local_points",
+                "occurrences": [
+                  {
+                    "start": 11,
+                    "end": 20
+                  }
+                ]
+              },
+              {
+                "lexeme": "v_p_local",
+                "access": "write",
+                "localRef": "values.local_points",
+                "templateFactRef": "standard_blocks.invariant_point_attention.values.local_points",
+                "instanceFactRef": "block_instances.structure_ipa.values.local_points",
+                "occurrences": [
+                  {
+                    "start": 22,
+                    "end": 31
+                  }
+                ]
+              },
+              {
+                "lexeme": "single_state",
+                "access": "read",
+                "localRef": "ports.single_state",
+                "templateFactRef": "standard_blocks.invariant_point_attention.ports.single_state",
+                "instanceFactRef": "block_instances.structure_ipa.ports.single_state",
+                "occurrences": [
+                  {
+                    "start": 52,
+                    "end": 64
+                  }
+                ]
+              }
             ]
           },
           {
@@ -9807,13 +10967,106 @@ export const manifest = {
             "instanceFactRef": "block_instances.structure_ipa.steps.transform_points_to_global",
             "label": "Express points in global frame",
             "operation": "rigid_apply",
-            "code": "q_p, k_p, v_p = frames.apply(q_p, k_p, v_p)",
+            "code": "q_p_global, k_p_global, v_p_global = frames.apply(q_p_local, k_p_local, v_p_local)",
             "inputs": [
               "values.local_points",
               "ports.frames"
             ],
             "outputs": [
               "values.global_points"
+            ],
+            "codeBindings": [
+              {
+                "lexeme": "q_p_global",
+                "access": "write",
+                "localRef": "values.global_points",
+                "templateFactRef": "standard_blocks.invariant_point_attention.values.global_points",
+                "instanceFactRef": "block_instances.structure_ipa.values.global_points",
+                "occurrences": [
+                  {
+                    "start": 0,
+                    "end": 10
+                  }
+                ]
+              },
+              {
+                "lexeme": "k_p_global",
+                "access": "write",
+                "localRef": "values.global_points",
+                "templateFactRef": "standard_blocks.invariant_point_attention.values.global_points",
+                "instanceFactRef": "block_instances.structure_ipa.values.global_points",
+                "occurrences": [
+                  {
+                    "start": 12,
+                    "end": 22
+                  }
+                ]
+              },
+              {
+                "lexeme": "v_p_global",
+                "access": "write",
+                "localRef": "values.global_points",
+                "templateFactRef": "standard_blocks.invariant_point_attention.values.global_points",
+                "instanceFactRef": "block_instances.structure_ipa.values.global_points",
+                "occurrences": [
+                  {
+                    "start": 24,
+                    "end": 34
+                  }
+                ]
+              },
+              {
+                "lexeme": "frames",
+                "access": "read",
+                "localRef": "ports.frames",
+                "templateFactRef": "standard_blocks.invariant_point_attention.ports.frames",
+                "instanceFactRef": "block_instances.structure_ipa.ports.frames",
+                "occurrences": [
+                  {
+                    "start": 37,
+                    "end": 43
+                  }
+                ]
+              },
+              {
+                "lexeme": "q_p_local",
+                "access": "read",
+                "localRef": "values.local_points",
+                "templateFactRef": "standard_blocks.invariant_point_attention.values.local_points",
+                "instanceFactRef": "block_instances.structure_ipa.values.local_points",
+                "occurrences": [
+                  {
+                    "start": 50,
+                    "end": 59
+                  }
+                ]
+              },
+              {
+                "lexeme": "k_p_local",
+                "access": "read",
+                "localRef": "values.local_points",
+                "templateFactRef": "standard_blocks.invariant_point_attention.values.local_points",
+                "instanceFactRef": "block_instances.structure_ipa.values.local_points",
+                "occurrences": [
+                  {
+                    "start": 61,
+                    "end": 70
+                  }
+                ]
+              },
+              {
+                "lexeme": "v_p_local",
+                "access": "read",
+                "localRef": "values.local_points",
+                "templateFactRef": "standard_blocks.invariant_point_attention.values.local_points",
+                "instanceFactRef": "block_instances.structure_ipa.values.local_points",
+                "occurrences": [
+                  {
+                    "start": 72,
+                    "end": 81
+                  }
+                ]
+              }
             ]
           },
           {
@@ -9828,6 +11081,47 @@ export const manifest = {
             ],
             "outputs": [
               "values.scalar_logits"
+            ],
+            "codeBindings": [
+              {
+                "lexeme": "scalar_logits",
+                "access": "write",
+                "localRef": "values.scalar_logits",
+                "templateFactRef": "standard_blocks.invariant_point_attention.values.scalar_logits",
+                "instanceFactRef": "block_instances.structure_ipa.values.scalar_logits",
+                "occurrences": [
+                  {
+                    "start": 0,
+                    "end": 13
+                  }
+                ]
+              },
+              {
+                "lexeme": "q_s",
+                "access": "read",
+                "localRef": "values.scalar_terms",
+                "templateFactRef": "standard_blocks.invariant_point_attention.values.scalar_terms",
+                "instanceFactRef": "block_instances.structure_ipa.values.scalar_terms",
+                "occurrences": [
+                  {
+                    "start": 20,
+                    "end": 23
+                  }
+                ]
+              },
+              {
+                "lexeme": "k_s",
+                "access": "read",
+                "localRef": "values.scalar_terms",
+                "templateFactRef": "standard_blocks.invariant_point_attention.values.scalar_terms",
+                "instanceFactRef": "block_instances.structure_ipa.values.scalar_terms",
+                "occurrences": [
+                  {
+                    "start": 25,
+                    "end": 28
+                  }
+                ]
+              }
             ]
           },
           {
@@ -9836,12 +11130,53 @@ export const manifest = {
             "instanceFactRef": "block_instances.structure_ipa.steps.point_distance_logits",
             "label": "Form point-distance logits",
             "operation": "invariant_point_distance",
-            "code": "point_logits = -0.5 * point_weight * squared_distance(q_p, k_p)",
+            "code": "point_logits = -0.5 * point_weight * squared_distance(q_p_global, k_p_global)",
             "inputs": [
               "values.global_points"
             ],
             "outputs": [
               "values.point_logits"
+            ],
+            "codeBindings": [
+              {
+                "lexeme": "point_logits",
+                "access": "write",
+                "localRef": "values.point_logits",
+                "templateFactRef": "standard_blocks.invariant_point_attention.values.point_logits",
+                "instanceFactRef": "block_instances.structure_ipa.values.point_logits",
+                "occurrences": [
+                  {
+                    "start": 0,
+                    "end": 12
+                  }
+                ]
+              },
+              {
+                "lexeme": "q_p_global",
+                "access": "read",
+                "localRef": "values.global_points",
+                "templateFactRef": "standard_blocks.invariant_point_attention.values.global_points",
+                "instanceFactRef": "block_instances.structure_ipa.values.global_points",
+                "occurrences": [
+                  {
+                    "start": 54,
+                    "end": 64
+                  }
+                ]
+              },
+              {
+                "lexeme": "k_p_global",
+                "access": "read",
+                "localRef": "values.global_points",
+                "templateFactRef": "standard_blocks.invariant_point_attention.values.global_points",
+                "instanceFactRef": "block_instances.structure_ipa.values.global_points",
+                "occurrences": [
+                  {
+                    "start": 66,
+                    "end": 76
+                  }
+                ]
+              }
             ]
           },
           {
@@ -9856,6 +11191,34 @@ export const manifest = {
             ],
             "outputs": [
               "values.pair_bias"
+            ],
+            "codeBindings": [
+              {
+                "lexeme": "pair_bias",
+                "access": "write",
+                "localRef": "values.pair_bias",
+                "templateFactRef": "standard_blocks.invariant_point_attention.values.pair_bias",
+                "instanceFactRef": "block_instances.structure_ipa.values.pair_bias",
+                "occurrences": [
+                  {
+                    "start": 0,
+                    "end": 9
+                  }
+                ]
+              },
+              {
+                "lexeme": "pair_context",
+                "access": "read",
+                "localRef": "ports.pair_context",
+                "templateFactRef": "standard_blocks.invariant_point_attention.ports.pair_context",
+                "instanceFactRef": "block_instances.structure_ipa.ports.pair_context",
+                "occurrences": [
+                  {
+                    "start": 21,
+                    "end": 33
+                  }
+                ]
+              }
             ]
           },
           {
@@ -9864,7 +11227,7 @@ export const manifest = {
             "instanceFactRef": "block_instances.structure_ipa.steps.combine_and_mask_logits",
             "label": "Combine logits and apply mask",
             "operation": "ipa_logit_composition",
-            "code": "combined_logits = mask(scalar_logits + point_logits + pair_bias)",
+            "code": "combined_logits = apply_mask(scalar_logits + point_logits + pair_bias, mask)",
             "inputs": [
               "values.scalar_logits",
               "values.point_logits",
@@ -9873,6 +11236,73 @@ export const manifest = {
             ],
             "outputs": [
               "values.combined_logits"
+            ],
+            "codeBindings": [
+              {
+                "lexeme": "combined_logits",
+                "access": "write",
+                "localRef": "values.combined_logits",
+                "templateFactRef": "standard_blocks.invariant_point_attention.values.combined_logits",
+                "instanceFactRef": "block_instances.structure_ipa.values.combined_logits",
+                "occurrences": [
+                  {
+                    "start": 0,
+                    "end": 15
+                  }
+                ]
+              },
+              {
+                "lexeme": "scalar_logits",
+                "access": "read",
+                "localRef": "values.scalar_logits",
+                "templateFactRef": "standard_blocks.invariant_point_attention.values.scalar_logits",
+                "instanceFactRef": "block_instances.structure_ipa.values.scalar_logits",
+                "occurrences": [
+                  {
+                    "start": 29,
+                    "end": 42
+                  }
+                ]
+              },
+              {
+                "lexeme": "point_logits",
+                "access": "read",
+                "localRef": "values.point_logits",
+                "templateFactRef": "standard_blocks.invariant_point_attention.values.point_logits",
+                "instanceFactRef": "block_instances.structure_ipa.values.point_logits",
+                "occurrences": [
+                  {
+                    "start": 45,
+                    "end": 57
+                  }
+                ]
+              },
+              {
+                "lexeme": "pair_bias",
+                "access": "read",
+                "localRef": "values.pair_bias",
+                "templateFactRef": "standard_blocks.invariant_point_attention.values.pair_bias",
+                "instanceFactRef": "block_instances.structure_ipa.values.pair_bias",
+                "occurrences": [
+                  {
+                    "start": 60,
+                    "end": 69
+                  }
+                ]
+              },
+              {
+                "lexeme": "mask",
+                "access": "read",
+                "localRef": "ports.mask",
+                "templateFactRef": "standard_blocks.invariant_point_attention.ports.mask",
+                "instanceFactRef": "block_instances.structure_ipa.ports.mask",
+                "occurrences": [
+                  {
+                    "start": 71,
+                    "end": 75
+                  }
+                ]
+              }
             ]
           },
           {
@@ -9881,12 +11311,40 @@ export const manifest = {
             "instanceFactRef": "block_instances.structure_ipa.steps.softmax_attention",
             "label": "Normalize over keys",
             "operation": "softmax",
-            "code": "attention = softmax(attention_logits, dim=keys)",
+            "code": "attention = softmax(combined_logits, dim=keys)",
             "inputs": [
               "values.combined_logits"
             ],
             "outputs": [
               "values.attention_weights"
+            ],
+            "codeBindings": [
+              {
+                "lexeme": "attention",
+                "access": "write",
+                "localRef": "values.attention_weights",
+                "templateFactRef": "standard_blocks.invariant_point_attention.values.attention_weights",
+                "instanceFactRef": "block_instances.structure_ipa.values.attention_weights",
+                "occurrences": [
+                  {
+                    "start": 0,
+                    "end": 9
+                  }
+                ]
+              },
+              {
+                "lexeme": "combined_logits",
+                "access": "read",
+                "localRef": "values.combined_logits",
+                "templateFactRef": "standard_blocks.invariant_point_attention.values.combined_logits",
+                "instanceFactRef": "block_instances.structure_ipa.values.combined_logits",
+                "occurrences": [
+                  {
+                    "start": 20,
+                    "end": 35
+                  }
+                ]
+              }
             ]
           },
           {
@@ -9902,6 +11360,47 @@ export const manifest = {
             ],
             "outputs": [
               "values.scalar_context"
+            ],
+            "codeBindings": [
+              {
+                "lexeme": "scalar_context",
+                "access": "write",
+                "localRef": "values.scalar_context",
+                "templateFactRef": "standard_blocks.invariant_point_attention.values.scalar_context",
+                "instanceFactRef": "block_instances.structure_ipa.values.scalar_context",
+                "occurrences": [
+                  {
+                    "start": 0,
+                    "end": 14
+                  }
+                ]
+              },
+              {
+                "lexeme": "attention",
+                "access": "read",
+                "localRef": "values.attention_weights",
+                "templateFactRef": "standard_blocks.invariant_point_attention.values.attention_weights",
+                "instanceFactRef": "block_instances.structure_ipa.values.attention_weights",
+                "occurrences": [
+                  {
+                    "start": 30,
+                    "end": 39
+                  }
+                ]
+              },
+              {
+                "lexeme": "v_s",
+                "access": "read",
+                "localRef": "values.scalar_terms",
+                "templateFactRef": "standard_blocks.invariant_point_attention.values.scalar_terms",
+                "instanceFactRef": "block_instances.structure_ipa.values.scalar_terms",
+                "occurrences": [
+                  {
+                    "start": 41,
+                    "end": 44
+                  }
+                ]
+              }
             ]
           },
           {
@@ -9917,6 +11416,47 @@ export const manifest = {
             ],
             "outputs": [
               "values.global_point_context"
+            ],
+            "codeBindings": [
+              {
+                "lexeme": "global_point_context",
+                "access": "write",
+                "localRef": "values.global_point_context",
+                "templateFactRef": "standard_blocks.invariant_point_attention.values.global_point_context",
+                "instanceFactRef": "block_instances.structure_ipa.values.global_point_context",
+                "occurrences": [
+                  {
+                    "start": 0,
+                    "end": 20
+                  }
+                ]
+              },
+              {
+                "lexeme": "attention",
+                "access": "read",
+                "localRef": "values.attention_weights",
+                "templateFactRef": "standard_blocks.invariant_point_attention.values.attention_weights",
+                "instanceFactRef": "block_instances.structure_ipa.values.attention_weights",
+                "occurrences": [
+                  {
+                    "start": 36,
+                    "end": 45
+                  }
+                ]
+              },
+              {
+                "lexeme": "v_p_global",
+                "access": "read",
+                "localRef": "values.global_points",
+                "templateFactRef": "standard_blocks.invariant_point_attention.values.global_points",
+                "instanceFactRef": "block_instances.structure_ipa.values.global_points",
+                "occurrences": [
+                  {
+                    "start": 47,
+                    "end": 57
+                  }
+                ]
+              }
             ]
           },
           {
@@ -9925,13 +11465,58 @@ export const manifest = {
             "instanceFactRef": "block_instances.structure_ipa.steps.return_points_to_local_frame",
             "label": "Return points to query frame",
             "operation": "rigid_inverse_apply",
-            "code": "local_point_context = concat(frames.invert_apply(global_points), point_norms)",
+            "code": "local_point_context = concat(frames.invert_apply(global_point_context), point_norms(global_point_context))",
             "inputs": [
               "values.global_point_context",
               "ports.frames"
             ],
             "outputs": [
               "values.local_point_context"
+            ],
+            "codeBindings": [
+              {
+                "lexeme": "local_point_context",
+                "access": "write",
+                "localRef": "values.local_point_context",
+                "templateFactRef": "standard_blocks.invariant_point_attention.values.local_point_context",
+                "instanceFactRef": "block_instances.structure_ipa.values.local_point_context",
+                "occurrences": [
+                  {
+                    "start": 0,
+                    "end": 19
+                  }
+                ]
+              },
+              {
+                "lexeme": "frames",
+                "access": "read",
+                "localRef": "ports.frames",
+                "templateFactRef": "standard_blocks.invariant_point_attention.ports.frames",
+                "instanceFactRef": "block_instances.structure_ipa.ports.frames",
+                "occurrences": [
+                  {
+                    "start": 29,
+                    "end": 35
+                  }
+                ]
+              },
+              {
+                "lexeme": "global_point_context",
+                "access": "read",
+                "localRef": "values.global_point_context",
+                "templateFactRef": "standard_blocks.invariant_point_attention.values.global_point_context",
+                "instanceFactRef": "block_instances.structure_ipa.values.global_point_context",
+                "occurrences": [
+                  {
+                    "start": 49,
+                    "end": 69
+                  },
+                  {
+                    "start": 84,
+                    "end": 104
+                  }
+                ]
+              }
             ]
           },
           {
@@ -9947,6 +11532,47 @@ export const manifest = {
             ],
             "outputs": [
               "values.pair_value_context"
+            ],
+            "codeBindings": [
+              {
+                "lexeme": "pair_value_context",
+                "access": "write",
+                "localRef": "values.pair_value_context",
+                "templateFactRef": "standard_blocks.invariant_point_attention.values.pair_value_context",
+                "instanceFactRef": "block_instances.structure_ipa.values.pair_value_context",
+                "occurrences": [
+                  {
+                    "start": 0,
+                    "end": 18
+                  }
+                ]
+              },
+              {
+                "lexeme": "attention",
+                "access": "read",
+                "localRef": "values.attention_weights",
+                "templateFactRef": "standard_blocks.invariant_point_attention.values.attention_weights",
+                "instanceFactRef": "block_instances.structure_ipa.values.attention_weights",
+                "occurrences": [
+                  {
+                    "start": 34,
+                    "end": 43
+                  }
+                ]
+              },
+              {
+                "lexeme": "pair_context",
+                "access": "read",
+                "localRef": "ports.pair_context",
+                "templateFactRef": "standard_blocks.invariant_point_attention.ports.pair_context",
+                "instanceFactRef": "block_instances.structure_ipa.ports.pair_context",
+                "occurrences": [
+                  {
+                    "start": 45,
+                    "end": 57
+                  }
+                ]
+              }
             ]
           },
           {
@@ -9955,7 +11581,7 @@ export const manifest = {
             "instanceFactRef": "block_instances.structure_ipa.steps.project_ipa_delta",
             "label": "Fuse IPA outputs",
             "operation": "output_projection",
-            "code": "ipa_delta = output_projection(concat(scalar_context, local_points, pair_values))",
+            "code": "ipa_delta = output_projection(concat(scalar_context, local_point_context, pair_value_context))",
             "inputs": [
               "values.scalar_context",
               "values.local_point_context",
@@ -9963,6 +11589,60 @@ export const manifest = {
             ],
             "outputs": [
               "values.ipa_delta"
+            ],
+            "codeBindings": [
+              {
+                "lexeme": "ipa_delta",
+                "access": "write",
+                "localRef": "values.ipa_delta",
+                "templateFactRef": "standard_blocks.invariant_point_attention.values.ipa_delta",
+                "instanceFactRef": "block_instances.structure_ipa.values.ipa_delta",
+                "occurrences": [
+                  {
+                    "start": 0,
+                    "end": 9
+                  }
+                ]
+              },
+              {
+                "lexeme": "scalar_context",
+                "access": "read",
+                "localRef": "values.scalar_context",
+                "templateFactRef": "standard_blocks.invariant_point_attention.values.scalar_context",
+                "instanceFactRef": "block_instances.structure_ipa.values.scalar_context",
+                "occurrences": [
+                  {
+                    "start": 37,
+                    "end": 51
+                  }
+                ]
+              },
+              {
+                "lexeme": "local_point_context",
+                "access": "read",
+                "localRef": "values.local_point_context",
+                "templateFactRef": "standard_blocks.invariant_point_attention.values.local_point_context",
+                "instanceFactRef": "block_instances.structure_ipa.values.local_point_context",
+                "occurrences": [
+                  {
+                    "start": 53,
+                    "end": 72
+                  }
+                ]
+              },
+              {
+                "lexeme": "pair_value_context",
+                "access": "read",
+                "localRef": "values.pair_value_context",
+                "templateFactRef": "standard_blocks.invariant_point_attention.values.pair_value_context",
+                "instanceFactRef": "block_instances.structure_ipa.values.pair_value_context",
+                "occurrences": [
+                  {
+                    "start": 74,
+                    "end": 92
+                  }
+                ]
+              }
             ]
           },
           {
@@ -9978,6 +11658,47 @@ export const manifest = {
             ],
             "outputs": [
               "ports.updated_single_state"
+            ],
+            "codeBindings": [
+              {
+                "lexeme": "updated_single_state",
+                "access": "write",
+                "localRef": "ports.updated_single_state",
+                "templateFactRef": "standard_blocks.invariant_point_attention.ports.updated_single_state",
+                "instanceFactRef": "block_instances.structure_ipa.ports.updated_single_state",
+                "occurrences": [
+                  {
+                    "start": 0,
+                    "end": 20
+                  }
+                ]
+              },
+              {
+                "lexeme": "single_state",
+                "access": "read",
+                "localRef": "ports.single_state",
+                "templateFactRef": "standard_blocks.invariant_point_attention.ports.single_state",
+                "instanceFactRef": "block_instances.structure_ipa.ports.single_state",
+                "occurrences": [
+                  {
+                    "start": 34,
+                    "end": 46
+                  }
+                ]
+              },
+              {
+                "lexeme": "ipa_delta",
+                "access": "read",
+                "localRef": "values.ipa_delta",
+                "templateFactRef": "standard_blocks.invariant_point_attention.values.ipa_delta",
+                "instanceFactRef": "block_instances.structure_ipa.values.ipa_delta",
+                "occurrences": [
+                  {
+                    "start": 57,
+                    "end": 66
+                  }
+                ]
+              }
             ]
           }
         ]
