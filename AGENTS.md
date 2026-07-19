@@ -289,6 +289,10 @@ Shared infrastructure:
   guessed percentage).
 - Renderer manifest builder: `renderer/architecture/build-manifest.rb`
   (emits one `manifest-<id>.js` per registry entry plus `manifest-index.js`).
+- Pages production builder: `scripts/build_pages.rb` regenerates and verifies
+  manifests, then emits an explicit allowlist of audience assets to ignored
+  `dist/`. Never publish the repository root; YAML, schemas, tests, and local
+  review tooling must remain outside the deployed artifact.
 - Landing directory: `index.html` plus `landing.js` (derives architecture
   cards from the generated manifests; `directory_role` in
   `architectures/index.yaml` separates model architectures from language
@@ -463,6 +467,7 @@ ruby -Ilib:test test/renderer_semantic_routing_test.rb
 ruby -Ilib:test test/renderer_repeat_region_test.rb
 ruby -Ilib:test test/renderer_semantic_pseudocode_test.rb
 RUN_BROWSER_ACCEPTANCE=1 ruby -Ilib:test test/renderer_semantic_pseudocode_browser_test.rb
+STATIC_SITE_ROOT=dist RUN_BROWSER_ACCEPTANCE=1 ruby -Ilib:test test/renderer_semantic_pseudocode_browser_test.rb
 ruby -Ilib:test test/renderer_theme_test.rb
 ruby -Ilib:test test/renderer_workspace_selection_test.rb
 ruby -Ilib:test test/renderer_workspace_test.rb

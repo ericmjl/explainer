@@ -289,7 +289,7 @@ class RendererSemanticPseudocodeBrowserTest < Minitest::Test
     skip "geckodriver is unavailable; set GECKODRIVER=/path/to/geckodriver" unless geckodriver_path
     skip "Firefox is unavailable; set FIREFOX_BIN=/path/to/firefox" unless firefox_path
 
-    server = StaticServer.new(ROOT).start
+    server = StaticServer.new(static_site_root).start
     driver_process = Geckodriver.new(geckodriver_path)
     browser = nil
     begin
@@ -306,6 +306,11 @@ class RendererSemanticPseudocodeBrowserTest < Minitest::Test
   end
 
   private
+
+  def static_site_root
+    configured = ENV["STATIC_SITE_ROOT"]
+    configured ? File.expand_path(configured, ROOT) : ROOT
+  end
 
   def browser_acceptance?
     ENV["RUN_BROWSER_ACCEPTANCE"] == "1"

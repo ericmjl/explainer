@@ -226,6 +226,35 @@ the design language: evidence fields, state semantics, conditioning modes,
 scale transitions, compact nodes, MathJax equations, pan/zoom, and semantic
 drilldown.
 
+## Production Build
+
+Build the Cloudflare Pages artifact with:
+
+```bash
+ruby scripts/build_pages.rb
+```
+
+The command regenerates the manifests, verifies every registered source set,
+and writes an allowlisted static site to `dist/`. Only the landing page,
+browser renderer, generated manifests, and shared styles/themes enter that
+directory. Architecture YAML, Markdown authoring protocols, Ruby libraries,
+schemas, tests, review tooling, and repository metadata are never copied. The
+builder refuses to replace a non-generated, non-empty output directory. The
+artifact contains only HTML, CSS, browser JavaScript, compiled manifest
+JavaScript, and Cloudflare's `_headers` control file; its ownership marker is
+kept beside `dist/`, outside the deployed directory.
+
+For Cloudflare Pages Git integration, use no framework preset, use
+**ruby scripts/build_pages.rb** as the build command, and set the build output
+directory to `dist`. The generated directory is intentionally ignored by Git.
+
+To exercise the exact published artifact in Firefox before deployment, run:
+
+```bash
+STATIC_SITE_ROOT=dist RUN_BROWSER_ACCEPTANCE=1 \
+  ruby -Ilib:test test/renderer_semantic_pseudocode_browser_test.rb
+```
+
 ## Workflow
 
 After changing YAML/view sources:
