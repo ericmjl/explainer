@@ -12,8 +12,9 @@ When updating an architecture, prefer editing the declarative sources first:
 2. `views/*.view.yaml`: semantic-zoom boards and visual layout.
 3. `pseudocode/*.yaml`: code or algorithm traces.
 4. `standard_blocks/*.yaml`: reusable motifs such as attention and conditioning.
-5. `stories/*/story.md`: human-readable distilled notes.
-6. Renderer code only when the DSL cannot express the needed behavior.
+5. `comparisons/*.yaml`: curated alignments between existing architecture facts.
+6. `stories/*/story.md`: human-readable distilled notes.
+7. Renderer code only when the DSL cannot express the needed behavior.
 
 ## Architecture Authoring Rules
 
@@ -60,6 +61,32 @@ When updating an architecture, prefer editing the declarative sources first:
   - `scale_transitions` for compression, broadcast, pooling, and reshaping.
   - `training_inference` for objectives, schedules, samplers, and deployment
     notes when relevant.
+- Reuse algorithm anatomy through `standard-block-v0.2` plus architecture
+  `block_instances`. Bind ports only to canonical `relations.*`; do not copy
+  endpoints or representation facts. Select an explicit variant and declare
+  `conformance: exact`, `wrapped`, or `reduced`. Non-exact reuse requires a
+  concrete `difference_summary`; never imply that a reduced or wrapped method
+  is the full standard block.
+
+## Comparison Authoring Rules
+
+- Treat an `architecture-comparison-v0.1` source as a curated lens over two
+  existing subjects, never as a new owner of architecture or reusable-block
+  facts. Put comparison sources under `comparisons/` and register their paths
+  only in `comparisons/index.yaml`.
+- Begin with one narrow `question`. Each subject binds a registered
+  `source_set`, stable `subject_ref`, and exact `board_ref`; do not copy either
+  board scene into the comparison.
+- Align stable, subject-scoped fact refs. For reusable blocks, use compiled
+  `block_instances.<id>.steps|values|ports.<fact>` refs that are active in the
+  selected variant. Never align by display label, node position, or visual
+  similarity alone.
+- Use `equivalent`, `analogous`, or `changed` only with facts on both sides.
+  Use `primary_only` or `counterpart_only` for explicit absence, and cite both
+  implementations when claiming that one side omits behavior.
+- Give alignments and findings their own evidence. Findings reference
+  alignments rather than restating their fact mappings. Keep unresolved
+  comparative questions in `open_questions`.
 
 ## Semantic-Zoom Views
 
@@ -95,9 +122,12 @@ Use `views/generic-semantic-zoom.view.yaml` as the current reference pattern.
   authored `row`. Edge hue and unambiguous module accents are derived from
   projected relation `carries`; do not encode single/pair family through
   `tone` or duplicate it in the view.
-- Every visualization-v0.4 board declares `subject_ref`, relative
+- Every ordinary visualization-v0.4 board declares `subject_ref`, relative
   `expansion_depth`, and an exact curated `nodes` list. Nodes bind through a
-  typed `ref` (`modules.*` or `value_sites.*`).
+  typed `ref` (`modules.*` or `value_sites.*`). A reusable internal-detail
+  board instead declares `kind: standard_block_instance` and
+  `block_instance_ref`; its registered v0.2 template owns the compiled grid,
+  nodes, and step-derived internal edges.
 - Do not author normal board `edges` or `view_only` flow. The shared projector
   derives edges from canonical architecture relations.
 - Preserve board-specific edge presentation in `edge_overrides`, matched by
@@ -155,6 +185,10 @@ editing the scripts. Current sets:
   bidirectional latent reasoning, directional DDIM sampling, and equivariant
   structure decoding.
 
+`comparisons/index.yaml` separately registers curated comparison lenses. The
+first comparison, `genie3_reduced_vs_full_ipa`, aligns Genie 3's reduced latent
+attention with full frame-aware IPA without copying either reusable board.
+
 Shared infrastructure:
 
 - Executable schemas: `schemas/*.schema.json` (strict current architecture,
@@ -171,6 +205,14 @@ Shared infrastructure:
 - Architecture verifier: `scripts/verify_architecture.rb` and
   `lib/architecture_verifier.rb` (read-only source-set checks with focused
   board diagnostics, JSON output, and manifest freshness verification).
+- Reusable-block contract/compiler: `lib/standard_block_contract.rb` and
+  `lib/standard_block_compiler.rb` validate typed ports, variants, honest
+  conformance, relation bindings, and deterministic instance detail boards.
+- Comparison contract/compiler: `lib/architecture_comparison_contract.rb` and
+  `lib/architecture_comparison_compiler.rb` validate registered subjects,
+  board-visible fact alignments, relationship side rules, and comparative
+  evidence, then compile deterministic highlight metadata without copying
+  board scenes.
 - Semantic layout compiler: `lib/architecture_semantic_layout.rb` (shared by
   board scaffolding and the reviewed architecture-edit-v0.2 `layout_board`
   operation) plus `renderer/architecture/semantic-routing.mjs` for measured
@@ -181,6 +223,14 @@ Shared infrastructure:
 - Static deep-link state: `renderer/architecture/deep-link-state.mjs`
   reconstructs board breadcrumbs and local node selection from stable URL
   parameters without persisting transient pan, zoom, or hover state.
+- Comparison URL state: `renderer/architecture/comparison-state.mjs` resolves
+  `compare_arch`, `compare_board`, and `compare_node` independently from the
+  primary location, preserves unrelated parameters, and permits only one
+  selected side.
+- Reusable browser board surfaces: `renderer/architecture/board-surface.mjs`
+  owns surface-scoped pan, zoom, fit, gestures, and SVG resource IDs;
+  `renderer/architecture/comparison-board-renderer.mjs` uses it for the lower
+  comparison board and applies compiled alignment badges.
 - Orthogonal route geometry: `renderer/architecture/orthogonal-routing.mjs`
   reserves readable arrow landings and separates parallel rails without
   consuming endpoint approach segments.
@@ -220,18 +270,48 @@ When the user provides architecture knowledge:
 
 1. Translate the statement into architecture/view language.
 2. Decide whether it changes a module, representation type, value site,
-   relation, claim, or board.
+   relation, reusable block instance, comparison alignment, claim, or board.
 3. Update the YAML source before touching renderer code.
 4. Add evidence references if code, paper, or spec lines are known.
 5. If evidence is not known, keep the scaffold but mark details as inferred or
    open.
-6. Regenerate the renderer manifest after YAML/view changes.
-7. Run the source-set verifier, then any infrastructure-level regression tests
+6. If the mechanism already exists as a v0.2 standard block, add or update one
+   `block_instances` owner and bind its ports to canonical relations. Reuse the
+   template's internals and trace; do not copy them into the architecture or
+   method pseudocode. If the implementation is reduced or wrapped, select a
+   matching variant and record the difference explicitly.
+7. Regenerate the renderer manifest after YAML/view changes.
+8. Run the source-set verifier, then any infrastructure-level regression tests
    appropriate to the change before reporting completion.
+
+### Authoring a Comparison
+
+When the user asks to compare architecture slices:
+
+1. Confirm that both subjects and their boards already exist in registered
+   source sets. Fix missing architecture or reusable-block facts at their
+   canonical owner before authoring the comparison.
+2. Add one `architecture-comparison-v0.1` source under `comparisons/`, bind its
+   two subjects, and align stable fact refs with explicit relationship kinds
+   and evidence.
+3. Register the source path in `comparisons/index.yaml`; do not add comparison
+   IDs or labels to renderer JavaScript.
+4. Regenerate manifests. The builder validates and compiles the comparison
+   into `comparisonIndex` in `renderer/architecture/manifest-index.js`; it does
+   not duplicate either subject board.
+5. Run comparison contract/compiler tests, renderer comparison tests, source
+   lint, manifest freshness, and the final verifier for each affected source
+   set.
 
 For a bounded multi-fact architecture/view edit, use an
 `architecture-edit-v0.2` plan whenever its supported operations cover the
 change. Legacy `architecture-edit-v0.1` plans remain accepted.
+
+Architecture edit v0.2 does not yet author standard-block templates,
+`block_instances`, reusable-board stubs, comparison sources, or the comparison
+registry. Make those bounded changes in the declarative sources, state that
+they are outside the current edit-plan boundary, and run the same full
+verifier and regression gates.
 
 The plan targets a registry `source_set`; prepare it to bind the current
 architecture and view digests, inspect the semantic diff, then apply it:
@@ -311,6 +391,10 @@ ruby -Ilib:test test/source_projection_integration_test.rb
 ruby -Ilib:test test/bibliography_test.rb
 ruby -Ilib:test test/strict_yaml_test.rb
 ruby -Ilib:test test/source_contract_test.rb
+ruby -Ilib:test test/standard_block_contract_test.rb
+ruby -Ilib:test test/standard_block_compiler_test.rb
+ruby -Ilib:test test/architecture_comparison_contract_test.rb
+ruby -Ilib:test test/architecture_comparison_compiler_test.rb
 ruby -Ilib:test test/evidence_contract_test.rb
 ruby -Ilib:test test/architecture_edit_contract_test.rb
 ruby -Ilib:test test/architecture_edit_v2_contract_test.rb
@@ -331,10 +415,15 @@ ruby -Ilib:test test/renderer_model_test.rb
 ruby -Ilib:test test/renderer_deep_link_chrome_test.rb
 ruby -Ilib:test test/renderer_deep_link_state_test.rb
 ruby -Ilib:test test/renderer_deep_link_integration_test.rb
+ruby -Ilib:test test/renderer_board_surface_test.rb
+ruby -Ilib:test test/renderer_comparison_state_test.rb
+ruby -Ilib:test test/renderer_comparison_board_test.rb
+ruby -Ilib:test test/renderer_comparison_workspace_test.rb
 ruby -Ilib:test test/renderer_edge_annotations_test.rb
 ruby -Ilib:test test/renderer_flow_family_test.rb
 ruby -Ilib:test test/renderer_orthogonal_routing_test.rb
 ruby -Ilib:test test/renderer_question_context_test.rb
+ruby -Ilib:test test/renderer_standard_block_test.rb
 ruby -Ilib:test test/renderer_representation_glyph_test.rb
 ruby -Ilib:test test/renderer_snappiness_test.rb
 ruby -Ilib:test test/renderer_stacking_test.rb

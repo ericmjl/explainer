@@ -816,6 +816,7 @@ boards:
         treatment: block
         col: 3
         row: 3
+        board_ref: genie2_ipa_internals
       - id: single_after_ipa
         ref: value_sites.single_after_ipa
         label: attention-updated single state
@@ -913,3 +914,12 @@ boards:
           title: Updated frames
           role: repeated structure state
           inside: The updated frames feed the next structure layer; after eight layers they return to the denoiser noise readout.
+
+  - id: genie2_ipa_internals
+    kind: standard_block_instance
+    title: Genie 2 Invariant Point Attention Internals
+    summary: Full IPA combines scalar, pair, and frame-aware point terms, then the structure-layer wrapper applies residual dropout and LayerNorm.
+    parent: structure_decoder
+    subject_ref: modules.invariant_point_attention
+    expansion_depth: 0
+    block_instance_ref: block_instances.structure_ipa

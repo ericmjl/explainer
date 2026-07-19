@@ -3,6 +3,7 @@
 
 require "set"
 require "yaml"
+require_relative "../lib/architecture_comparison_contract"
 require_relative "../lib/architecture_coverage"
 require_relative "../lib/architecture_projection"
 require_relative "../lib/architecture_view_lanes"
@@ -10,6 +11,7 @@ require_relative "../lib/architecture_view_regions"
 require_relative "../lib/architecture_ownership"
 require_relative "../lib/evidence_contract"
 require_relative "../lib/source_contract"
+require_relative "../lib/standard_block_contract"
 require_relative "../lib/strict_yaml"
 
 ROOT = File.expand_path("..", __dir__)
@@ -168,9 +170,11 @@ def collect_standard_blocks
     next if block.empty?
 
     blocks[rel] = {
+      "document" => block,
       "id" => block["id"],
       "slot_ids" => Set.new(Array(block["input_slots"]).map { |slot| slot["id"] } +
-                             Array(block["output_slots"]).map { |slot| slot["id"] })
+                             Array(block["output_slots"]).map { |slot| slot["id"] } +
+                             Array(block["ports"]).map { |port| port["id"] })
     }
   end
 end
@@ -203,6 +207,7 @@ def lint_architecture(arch, standard_blocks)
   rep_ids = require_unique_ids("architecture representation", arch["representations"])
   value_site_ids = require_unique_ids("architecture value site", arch["value_sites"])
   claim_ids = require_unique_ids("architecture claim", arch["claims"])
+  block_instance_ids = require_unique_ids("architecture block instance", arch["block_instances"])
   relations = architecture_relations(arch)
   relation_ids = if %w[architecture-v0.2 architecture-v0.3 architecture-v0.4].include?(schema_version)
     require_unique_ids("architecture relation", relations)
@@ -280,6 +285,9 @@ def lint_architecture(arch, standard_blocks)
   end
 
   Array(arch["claims"]).each { |claim| require_evidence("claim #{claim['id']}", claim) }
+  Array(arch["block_instances"]).each do |instance|
+    require_evidence("block instance #{instance['id']}", instance)
+  end
   if schema_version == "architecture-v0.4"
     require_evidence("training_inference", arch["training_inference"])
     require_evidence("reference_configuration", arch["reference_configuration"]) if arch["reference_configuration"]
@@ -304,6 +312,7 @@ def lint_architecture(arch, standard_blocks)
     known_question_refs.merge(relation_ids.map { |id| "relations.#{id}" })
     known_question_refs.merge(ids(arch["conditioning"]).map { |id| "conditioning.#{id}" })
     known_question_refs.merge(ids(arch["scale_transitions"]).map { |id| "scale_transitions.#{id}" })
+    known_question_refs.merge(block_instance_ids.map { |id| "block_instances.#{id}" })
     known_question_refs.merge(Hash(arch["state_semantics"]).keys.map { |id| "state_semantics.#{id}" })
     known_question_refs.merge(Array(arch.dig("execution", "loops")).filter_map do |loop|
       "execution.loops.#{loop['id']}" if loop["id"]
@@ -459,6 +468,9 @@ def lint_projected_view(view, arch)
 
   projector = ArchitectureProjection::Projector.new(arch)
   modules_by_ref = Array(arch["modules"]).to_h { |mod| ["modules.#{mod['id']}", mod] }
+  block_instances_by_ref = Array(arch["block_instances"]).to_h do |instance|
+    ["block_instances.#{instance['id']}", instance]
+  end
   boards.each do |board|
     board_id = board["id"]
     lint_board_lanes(board)
@@ -468,7 +480,16 @@ def lint_projected_view(view, arch)
     subject_ref = board["subject_ref"]
     subject = subject_ref == "architecture" ? arch : modules_by_ref[subject_ref]
     subject_status = subject&.dig("decomposition", "status")
-    if %w[leaf opaque].include?(subject_status)
+    if board["kind"] == "standard_block_instance"
+      instance = block_instances_by_ref[board["block_instance_ref"]]
+      unless instance
+        @errors << "board #{board_id} references unknown block instance #{board['block_instance_ref']}"
+      end
+      if instance && instance["subject_ref"] != subject_ref
+        @errors << "board #{board_id} subject #{subject_ref} does not match #{board['block_instance_ref']} subject #{instance['subject_ref']}"
+      end
+      next
+    elsif %w[leaf opaque].include?(subject_status)
       @errors << "board #{board_id} expands #{subject_ref}, but its decomposition status is #{subject_status}"
     end
 
@@ -675,7 +696,7 @@ def lint_view(view, arch, module_ids, rep_ids, relations_by_id)
   end
 end
 
-def lint_pseudocode(program, module_ids, rep_ids, value_site_ids, claim_ids, relation_ids, standard_blocks)
+def lint_pseudocode(program, module_ids, rep_ids, value_site_ids, claim_ids, relation_ids, standard_blocks, block_instance_ids)
   lint_source_ref_targets(program, "pseudocode #{program['id'] || 'unknown'}")
   source_ids = require_unique_ids("pseudocode source", program["sources"])
   symbol_ids = require_unique_ids("pseudocode symbol", program["symbols"])
@@ -715,6 +736,10 @@ def lint_pseudocode(program, module_ids, rep_ids, value_site_ids, claim_ids, rel
         @errors << "line #{line['id']} binds unknown slot #{slot} for #{ref}" unless slot_ids.include?(slot)
       end
     end
+    instance_ref = line["block_instance_ref"]
+    if instance_ref && !block_instance_ids.include?(untyped_ref(instance_ref, "block_instances"))
+      @errors << "line #{line['id']} references missing block instance #{instance_ref}"
+    end
   end
 
   Array(program["claims"]).each do |claim|
@@ -730,11 +755,18 @@ def lint_standard_blocks(standard_blocks)
     @errors << "standard block #{ref} missing id" unless block["id"]
     slot_ids = block["slot_ids"]
     @errors << "standard block #{ref} has no input/output slots" if slot_ids.empty?
+    document = block["document"]
+    next unless document["schema_version"] == "standard-block-v0.2"
+
+    StandardBlockContract.definition_errors(document).each do |diagnostic|
+      @errors << "standard block #{ref} [#{diagnostic.code}] #{diagnostic.path}: #{diagnostic.message}"
+    end
   end
 end
 
 standard_blocks = collect_standard_blocks
 registry = load_yaml(REGISTRY)
+source_set_contexts = {}
 bibliography_path = registry["bibliography"]
 if bibliography_path
   bibliography = load_yaml(bibliography_path)
@@ -761,13 +793,58 @@ Array(registry["source_sets"]).each do |source_set|
   end
 
   module_ids, rep_ids, value_site_ids, claim_ids, relation_ids, relations_by_id = lint_architecture(arch, standard_blocks)
+  registered_blocks = Array(source_set["standard_blocks"])
+  block_documents = standard_blocks.transform_values { |block| block["document"] }
+  source_set_contexts[source_set.fetch("id")] = {
+    architecture: arch,
+    view: view,
+    blocks_by_path: block_documents,
+    registered_blocks: registered_blocks,
+  }
+  StandardBlockContract.instance_errors(
+    arch,
+    blocks_by_path: block_documents,
+    registered_blocks: registered_blocks,
+  ).each do |diagnostic|
+    @errors << "architecture #{arch['id']} block instance [#{diagnostic.code}] #{diagnostic.path}: #{diagnostic.message}"
+  end
   lint_view(view, arch, module_ids, rep_ids, relations_by_id)
-  lint_pseudocode(program, module_ids, rep_ids, value_site_ids, claim_ids, relation_ids, standard_blocks)
+  block_instance_ids = Set.new(Array(arch["block_instances"]).filter_map { |instance| instance["id"] })
+  lint_pseudocode(program, module_ids, rep_ids, value_site_ids, claim_ids, relation_ids, standard_blocks, block_instance_ids)
 rescue StandardError => e
   @errors << "#{source_set.fetch('id')} lint failed: #{e.class}: #{e.message}"
 end
 
 lint_standard_blocks(standard_blocks)
+
+comparison_registry_path = registry["comparisons"]
+if comparison_registry_path
+  comparison_registry = load_yaml(comparison_registry_path)
+  lint_source_contract(comparison_registry, "comparison registry")
+  comparison_paths = Array(comparison_registry["sources"])
+  comparisons_by_path = comparison_paths.to_h do |path|
+    comparison = load_yaml(path)
+    lint_source_contract(comparison, "comparison #{path}")
+    [path, comparison]
+  end
+  ArchitectureComparisonContract.registry_errors(
+    comparison_registry,
+    comparisons_by_path: comparisons_by_path,
+  ).each do |diagnostic|
+    @errors << "comparison registry [#{diagnostic.code}] #{diagnostic.path}: #{diagnostic.message}"
+  end
+  comparisons_by_path.each do |path, comparison|
+    ArchitectureComparisonContract.errors(
+      comparison,
+      source_sets: source_set_contexts,
+      bibliography_sources: @bibliography_sources_by_id,
+    ).each do |diagnostic|
+      @errors << "comparison #{path} [#{diagnostic.code}] #{diagnostic.path}: #{diagnostic.message}"
+    end
+  end
+else
+  @errors << "registry missing comparisons"
+end
 
 if @errors.empty?
   puts "source lint ok"

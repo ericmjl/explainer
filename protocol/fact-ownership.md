@@ -7,6 +7,12 @@ References may connect facts, and the generated manifest may materialize
 convenience fields, but authors must not keep two endpoint or interface lists in
 sync by hand.
 
+Reusable `block_instances` follow the same rule. They bind named template
+ports to `relations.*` and derive endpoints and carried representations from
+those relations. A standard block owns generic internal steps; its concrete
+instance owns the selected variant, conformance, and usage evidence.
+Template-internal edges are explanatory and never enter canonical relations.
+
 ## Ownership Matrix
 
 | Fact | Durable owner | Referenced by | Derived at build time |
@@ -20,6 +26,8 @@ sync by hand.
 | State lifecycle grouping | `state_semantics` | renderer and comparisons | per-site lifecycle lookup |
 | Scale-change interpretation | `scale_transitions[]` | renderer and comparisons | endpoints, scales, projection modules, and index value |
 | Board curation and presentation | `views/*.view.yaml` | projector | visible edges from canonical relations |
+| Reusable algorithm anatomy | `standard_blocks/*.yaml` | `block_instances[]` | instance-scoped trace and internal detail scene |
+| Concrete reusable use | `block_instances[]` | reusable board stubs and question context | resolved port endpoints and relation evidence |
 
 ## Architecture-v0.4 Rules
 

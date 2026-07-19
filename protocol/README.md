@@ -42,11 +42,11 @@ canonical YAML only after stale-plan and full source validation succeed.
 The local review workspace is a browser client of that same compiler; it is
 not an editable copy of the audience manifest.
 
-## Proposed Contract
+## Comparison Contract
 
-`architecture-comparison-protocol.md` is a design proposal for a future
-cross-architecture comparison source and renderer. It is not yet registered,
-linted, or rendered by the current pipeline.
+`architecture-comparison-protocol.md` defines the registered v0.1 comparison
+source, compiled fact alignment, and evidence contract used by the comparison
+renderer.
 
 ## Legacy Compatibility
 

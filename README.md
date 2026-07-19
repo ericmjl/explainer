@@ -34,14 +34,15 @@ Source layers:
   interfaces derived from canonical relations.
 - `protocol/architecture-coverage.md`: explicit top-down breadth closure,
   depth frontiers, and compiled non-percentage coverage reports.
-- `protocol/architecture-comparison-protocol.md`: proposed comparison workflow
-  and axes; not yet part of the compiler pipeline.
+- `protocol/architecture-comparison-protocol.md`: registered v0.1 comparison
+  sources, compiled fact alignment, and evidence-grounded differences.
 - `protocol/pseudocode-language.md`: YAML vocabulary for algorithm lines,
   symbols, source refs, claims, and visual scenes.
 - `protocol/standard-blocks.md`: reusable visual/mathematical motifs.
 - `protocol/visualization-language.md`: semantic-zoom board language.
 - `protocol/renderer-architecture.md`: renderer stack and interaction model.
 - `architectures/`: machine-readable architecture slices.
+- `comparisons/`: curated, source-backed alignments between architecture slices.
 - `pseudocode/`: machine-readable algorithm or code traces.
 - `standard_blocks/`: reusable block specs.
 - `views/`: source specs for generated architecture views.
@@ -60,6 +61,14 @@ elisions/exclusions, and presentation overrides; they do not author semantic
 edges. A shared build/lint-time projector derives direct, boundary, and
 contracted edges with ordered relation provenance. Drilldown remains explicit
 through `board_ref`. See `protocol/architecture-projection-model.md`.
+
+Reusable algorithm internals now use `standard-block-v0.2`. A template owns
+typed ports, variants, step-level pseudocode/math, and one internal layout;
+architecture `block_instances` bind a concrete module occurrence to canonical
+relations with explicit `exact`, `wrapped`, or `reduced` conformance. Optional
+`kind: standard_block_instance` view stubs give those compiled internals stable
+static URLs without turning template steps into invented architecture facts.
+See `protocol/standard-blocks.md`.
 
 Within the architecture source, relations alone own flow endpoints. Modules do
 not repeat inputs/outputs; conditioning refers to one relation; scale

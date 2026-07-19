@@ -5,6 +5,7 @@ require "open3"
 require "rbconfig"
 require "set"
 
+require_relative "architecture_comparison_contract"
 require_relative "architecture_coverage"
 require_relative "architecture_ownership"
 require_relative "architecture_projection"
@@ -12,6 +13,7 @@ require_relative "architecture_view_lanes"
 require_relative "architecture_view_regions"
 require_relative "evidence_contract"
 require_relative "source_contract"
+require_relative "standard_block_contract"
 require_relative "strict_yaml"
 
 # Read-only, agent-facing verification for one registered architecture source
@@ -26,6 +28,7 @@ module ArchitectureVerifier
     strict_yaml
     source_contract
     source_semantics
+    comparisons
     ownership
     coverage
     view_navigation
@@ -125,6 +128,7 @@ module ArchitectureVerifier
         bibliography,
         source_set,
         registry.fetch("bibliography"),
+        documents,
       )
       checks << contract_check
       if contract_check.fetch("status") == "failed"
@@ -132,14 +136,16 @@ module ArchitectureVerifier
         checks << skipped_check("manifest", "source contracts did not validate") if include_manifest
         return Report.new(source_set_id: source_set_id, board_id: board_id, checks: checks)
       end
-      checks << source_semantics_check(architecture, view, pseudocode, bibliography, source_set)
+      checks << source_semantics_check(architecture, view, pseudocode, bibliography, source_set, documents)
+      checks << comparison_check(registry, source_set_id, bibliography, documents)
       checks << string_error_check("ownership", ArchitectureOwnership.errors(architecture), source_set.fetch("architecture"))
       checks << string_error_check("coverage", ArchitectureCoverage.errors(architecture), source_set.fetch("architecture"))
       checks << navigation_check(architecture, view, source_set.fetch("view"), board_id)
 
       selected_boards = select_boards(view, board_id)
-      checks << layout_check(selected_boards, source_set.fetch("view"))
-      checks << projection_check(architecture, view, selected_boards, source_set.fetch("view"))
+      architecture_boards = selected_boards.reject { |board| board["kind"] == "standard_block_instance" }
+      checks << layout_check(architecture_boards, source_set.fetch("view"))
+      checks << projection_check(architecture, view, architecture_boards, source_set.fetch("view"))
       checks << manifest_check if include_manifest
 
       Report.new(source_set_id: source_set_id, board_id: board_id, checks: checks)
@@ -169,6 +175,7 @@ module ArchitectureVerifier
         "view" => source_set["view"],
         "pseudocode" => source_set["pseudocode"],
         "bibliography" => registry["bibliography"],
+        "comparisons" => registry["comparisons"],
       }
       Array(source_set["standard_blocks"]).each_with_index do |relative, index|
         required_paths["standard_blocks[#{index}]"] = relative
@@ -197,6 +204,7 @@ module ArchitectureVerifier
         "view" => source_set.fetch("view"),
         "pseudocode" => source_set.fetch("pseudocode"),
         "bibliography" => registry.fetch("bibliography"),
+        "comparison_registry" => registry.fetch("comparisons"),
       }
       Array(source_set["standard_blocks"]).each_with_index do |relative, index|
         paths["standard_block_#{index}"] = relative
@@ -211,10 +219,33 @@ module ArchitectureVerifier
       rescue StrictYaml::Error, Errno::ENOENT => e
         diagnostics << diagnostic("strict_yaml", "invalid_yaml", e.message, file: relative)
       end
+      comparison_registry = documents["comparison_registry"]
+      Array(comparison_registry && comparison_registry["sources"]).each_with_index do |relative, index|
+        unless relative.is_a?(String) && !relative.empty?
+          diagnostics << diagnostic(
+            "strict_yaml", "invalid_comparison_source_path",
+            "comparison source path must be a non-empty string",
+            file: registry.fetch("comparisons"), path: "$.sources[#{index}]"
+          )
+          next
+        end
+        path = safe_path(relative)
+        unless path
+          diagnostics << diagnostic(
+            "strict_yaml", "unsafe_comparison_source_path",
+            "comparison source path escapes repository: #{relative}",
+            file: registry.fetch("comparisons"), path: "$.sources[#{index}]"
+          )
+          next
+        end
+        documents["comparison_#{index}"] = StrictYaml.load_file(path)
+      rescue StrictYaml::Error, Errno::ENOENT => e
+        diagnostics << diagnostic("strict_yaml", "invalid_yaml", e.message, file: relative)
+      end
       [documents, diagnostics]
     end
 
-    def source_contract_check(architecture, view, bibliography, source_set, bibliography_file)
+    def source_contract_check(architecture, view, bibliography, source_set, bibliography_file, documents)
       diagnostics = []
       {
         source_set.fetch("architecture") => architecture,
@@ -228,10 +259,21 @@ module ArchitectureVerifier
           )
         end
       end
+      Array(source_set["standard_blocks"]).each_with_index do |file, index|
+        document = documents["standard_block_#{index}"]
+        next unless document && document["schema_version"] == "standard-block-v0.2"
+
+        StandardBlockContract.definition_errors(document).each do |item|
+          diagnostics << diagnostic(
+            "source_contract", item.code, item.message,
+            file: file, path: item.path
+          )
+        end
+      end
       build_check("source_contract", diagnostics)
     end
 
-    def source_semantics_check(architecture, view, pseudocode, bibliography, source_set)
+    def source_semantics_check(architecture, view, pseudocode, bibliography, source_set, documents)
       diagnostics = []
       architecture_file = source_set.fetch("architecture")
       view_file = source_set.fetch("view")
@@ -253,6 +295,7 @@ module ArchitectureVerifier
         "scale_transitions" => architecture["scale_transitions"],
         "open_questions" => architecture["open_questions"],
         "execution.loops" => architecture.dig("execution", "loops"),
+        "block_instances" => architecture["block_instances"],
       }
       unique_collections.each do |name, items|
         duplicate_ids(Array(items)).each do |id|
@@ -282,6 +325,19 @@ module ArchitectureVerifier
         )
       end
       registered_blocks = Array(source_set["standard_blocks"]).to_set
+      blocks_by_path = Array(source_set["standard_blocks"]).each_with_index.to_h do |relative, index|
+        [relative, documents.fetch("standard_block_#{index}")]
+      end
+      StandardBlockContract.instance_errors(
+        architecture,
+        blocks_by_path: blocks_by_path,
+        registered_blocks: registered_blocks,
+      ).each do |item|
+        diagnostics << diagnostic(
+          "source_semantics", item.code, item.message,
+          file: architecture_file, path: item.path
+        )
+      end
       {
         architecture_file => architecture,
         source_set.fetch("pseudocode") => pseudocode,
@@ -297,6 +353,92 @@ module ArchitectureVerifier
         end
       end
       build_check("source_semantics", diagnostics)
+    end
+
+    def comparison_check(registry, source_set_id, bibliography, documents)
+      diagnostics = []
+      registry_file = registry.fetch("comparisons")
+      comparison_registry = documents.fetch("comparison_registry")
+      comparison_paths = Array(comparison_registry["sources"])
+      comparisons_by_path = comparison_paths.each_with_index.to_h do |path, index|
+        [path, documents["comparison_#{index}"]]
+      end
+      ArchitectureComparisonContract.registry_errors(
+        comparison_registry,
+        comparisons_by_path: comparisons_by_path,
+      ).each do |item|
+        diagnostics << diagnostic(
+          "comparisons", item.code, item.message,
+          file: registry_file, path: item.path
+        )
+      end
+
+      structurally_valid = {}
+      comparison_paths.each do |path|
+        comparison = comparisons_by_path[path]
+        next unless comparison
+
+        errors = SourceContract.errors(comparison)
+        errors.each do |item|
+          diagnostics << diagnostic(
+            "comparisons", item.code, item.message,
+            file: path, path: item.path
+          )
+        end
+        structurally_valid[path] = comparison if errors.empty?
+      end
+
+      relevant = structurally_valid.select do |_path, comparison|
+        Hash(comparison["subjects"]).values.any? { |subject| subject["source_set"] == source_set_id }
+      end
+      context, context_diagnostics = comparison_source_set_context(registry, relevant.values)
+      diagnostics.concat(context_diagnostics)
+      bibliography_sources = Array(bibliography["sources"]).to_h { |source| [source.fetch("id"), source] }
+      relevant.each do |path, comparison|
+        ArchitectureComparisonContract.errors(
+          comparison,
+          source_sets: context,
+          bibliography_sources: bibliography_sources,
+        ).each do |item|
+          diagnostics << diagnostic(
+            "comparisons", item.code, item.message,
+            file: path, path: item.path
+          )
+        end
+      end
+      build_check(
+        "comparisons",
+        diagnostics,
+        metrics: { "registered_count" => comparison_paths.length, "relevant_count" => relevant.length },
+      )
+    end
+
+    def comparison_source_set_context(registry, comparisons)
+      source_set_ids = comparisons.flat_map do |comparison|
+        Hash(comparison["subjects"]).values.filter_map { |subject| subject["source_set"] }
+      end.uniq
+      source_sets = Array(registry["source_sets"]).to_h { |entry| [entry["id"], entry] }
+      context = {}
+      diagnostics = []
+      source_set_ids.each do |id|
+        entry = source_sets[id]
+        next unless entry
+
+        block_paths = Array(entry["standard_blocks"])
+        context[id] = {
+          architecture: StrictYaml.load_file(safe_path(entry.fetch("architecture"))),
+          view: StrictYaml.load_file(safe_path(entry.fetch("view"))),
+          blocks_by_path: block_paths.to_h { |path| [path, StrictYaml.load_file(safe_path(path))] },
+          registered_blocks: block_paths,
+        }
+      rescue StrictYaml::Error, Errno::ENOENT, KeyError, TypeError => e
+        diagnostics << diagnostic(
+          "comparisons", "comparison_source_set_load_failed",
+          "cannot load source set #{id.inspect} for comparison: #{e.message}",
+          file: "architectures/index.yaml"
+        )
+      end
+      [context, diagnostics]
     end
 
     def navigation_check(architecture, view, file, selected_board_id)
@@ -326,6 +468,9 @@ module ArchitectureVerifier
       end
 
       modules_by_ref = Array(architecture["modules"]).to_h { |mod| ["modules.#{mod['id']}", mod] }
+      block_instances_by_ref = Array(architecture["block_instances"]).to_h do |instance|
+        ["block_instances.#{instance['id']}", instance]
+      end
       adjacency = Hash.new { |hash, key| hash[key] = [] }
       boards.each do |board|
         board_id = board["id"]
@@ -337,6 +482,22 @@ module ArchitectureVerifier
         subject_status = subject == "architecture" ? architecture.dig("decomposition", "status") : modules_by_ref.dig(subject, "decomposition", "status")
         if subject != "architecture" && !modules_by_ref.key?(subject)
           diagnostics << diagnostic("view_navigation", "unknown_board_subject", "board subject #{subject.inspect} does not exist", file: file, board: board_id)
+        elsif board["kind"] == "standard_block_instance"
+          instance = block_instances_by_ref[board["block_instance_ref"]]
+          unless instance
+            diagnostics << diagnostic(
+              "view_navigation", "unknown_block_instance",
+              "board #{board_id} references unknown #{board['block_instance_ref'].inspect}",
+              file: file, board: board_id
+            )
+          end
+          if instance && instance["subject_ref"] != subject
+            diagnostics << diagnostic(
+              "view_navigation", "block_instance_subject_mismatch",
+              "#{board['block_instance_ref']} belongs to #{instance['subject_ref']}, not #{subject}",
+              file: file, board: board_id
+            )
+          end
         elsif %w[leaf opaque].include?(subject_status)
           diagnostics << diagnostic("view_navigation", "non_expandable_subject", "#{subject} is #{subject_status} and cannot own a board", file: file, board: board_id)
         end
@@ -513,7 +674,7 @@ module ArchitectureVerifier
     def evidence_facts(architecture)
       facts = []
       facts << ["architecture decomposition", architecture["decomposition"], "$.decomposition"]
-      %w[representations value_sites modules relations claims conditioning scale_transitions open_questions].each do |collection|
+      %w[representations value_sites modules relations claims conditioning scale_transitions open_questions block_instances].each do |collection|
         Array(architecture[collection]).each_with_index do |item, index|
           facts << ["#{collection.delete_suffix('s')} #{item['id'] || index}", item, "$.#{collection}[#{index}]"]
         end

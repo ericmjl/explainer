@@ -26,6 +26,8 @@ strict YAML parse
   -> fact-ownership validation
   -> decomposition-coverage validation
   -> semantic board projection
+  -> reusable-block instance-board compilation
+  -> cross-source comparison resolution and compilation
   -> deterministic manifest emission/check
 ```
 
@@ -40,8 +42,11 @@ current sources use anchors for repeated evidence objects.
 The implementation-independent source schemas are:
 
 - `schemas/architecture-v0.4.schema.json`;
-- `schemas/visualization-v0.4.schema.json`; and
-- `schemas/bibliography-v0.1.schema.json`.
+- `schemas/visualization-v0.4.schema.json`;
+- `schemas/bibliography-v0.1.schema.json`;
+- `schemas/standard-block-v0.2.schema.json`;
+- `schemas/comparison-registry-v0.1.schema.json`; and
+- `schemas/architecture-comparison-v0.1.schema.json`.
 
 They use JSON Schema 2020-12 vocabulary. `lib/json_schema_subset.rb` evaluates
 the subset used by this repository without adding a Ruby gem dependency. A
@@ -70,6 +75,11 @@ document's JSON Schema:
 - open questions name affected facts;
 - representation lanes map known canonical types to in-bounds authored rows,
   without overlapping refs or ambiguous family glyphs;
+- reusable-block ports, active variants, instance bindings, and compiled
+  internal-detail boards agree;
+- comparison subjects resolve to registered boards, aligned facts are visible
+  and scoped to the correct subject, relationship side rules hold, and
+  comparative evidence is compatible;
 - ownership and decomposition invariants hold; and
 - every board projects without omission, contraction, or drilldown ambiguity.
 
@@ -112,6 +122,38 @@ Every manifest records the generator contract version and SHA-256 digest of
 its bibliography, architecture, view, pseudocode, and standard-block inputs.
 No timestamps or environment-dependent IDs are emitted.
 
+`manifest-index.js` also records the comparison registry schema, independent
+`architecture-comparison-compiler-v0.1` version, and SHA-256 digests of the
+registry, every comparison source, the bibliography, and the architecture,
+view, and reusable-block sources used to resolve board-local facts. Its
+compiled `comparisonIndex` stores subject and alignment metadata but never copies either
+manifest-owned board scene.
+
+Registered `standard-block-v0.2` inputs are schema-checked and validated for
+local refs, variant step membership, visual coverage, and output production.
+Architecture block instances additionally validate their subject, required
+ports, relation direction/kind/cardinality, exact interface coverage, honest
+non-exact differences, and usage evidence.
+
+Registered comparisons are schema-checked and resolved against the same
+compiled reusable boards emitted to the browser. This rejects foreign,
+inactive, misspelled, or off-board facts before highlight metadata is emitted.
+Alignment and finding evidence remains separately reviewable from the facts it
+compares.
+
+Comparison-specific regression gates are:
+
+```bash
+ruby -Ilib:test test/architecture_comparison_contract_test.rb
+ruby -Ilib:test test/architecture_comparison_compiler_test.rb
+ruby -Ilib:test test/renderer_board_surface_test.rb
+ruby -Ilib:test test/renderer_comparison_state_test.rb
+ruby -Ilib:test test/renderer_comparison_board_test.rb
+ruby -Ilib:test test/renderer_comparison_workspace_test.rb
+ruby scripts/lint_sources.rb
+ruby renderer/architecture/build-manifest.rb --check
+```
+
 ## Agent-Facing Source-Set Verification
 
 After an agent applies an architecture edit or bootstraps and registers a new
@@ -130,17 +172,20 @@ ruby scripts/verify_architecture.rb --source-set genie3 \
 ```
 
 Checks have stable IDs for registry resolution, strict YAML, source contracts,
-source semantics and evidence, ownership, coverage, view navigation, board
-layout, semantic projection, and manifest freshness. A successful unscoped
-run means the registered source set satisfies the current static contracts:
+source semantics and evidence, architecture comparisons, ownership, coverage,
+view navigation, board layout, semantic projection, and manifest freshness. A
+successful unscoped run means the registered source set satisfies the current
+static contracts:
 bibliography and evidence-reference compatibility, typed references,
 decomposition and ownership rules, pseudocode and standard-block references,
+comparison subjects and compiled fact alignments,
 every-board projection, navigation and declarative grid invariants, and a
 byte-reproducible generated manifest.
 
-`--board` retains source-set-wide source and navigation checks while narrowing
-layout and projection diagnostics to the named board. It is useful during
-repair, but it is not the final handoff gate; rerun without `--board`.
+`--board` retains source-set-wide source, comparison, and navigation checks
+while narrowing layout and projection diagnostics to the named board. It is
+useful during repair, but it is not the final handoff gate; rerun without
+`--board`.
 `--format json` changes only presentation, not verification rules. The command
 is non-mutating and exits `0` on success, `1` on verification failure, and `2`
 for invalid CLI usage.

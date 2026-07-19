@@ -1,9 +1,9 @@
 export const manifest = {
   "schemaVersion": "architecture-manifest-v0.4",
   "build": {
-    "generator": "architecture-manifest-builder-v0.4.1",
+    "generator": "architecture-manifest-builder-v0.4.2",
     "inputDigests": {
-      "references/bibliography.yaml": "2c238cc39ff866cfb41c1b60c3e7a142df5707d3a9292efb8051aabbd5c8f336",
+      "references/bibliography.yaml": "8ddccafa8ac6452643f652d69730c06644298c00bde10cbcca4a9f557a8f95c7",
       "architectures/diffusion-transformer.yaml": "5d7c09d2a97999cd526241976db9881acc2499d98abbe3624520562a53510aad",
       "views/dit-semantic-zoom.view.yaml": "ebca6fefd29f612792b8957db940cc3237132140722d52b76999194823dbc5eb",
       "pseudocode/diffusion-transformer.yaml": "c30de43fb5cb70827e520b7f60c410d348de1c10d72646ab68e6b4a2d6064c65",
@@ -969,6 +969,9 @@ export const manifest = {
           ]
         }
       }
+    ],
+    "blockInstances": [
+
     ],
     "representations": [
       {
@@ -3591,6 +3594,17 @@ export const manifest = {
         "href": "https://github.com/aqlaboratory/genie2/blob/9a954578f7b5a39552545eebc6d4794447794c87/genie/model/structure_net.py"
       },
       {
+        "id": "genie2_ipa_code",
+        "kind": "code",
+        "title": "Genie 2 invariant point attention module",
+        "organization": "AQLaboratory",
+        "repository": "aqlaboratory/genie2",
+        "revision": "9a954578f7b5a39552545eebc6d4794447794c87",
+        "path": "genie/model/modules/invariant_point_attention.py",
+        "url": "https://github.com/aqlaboratory/genie2/blob/9a954578f7b5a39552545eebc6d4794447794c87/genie/model/modules/invariant_point_attention.py",
+        "href": "https://github.com/aqlaboratory/genie2/blob/9a954578f7b5a39552545eebc6d4794447794c87/genie/model/modules/invariant_point_attention.py"
+      },
+      {
         "id": "genie2_sampler_code",
         "kind": "code",
         "title": "Genie 2 reverse-diffusion sampler",
@@ -3721,6 +3735,17 @@ export const manifest = {
         "href": "https://github.com/aqlaboratory/genie3/blob/d77ae5ac04212ff1e8b29b585859a3244c614804/src/genie3/generation/model/structure_net.py"
       },
       {
+        "id": "genie3_ipa_code",
+        "kind": "code",
+        "title": "Genie 3 full and reduced invariant point attention modules",
+        "organization": "AQLaboratory",
+        "repository": "aqlaboratory/genie3",
+        "revision": "d77ae5ac04212ff1e8b29b585859a3244c614804",
+        "path": "src/genie3/generation/model/module/invariant_point_attention.py",
+        "url": "https://github.com/aqlaboratory/genie3/blob/d77ae5ac04212ff1e8b29b585859a3244c614804/src/genie3/generation/model/module/invariant_point_attention.py",
+        "href": "https://github.com/aqlaboratory/genie3/blob/d77ae5ac04212ff1e8b29b585859a3244c614804/src/genie3/generation/model/module/invariant_point_attention.py"
+      },
+      {
         "id": "genie3_sequence_code",
         "kind": "code",
         "title": "Genie 3 optional sequence head",
@@ -3827,6 +3852,7 @@ export const manifest = {
   "standardBlocks": {
     "adaln_zero_conditioning": {
       "id": "adaln_zero_conditioning",
+      "schemaVersion": "standard-block-v0.1",
       "name": "AdaLN-Zero Conditioning",
       "sourceYaml": "../../standard_blocks/adaln-zero-conditioning.yaml",
       "description": "Regress per-sample shift, scale-offset, and residual-gate parameters from a global conditioning vector; the entire six-output modulation linear is zero-initialized, so each residual update starts at zero and the enclosing block starts as the identity.",
@@ -3858,6 +3884,7 @@ export const manifest = {
     },
     "sinusoidal_timestep_embedding": {
       "id": "sinusoidal_timestep_embedding",
+      "schemaVersion": "standard-block-v0.1",
       "name": "Sinusoidal Timestep Embedding",
       "sourceYaml": "../../standard_blocks/sinusoidal-timestep-embedding.yaml",
       "description": "Expand a scalar diffusion timestep into a fixed sinusoidal frequency embedding, then project it to model width with a two-layer SiLU MLP. A reusable atom for diffusion-style architectures.",
@@ -3884,6 +3911,7 @@ export const manifest = {
     },
     "per_item_adaln_conditioning": {
       "id": "per_item_adaln_conditioning",
+      "schemaVersion": "standard-block-v0.1",
       "name": "Per-Item AdaLN Conditioning",
       "sourceYaml": "../../standard_blocks/per-item-adaln-conditioning.yaml",
       "description": "Use a per-item conditioning stream to produce adaptive normalization shifts, scales, and gates for item updates.",
@@ -4009,6 +4037,13 @@ export const manifest = {
           "refs": "DiT.forward",
           "architectureRefs": [
             "modules.patchify"
+          ],
+          "operation": "patch_embedding",
+          "inputs": [
+            "input_latent"
+          ],
+          "outputs": [
+            "token_state"
           ]
         },
         {
@@ -4017,6 +4052,13 @@ export const manifest = {
           "refs": "TimestepEmbedder",
           "architectureRefs": [
             "modules.timestep_embedder"
+          ],
+          "operation": "sinusoidal_embedding",
+          "inputs": [
+            "timestep"
+          ],
+          "outputs": [
+            "t_embedding"
           ]
         },
         {
@@ -4025,6 +4067,13 @@ export const manifest = {
           "refs": "LabelEmbedder",
           "architectureRefs": [
             "modules.label_embedder"
+          ],
+          "operation": "label_embedding_with_cfg_dropout",
+          "inputs": [
+            "class_label"
+          ],
+          "outputs": [
+            "y_embedding"
           ]
         },
         {
@@ -4034,6 +4083,14 @@ export const manifest = {
           "architectureRefs": [
             "modules.cond_combiner",
             "claims.conditioning_is_per_sample"
+          ],
+          "operation": "sum",
+          "inputs": [
+            "t_embedding",
+            "y_embedding"
+          ],
+          "outputs": [
+            "cond_vector"
           ]
         },
         {
@@ -4044,7 +4101,22 @@ export const manifest = {
             "modules.dit_blocks",
             "claims.adaln_zero_beats_alternatives"
           ],
-          "standardBlockRef": "../../standard_blocks/adaln-zero-conditioning.yaml"
+          "standardBlockRef": "../../standard_blocks/adaln-zero-conditioning.yaml",
+          "operation": "adaln_zero",
+          "inputs": [
+            "token_state",
+            "cond_vector"
+          ],
+          "outputs": [
+            "token_state"
+          ],
+          "visual": {
+            "block": "adaln_zero_conditioning",
+            "slots": {
+              "token_state": "token_state",
+              "cond_vector": "cond_vector"
+            }
+          }
         },
         {
           "id": "decode_tokens",
@@ -4052,6 +4124,14 @@ export const manifest = {
           "refs": "FinalLayer",
           "architectureRefs": [
             "modules.final_layer"
+          ],
+          "operation": "linear_decode",
+          "inputs": [
+            "token_state",
+            "cond_vector"
+          ],
+          "outputs": [
+            "output_tokens"
           ]
         },
         {
@@ -4060,6 +4140,13 @@ export const manifest = {
           "refs": "DiT.unpatchify",
           "architectureRefs": [
             "modules.unpatchify"
+          ],
+          "operation": "reshape",
+          "inputs": [
+            "output_tokens"
+          ],
+          "outputs": [
+            "noise_prediction"
           ]
         }
       ],

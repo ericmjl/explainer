@@ -114,6 +114,11 @@ claims:
 trace symbols to standard-block input/output slots. The linter checks that
 slot names exist in the referenced block.
 
+For a v0.2 concrete use, prefer `block_instance_ref` on the architecture-level
+trace line. The selected standard-block variant already owns its detailed
+step code, input/output refs, and TeX, so the method pseudocode should retain
+only the surrounding architecture operation instead of copying those steps.
+
 ## Renderer Contract
 
 A renderer should be able to:

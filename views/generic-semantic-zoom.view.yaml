@@ -342,6 +342,7 @@ boards:
         label: pair-biased attention
         col: 3
         row: 2
+        board_ref: generic_group_pair_attention_internals
       - id: group_state_out
         ref: value_sites.group_state_after_refiner
         label: group state out
@@ -370,3 +371,12 @@ boards:
           title: Refined group state
           role: mutable output
           inside: The attention output updates group state while pair/context remains read-only in this demo.
+
+  - id: generic_group_pair_attention_internals
+    kind: standard_block_instance
+    title: Pair-Biased Attention Internals
+    summary: The reusable logit-bias-only variant projects pair context into the attention logits, then aggregates scalar values into the updated group state.
+    parent: group_refiner
+    subject_ref: modules.pair_biased_attention
+    expansion_depth: 0
+    block_instance_ref: block_instances.generic_group_pair_attention

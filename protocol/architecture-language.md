@@ -225,7 +225,8 @@ Use the optional `mechanisms` list for searchable implementation detail such
 as `directional_ddim`, `invariant_point_attention`, or
 `triangular_multiplication`. Do not encode granularity or reuse metadata in
 `kind`: hierarchy and `decomposition` identify containers, `repeats` identifies
-iteration, and `standard_block_ref` identifies reusable block occurrences.
+iteration. Typed reusable occurrences live in top-level `block_instances`;
+legacy `standard_block_ref` remains a summary-only compatibility hook.
 Discovery should match both fields: an `attention` query finds modules whose
 kind is `attention` and composite modules that list `attention` as a mechanism.
 Prefer reusable mechanism names; keep direction, placement, and other
@@ -253,6 +254,20 @@ modules:
 Optional module fields include `mechanisms`, `repeats`, `depth`, `attention`,
 `standard_block_ref`, `pseudocode_ref`, and `frozen`. Do not author module
 `inputs` or `outputs`; canonical relations define the interface.
+
+## Reusable Block Instances
+
+`block_instances` binds one versioned standard-block template to a concrete
+module through canonical relations. The instance owns the selected `variant`,
+`use_scope`, `conformance`, method-specific difference summary, and evidence.
+It never copies relation endpoints or representation facts.
+
+Use `conformance: exact` only when every non-control relation incident on the
+subject is bound and the selected variant covers the full module boundary.
+Use `wrapped` when architecture-specific wrapper logic surrounds the reusable
+core, and `reduced` when the method intentionally removes or replaces parts.
+Both non-exact forms require `difference_summary`. See
+`protocol/standard-blocks.md` for the complete port and detail-board contract.
 
 ## Canonical Relations
 

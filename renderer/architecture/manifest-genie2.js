@@ -1,12 +1,13 @@
 export const manifest = {
   "schemaVersion": "architecture-manifest-v0.4",
   "build": {
-    "generator": "architecture-manifest-builder-v0.4.1",
+    "generator": "architecture-manifest-builder-v0.4.2",
     "inputDigests": {
-      "references/bibliography.yaml": "2c238cc39ff866cfb41c1b60c3e7a142df5707d3a9292efb8051aabbd5c8f336",
-      "architectures/genie2.yaml": "cc0f6dea8ed2d6622590cc8da824921fdd9010203c29bab8b59ad7993087c514",
-      "views/genie2-semantic-zoom.view.yaml": "3bef1fa640d8e2d0cb1654b6c145920f258ec40e8d8acd526017d1c5c72ea87e",
-      "pseudocode/genie2.yaml": "b78ca953f8ebed98a688501d7485e3b2e79fb50b2e9434d876012c1ee4289bd0"
+      "references/bibliography.yaml": "8ddccafa8ac6452643f652d69730c06644298c00bde10cbcca4a9f557a8f95c7",
+      "architectures/genie2.yaml": "d5fbf1c1a91ef74dcef47388855e83b7e5571deb7d63a5eb2657177355c2f96a",
+      "views/genie2-semantic-zoom.view.yaml": "ef8da5bf79917ffcda1b4ecc749c93380c26a4f5679847586d35834cd8c60ed0",
+      "pseudocode/genie2.yaml": "b78ca953f8ebed98a688501d7485e3b2e79fb50b2e9434d876012c1ee4289bd0",
+      "standard_blocks/invariant-point-attention.yaml": "cae45ff984b74aef017c9562a5231f344fab7fb41dca60818ff338afd0848176"
     }
   },
   "architecture": {
@@ -801,6 +802,339 @@ export const manifest = {
             }
           ]
         }
+      }
+    ],
+    "blockInstances": [
+      {
+        "id": "structure_ipa",
+        "standardBlockId": "invariant_point_attention",
+        "standardBlockRef": "standard_blocks/invariant-point-attention.yaml",
+        "standardBlockName": "Invariant Point Attention",
+        "subjectRef": "modules.invariant_point_attention",
+        "variant": "full_ipa_residual_norm",
+        "variantLabel": "Full IPA + residual normalization",
+        "variantDescription": "Full scalar, point, and pair aggregation followed by the StructureLayer residual, dropout, and LayerNorm wrapper.",
+        "useScope": "whole_module",
+        "conformance": "exact",
+        "evidence": {
+          "status": "confirmed_from_code",
+          "refs": [
+            {
+              "source_ref": "genie2_ipa_code",
+              "role": "implementation_evidence",
+              "locator": "InvariantPointAttention.forward",
+              "note": "The IPA module implements scalar, point, pair-bias, and pair-value attention terms."
+            },
+            {
+              "source_ref": "genie2_structure_code",
+              "role": "wrapper_evidence",
+              "locator": "StructureLayer.forward",
+              "note": "The structure layer applies the residual, dropout, and LayerNorm wrapper represented by this variant."
+            }
+          ]
+        },
+        "portBindings": [
+          {
+            "portRef": "ports.single_state",
+            "relationRefs": [
+              "relations.single_features_enter_ipa"
+            ],
+            "relations": [
+              {
+                "relationRef": "relations.single_features_enter_ipa",
+                "from": "value_sites.single_features",
+                "to": "modules.invariant_point_attention",
+                "kind": "data_flow",
+                "operation": "attend_from_single_state",
+                "carries": [
+                  "representations.single_features"
+                ]
+              }
+            ]
+          },
+          {
+            "portRef": "ports.pair_context",
+            "relationRefs": [
+              "relations.refined_pair_features_bias_ipa"
+            ],
+            "relations": [
+              {
+                "relationRef": "relations.refined_pair_features_bias_ipa",
+                "from": "value_sites.refined_pair_features",
+                "to": "modules.invariant_point_attention",
+                "kind": "conditioning",
+                "operation": "pair_conditioned_attention",
+                "carries": [
+                  "representations.pair_features"
+                ]
+              }
+            ]
+          },
+          {
+            "portRef": "ports.frames",
+            "relationRefs": [
+              "relations.current_frames_condition_ipa"
+            ],
+            "relations": [
+              {
+                "relationRef": "relations.current_frames_condition_ipa",
+                "from": "value_sites.current_frames",
+                "to": "modules.invariant_point_attention",
+                "kind": "conditioning",
+                "operation": "express_attention_points_in_frames",
+                "carries": [
+                  "representations.residue_frames"
+                ]
+              }
+            ]
+          },
+          {
+            "portRef": "ports.mask",
+            "relationRefs": [
+              "relations.feature_bundle_masks_ipa"
+            ],
+            "selector": "residue_mask",
+            "relations": [
+              {
+                "relationRef": "relations.feature_bundle_masks_ipa",
+                "from": "value_sites.feature_bundle",
+                "to": "modules.invariant_point_attention",
+                "kind": "conditioning",
+                "operation": "mask_padded_residues",
+                "carries": [
+                  "representations.feature_bundle"
+                ]
+              }
+            ]
+          },
+          {
+            "portRef": "ports.updated_single_state",
+            "relationRefs": [
+              "relations.ipa_produces_updated_single_state"
+            ],
+            "relations": [
+              {
+                "relationRef": "relations.ipa_produces_updated_single_state",
+                "from": "modules.invariant_point_attention",
+                "to": "value_sites.single_after_ipa",
+                "kind": "state_update",
+                "operation": "residual_attention_update",
+                "carries": [
+                  "representations.single_features"
+                ]
+              }
+            ]
+          }
+        ],
+        "pseudocode": [
+          {
+            "id": "project_scalar_terms",
+            "templateFactRef": "standard_blocks.invariant_point_attention.steps.project_scalar_terms",
+            "instanceFactRef": "block_instances.structure_ipa.steps.project_scalar_terms",
+            "label": "Project scalar Q/K/V",
+            "operation": "scalar_qkv_projection",
+            "code": "q_s, k_s, v_s = project_scalar_qkv(single_state)",
+            "inputs": [
+              "ports.single_state"
+            ],
+            "outputs": [
+              "values.scalar_terms"
+            ]
+          },
+          {
+            "id": "project_local_points",
+            "templateFactRef": "standard_blocks.invariant_point_attention.steps.project_local_points",
+            "instanceFactRef": "block_instances.structure_ipa.steps.project_local_points",
+            "label": "Project local Q/K/V points",
+            "operation": "point_qkv_projection",
+            "code": "q_p, k_p, v_p = project_point_qkv(single_state)",
+            "inputs": [
+              "ports.single_state"
+            ],
+            "outputs": [
+              "values.local_points"
+            ]
+          },
+          {
+            "id": "transform_points_to_global",
+            "templateFactRef": "standard_blocks.invariant_point_attention.steps.transform_points_to_global",
+            "instanceFactRef": "block_instances.structure_ipa.steps.transform_points_to_global",
+            "label": "Express points in global frame",
+            "operation": "rigid_apply",
+            "code": "q_p, k_p, v_p = frames.apply(q_p, k_p, v_p)",
+            "inputs": [
+              "values.local_points",
+              "ports.frames"
+            ],
+            "outputs": [
+              "values.global_points"
+            ]
+          },
+          {
+            "id": "scalar_attention_logits",
+            "templateFactRef": "standard_blocks.invariant_point_attention.steps.scalar_attention_logits",
+            "instanceFactRef": "block_instances.structure_ipa.steps.scalar_attention_logits",
+            "label": "Form scalar logits",
+            "operation": "attention_logits",
+            "code": "scalar_logits = dot(q_s, k_s) * scalar_scale",
+            "inputs": [
+              "values.scalar_terms"
+            ],
+            "outputs": [
+              "values.scalar_logits"
+            ]
+          },
+          {
+            "id": "point_distance_logits",
+            "templateFactRef": "standard_blocks.invariant_point_attention.steps.point_distance_logits",
+            "instanceFactRef": "block_instances.structure_ipa.steps.point_distance_logits",
+            "label": "Form point-distance logits",
+            "operation": "invariant_point_distance",
+            "code": "point_logits = -0.5 * point_weight * squared_distance(q_p, k_p)",
+            "inputs": [
+              "values.global_points"
+            ],
+            "outputs": [
+              "values.point_logits"
+            ]
+          },
+          {
+            "id": "project_pair_bias",
+            "templateFactRef": "standard_blocks.invariant_point_attention.steps.project_pair_bias",
+            "instanceFactRef": "block_instances.structure_ipa.steps.project_pair_bias",
+            "label": "Project pair bias",
+            "operation": "pair_bias_projection",
+            "code": "pair_bias = linear_b(pair_context)",
+            "inputs": [
+              "ports.pair_context"
+            ],
+            "outputs": [
+              "values.pair_bias"
+            ]
+          },
+          {
+            "id": "combine_and_mask_logits",
+            "templateFactRef": "standard_blocks.invariant_point_attention.steps.combine_and_mask_logits",
+            "instanceFactRef": "block_instances.structure_ipa.steps.combine_and_mask_logits",
+            "label": "Combine logits and apply mask",
+            "operation": "ipa_logit_composition",
+            "code": "combined_logits = mask(scalar_logits + point_logits + pair_bias)",
+            "inputs": [
+              "values.scalar_logits",
+              "values.point_logits",
+              "values.pair_bias",
+              "ports.mask"
+            ],
+            "outputs": [
+              "values.combined_logits"
+            ]
+          },
+          {
+            "id": "softmax_attention",
+            "templateFactRef": "standard_blocks.invariant_point_attention.steps.softmax_attention",
+            "instanceFactRef": "block_instances.structure_ipa.steps.softmax_attention",
+            "label": "Normalize over keys",
+            "operation": "softmax",
+            "code": "attention = softmax(attention_logits, dim=keys)",
+            "inputs": [
+              "values.combined_logits"
+            ],
+            "outputs": [
+              "values.attention_weights"
+            ]
+          },
+          {
+            "id": "aggregate_scalar_values",
+            "templateFactRef": "standard_blocks.invariant_point_attention.steps.aggregate_scalar_values",
+            "instanceFactRef": "block_instances.structure_ipa.steps.aggregate_scalar_values",
+            "label": "Aggregate scalar values",
+            "operation": "weighted_sum",
+            "code": "scalar_context = weighted_sum(attention, v_s)",
+            "inputs": [
+              "values.attention_weights",
+              "values.scalar_terms"
+            ],
+            "outputs": [
+              "values.scalar_context"
+            ]
+          },
+          {
+            "id": "aggregate_global_points",
+            "templateFactRef": "standard_blocks.invariant_point_attention.steps.aggregate_global_points",
+            "instanceFactRef": "block_instances.structure_ipa.steps.aggregate_global_points",
+            "label": "Aggregate value points",
+            "operation": "weighted_point_sum",
+            "code": "global_point_context = weighted_sum(attention, v_p_global)",
+            "inputs": [
+              "values.attention_weights",
+              "values.global_points"
+            ],
+            "outputs": [
+              "values.global_point_context"
+            ]
+          },
+          {
+            "id": "return_points_to_local_frame",
+            "templateFactRef": "standard_blocks.invariant_point_attention.steps.return_points_to_local_frame",
+            "instanceFactRef": "block_instances.structure_ipa.steps.return_points_to_local_frame",
+            "label": "Return points to query frame",
+            "operation": "rigid_inverse_apply",
+            "code": "local_point_context = concat(frames.invert_apply(global_points), point_norms)",
+            "inputs": [
+              "values.global_point_context",
+              "ports.frames"
+            ],
+            "outputs": [
+              "values.local_point_context"
+            ]
+          },
+          {
+            "id": "aggregate_pair_values",
+            "templateFactRef": "standard_blocks.invariant_point_attention.steps.aggregate_pair_values",
+            "instanceFactRef": "block_instances.structure_ipa.steps.aggregate_pair_values",
+            "label": "Aggregate pair values",
+            "operation": "pair_value_aggregation",
+            "code": "pair_value_context = weighted_sum(attention, pair_context)",
+            "inputs": [
+              "values.attention_weights",
+              "ports.pair_context"
+            ],
+            "outputs": [
+              "values.pair_value_context"
+            ]
+          },
+          {
+            "id": "project_ipa_delta",
+            "templateFactRef": "standard_blocks.invariant_point_attention.steps.project_ipa_delta",
+            "instanceFactRef": "block_instances.structure_ipa.steps.project_ipa_delta",
+            "label": "Fuse IPA outputs",
+            "operation": "output_projection",
+            "code": "ipa_delta = output_projection(concat(scalar_context, local_points, pair_values))",
+            "inputs": [
+              "values.scalar_context",
+              "values.local_point_context",
+              "values.pair_value_context"
+            ],
+            "outputs": [
+              "values.ipa_delta"
+            ]
+          },
+          {
+            "id": "residual_norm",
+            "templateFactRef": "standard_blocks.invariant_point_attention.steps.residual_norm",
+            "instanceFactRef": "block_instances.structure_ipa.steps.residual_norm",
+            "label": "Residual, dropout, and norm",
+            "operation": "residual_normalization",
+            "code": "updated_single_state = layer_norm(single_state + dropout(ipa_delta))",
+            "inputs": [
+              "ports.single_state",
+              "values.ipa_delta"
+            ],
+            "outputs": [
+              "ports.updated_single_state"
+            ]
+          }
+        ]
       }
     ],
     "representations": [
@@ -3317,6 +3651,17 @@ export const manifest = {
         "href": "https://github.com/aqlaboratory/genie2/blob/9a954578f7b5a39552545eebc6d4794447794c87/genie/model/structure_net.py"
       },
       {
+        "id": "genie2_ipa_code",
+        "kind": "code",
+        "title": "Genie 2 invariant point attention module",
+        "organization": "AQLaboratory",
+        "repository": "aqlaboratory/genie2",
+        "revision": "9a954578f7b5a39552545eebc6d4794447794c87",
+        "path": "genie/model/modules/invariant_point_attention.py",
+        "url": "https://github.com/aqlaboratory/genie2/blob/9a954578f7b5a39552545eebc6d4794447794c87/genie/model/modules/invariant_point_attention.py",
+        "href": "https://github.com/aqlaboratory/genie2/blob/9a954578f7b5a39552545eebc6d4794447794c87/genie/model/modules/invariant_point_attention.py"
+      },
+      {
         "id": "genie2_sampler_code",
         "kind": "code",
         "title": "Genie 2 reverse-diffusion sampler",
@@ -3447,6 +3792,17 @@ export const manifest = {
         "href": "https://github.com/aqlaboratory/genie3/blob/d77ae5ac04212ff1e8b29b585859a3244c614804/src/genie3/generation/model/structure_net.py"
       },
       {
+        "id": "genie3_ipa_code",
+        "kind": "code",
+        "title": "Genie 3 full and reduced invariant point attention modules",
+        "organization": "AQLaboratory",
+        "repository": "aqlaboratory/genie3",
+        "revision": "d77ae5ac04212ff1e8b29b585859a3244c614804",
+        "path": "src/genie3/generation/model/module/invariant_point_attention.py",
+        "url": "https://github.com/aqlaboratory/genie3/blob/d77ae5ac04212ff1e8b29b585859a3244c614804/src/genie3/generation/model/module/invariant_point_attention.py",
+        "href": "https://github.com/aqlaboratory/genie3/blob/d77ae5ac04212ff1e8b29b585859a3244c614804/src/genie3/generation/model/module/invariant_point_attention.py"
+      },
+      {
         "id": "genie3_sequence_code",
         "kind": "code",
         "title": "Genie 3 optional sequence head",
@@ -3551,6 +3907,780 @@ export const manifest = {
     ]
   },
   "standardBlocks": {
+    "invariant_point_attention": {
+      "id": "invariant_point_attention",
+      "schemaVersion": "standard-block-v0.2",
+      "name": "Invariant Point Attention",
+      "sourceYaml": "../../standard_blocks/invariant-point-attention.yaml",
+      "description": "Combine scalar attention, pair bias, and frame-aware point-distance logits, then aggregate scalar, point, and pair values into a residual-normalized single-state update.",
+      "math": [
+        {
+          "id": "project_scalar_terms",
+          "text": "q_s, k_s, v_s = project_scalar_qkv(single_state)",
+          "operation": "scalar_qkv_projection"
+        },
+        {
+          "id": "project_local_points",
+          "text": "q_p, k_p, v_p = project_point_qkv(single_state)",
+          "operation": "point_qkv_projection"
+        },
+        {
+          "id": "transform_points_to_global",
+          "text": "q_p, k_p, v_p = frames.apply(q_p, k_p, v_p)",
+          "operation": "rigid_apply"
+        },
+        {
+          "id": "scalar_attention_logits",
+          "text": "scalar_logits = dot(q_s, k_s) * scalar_scale",
+          "operation": "attention_logits"
+        },
+        {
+          "id": "point_distance_logits",
+          "text": "point_logits = -0.5 * point_weight * squared_distance(q_p, k_p)",
+          "operation": "invariant_point_distance"
+        },
+        {
+          "id": "project_pair_bias",
+          "text": "pair_bias = linear_b(pair_context)",
+          "operation": "pair_bias_projection"
+        },
+        {
+          "id": "combine_and_mask_logits",
+          "text": "combined_logits = mask(scalar_logits + point_logits + pair_bias)",
+          "operation": "ipa_logit_composition"
+        },
+        {
+          "id": "softmax_attention",
+          "text": "attention = softmax(attention_logits, dim=keys)",
+          "operation": "softmax"
+        },
+        {
+          "id": "aggregate_scalar_values",
+          "text": "scalar_context = weighted_sum(attention, v_s)",
+          "operation": "weighted_sum"
+        },
+        {
+          "id": "aggregate_global_points",
+          "text": "global_point_context = weighted_sum(attention, v_p_global)",
+          "operation": "weighted_point_sum"
+        },
+        {
+          "id": "return_points_to_local_frame",
+          "text": "local_point_context = concat(frames.invert_apply(global_points), point_norms)",
+          "operation": "rigid_inverse_apply"
+        },
+        {
+          "id": "aggregate_pair_values",
+          "text": "pair_value_context = weighted_sum(attention, pair_context)",
+          "operation": "pair_value_aggregation"
+        },
+        {
+          "id": "project_ipa_delta",
+          "text": "ipa_delta = output_projection(concat(scalar_context, local_points, pair_values))",
+          "operation": "output_projection"
+        },
+        {
+          "id": "residual_norm",
+          "text": "updated_single_state = layer_norm(single_state + dropout(ipa_delta))",
+          "operation": "residual_normalization"
+        }
+      ],
+      "kind": "attention",
+      "status": "review",
+      "ports": [
+        {
+          "id": "single_state",
+          "label": "single state",
+          "direction": "input",
+          "kind": "representation",
+          "required": true,
+          "cardinality": "one",
+          "relation_kinds": [
+            "data_flow",
+            "state_update"
+          ],
+          "glyph": "single",
+          "notation": "s"
+        },
+        {
+          "id": "pair_context",
+          "label": "pair context",
+          "direction": "conditioning",
+          "kind": "representation",
+          "required": true,
+          "cardinality": "one",
+          "relation_kinds": [
+            "conditioning",
+            "data_flow"
+          ],
+          "glyph": "pair",
+          "notation": "z"
+        },
+        {
+          "id": "frames",
+          "label": "current frames",
+          "direction": "conditioning",
+          "kind": "representation",
+          "required": true,
+          "cardinality": "one",
+          "relation_kinds": [
+            "conditioning",
+            "data_flow"
+          ],
+          "glyph": "frames",
+          "notation": "T"
+        },
+        {
+          "id": "mask",
+          "label": "valid-item mask",
+          "direction": "conditioning",
+          "kind": "mask",
+          "required": true,
+          "cardinality": "one",
+          "relation_kinds": [
+            "conditioning",
+            "control"
+          ],
+          "glyph": "vector",
+          "notation": "m"
+        },
+        {
+          "id": "updated_single_state",
+          "label": "IPA-updated single state",
+          "direction": "output",
+          "kind": "representation",
+          "required": true,
+          "cardinality": "one",
+          "relation_kinds": [
+            "data_flow",
+            "state_update"
+          ],
+          "glyph": "single",
+          "notation": "s_ipa"
+        }
+      ],
+      "variants": [
+        {
+          "id": "full_ipa_residual_norm",
+          "label": "Full IPA + residual normalization",
+          "description": "Full scalar, point, and pair aggregation followed by the StructureLayer residual, dropout, and LayerNorm wrapper.",
+          "step_refs": [
+            "steps.project_scalar_terms",
+            "steps.project_local_points",
+            "steps.transform_points_to_global",
+            "steps.scalar_attention_logits",
+            "steps.point_distance_logits",
+            "steps.project_pair_bias",
+            "steps.combine_and_mask_logits",
+            "steps.softmax_attention",
+            "steps.aggregate_scalar_values",
+            "steps.aggregate_global_points",
+            "steps.return_points_to_local_frame",
+            "steps.aggregate_pair_values",
+            "steps.project_ipa_delta",
+            "steps.residual_norm"
+          ]
+        }
+      ],
+      "defaultVariant": "full_ipa_residual_norm",
+      "values": [
+        {
+          "id": "scalar_terms",
+          "label": "scalar Q/K/V",
+          "kind": "representation",
+          "glyph": "single",
+          "notation": "qkv_s"
+        },
+        {
+          "id": "local_points",
+          "label": "local Q/K/V points",
+          "kind": "geometry",
+          "glyph": "coordinates",
+          "notation": "qkv_p"
+        },
+        {
+          "id": "global_points",
+          "label": "global Q/K/V points",
+          "kind": "geometry",
+          "glyph": "coordinates",
+          "notation": "T_qkv_p"
+        },
+        {
+          "id": "scalar_logits",
+          "label": "scalar logits",
+          "kind": "logit",
+          "glyph": "pair",
+          "notation": "l_s"
+        },
+        {
+          "id": "point_logits",
+          "label": "point-distance logits",
+          "kind": "logit",
+          "glyph": "pair",
+          "notation": "l_p"
+        },
+        {
+          "id": "pair_bias",
+          "label": "pair bias",
+          "kind": "logit",
+          "glyph": "pair",
+          "notation": "b_z"
+        },
+        {
+          "id": "combined_logits",
+          "label": "combined masked logits",
+          "kind": "logit",
+          "glyph": "pair",
+          "notation": "l"
+        },
+        {
+          "id": "attention_weights",
+          "label": "attention weights",
+          "kind": "weight",
+          "glyph": "pair",
+          "notation": "a"
+        },
+        {
+          "id": "scalar_context",
+          "label": "scalar context",
+          "kind": "representation",
+          "glyph": "single",
+          "notation": "o_s"
+        },
+        {
+          "id": "global_point_context",
+          "label": "global point context",
+          "kind": "geometry",
+          "glyph": "coordinates",
+          "notation": "o_p_global"
+        },
+        {
+          "id": "local_point_context",
+          "label": "local points + norms",
+          "kind": "geometry",
+          "glyph": "coordinates",
+          "notation": "o_p_local"
+        },
+        {
+          "id": "pair_value_context",
+          "label": "pair-value context",
+          "kind": "representation",
+          "glyph": "single",
+          "notation": "o_z"
+        },
+        {
+          "id": "ipa_delta",
+          "label": "IPA delta",
+          "kind": "representation",
+          "glyph": "single",
+          "notation": "delta_s"
+        }
+      ],
+      "steps": [
+        {
+          "id": "project_scalar_terms",
+          "label": "Project scalar Q/K/V",
+          "operation": "scalar_qkv_projection",
+          "inputs": [
+            "ports.single_state"
+          ],
+          "outputs": [
+            "values.scalar_terms"
+          ],
+          "code": "q_s, k_s, v_s = project_scalar_qkv(single_state)"
+        },
+        {
+          "id": "project_local_points",
+          "label": "Project local Q/K/V points",
+          "operation": "point_qkv_projection",
+          "inputs": [
+            "ports.single_state"
+          ],
+          "outputs": [
+            "values.local_points"
+          ],
+          "code": "q_p, k_p, v_p = project_point_qkv(single_state)"
+        },
+        {
+          "id": "transform_points_to_global",
+          "label": "Express points in global frame",
+          "operation": "rigid_apply",
+          "inputs": [
+            "values.local_points",
+            "ports.frames"
+          ],
+          "outputs": [
+            "values.global_points"
+          ],
+          "code": "q_p, k_p, v_p = frames.apply(q_p, k_p, v_p)"
+        },
+        {
+          "id": "scalar_attention_logits",
+          "label": "Form scalar logits",
+          "operation": "attention_logits",
+          "inputs": [
+            "values.scalar_terms"
+          ],
+          "outputs": [
+            "values.scalar_logits"
+          ],
+          "code": "scalar_logits = dot(q_s, k_s) * scalar_scale"
+        },
+        {
+          "id": "point_distance_logits",
+          "label": "Form point-distance logits",
+          "operation": "invariant_point_distance",
+          "inputs": [
+            "values.global_points"
+          ],
+          "outputs": [
+            "values.point_logits"
+          ],
+          "code": "point_logits = -0.5 * point_weight * squared_distance(q_p, k_p)"
+        },
+        {
+          "id": "project_pair_bias",
+          "label": "Project pair bias",
+          "operation": "pair_bias_projection",
+          "inputs": [
+            "ports.pair_context"
+          ],
+          "outputs": [
+            "values.pair_bias"
+          ],
+          "code": "pair_bias = linear_b(pair_context)"
+        },
+        {
+          "id": "combine_and_mask_logits",
+          "label": "Combine logits and apply mask",
+          "operation": "ipa_logit_composition",
+          "inputs": [
+            "values.scalar_logits",
+            "values.point_logits",
+            "values.pair_bias",
+            "ports.mask"
+          ],
+          "outputs": [
+            "values.combined_logits"
+          ],
+          "code": "combined_logits = mask(scalar_logits + point_logits + pair_bias)"
+        },
+        {
+          "id": "softmax_attention",
+          "label": "Normalize over keys",
+          "operation": "softmax",
+          "inputs": [
+            "values.combined_logits"
+          ],
+          "outputs": [
+            "values.attention_weights"
+          ],
+          "code": "attention = softmax(attention_logits, dim=keys)"
+        },
+        {
+          "id": "aggregate_scalar_values",
+          "label": "Aggregate scalar values",
+          "operation": "weighted_sum",
+          "inputs": [
+            "values.attention_weights",
+            "values.scalar_terms"
+          ],
+          "outputs": [
+            "values.scalar_context"
+          ],
+          "code": "scalar_context = weighted_sum(attention, v_s)"
+        },
+        {
+          "id": "aggregate_global_points",
+          "label": "Aggregate value points",
+          "operation": "weighted_point_sum",
+          "inputs": [
+            "values.attention_weights",
+            "values.global_points"
+          ],
+          "outputs": [
+            "values.global_point_context"
+          ],
+          "code": "global_point_context = weighted_sum(attention, v_p_global)"
+        },
+        {
+          "id": "return_points_to_local_frame",
+          "label": "Return points to query frame",
+          "operation": "rigid_inverse_apply",
+          "inputs": [
+            "values.global_point_context",
+            "ports.frames"
+          ],
+          "outputs": [
+            "values.local_point_context"
+          ],
+          "code": "local_point_context = concat(frames.invert_apply(global_points), point_norms)"
+        },
+        {
+          "id": "aggregate_pair_values",
+          "label": "Aggregate pair values",
+          "operation": "pair_value_aggregation",
+          "inputs": [
+            "values.attention_weights",
+            "ports.pair_context"
+          ],
+          "outputs": [
+            "values.pair_value_context"
+          ],
+          "code": "pair_value_context = weighted_sum(attention, pair_context)"
+        },
+        {
+          "id": "project_ipa_delta",
+          "label": "Fuse IPA outputs",
+          "operation": "output_projection",
+          "inputs": [
+            "values.scalar_context",
+            "values.local_point_context",
+            "values.pair_value_context"
+          ],
+          "outputs": [
+            "values.ipa_delta"
+          ],
+          "code": "ipa_delta = output_projection(concat(scalar_context, local_points, pair_values))"
+        },
+        {
+          "id": "residual_norm",
+          "label": "Residual, dropout, and norm",
+          "operation": "residual_normalization",
+          "inputs": [
+            "ports.single_state",
+            "values.ipa_delta"
+          ],
+          "outputs": [
+            "ports.updated_single_state"
+          ],
+          "code": "updated_single_state = layer_norm(single_state + dropout(ipa_delta))"
+        }
+      ],
+      "visualTemplate": {
+        "grid": {
+          "columns": 12,
+          "rows": 10,
+          "column_sizing": "content",
+          "col_gap": 20,
+          "row_gap": 28
+        },
+        "nodes": [
+          {
+            "id": "single_state",
+            "ref": "ports.single_state",
+            "col": 1,
+            "row": 1,
+            "prominence": "secondary",
+            "treatment": "compact"
+          },
+          {
+            "id": "pair_context",
+            "ref": "ports.pair_context",
+            "col": 1,
+            "row": 3,
+            "prominence": "secondary",
+            "treatment": "compact"
+          },
+          {
+            "id": "frames",
+            "ref": "ports.frames",
+            "col": 1,
+            "row": 4,
+            "prominence": "secondary",
+            "treatment": "compact"
+          },
+          {
+            "id": "mask",
+            "ref": "ports.mask",
+            "col": 4,
+            "row": 4,
+            "prominence": "context",
+            "treatment": "chip"
+          },
+          {
+            "id": "updated_single_state",
+            "ref": "ports.updated_single_state",
+            "col": 12,
+            "row": 10,
+            "prominence": "secondary",
+            "treatment": "compact"
+          },
+          {
+            "id": "project_scalar_terms",
+            "ref": "steps.project_scalar_terms",
+            "col": 2,
+            "row": 1,
+            "prominence": "primary",
+            "treatment": "compact"
+          },
+          {
+            "id": "scalar_terms",
+            "ref": "values.scalar_terms",
+            "col": 3,
+            "row": 1,
+            "prominence": "context",
+            "treatment": "compact"
+          },
+          {
+            "id": "scalar_attention_logits",
+            "ref": "steps.scalar_attention_logits",
+            "col": 4,
+            "row": 1,
+            "prominence": "primary",
+            "treatment": "compact"
+          },
+          {
+            "id": "scalar_logits",
+            "ref": "values.scalar_logits",
+            "col": 5,
+            "row": 1,
+            "prominence": "context",
+            "treatment": "compact"
+          },
+          {
+            "id": "project_local_points",
+            "ref": "steps.project_local_points",
+            "col": 2,
+            "row": 2,
+            "prominence": "primary",
+            "treatment": "compact"
+          },
+          {
+            "id": "local_points",
+            "ref": "values.local_points",
+            "col": 3,
+            "row": 2,
+            "prominence": "context",
+            "treatment": "compact"
+          },
+          {
+            "id": "transform_points_to_global",
+            "ref": "steps.transform_points_to_global",
+            "col": 4,
+            "row": 2,
+            "prominence": "primary",
+            "treatment": "compact"
+          },
+          {
+            "id": "global_points",
+            "ref": "values.global_points",
+            "col": 5,
+            "row": 2,
+            "prominence": "context",
+            "treatment": "compact"
+          },
+          {
+            "id": "point_distance_logits",
+            "ref": "steps.point_distance_logits",
+            "col": 6,
+            "row": 2,
+            "prominence": "primary",
+            "treatment": "compact"
+          },
+          {
+            "id": "point_logits",
+            "ref": "values.point_logits",
+            "col": 7,
+            "row": 2,
+            "prominence": "context",
+            "treatment": "compact"
+          },
+          {
+            "id": "project_pair_bias",
+            "ref": "steps.project_pair_bias",
+            "col": 2,
+            "row": 3,
+            "prominence": "primary",
+            "treatment": "compact"
+          },
+          {
+            "id": "pair_bias",
+            "ref": "values.pair_bias",
+            "col": 5,
+            "row": 3,
+            "prominence": "context",
+            "treatment": "compact"
+          },
+          {
+            "id": "combine_and_mask_logits",
+            "ref": "steps.combine_and_mask_logits",
+            "col": 6,
+            "row": 4,
+            "prominence": "primary",
+            "treatment": "compact"
+          },
+          {
+            "id": "combined_logits",
+            "ref": "values.combined_logits",
+            "col": 7,
+            "row": 4,
+            "prominence": "context",
+            "treatment": "compact"
+          },
+          {
+            "id": "softmax_attention",
+            "ref": "steps.softmax_attention",
+            "col": 6,
+            "row": 5,
+            "prominence": "primary",
+            "treatment": "compact"
+          },
+          {
+            "id": "attention_weights",
+            "ref": "values.attention_weights",
+            "col": 7,
+            "row": 5,
+            "prominence": "context",
+            "treatment": "compact"
+          },
+          {
+            "id": "aggregate_scalar_values",
+            "ref": "steps.aggregate_scalar_values",
+            "col": 7,
+            "row": 7,
+            "prominence": "primary",
+            "treatment": "compact"
+          },
+          {
+            "id": "scalar_context",
+            "ref": "values.scalar_context",
+            "col": 8,
+            "row": 7,
+            "prominence": "context",
+            "treatment": "compact"
+          },
+          {
+            "id": "aggregate_pair_values",
+            "ref": "steps.aggregate_pair_values",
+            "col": 7,
+            "row": 8,
+            "prominence": "primary",
+            "treatment": "compact"
+          },
+          {
+            "id": "pair_value_context",
+            "ref": "values.pair_value_context",
+            "col": 8,
+            "row": 8,
+            "prominence": "context",
+            "treatment": "compact"
+          },
+          {
+            "id": "aggregate_global_points",
+            "ref": "steps.aggregate_global_points",
+            "col": 7,
+            "row": 9,
+            "prominence": "primary",
+            "treatment": "compact"
+          },
+          {
+            "id": "global_point_context",
+            "ref": "values.global_point_context",
+            "col": 8,
+            "row": 9,
+            "prominence": "context",
+            "treatment": "compact"
+          },
+          {
+            "id": "return_points_to_local_frame",
+            "ref": "steps.return_points_to_local_frame",
+            "col": 9,
+            "row": 9,
+            "prominence": "primary",
+            "treatment": "compact"
+          },
+          {
+            "id": "local_point_context",
+            "ref": "values.local_point_context",
+            "col": 10,
+            "row": 9,
+            "prominence": "context",
+            "treatment": "compact"
+          },
+          {
+            "id": "project_ipa_delta",
+            "ref": "steps.project_ipa_delta",
+            "col": 9,
+            "row": 10,
+            "prominence": "primary",
+            "treatment": "compact"
+          },
+          {
+            "id": "ipa_delta",
+            "ref": "values.ipa_delta",
+            "col": 10,
+            "row": 10,
+            "prominence": "context",
+            "treatment": "compact"
+          },
+          {
+            "id": "residual_norm",
+            "ref": "steps.residual_norm",
+            "col": 11,
+            "row": 10,
+            "prominence": "primary",
+            "treatment": "compact"
+          }
+        ],
+        "segments": [
+          {
+            "id": "attention_weights",
+            "label": "Compute attention weights",
+            "description": "Form scalar and invariant point-distance logits, add pair bias, apply the validity mask, and normalize once over keys. Bundled Q/K/V projections also prepare the value terms consumed in Phase 2.",
+            "node_refs": [
+              "ports.single_state",
+              "ports.pair_context",
+              "ports.frames",
+              "ports.mask",
+              "steps.project_scalar_terms",
+              "values.scalar_terms",
+              "steps.scalar_attention_logits",
+              "values.scalar_logits",
+              "steps.project_local_points",
+              "values.local_points",
+              "steps.transform_points_to_global",
+              "values.global_points",
+              "steps.point_distance_logits",
+              "values.point_logits",
+              "steps.project_pair_bias",
+              "values.pair_bias",
+              "steps.combine_and_mask_logits",
+              "values.combined_logits",
+              "steps.softmax_attention",
+              "values.attention_weights"
+            ]
+          },
+          {
+            "id": "value_extraction",
+            "label": "Extract values and update state",
+            "description": "Reuse the shared attention weights for scalar, point, and pair values, return points to the local frame, fuse the contexts, and apply the residual wrapper.",
+            "node_refs": [
+              "steps.aggregate_scalar_values",
+              "values.scalar_context",
+              "steps.aggregate_global_points",
+              "values.global_point_context",
+              "steps.return_points_to_local_frame",
+              "values.local_point_context",
+              "steps.aggregate_pair_values",
+              "values.pair_value_context",
+              "steps.project_ipa_delta",
+              "values.ipa_delta",
+              "steps.residual_norm",
+              "ports.updated_single_state"
+            ]
+          }
+        ]
+      },
+      "evidencePolicy": {
+        "generic_definition": "Full IPA anatomy is reusable vocabulary; each architecture instance must separately prove its core and wrapper variant.",
+        "usage_requires": [
+          "Evidence for scalar, point-distance, and pair logit terms.",
+          "Evidence for scalar, point, and pair-value aggregation.",
+          "Evidence for the residual/dropout/normalization wrapper when full_ipa_residual_norm is selected."
+        ]
+      }
+    }
   },
   "pseudocode": {
     "genie2": {
@@ -3651,6 +4781,13 @@ export const manifest = {
           "refs": "BaseSampler._sample",
           "architectureRefs": [
             "modules.coordinate_initializer"
+          ],
+          "operation": "gaussian_coordinate_initialization",
+          "inputs": [
+            "feature_bundle"
+          ],
+          "outputs": [
+            "current_coordinates"
           ]
         },
         {
@@ -3659,6 +4796,14 @@ export const manifest = {
           "refs": "BaseSampler._sample",
           "architectureRefs": [
             "modules.frenet_frame_builder"
+          ],
+          "operation": "derive_frenet_frames",
+          "inputs": [
+            "current_coordinates",
+            "feature_bundle"
+          ],
+          "outputs": [
+            "current_frames"
           ]
         },
         {
@@ -3667,6 +4812,14 @@ export const manifest = {
           "refs": "SingleFeatureNet.forward",
           "architectureRefs": [
             "modules.single_feature_net"
+          ],
+          "operation": "single_feature_encoding",
+          "inputs": [
+            "feature_bundle",
+            "timestep"
+          ],
+          "outputs": [
+            "single_features"
           ]
         },
         {
@@ -3676,6 +4829,15 @@ export const manifest = {
           "architectureRefs": [
             "modules.pair_feature_net",
             "claims.motif_geometry_is_intra_group"
+          ],
+          "operation": "pair_feature_encoding",
+          "inputs": [
+            "single_features",
+            "current_frames",
+            "feature_bundle"
+          ],
+          "outputs": [
+            "pair_features"
           ]
         },
         {
@@ -3685,6 +4847,13 @@ export const manifest = {
           "architectureRefs": [
             "modules.pair_transform_stack",
             "claims.base_model_omits_triangle_attention"
+          ],
+          "operation": "pair_refinement",
+          "inputs": [
+            "pair_features"
+          ],
+          "outputs": [
+            "pair_features"
           ]
         },
         {
@@ -3693,6 +4862,15 @@ export const manifest = {
           "refs": "StructureLayer.forward and StructureNet.forward",
           "architectureRefs": [
             "modules.equivariant_structure_decoder"
+          ],
+          "operation": "equivariant_structure_refinement",
+          "inputs": [
+            "single_features",
+            "pair_features",
+            "current_frames"
+          ],
+          "outputs": [
+            "updated_frames"
           ]
         },
         {
@@ -3701,6 +4879,14 @@ export const manifest = {
           "refs": "Denoiser.forward",
           "architectureRefs": [
             "modules.noise_readout"
+          ],
+          "operation": "translation_displacement",
+          "inputs": [
+            "current_frames",
+            "updated_frames"
+          ],
+          "outputs": [
+            "predicted_noise"
           ]
         },
         {
@@ -3710,6 +4896,16 @@ export const manifest = {
           "architectureRefs": [
             "modules.step_noise_sampler",
             "modules.reverse_diffusion_update"
+          ],
+          "operation": "stochastic_ddpm_coordinate_update",
+          "inputs": [
+            "current_coordinates",
+            "timestep",
+            "predicted_noise",
+            "step_noise"
+          ],
+          "outputs": [
+            "next_coordinates"
           ]
         },
         {
@@ -3719,6 +4915,13 @@ export const manifest = {
           "architectureRefs": [
             "modules.pdb_exporter",
             "claims.model_is_sequence_agnostic"
+          ],
+          "operation": "emit_generated_backbone",
+          "inputs": [
+            "next_coordinates"
+          ],
+          "outputs": [
+            "final_coordinates"
           ]
         }
       ],
@@ -6584,7 +7787,8 @@ export const manifest = {
             "prominence": "primary",
             "treatment": "block",
             "col": 3,
-            "row": 3
+            "row": 3,
+            "board_ref": "genie2_ipa_internals"
           },
           {
             "id": "single_after_ipa",
@@ -7048,6 +8252,1735 @@ export const manifest = {
           "value_sites.updated_frames": "visible"
         },
         "projectionMode": "derived"
+      },
+      {
+        "id": "genie2_ipa_internals",
+        "kind": "standard_block_instance",
+        "title": "Genie 2 Invariant Point Attention Internals",
+        "summary": "Full IPA combines scalar, pair, and frame-aware point terms, then the structure-layer wrapper applies residual dropout and LayerNorm.",
+        "parent": "structure_decoder",
+        "subject_ref": "modules.invariant_point_attention",
+        "expansion_depth": 0,
+        "block_instance_ref": "block_instances.structure_ipa",
+        "grid": {
+          "columns": 12,
+          "rows": 10,
+          "column_sizing": "content",
+          "col_gap": 20,
+          "row_gap": 28
+        },
+        "nodes": [
+          {
+            "id": "single_state",
+            "label": "single state",
+            "col": 1,
+            "row": 1,
+            "prominence": "secondary",
+            "treatment": "compact",
+            "standard_block_ref": "standard_blocks/invariant-point-attention.yaml",
+            "standard_block_id": "invariant_point_attention",
+            "block_instance_ref": "block_instances.structure_ipa",
+            "template_fact_ref": "standard_blocks.invariant_point_attention.ports.single_state",
+            "instance_fact_ref": "block_instances.structure_ipa.ports.single_state",
+            "kind": "representation",
+            "rep_ref": "single_features",
+            "shape": "B x N x 384",
+            "scale": "residue",
+            "glyph": "single",
+            "flow_family": "single",
+            "notation": "s",
+            "port_ref": "ports.single_state"
+          },
+          {
+            "id": "pair_context",
+            "label": "pair context",
+            "col": 1,
+            "row": 3,
+            "prominence": "secondary",
+            "treatment": "compact",
+            "standard_block_ref": "standard_blocks/invariant-point-attention.yaml",
+            "standard_block_id": "invariant_point_attention",
+            "block_instance_ref": "block_instances.structure_ipa",
+            "template_fact_ref": "standard_blocks.invariant_point_attention.ports.pair_context",
+            "instance_fact_ref": "block_instances.structure_ipa.ports.pair_context",
+            "kind": "representation",
+            "rep_ref": "pair_features",
+            "shape": "B x N x N x 128",
+            "scale": "pair",
+            "glyph": "pair",
+            "flow_family": "pair",
+            "notation": "z",
+            "port_ref": "ports.pair_context"
+          },
+          {
+            "id": "frames",
+            "label": "current frames",
+            "col": 1,
+            "row": 4,
+            "prominence": "secondary",
+            "treatment": "compact",
+            "standard_block_ref": "standard_blocks/invariant-point-attention.yaml",
+            "standard_block_id": "invariant_point_attention",
+            "block_instance_ref": "block_instances.structure_ipa",
+            "template_fact_ref": "standard_blocks.invariant_point_attention.ports.frames",
+            "instance_fact_ref": "block_instances.structure_ipa.ports.frames",
+            "kind": "representation",
+            "rep_ref": "residue_frames",
+            "shape": "B x N x (3 x 3 + 3)",
+            "scale": "residue",
+            "glyph": "frames",
+            "flow_family": "frame",
+            "notation": "T",
+            "port_ref": "ports.frames"
+          },
+          {
+            "id": "mask",
+            "label": "valid-item mask",
+            "col": 4,
+            "row": 4,
+            "prominence": "context",
+            "treatment": "chip",
+            "standard_block_ref": "standard_blocks/invariant-point-attention.yaml",
+            "standard_block_id": "invariant_point_attention",
+            "block_instance_ref": "block_instances.structure_ipa",
+            "template_fact_ref": "standard_blocks.invariant_point_attention.ports.mask",
+            "instance_fact_ref": "block_instances.structure_ipa.ports.mask",
+            "kind": "representation",
+            "rep_ref": "feature_bundle",
+            "shape": "B x N fields + B x N x N masks",
+            "scale": "mixed",
+            "glyph": "vector",
+            "notation": "m",
+            "port_ref": "ports.mask"
+          },
+          {
+            "id": "updated_single_state",
+            "label": "IPA-updated single state",
+            "col": 12,
+            "row": 10,
+            "prominence": "secondary",
+            "treatment": "compact",
+            "standard_block_ref": "standard_blocks/invariant-point-attention.yaml",
+            "standard_block_id": "invariant_point_attention",
+            "block_instance_ref": "block_instances.structure_ipa",
+            "template_fact_ref": "standard_blocks.invariant_point_attention.ports.updated_single_state",
+            "instance_fact_ref": "block_instances.structure_ipa.ports.updated_single_state",
+            "kind": "representation",
+            "rep_ref": "single_features",
+            "shape": "B x N x 384",
+            "scale": "residue",
+            "glyph": "single",
+            "flow_family": "single",
+            "notation": "s_ipa",
+            "port_ref": "ports.updated_single_state"
+          },
+          {
+            "id": "project_scalar_terms",
+            "label": "Project scalar Q/K/V",
+            "col": 2,
+            "row": 1,
+            "prominence": "primary",
+            "treatment": "compact",
+            "standard_block_ref": "standard_blocks/invariant-point-attention.yaml",
+            "standard_block_id": "invariant_point_attention",
+            "block_instance_ref": "block_instances.structure_ipa",
+            "template_fact_ref": "standard_blocks.invariant_point_attention.steps.project_scalar_terms",
+            "instance_fact_ref": "block_instances.structure_ipa.steps.project_scalar_terms",
+            "kind": "operation",
+            "scale": "operation",
+            "detail": "scalar_qkv_projection",
+            "code": "q_s, k_s, v_s = project_scalar_qkv(single_state)",
+            "operation": "scalar_qkv_projection"
+          },
+          {
+            "id": "scalar_terms",
+            "label": "scalar Q/K/V",
+            "col": 3,
+            "row": 1,
+            "prominence": "context",
+            "treatment": "compact",
+            "standard_block_ref": "standard_blocks/invariant-point-attention.yaml",
+            "standard_block_id": "invariant_point_attention",
+            "block_instance_ref": "block_instances.structure_ipa",
+            "template_fact_ref": "standard_blocks.invariant_point_attention.values.scalar_terms",
+            "instance_fact_ref": "block_instances.structure_ipa.values.scalar_terms",
+            "kind": "representation",
+            "scale": "item",
+            "glyph": "single",
+            "flow_family": "single",
+            "notation": "qkv_s"
+          },
+          {
+            "id": "scalar_attention_logits",
+            "label": "Form scalar logits",
+            "col": 4,
+            "row": 1,
+            "prominence": "primary",
+            "treatment": "compact",
+            "standard_block_ref": "standard_blocks/invariant-point-attention.yaml",
+            "standard_block_id": "invariant_point_attention",
+            "block_instance_ref": "block_instances.structure_ipa",
+            "template_fact_ref": "standard_blocks.invariant_point_attention.steps.scalar_attention_logits",
+            "instance_fact_ref": "block_instances.structure_ipa.steps.scalar_attention_logits",
+            "kind": "operation",
+            "scale": "operation",
+            "detail": "attention_logits",
+            "code": "scalar_logits = dot(q_s, k_s) * scalar_scale",
+            "operation": "attention_logits"
+          },
+          {
+            "id": "scalar_logits",
+            "label": "scalar logits",
+            "col": 5,
+            "row": 1,
+            "prominence": "context",
+            "treatment": "compact",
+            "standard_block_ref": "standard_blocks/invariant-point-attention.yaml",
+            "standard_block_id": "invariant_point_attention",
+            "block_instance_ref": "block_instances.structure_ipa",
+            "template_fact_ref": "standard_blocks.invariant_point_attention.values.scalar_logits",
+            "instance_fact_ref": "block_instances.structure_ipa.values.scalar_logits",
+            "kind": "representation",
+            "scale": "item",
+            "glyph": "pair",
+            "flow_family": "pair",
+            "notation": "l_s"
+          },
+          {
+            "id": "project_local_points",
+            "label": "Project local Q/K/V points",
+            "col": 2,
+            "row": 2,
+            "prominence": "primary",
+            "treatment": "compact",
+            "standard_block_ref": "standard_blocks/invariant-point-attention.yaml",
+            "standard_block_id": "invariant_point_attention",
+            "block_instance_ref": "block_instances.structure_ipa",
+            "template_fact_ref": "standard_blocks.invariant_point_attention.steps.project_local_points",
+            "instance_fact_ref": "block_instances.structure_ipa.steps.project_local_points",
+            "kind": "operation",
+            "scale": "operation",
+            "detail": "point_qkv_projection",
+            "code": "q_p, k_p, v_p = project_point_qkv(single_state)",
+            "operation": "point_qkv_projection"
+          },
+          {
+            "id": "local_points",
+            "label": "local Q/K/V points",
+            "col": 3,
+            "row": 2,
+            "prominence": "context",
+            "treatment": "compact",
+            "standard_block_ref": "standard_blocks/invariant-point-attention.yaml",
+            "standard_block_id": "invariant_point_attention",
+            "block_instance_ref": "block_instances.structure_ipa",
+            "template_fact_ref": "standard_blocks.invariant_point_attention.values.local_points",
+            "instance_fact_ref": "block_instances.structure_ipa.values.local_points",
+            "kind": "representation",
+            "scale": "item",
+            "glyph": "coordinates",
+            "flow_family": "coordinate",
+            "notation": "qkv_p"
+          },
+          {
+            "id": "transform_points_to_global",
+            "label": "Express points in global frame",
+            "col": 4,
+            "row": 2,
+            "prominence": "primary",
+            "treatment": "compact",
+            "standard_block_ref": "standard_blocks/invariant-point-attention.yaml",
+            "standard_block_id": "invariant_point_attention",
+            "block_instance_ref": "block_instances.structure_ipa",
+            "template_fact_ref": "standard_blocks.invariant_point_attention.steps.transform_points_to_global",
+            "instance_fact_ref": "block_instances.structure_ipa.steps.transform_points_to_global",
+            "kind": "operation",
+            "scale": "operation",
+            "detail": "rigid_apply",
+            "code": "q_p, k_p, v_p = frames.apply(q_p, k_p, v_p)",
+            "operation": "rigid_apply"
+          },
+          {
+            "id": "global_points",
+            "label": "global Q/K/V points",
+            "col": 5,
+            "row": 2,
+            "prominence": "context",
+            "treatment": "compact",
+            "standard_block_ref": "standard_blocks/invariant-point-attention.yaml",
+            "standard_block_id": "invariant_point_attention",
+            "block_instance_ref": "block_instances.structure_ipa",
+            "template_fact_ref": "standard_blocks.invariant_point_attention.values.global_points",
+            "instance_fact_ref": "block_instances.structure_ipa.values.global_points",
+            "kind": "representation",
+            "scale": "item",
+            "glyph": "coordinates",
+            "flow_family": "coordinate",
+            "notation": "T_qkv_p"
+          },
+          {
+            "id": "point_distance_logits",
+            "label": "Form point-distance logits",
+            "col": 6,
+            "row": 2,
+            "prominence": "primary",
+            "treatment": "compact",
+            "standard_block_ref": "standard_blocks/invariant-point-attention.yaml",
+            "standard_block_id": "invariant_point_attention",
+            "block_instance_ref": "block_instances.structure_ipa",
+            "template_fact_ref": "standard_blocks.invariant_point_attention.steps.point_distance_logits",
+            "instance_fact_ref": "block_instances.structure_ipa.steps.point_distance_logits",
+            "kind": "operation",
+            "scale": "operation",
+            "detail": "invariant_point_distance",
+            "code": "point_logits = -0.5 * point_weight * squared_distance(q_p, k_p)",
+            "operation": "invariant_point_distance"
+          },
+          {
+            "id": "point_logits",
+            "label": "point-distance logits",
+            "col": 7,
+            "row": 2,
+            "prominence": "context",
+            "treatment": "compact",
+            "standard_block_ref": "standard_blocks/invariant-point-attention.yaml",
+            "standard_block_id": "invariant_point_attention",
+            "block_instance_ref": "block_instances.structure_ipa",
+            "template_fact_ref": "standard_blocks.invariant_point_attention.values.point_logits",
+            "instance_fact_ref": "block_instances.structure_ipa.values.point_logits",
+            "kind": "representation",
+            "scale": "item",
+            "glyph": "pair",
+            "flow_family": "pair",
+            "notation": "l_p"
+          },
+          {
+            "id": "project_pair_bias",
+            "label": "Project pair bias",
+            "col": 2,
+            "row": 3,
+            "prominence": "primary",
+            "treatment": "compact",
+            "standard_block_ref": "standard_blocks/invariant-point-attention.yaml",
+            "standard_block_id": "invariant_point_attention",
+            "block_instance_ref": "block_instances.structure_ipa",
+            "template_fact_ref": "standard_blocks.invariant_point_attention.steps.project_pair_bias",
+            "instance_fact_ref": "block_instances.structure_ipa.steps.project_pair_bias",
+            "kind": "operation",
+            "scale": "operation",
+            "detail": "pair_bias_projection",
+            "code": "pair_bias = linear_b(pair_context)",
+            "operation": "pair_bias_projection"
+          },
+          {
+            "id": "pair_bias",
+            "label": "pair bias",
+            "col": 5,
+            "row": 3,
+            "prominence": "context",
+            "treatment": "compact",
+            "standard_block_ref": "standard_blocks/invariant-point-attention.yaml",
+            "standard_block_id": "invariant_point_attention",
+            "block_instance_ref": "block_instances.structure_ipa",
+            "template_fact_ref": "standard_blocks.invariant_point_attention.values.pair_bias",
+            "instance_fact_ref": "block_instances.structure_ipa.values.pair_bias",
+            "kind": "representation",
+            "scale": "item",
+            "glyph": "pair",
+            "flow_family": "pair",
+            "notation": "b_z"
+          },
+          {
+            "id": "combine_and_mask_logits",
+            "label": "Combine logits and apply mask",
+            "col": 6,
+            "row": 4,
+            "prominence": "primary",
+            "treatment": "compact",
+            "standard_block_ref": "standard_blocks/invariant-point-attention.yaml",
+            "standard_block_id": "invariant_point_attention",
+            "block_instance_ref": "block_instances.structure_ipa",
+            "template_fact_ref": "standard_blocks.invariant_point_attention.steps.combine_and_mask_logits",
+            "instance_fact_ref": "block_instances.structure_ipa.steps.combine_and_mask_logits",
+            "kind": "operation",
+            "scale": "operation",
+            "detail": "ipa_logit_composition",
+            "code": "combined_logits = mask(scalar_logits + point_logits + pair_bias)",
+            "operation": "ipa_logit_composition"
+          },
+          {
+            "id": "combined_logits",
+            "label": "combined masked logits",
+            "col": 7,
+            "row": 4,
+            "prominence": "context",
+            "treatment": "compact",
+            "standard_block_ref": "standard_blocks/invariant-point-attention.yaml",
+            "standard_block_id": "invariant_point_attention",
+            "block_instance_ref": "block_instances.structure_ipa",
+            "template_fact_ref": "standard_blocks.invariant_point_attention.values.combined_logits",
+            "instance_fact_ref": "block_instances.structure_ipa.values.combined_logits",
+            "kind": "representation",
+            "scale": "item",
+            "glyph": "pair",
+            "flow_family": "pair",
+            "notation": "l"
+          },
+          {
+            "id": "softmax_attention",
+            "label": "Normalize over keys",
+            "col": 6,
+            "row": 5,
+            "prominence": "primary",
+            "treatment": "compact",
+            "standard_block_ref": "standard_blocks/invariant-point-attention.yaml",
+            "standard_block_id": "invariant_point_attention",
+            "block_instance_ref": "block_instances.structure_ipa",
+            "template_fact_ref": "standard_blocks.invariant_point_attention.steps.softmax_attention",
+            "instance_fact_ref": "block_instances.structure_ipa.steps.softmax_attention",
+            "kind": "operation",
+            "scale": "operation",
+            "detail": "softmax",
+            "code": "attention = softmax(attention_logits, dim=keys)",
+            "operation": "softmax"
+          },
+          {
+            "id": "attention_weights",
+            "label": "attention weights",
+            "col": 7,
+            "row": 5,
+            "prominence": "context",
+            "treatment": "compact",
+            "standard_block_ref": "standard_blocks/invariant-point-attention.yaml",
+            "standard_block_id": "invariant_point_attention",
+            "block_instance_ref": "block_instances.structure_ipa",
+            "template_fact_ref": "standard_blocks.invariant_point_attention.values.attention_weights",
+            "instance_fact_ref": "block_instances.structure_ipa.values.attention_weights",
+            "kind": "representation",
+            "scale": "item",
+            "glyph": "pair",
+            "flow_family": "pair",
+            "notation": "a"
+          },
+          {
+            "id": "aggregate_scalar_values",
+            "label": "Aggregate scalar values",
+            "col": 7,
+            "row": 7,
+            "prominence": "primary",
+            "treatment": "compact",
+            "standard_block_ref": "standard_blocks/invariant-point-attention.yaml",
+            "standard_block_id": "invariant_point_attention",
+            "block_instance_ref": "block_instances.structure_ipa",
+            "template_fact_ref": "standard_blocks.invariant_point_attention.steps.aggregate_scalar_values",
+            "instance_fact_ref": "block_instances.structure_ipa.steps.aggregate_scalar_values",
+            "kind": "operation",
+            "scale": "operation",
+            "detail": "weighted_sum",
+            "code": "scalar_context = weighted_sum(attention, v_s)",
+            "operation": "weighted_sum"
+          },
+          {
+            "id": "scalar_context",
+            "label": "scalar context",
+            "col": 8,
+            "row": 7,
+            "prominence": "context",
+            "treatment": "compact",
+            "standard_block_ref": "standard_blocks/invariant-point-attention.yaml",
+            "standard_block_id": "invariant_point_attention",
+            "block_instance_ref": "block_instances.structure_ipa",
+            "template_fact_ref": "standard_blocks.invariant_point_attention.values.scalar_context",
+            "instance_fact_ref": "block_instances.structure_ipa.values.scalar_context",
+            "kind": "representation",
+            "scale": "item",
+            "glyph": "single",
+            "flow_family": "single",
+            "notation": "o_s"
+          },
+          {
+            "id": "aggregate_pair_values",
+            "label": "Aggregate pair values",
+            "col": 7,
+            "row": 8,
+            "prominence": "primary",
+            "treatment": "compact",
+            "standard_block_ref": "standard_blocks/invariant-point-attention.yaml",
+            "standard_block_id": "invariant_point_attention",
+            "block_instance_ref": "block_instances.structure_ipa",
+            "template_fact_ref": "standard_blocks.invariant_point_attention.steps.aggregate_pair_values",
+            "instance_fact_ref": "block_instances.structure_ipa.steps.aggregate_pair_values",
+            "kind": "operation",
+            "scale": "operation",
+            "detail": "pair_value_aggregation",
+            "code": "pair_value_context = weighted_sum(attention, pair_context)",
+            "operation": "pair_value_aggregation"
+          },
+          {
+            "id": "pair_value_context",
+            "label": "pair-value context",
+            "col": 8,
+            "row": 8,
+            "prominence": "context",
+            "treatment": "compact",
+            "standard_block_ref": "standard_blocks/invariant-point-attention.yaml",
+            "standard_block_id": "invariant_point_attention",
+            "block_instance_ref": "block_instances.structure_ipa",
+            "template_fact_ref": "standard_blocks.invariant_point_attention.values.pair_value_context",
+            "instance_fact_ref": "block_instances.structure_ipa.values.pair_value_context",
+            "kind": "representation",
+            "scale": "item",
+            "glyph": "single",
+            "flow_family": "single",
+            "notation": "o_z"
+          },
+          {
+            "id": "aggregate_global_points",
+            "label": "Aggregate value points",
+            "col": 7,
+            "row": 9,
+            "prominence": "primary",
+            "treatment": "compact",
+            "standard_block_ref": "standard_blocks/invariant-point-attention.yaml",
+            "standard_block_id": "invariant_point_attention",
+            "block_instance_ref": "block_instances.structure_ipa",
+            "template_fact_ref": "standard_blocks.invariant_point_attention.steps.aggregate_global_points",
+            "instance_fact_ref": "block_instances.structure_ipa.steps.aggregate_global_points",
+            "kind": "operation",
+            "scale": "operation",
+            "detail": "weighted_point_sum",
+            "code": "global_point_context = weighted_sum(attention, v_p_global)",
+            "operation": "weighted_point_sum"
+          },
+          {
+            "id": "global_point_context",
+            "label": "global point context",
+            "col": 8,
+            "row": 9,
+            "prominence": "context",
+            "treatment": "compact",
+            "standard_block_ref": "standard_blocks/invariant-point-attention.yaml",
+            "standard_block_id": "invariant_point_attention",
+            "block_instance_ref": "block_instances.structure_ipa",
+            "template_fact_ref": "standard_blocks.invariant_point_attention.values.global_point_context",
+            "instance_fact_ref": "block_instances.structure_ipa.values.global_point_context",
+            "kind": "representation",
+            "scale": "item",
+            "glyph": "coordinates",
+            "flow_family": "coordinate",
+            "notation": "o_p_global"
+          },
+          {
+            "id": "return_points_to_local_frame",
+            "label": "Return points to query frame",
+            "col": 9,
+            "row": 9,
+            "prominence": "primary",
+            "treatment": "compact",
+            "standard_block_ref": "standard_blocks/invariant-point-attention.yaml",
+            "standard_block_id": "invariant_point_attention",
+            "block_instance_ref": "block_instances.structure_ipa",
+            "template_fact_ref": "standard_blocks.invariant_point_attention.steps.return_points_to_local_frame",
+            "instance_fact_ref": "block_instances.structure_ipa.steps.return_points_to_local_frame",
+            "kind": "operation",
+            "scale": "operation",
+            "detail": "rigid_inverse_apply",
+            "code": "local_point_context = concat(frames.invert_apply(global_points), point_norms)",
+            "operation": "rigid_inverse_apply"
+          },
+          {
+            "id": "local_point_context",
+            "label": "local points + norms",
+            "col": 10,
+            "row": 9,
+            "prominence": "context",
+            "treatment": "compact",
+            "standard_block_ref": "standard_blocks/invariant-point-attention.yaml",
+            "standard_block_id": "invariant_point_attention",
+            "block_instance_ref": "block_instances.structure_ipa",
+            "template_fact_ref": "standard_blocks.invariant_point_attention.values.local_point_context",
+            "instance_fact_ref": "block_instances.structure_ipa.values.local_point_context",
+            "kind": "representation",
+            "scale": "item",
+            "glyph": "coordinates",
+            "flow_family": "coordinate",
+            "notation": "o_p_local"
+          },
+          {
+            "id": "project_ipa_delta",
+            "label": "Fuse IPA outputs",
+            "col": 9,
+            "row": 10,
+            "prominence": "primary",
+            "treatment": "compact",
+            "standard_block_ref": "standard_blocks/invariant-point-attention.yaml",
+            "standard_block_id": "invariant_point_attention",
+            "block_instance_ref": "block_instances.structure_ipa",
+            "template_fact_ref": "standard_blocks.invariant_point_attention.steps.project_ipa_delta",
+            "instance_fact_ref": "block_instances.structure_ipa.steps.project_ipa_delta",
+            "kind": "operation",
+            "scale": "operation",
+            "detail": "output_projection",
+            "code": "ipa_delta = output_projection(concat(scalar_context, local_points, pair_values))",
+            "operation": "output_projection"
+          },
+          {
+            "id": "ipa_delta",
+            "label": "IPA delta",
+            "col": 10,
+            "row": 10,
+            "prominence": "context",
+            "treatment": "compact",
+            "standard_block_ref": "standard_blocks/invariant-point-attention.yaml",
+            "standard_block_id": "invariant_point_attention",
+            "block_instance_ref": "block_instances.structure_ipa",
+            "template_fact_ref": "standard_blocks.invariant_point_attention.values.ipa_delta",
+            "instance_fact_ref": "block_instances.structure_ipa.values.ipa_delta",
+            "kind": "representation",
+            "scale": "item",
+            "glyph": "single",
+            "flow_family": "single",
+            "notation": "delta_s"
+          },
+          {
+            "id": "residual_norm",
+            "label": "Residual, dropout, and norm",
+            "col": 11,
+            "row": 10,
+            "prominence": "primary",
+            "treatment": "compact",
+            "standard_block_ref": "standard_blocks/invariant-point-attention.yaml",
+            "standard_block_id": "invariant_point_attention",
+            "block_instance_ref": "block_instances.structure_ipa",
+            "template_fact_ref": "standard_blocks.invariant_point_attention.steps.residual_norm",
+            "instance_fact_ref": "block_instances.structure_ipa.steps.residual_norm",
+            "kind": "operation",
+            "scale": "operation",
+            "detail": "residual_normalization",
+            "code": "updated_single_state = layer_norm(single_state + dropout(ipa_delta))",
+            "operation": "residual_normalization"
+          }
+        ],
+        "edges": [
+          {
+            "id": "structure_ipa__project_scalar_terms__input_1",
+            "from": "single_state",
+            "to": "project_scalar_terms",
+            "kind": "data_flow",
+            "carries": [
+              "representations.single_features"
+            ],
+            "relation_path": [
+              "relations.single_features_enter_ipa"
+            ],
+            "grounding": "canonical_relation_path",
+            "standard_block_ref": "standard_blocks/invariant-point-attention.yaml",
+            "standard_block_id": "invariant_point_attention",
+            "block_instance_ref": "block_instances.structure_ipa",
+            "template_fact_ref": "standard_blocks.invariant_point_attention.steps.project_scalar_terms",
+            "instance_fact_ref": "block_instances.structure_ipa.steps.project_scalar_terms",
+            "template_data_ref": "ports.single_state",
+            "connection": {
+              "title": "Project scalar Q/K/V",
+              "role": "reusable step input",
+              "inside": "q_s, k_s, v_s = project_scalar_qkv(single_state)"
+            }
+          },
+          {
+            "id": "structure_ipa__project_scalar_terms__output_1",
+            "from": "project_scalar_terms",
+            "to": "scalar_terms",
+            "kind": "data_flow",
+            "carries": [
+
+            ],
+            "grounding": "standard_block_template",
+            "standard_block_ref": "standard_blocks/invariant-point-attention.yaml",
+            "standard_block_id": "invariant_point_attention",
+            "block_instance_ref": "block_instances.structure_ipa",
+            "template_fact_ref": "standard_blocks.invariant_point_attention.steps.project_scalar_terms",
+            "instance_fact_ref": "block_instances.structure_ipa.steps.project_scalar_terms",
+            "template_data_ref": "values.scalar_terms",
+            "connection": {
+              "title": "Project scalar Q/K/V",
+              "role": "reusable step output",
+              "inside": "q_s, k_s, v_s = project_scalar_qkv(single_state)"
+            }
+          },
+          {
+            "id": "structure_ipa__project_local_points__input_1",
+            "from": "single_state",
+            "to": "project_local_points",
+            "kind": "data_flow",
+            "carries": [
+              "representations.single_features"
+            ],
+            "relation_path": [
+              "relations.single_features_enter_ipa"
+            ],
+            "grounding": "canonical_relation_path",
+            "standard_block_ref": "standard_blocks/invariant-point-attention.yaml",
+            "standard_block_id": "invariant_point_attention",
+            "block_instance_ref": "block_instances.structure_ipa",
+            "template_fact_ref": "standard_blocks.invariant_point_attention.steps.project_local_points",
+            "instance_fact_ref": "block_instances.structure_ipa.steps.project_local_points",
+            "template_data_ref": "ports.single_state",
+            "connection": {
+              "title": "Project local Q/K/V points",
+              "role": "reusable step input",
+              "inside": "q_p, k_p, v_p = project_point_qkv(single_state)"
+            }
+          },
+          {
+            "id": "structure_ipa__project_local_points__output_1",
+            "from": "project_local_points",
+            "to": "local_points",
+            "kind": "data_flow",
+            "carries": [
+
+            ],
+            "grounding": "standard_block_template",
+            "standard_block_ref": "standard_blocks/invariant-point-attention.yaml",
+            "standard_block_id": "invariant_point_attention",
+            "block_instance_ref": "block_instances.structure_ipa",
+            "template_fact_ref": "standard_blocks.invariant_point_attention.steps.project_local_points",
+            "instance_fact_ref": "block_instances.structure_ipa.steps.project_local_points",
+            "template_data_ref": "values.local_points",
+            "connection": {
+              "title": "Project local Q/K/V points",
+              "role": "reusable step output",
+              "inside": "q_p, k_p, v_p = project_point_qkv(single_state)"
+            }
+          },
+          {
+            "id": "structure_ipa__transform_points_to_global__input_1",
+            "from": "local_points",
+            "to": "transform_points_to_global",
+            "kind": "data_flow",
+            "carries": [
+
+            ],
+            "grounding": "standard_block_template",
+            "standard_block_ref": "standard_blocks/invariant-point-attention.yaml",
+            "standard_block_id": "invariant_point_attention",
+            "block_instance_ref": "block_instances.structure_ipa",
+            "template_fact_ref": "standard_blocks.invariant_point_attention.steps.transform_points_to_global",
+            "instance_fact_ref": "block_instances.structure_ipa.steps.transform_points_to_global",
+            "template_data_ref": "values.local_points",
+            "connection": {
+              "title": "Express points in global frame",
+              "role": "reusable step input",
+              "inside": "q_p, k_p, v_p = frames.apply(q_p, k_p, v_p)"
+            }
+          },
+          {
+            "id": "structure_ipa__transform_points_to_global__input_2",
+            "from": "frames",
+            "to": "transform_points_to_global",
+            "kind": "conditioning",
+            "tone": "conditioning",
+            "carries": [
+              "representations.residue_frames"
+            ],
+            "relation_path": [
+              "relations.current_frames_condition_ipa"
+            ],
+            "grounding": "canonical_relation_path",
+            "standard_block_ref": "standard_blocks/invariant-point-attention.yaml",
+            "standard_block_id": "invariant_point_attention",
+            "block_instance_ref": "block_instances.structure_ipa",
+            "template_fact_ref": "standard_blocks.invariant_point_attention.steps.transform_points_to_global",
+            "instance_fact_ref": "block_instances.structure_ipa.steps.transform_points_to_global",
+            "template_data_ref": "ports.frames",
+            "connection": {
+              "title": "Express points in global frame",
+              "role": "reusable step input",
+              "inside": "q_p, k_p, v_p = frames.apply(q_p, k_p, v_p)"
+            }
+          },
+          {
+            "id": "structure_ipa__transform_points_to_global__output_1",
+            "from": "transform_points_to_global",
+            "to": "global_points",
+            "kind": "data_flow",
+            "carries": [
+
+            ],
+            "grounding": "standard_block_template",
+            "standard_block_ref": "standard_blocks/invariant-point-attention.yaml",
+            "standard_block_id": "invariant_point_attention",
+            "block_instance_ref": "block_instances.structure_ipa",
+            "template_fact_ref": "standard_blocks.invariant_point_attention.steps.transform_points_to_global",
+            "instance_fact_ref": "block_instances.structure_ipa.steps.transform_points_to_global",
+            "template_data_ref": "values.global_points",
+            "connection": {
+              "title": "Express points in global frame",
+              "role": "reusable step output",
+              "inside": "q_p, k_p, v_p = frames.apply(q_p, k_p, v_p)"
+            }
+          },
+          {
+            "id": "structure_ipa__scalar_attention_logits__input_1",
+            "from": "scalar_terms",
+            "to": "scalar_attention_logits",
+            "kind": "data_flow",
+            "carries": [
+
+            ],
+            "grounding": "standard_block_template",
+            "standard_block_ref": "standard_blocks/invariant-point-attention.yaml",
+            "standard_block_id": "invariant_point_attention",
+            "block_instance_ref": "block_instances.structure_ipa",
+            "template_fact_ref": "standard_blocks.invariant_point_attention.steps.scalar_attention_logits",
+            "instance_fact_ref": "block_instances.structure_ipa.steps.scalar_attention_logits",
+            "template_data_ref": "values.scalar_terms",
+            "connection": {
+              "title": "Form scalar logits",
+              "role": "reusable step input",
+              "inside": "scalar_logits = dot(q_s, k_s) * scalar_scale"
+            }
+          },
+          {
+            "id": "structure_ipa__scalar_attention_logits__output_1",
+            "from": "scalar_attention_logits",
+            "to": "scalar_logits",
+            "kind": "data_flow",
+            "carries": [
+
+            ],
+            "grounding": "standard_block_template",
+            "standard_block_ref": "standard_blocks/invariant-point-attention.yaml",
+            "standard_block_id": "invariant_point_attention",
+            "block_instance_ref": "block_instances.structure_ipa",
+            "template_fact_ref": "standard_blocks.invariant_point_attention.steps.scalar_attention_logits",
+            "instance_fact_ref": "block_instances.structure_ipa.steps.scalar_attention_logits",
+            "template_data_ref": "values.scalar_logits",
+            "connection": {
+              "title": "Form scalar logits",
+              "role": "reusable step output",
+              "inside": "scalar_logits = dot(q_s, k_s) * scalar_scale"
+            }
+          },
+          {
+            "id": "structure_ipa__point_distance_logits__input_1",
+            "from": "global_points",
+            "to": "point_distance_logits",
+            "kind": "data_flow",
+            "carries": [
+
+            ],
+            "grounding": "standard_block_template",
+            "standard_block_ref": "standard_blocks/invariant-point-attention.yaml",
+            "standard_block_id": "invariant_point_attention",
+            "block_instance_ref": "block_instances.structure_ipa",
+            "template_fact_ref": "standard_blocks.invariant_point_attention.steps.point_distance_logits",
+            "instance_fact_ref": "block_instances.structure_ipa.steps.point_distance_logits",
+            "template_data_ref": "values.global_points",
+            "connection": {
+              "title": "Form point-distance logits",
+              "role": "reusable step input",
+              "inside": "point_logits = -0.5 * point_weight * squared_distance(q_p, k_p)"
+            }
+          },
+          {
+            "id": "structure_ipa__point_distance_logits__output_1",
+            "from": "point_distance_logits",
+            "to": "point_logits",
+            "kind": "data_flow",
+            "carries": [
+
+            ],
+            "grounding": "standard_block_template",
+            "standard_block_ref": "standard_blocks/invariant-point-attention.yaml",
+            "standard_block_id": "invariant_point_attention",
+            "block_instance_ref": "block_instances.structure_ipa",
+            "template_fact_ref": "standard_blocks.invariant_point_attention.steps.point_distance_logits",
+            "instance_fact_ref": "block_instances.structure_ipa.steps.point_distance_logits",
+            "template_data_ref": "values.point_logits",
+            "connection": {
+              "title": "Form point-distance logits",
+              "role": "reusable step output",
+              "inside": "point_logits = -0.5 * point_weight * squared_distance(q_p, k_p)"
+            }
+          },
+          {
+            "id": "structure_ipa__project_pair_bias__input_1",
+            "from": "pair_context",
+            "to": "project_pair_bias",
+            "kind": "conditioning",
+            "tone": "conditioning",
+            "carries": [
+              "representations.pair_features"
+            ],
+            "relation_path": [
+              "relations.refined_pair_features_bias_ipa"
+            ],
+            "grounding": "canonical_relation_path",
+            "standard_block_ref": "standard_blocks/invariant-point-attention.yaml",
+            "standard_block_id": "invariant_point_attention",
+            "block_instance_ref": "block_instances.structure_ipa",
+            "template_fact_ref": "standard_blocks.invariant_point_attention.steps.project_pair_bias",
+            "instance_fact_ref": "block_instances.structure_ipa.steps.project_pair_bias",
+            "template_data_ref": "ports.pair_context",
+            "connection": {
+              "title": "Project pair bias",
+              "role": "reusable step input",
+              "inside": "pair_bias = linear_b(pair_context)"
+            }
+          },
+          {
+            "id": "structure_ipa__project_pair_bias__output_1",
+            "from": "project_pair_bias",
+            "to": "pair_bias",
+            "kind": "data_flow",
+            "carries": [
+
+            ],
+            "grounding": "standard_block_template",
+            "standard_block_ref": "standard_blocks/invariant-point-attention.yaml",
+            "standard_block_id": "invariant_point_attention",
+            "block_instance_ref": "block_instances.structure_ipa",
+            "template_fact_ref": "standard_blocks.invariant_point_attention.steps.project_pair_bias",
+            "instance_fact_ref": "block_instances.structure_ipa.steps.project_pair_bias",
+            "template_data_ref": "values.pair_bias",
+            "connection": {
+              "title": "Project pair bias",
+              "role": "reusable step output",
+              "inside": "pair_bias = linear_b(pair_context)"
+            }
+          },
+          {
+            "id": "structure_ipa__combine_and_mask_logits__input_1",
+            "from": "scalar_logits",
+            "to": "combine_and_mask_logits",
+            "kind": "data_flow",
+            "carries": [
+
+            ],
+            "grounding": "standard_block_template",
+            "standard_block_ref": "standard_blocks/invariant-point-attention.yaml",
+            "standard_block_id": "invariant_point_attention",
+            "block_instance_ref": "block_instances.structure_ipa",
+            "template_fact_ref": "standard_blocks.invariant_point_attention.steps.combine_and_mask_logits",
+            "instance_fact_ref": "block_instances.structure_ipa.steps.combine_and_mask_logits",
+            "template_data_ref": "values.scalar_logits",
+            "connection": {
+              "title": "Combine logits and apply mask",
+              "role": "reusable step input",
+              "inside": "combined_logits = mask(scalar_logits + point_logits + pair_bias)"
+            }
+          },
+          {
+            "id": "structure_ipa__combine_and_mask_logits__input_2",
+            "from": "point_logits",
+            "to": "combine_and_mask_logits",
+            "kind": "data_flow",
+            "carries": [
+
+            ],
+            "grounding": "standard_block_template",
+            "standard_block_ref": "standard_blocks/invariant-point-attention.yaml",
+            "standard_block_id": "invariant_point_attention",
+            "block_instance_ref": "block_instances.structure_ipa",
+            "template_fact_ref": "standard_blocks.invariant_point_attention.steps.combine_and_mask_logits",
+            "instance_fact_ref": "block_instances.structure_ipa.steps.combine_and_mask_logits",
+            "template_data_ref": "values.point_logits",
+            "connection": {
+              "title": "Combine logits and apply mask",
+              "role": "reusable step input",
+              "inside": "combined_logits = mask(scalar_logits + point_logits + pair_bias)"
+            }
+          },
+          {
+            "id": "structure_ipa__combine_and_mask_logits__input_3",
+            "from": "pair_bias",
+            "to": "combine_and_mask_logits",
+            "kind": "data_flow",
+            "carries": [
+
+            ],
+            "grounding": "standard_block_template",
+            "standard_block_ref": "standard_blocks/invariant-point-attention.yaml",
+            "standard_block_id": "invariant_point_attention",
+            "block_instance_ref": "block_instances.structure_ipa",
+            "template_fact_ref": "standard_blocks.invariant_point_attention.steps.combine_and_mask_logits",
+            "instance_fact_ref": "block_instances.structure_ipa.steps.combine_and_mask_logits",
+            "template_data_ref": "values.pair_bias",
+            "connection": {
+              "title": "Combine logits and apply mask",
+              "role": "reusable step input",
+              "inside": "combined_logits = mask(scalar_logits + point_logits + pair_bias)"
+            }
+          },
+          {
+            "id": "structure_ipa__combine_and_mask_logits__input_4",
+            "from": "mask",
+            "to": "combine_and_mask_logits",
+            "kind": "conditioning",
+            "tone": "conditioning",
+            "carries": [
+              "representations.feature_bundle"
+            ],
+            "relation_path": [
+              "relations.feature_bundle_masks_ipa"
+            ],
+            "grounding": "canonical_relation_path",
+            "standard_block_ref": "standard_blocks/invariant-point-attention.yaml",
+            "standard_block_id": "invariant_point_attention",
+            "block_instance_ref": "block_instances.structure_ipa",
+            "template_fact_ref": "standard_blocks.invariant_point_attention.steps.combine_and_mask_logits",
+            "instance_fact_ref": "block_instances.structure_ipa.steps.combine_and_mask_logits",
+            "template_data_ref": "ports.mask",
+            "connection": {
+              "title": "Combine logits and apply mask",
+              "role": "reusable step input",
+              "inside": "combined_logits = mask(scalar_logits + point_logits + pair_bias)"
+            }
+          },
+          {
+            "id": "structure_ipa__combine_and_mask_logits__output_1",
+            "from": "combine_and_mask_logits",
+            "to": "combined_logits",
+            "kind": "data_flow",
+            "carries": [
+
+            ],
+            "grounding": "standard_block_template",
+            "standard_block_ref": "standard_blocks/invariant-point-attention.yaml",
+            "standard_block_id": "invariant_point_attention",
+            "block_instance_ref": "block_instances.structure_ipa",
+            "template_fact_ref": "standard_blocks.invariant_point_attention.steps.combine_and_mask_logits",
+            "instance_fact_ref": "block_instances.structure_ipa.steps.combine_and_mask_logits",
+            "template_data_ref": "values.combined_logits",
+            "connection": {
+              "title": "Combine logits and apply mask",
+              "role": "reusable step output",
+              "inside": "combined_logits = mask(scalar_logits + point_logits + pair_bias)"
+            }
+          },
+          {
+            "id": "structure_ipa__softmax_attention__input_1",
+            "from": "combined_logits",
+            "to": "softmax_attention",
+            "kind": "data_flow",
+            "carries": [
+
+            ],
+            "grounding": "standard_block_template",
+            "standard_block_ref": "standard_blocks/invariant-point-attention.yaml",
+            "standard_block_id": "invariant_point_attention",
+            "block_instance_ref": "block_instances.structure_ipa",
+            "template_fact_ref": "standard_blocks.invariant_point_attention.steps.softmax_attention",
+            "instance_fact_ref": "block_instances.structure_ipa.steps.softmax_attention",
+            "template_data_ref": "values.combined_logits",
+            "connection": {
+              "title": "Normalize over keys",
+              "role": "reusable step input",
+              "inside": "attention = softmax(attention_logits, dim=keys)"
+            }
+          },
+          {
+            "id": "structure_ipa__softmax_attention__output_1",
+            "from": "softmax_attention",
+            "to": "attention_weights",
+            "kind": "data_flow",
+            "carries": [
+
+            ],
+            "grounding": "standard_block_template",
+            "standard_block_ref": "standard_blocks/invariant-point-attention.yaml",
+            "standard_block_id": "invariant_point_attention",
+            "block_instance_ref": "block_instances.structure_ipa",
+            "template_fact_ref": "standard_blocks.invariant_point_attention.steps.softmax_attention",
+            "instance_fact_ref": "block_instances.structure_ipa.steps.softmax_attention",
+            "template_data_ref": "values.attention_weights",
+            "connection": {
+              "title": "Normalize over keys",
+              "role": "reusable step output",
+              "inside": "attention = softmax(attention_logits, dim=keys)"
+            }
+          },
+          {
+            "id": "structure_ipa__aggregate_scalar_values__input_1",
+            "from": "attention_weights",
+            "to": "aggregate_scalar_values",
+            "kind": "data_flow",
+            "carries": [
+
+            ],
+            "grounding": "standard_block_template",
+            "standard_block_ref": "standard_blocks/invariant-point-attention.yaml",
+            "standard_block_id": "invariant_point_attention",
+            "block_instance_ref": "block_instances.structure_ipa",
+            "template_fact_ref": "standard_blocks.invariant_point_attention.steps.aggregate_scalar_values",
+            "instance_fact_ref": "block_instances.structure_ipa.steps.aggregate_scalar_values",
+            "template_data_ref": "values.attention_weights",
+            "connection": {
+              "title": "Aggregate scalar values",
+              "role": "reusable step input",
+              "inside": "scalar_context = weighted_sum(attention, v_s)"
+            }
+          },
+          {
+            "id": "structure_ipa__aggregate_scalar_values__input_2",
+            "from": "scalar_terms",
+            "to": "aggregate_scalar_values",
+            "kind": "data_flow",
+            "carries": [
+
+            ],
+            "grounding": "standard_block_template",
+            "standard_block_ref": "standard_blocks/invariant-point-attention.yaml",
+            "standard_block_id": "invariant_point_attention",
+            "block_instance_ref": "block_instances.structure_ipa",
+            "template_fact_ref": "standard_blocks.invariant_point_attention.steps.aggregate_scalar_values",
+            "instance_fact_ref": "block_instances.structure_ipa.steps.aggregate_scalar_values",
+            "template_data_ref": "values.scalar_terms",
+            "connection": {
+              "title": "Aggregate scalar values",
+              "role": "reusable step input",
+              "inside": "scalar_context = weighted_sum(attention, v_s)"
+            }
+          },
+          {
+            "id": "structure_ipa__aggregate_scalar_values__output_1",
+            "from": "aggregate_scalar_values",
+            "to": "scalar_context",
+            "kind": "data_flow",
+            "carries": [
+
+            ],
+            "grounding": "standard_block_template",
+            "standard_block_ref": "standard_blocks/invariant-point-attention.yaml",
+            "standard_block_id": "invariant_point_attention",
+            "block_instance_ref": "block_instances.structure_ipa",
+            "template_fact_ref": "standard_blocks.invariant_point_attention.steps.aggregate_scalar_values",
+            "instance_fact_ref": "block_instances.structure_ipa.steps.aggregate_scalar_values",
+            "template_data_ref": "values.scalar_context",
+            "connection": {
+              "title": "Aggregate scalar values",
+              "role": "reusable step output",
+              "inside": "scalar_context = weighted_sum(attention, v_s)"
+            }
+          },
+          {
+            "id": "structure_ipa__aggregate_global_points__input_1",
+            "from": "attention_weights",
+            "to": "aggregate_global_points",
+            "kind": "data_flow",
+            "carries": [
+
+            ],
+            "grounding": "standard_block_template",
+            "standard_block_ref": "standard_blocks/invariant-point-attention.yaml",
+            "standard_block_id": "invariant_point_attention",
+            "block_instance_ref": "block_instances.structure_ipa",
+            "template_fact_ref": "standard_blocks.invariant_point_attention.steps.aggregate_global_points",
+            "instance_fact_ref": "block_instances.structure_ipa.steps.aggregate_global_points",
+            "template_data_ref": "values.attention_weights",
+            "connection": {
+              "title": "Aggregate value points",
+              "role": "reusable step input",
+              "inside": "global_point_context = weighted_sum(attention, v_p_global)"
+            }
+          },
+          {
+            "id": "structure_ipa__aggregate_global_points__input_2",
+            "from": "global_points",
+            "to": "aggregate_global_points",
+            "kind": "data_flow",
+            "carries": [
+
+            ],
+            "grounding": "standard_block_template",
+            "standard_block_ref": "standard_blocks/invariant-point-attention.yaml",
+            "standard_block_id": "invariant_point_attention",
+            "block_instance_ref": "block_instances.structure_ipa",
+            "template_fact_ref": "standard_blocks.invariant_point_attention.steps.aggregate_global_points",
+            "instance_fact_ref": "block_instances.structure_ipa.steps.aggregate_global_points",
+            "template_data_ref": "values.global_points",
+            "connection": {
+              "title": "Aggregate value points",
+              "role": "reusable step input",
+              "inside": "global_point_context = weighted_sum(attention, v_p_global)"
+            }
+          },
+          {
+            "id": "structure_ipa__aggregate_global_points__output_1",
+            "from": "aggregate_global_points",
+            "to": "global_point_context",
+            "kind": "data_flow",
+            "carries": [
+
+            ],
+            "grounding": "standard_block_template",
+            "standard_block_ref": "standard_blocks/invariant-point-attention.yaml",
+            "standard_block_id": "invariant_point_attention",
+            "block_instance_ref": "block_instances.structure_ipa",
+            "template_fact_ref": "standard_blocks.invariant_point_attention.steps.aggregate_global_points",
+            "instance_fact_ref": "block_instances.structure_ipa.steps.aggregate_global_points",
+            "template_data_ref": "values.global_point_context",
+            "connection": {
+              "title": "Aggregate value points",
+              "role": "reusable step output",
+              "inside": "global_point_context = weighted_sum(attention, v_p_global)"
+            }
+          },
+          {
+            "id": "structure_ipa__return_points_to_local_frame__input_1",
+            "from": "global_point_context",
+            "to": "return_points_to_local_frame",
+            "kind": "data_flow",
+            "carries": [
+
+            ],
+            "grounding": "standard_block_template",
+            "standard_block_ref": "standard_blocks/invariant-point-attention.yaml",
+            "standard_block_id": "invariant_point_attention",
+            "block_instance_ref": "block_instances.structure_ipa",
+            "template_fact_ref": "standard_blocks.invariant_point_attention.steps.return_points_to_local_frame",
+            "instance_fact_ref": "block_instances.structure_ipa.steps.return_points_to_local_frame",
+            "template_data_ref": "values.global_point_context",
+            "connection": {
+              "title": "Return points to query frame",
+              "role": "reusable step input",
+              "inside": "local_point_context = concat(frames.invert_apply(global_points), point_norms)"
+            }
+          },
+          {
+            "id": "structure_ipa__return_points_to_local_frame__input_2",
+            "from": "frames",
+            "to": "return_points_to_local_frame",
+            "kind": "conditioning",
+            "tone": "conditioning",
+            "carries": [
+              "representations.residue_frames"
+            ],
+            "relation_path": [
+              "relations.current_frames_condition_ipa"
+            ],
+            "grounding": "canonical_relation_path",
+            "standard_block_ref": "standard_blocks/invariant-point-attention.yaml",
+            "standard_block_id": "invariant_point_attention",
+            "block_instance_ref": "block_instances.structure_ipa",
+            "template_fact_ref": "standard_blocks.invariant_point_attention.steps.return_points_to_local_frame",
+            "instance_fact_ref": "block_instances.structure_ipa.steps.return_points_to_local_frame",
+            "template_data_ref": "ports.frames",
+            "connection": {
+              "title": "Return points to query frame",
+              "role": "reusable step input",
+              "inside": "local_point_context = concat(frames.invert_apply(global_points), point_norms)"
+            }
+          },
+          {
+            "id": "structure_ipa__return_points_to_local_frame__output_1",
+            "from": "return_points_to_local_frame",
+            "to": "local_point_context",
+            "kind": "data_flow",
+            "carries": [
+
+            ],
+            "grounding": "standard_block_template",
+            "standard_block_ref": "standard_blocks/invariant-point-attention.yaml",
+            "standard_block_id": "invariant_point_attention",
+            "block_instance_ref": "block_instances.structure_ipa",
+            "template_fact_ref": "standard_blocks.invariant_point_attention.steps.return_points_to_local_frame",
+            "instance_fact_ref": "block_instances.structure_ipa.steps.return_points_to_local_frame",
+            "template_data_ref": "values.local_point_context",
+            "connection": {
+              "title": "Return points to query frame",
+              "role": "reusable step output",
+              "inside": "local_point_context = concat(frames.invert_apply(global_points), point_norms)"
+            }
+          },
+          {
+            "id": "structure_ipa__aggregate_pair_values__input_1",
+            "from": "attention_weights",
+            "to": "aggregate_pair_values",
+            "kind": "data_flow",
+            "carries": [
+
+            ],
+            "grounding": "standard_block_template",
+            "standard_block_ref": "standard_blocks/invariant-point-attention.yaml",
+            "standard_block_id": "invariant_point_attention",
+            "block_instance_ref": "block_instances.structure_ipa",
+            "template_fact_ref": "standard_blocks.invariant_point_attention.steps.aggregate_pair_values",
+            "instance_fact_ref": "block_instances.structure_ipa.steps.aggregate_pair_values",
+            "template_data_ref": "values.attention_weights",
+            "connection": {
+              "title": "Aggregate pair values",
+              "role": "reusable step input",
+              "inside": "pair_value_context = weighted_sum(attention, pair_context)"
+            }
+          },
+          {
+            "id": "structure_ipa__aggregate_pair_values__input_2",
+            "from": "pair_context",
+            "to": "aggregate_pair_values",
+            "kind": "conditioning",
+            "tone": "conditioning",
+            "carries": [
+              "representations.pair_features"
+            ],
+            "relation_path": [
+              "relations.refined_pair_features_bias_ipa"
+            ],
+            "grounding": "canonical_relation_path",
+            "standard_block_ref": "standard_blocks/invariant-point-attention.yaml",
+            "standard_block_id": "invariant_point_attention",
+            "block_instance_ref": "block_instances.structure_ipa",
+            "template_fact_ref": "standard_blocks.invariant_point_attention.steps.aggregate_pair_values",
+            "instance_fact_ref": "block_instances.structure_ipa.steps.aggregate_pair_values",
+            "template_data_ref": "ports.pair_context",
+            "connection": {
+              "title": "Aggregate pair values",
+              "role": "reusable step input",
+              "inside": "pair_value_context = weighted_sum(attention, pair_context)"
+            }
+          },
+          {
+            "id": "structure_ipa__aggregate_pair_values__output_1",
+            "from": "aggregate_pair_values",
+            "to": "pair_value_context",
+            "kind": "data_flow",
+            "carries": [
+
+            ],
+            "grounding": "standard_block_template",
+            "standard_block_ref": "standard_blocks/invariant-point-attention.yaml",
+            "standard_block_id": "invariant_point_attention",
+            "block_instance_ref": "block_instances.structure_ipa",
+            "template_fact_ref": "standard_blocks.invariant_point_attention.steps.aggregate_pair_values",
+            "instance_fact_ref": "block_instances.structure_ipa.steps.aggregate_pair_values",
+            "template_data_ref": "values.pair_value_context",
+            "connection": {
+              "title": "Aggregate pair values",
+              "role": "reusable step output",
+              "inside": "pair_value_context = weighted_sum(attention, pair_context)"
+            }
+          },
+          {
+            "id": "structure_ipa__project_ipa_delta__input_1",
+            "from": "scalar_context",
+            "to": "project_ipa_delta",
+            "kind": "data_flow",
+            "carries": [
+
+            ],
+            "grounding": "standard_block_template",
+            "standard_block_ref": "standard_blocks/invariant-point-attention.yaml",
+            "standard_block_id": "invariant_point_attention",
+            "block_instance_ref": "block_instances.structure_ipa",
+            "template_fact_ref": "standard_blocks.invariant_point_attention.steps.project_ipa_delta",
+            "instance_fact_ref": "block_instances.structure_ipa.steps.project_ipa_delta",
+            "template_data_ref": "values.scalar_context",
+            "connection": {
+              "title": "Fuse IPA outputs",
+              "role": "reusable step input",
+              "inside": "ipa_delta = output_projection(concat(scalar_context, local_points, pair_values))"
+            }
+          },
+          {
+            "id": "structure_ipa__project_ipa_delta__input_2",
+            "from": "local_point_context",
+            "to": "project_ipa_delta",
+            "kind": "data_flow",
+            "carries": [
+
+            ],
+            "grounding": "standard_block_template",
+            "standard_block_ref": "standard_blocks/invariant-point-attention.yaml",
+            "standard_block_id": "invariant_point_attention",
+            "block_instance_ref": "block_instances.structure_ipa",
+            "template_fact_ref": "standard_blocks.invariant_point_attention.steps.project_ipa_delta",
+            "instance_fact_ref": "block_instances.structure_ipa.steps.project_ipa_delta",
+            "template_data_ref": "values.local_point_context",
+            "connection": {
+              "title": "Fuse IPA outputs",
+              "role": "reusable step input",
+              "inside": "ipa_delta = output_projection(concat(scalar_context, local_points, pair_values))"
+            }
+          },
+          {
+            "id": "structure_ipa__project_ipa_delta__input_3",
+            "from": "pair_value_context",
+            "to": "project_ipa_delta",
+            "kind": "data_flow",
+            "carries": [
+
+            ],
+            "grounding": "standard_block_template",
+            "standard_block_ref": "standard_blocks/invariant-point-attention.yaml",
+            "standard_block_id": "invariant_point_attention",
+            "block_instance_ref": "block_instances.structure_ipa",
+            "template_fact_ref": "standard_blocks.invariant_point_attention.steps.project_ipa_delta",
+            "instance_fact_ref": "block_instances.structure_ipa.steps.project_ipa_delta",
+            "template_data_ref": "values.pair_value_context",
+            "connection": {
+              "title": "Fuse IPA outputs",
+              "role": "reusable step input",
+              "inside": "ipa_delta = output_projection(concat(scalar_context, local_points, pair_values))"
+            }
+          },
+          {
+            "id": "structure_ipa__project_ipa_delta__output_1",
+            "from": "project_ipa_delta",
+            "to": "ipa_delta",
+            "kind": "data_flow",
+            "carries": [
+
+            ],
+            "grounding": "standard_block_template",
+            "standard_block_ref": "standard_blocks/invariant-point-attention.yaml",
+            "standard_block_id": "invariant_point_attention",
+            "block_instance_ref": "block_instances.structure_ipa",
+            "template_fact_ref": "standard_blocks.invariant_point_attention.steps.project_ipa_delta",
+            "instance_fact_ref": "block_instances.structure_ipa.steps.project_ipa_delta",
+            "template_data_ref": "values.ipa_delta",
+            "connection": {
+              "title": "Fuse IPA outputs",
+              "role": "reusable step output",
+              "inside": "ipa_delta = output_projection(concat(scalar_context, local_points, pair_values))"
+            }
+          },
+          {
+            "id": "structure_ipa__residual_norm__input_1",
+            "from": "single_state",
+            "to": "residual_norm",
+            "kind": "data_flow",
+            "carries": [
+              "representations.single_features"
+            ],
+            "relation_path": [
+              "relations.single_features_enter_ipa"
+            ],
+            "grounding": "canonical_relation_path",
+            "standard_block_ref": "standard_blocks/invariant-point-attention.yaml",
+            "standard_block_id": "invariant_point_attention",
+            "block_instance_ref": "block_instances.structure_ipa",
+            "template_fact_ref": "standard_blocks.invariant_point_attention.steps.residual_norm",
+            "instance_fact_ref": "block_instances.structure_ipa.steps.residual_norm",
+            "template_data_ref": "ports.single_state",
+            "connection": {
+              "title": "Residual, dropout, and norm",
+              "role": "reusable step input",
+              "inside": "updated_single_state = layer_norm(single_state + dropout(ipa_delta))"
+            }
+          },
+          {
+            "id": "structure_ipa__residual_norm__input_2",
+            "from": "ipa_delta",
+            "to": "residual_norm",
+            "kind": "data_flow",
+            "carries": [
+
+            ],
+            "grounding": "standard_block_template",
+            "standard_block_ref": "standard_blocks/invariant-point-attention.yaml",
+            "standard_block_id": "invariant_point_attention",
+            "block_instance_ref": "block_instances.structure_ipa",
+            "template_fact_ref": "standard_blocks.invariant_point_attention.steps.residual_norm",
+            "instance_fact_ref": "block_instances.structure_ipa.steps.residual_norm",
+            "template_data_ref": "values.ipa_delta",
+            "connection": {
+              "title": "Residual, dropout, and norm",
+              "role": "reusable step input",
+              "inside": "updated_single_state = layer_norm(single_state + dropout(ipa_delta))"
+            }
+          },
+          {
+            "id": "structure_ipa__residual_norm__output_1",
+            "from": "residual_norm",
+            "to": "updated_single_state",
+            "kind": "state_update",
+            "carries": [
+              "representations.single_features"
+            ],
+            "relation_path": [
+              "relations.ipa_produces_updated_single_state"
+            ],
+            "grounding": "canonical_relation_path",
+            "standard_block_ref": "standard_blocks/invariant-point-attention.yaml",
+            "standard_block_id": "invariant_point_attention",
+            "block_instance_ref": "block_instances.structure_ipa",
+            "template_fact_ref": "standard_blocks.invariant_point_attention.steps.residual_norm",
+            "instance_fact_ref": "block_instances.structure_ipa.steps.residual_norm",
+            "template_data_ref": "ports.updated_single_state",
+            "connection": {
+              "title": "Residual, dropout, and norm",
+              "role": "reusable step output",
+              "inside": "updated_single_state = layer_norm(single_state + dropout(ipa_delta))"
+            }
+          }
+        ],
+        "segments": [
+          {
+            "id": "attention_weights",
+            "label": "Compute attention weights",
+            "description": "Form scalar and invariant point-distance logits, add pair bias, apply the validity mask, and normalize once over keys. Bundled Q/K/V projections also prepare the value terms consumed in Phase 2.",
+            "order": 1,
+            "node_ids": [
+              "single_state",
+              "pair_context",
+              "frames",
+              "mask",
+              "project_scalar_terms",
+              "scalar_terms",
+              "scalar_attention_logits",
+              "scalar_logits",
+              "project_local_points",
+              "local_points",
+              "transform_points_to_global",
+              "global_points",
+              "point_distance_logits",
+              "point_logits",
+              "project_pair_bias",
+              "pair_bias",
+              "combine_and_mask_logits",
+              "combined_logits",
+              "softmax_attention",
+              "attention_weights"
+            ]
+          },
+          {
+            "id": "value_extraction",
+            "label": "Extract values and update state",
+            "description": "Reuse the shared attention weights for scalar, point, and pair values, return points to the local frame, fuse the contexts, and apply the residual wrapper.",
+            "order": 2,
+            "node_ids": [
+              "aggregate_scalar_values",
+              "scalar_context",
+              "aggregate_global_points",
+              "global_point_context",
+              "return_points_to_local_frame",
+              "local_point_context",
+              "aggregate_pair_values",
+              "pair_value_context",
+              "project_ipa_delta",
+              "ipa_delta",
+              "residual_norm",
+              "updated_single_state"
+            ]
+          }
+        ],
+        "projectionMode": "standard_block_template",
+        "standardBlockRef": "standard_blocks/invariant-point-attention.yaml",
+        "standardBlockId": "invariant_point_attention",
+        "blockInstanceRef": "block_instances.structure_ipa",
+        "variant": "full_ipa_residual_norm",
+        "variantLabel": "Full IPA + residual normalization",
+        "useScope": "whole_module",
+        "conformance": "exact",
+        "pseudocode": [
+          {
+            "id": "project_scalar_terms",
+            "templateFactRef": "standard_blocks.invariant_point_attention.steps.project_scalar_terms",
+            "instanceFactRef": "block_instances.structure_ipa.steps.project_scalar_terms",
+            "label": "Project scalar Q/K/V",
+            "operation": "scalar_qkv_projection",
+            "code": "q_s, k_s, v_s = project_scalar_qkv(single_state)",
+            "inputs": [
+              "ports.single_state"
+            ],
+            "outputs": [
+              "values.scalar_terms"
+            ]
+          },
+          {
+            "id": "project_local_points",
+            "templateFactRef": "standard_blocks.invariant_point_attention.steps.project_local_points",
+            "instanceFactRef": "block_instances.structure_ipa.steps.project_local_points",
+            "label": "Project local Q/K/V points",
+            "operation": "point_qkv_projection",
+            "code": "q_p, k_p, v_p = project_point_qkv(single_state)",
+            "inputs": [
+              "ports.single_state"
+            ],
+            "outputs": [
+              "values.local_points"
+            ]
+          },
+          {
+            "id": "transform_points_to_global",
+            "templateFactRef": "standard_blocks.invariant_point_attention.steps.transform_points_to_global",
+            "instanceFactRef": "block_instances.structure_ipa.steps.transform_points_to_global",
+            "label": "Express points in global frame",
+            "operation": "rigid_apply",
+            "code": "q_p, k_p, v_p = frames.apply(q_p, k_p, v_p)",
+            "inputs": [
+              "values.local_points",
+              "ports.frames"
+            ],
+            "outputs": [
+              "values.global_points"
+            ]
+          },
+          {
+            "id": "scalar_attention_logits",
+            "templateFactRef": "standard_blocks.invariant_point_attention.steps.scalar_attention_logits",
+            "instanceFactRef": "block_instances.structure_ipa.steps.scalar_attention_logits",
+            "label": "Form scalar logits",
+            "operation": "attention_logits",
+            "code": "scalar_logits = dot(q_s, k_s) * scalar_scale",
+            "inputs": [
+              "values.scalar_terms"
+            ],
+            "outputs": [
+              "values.scalar_logits"
+            ]
+          },
+          {
+            "id": "point_distance_logits",
+            "templateFactRef": "standard_blocks.invariant_point_attention.steps.point_distance_logits",
+            "instanceFactRef": "block_instances.structure_ipa.steps.point_distance_logits",
+            "label": "Form point-distance logits",
+            "operation": "invariant_point_distance",
+            "code": "point_logits = -0.5 * point_weight * squared_distance(q_p, k_p)",
+            "inputs": [
+              "values.global_points"
+            ],
+            "outputs": [
+              "values.point_logits"
+            ]
+          },
+          {
+            "id": "project_pair_bias",
+            "templateFactRef": "standard_blocks.invariant_point_attention.steps.project_pair_bias",
+            "instanceFactRef": "block_instances.structure_ipa.steps.project_pair_bias",
+            "label": "Project pair bias",
+            "operation": "pair_bias_projection",
+            "code": "pair_bias = linear_b(pair_context)",
+            "inputs": [
+              "ports.pair_context"
+            ],
+            "outputs": [
+              "values.pair_bias"
+            ]
+          },
+          {
+            "id": "combine_and_mask_logits",
+            "templateFactRef": "standard_blocks.invariant_point_attention.steps.combine_and_mask_logits",
+            "instanceFactRef": "block_instances.structure_ipa.steps.combine_and_mask_logits",
+            "label": "Combine logits and apply mask",
+            "operation": "ipa_logit_composition",
+            "code": "combined_logits = mask(scalar_logits + point_logits + pair_bias)",
+            "inputs": [
+              "values.scalar_logits",
+              "values.point_logits",
+              "values.pair_bias",
+              "ports.mask"
+            ],
+            "outputs": [
+              "values.combined_logits"
+            ]
+          },
+          {
+            "id": "softmax_attention",
+            "templateFactRef": "standard_blocks.invariant_point_attention.steps.softmax_attention",
+            "instanceFactRef": "block_instances.structure_ipa.steps.softmax_attention",
+            "label": "Normalize over keys",
+            "operation": "softmax",
+            "code": "attention = softmax(attention_logits, dim=keys)",
+            "inputs": [
+              "values.combined_logits"
+            ],
+            "outputs": [
+              "values.attention_weights"
+            ]
+          },
+          {
+            "id": "aggregate_scalar_values",
+            "templateFactRef": "standard_blocks.invariant_point_attention.steps.aggregate_scalar_values",
+            "instanceFactRef": "block_instances.structure_ipa.steps.aggregate_scalar_values",
+            "label": "Aggregate scalar values",
+            "operation": "weighted_sum",
+            "code": "scalar_context = weighted_sum(attention, v_s)",
+            "inputs": [
+              "values.attention_weights",
+              "values.scalar_terms"
+            ],
+            "outputs": [
+              "values.scalar_context"
+            ]
+          },
+          {
+            "id": "aggregate_global_points",
+            "templateFactRef": "standard_blocks.invariant_point_attention.steps.aggregate_global_points",
+            "instanceFactRef": "block_instances.structure_ipa.steps.aggregate_global_points",
+            "label": "Aggregate value points",
+            "operation": "weighted_point_sum",
+            "code": "global_point_context = weighted_sum(attention, v_p_global)",
+            "inputs": [
+              "values.attention_weights",
+              "values.global_points"
+            ],
+            "outputs": [
+              "values.global_point_context"
+            ]
+          },
+          {
+            "id": "return_points_to_local_frame",
+            "templateFactRef": "standard_blocks.invariant_point_attention.steps.return_points_to_local_frame",
+            "instanceFactRef": "block_instances.structure_ipa.steps.return_points_to_local_frame",
+            "label": "Return points to query frame",
+            "operation": "rigid_inverse_apply",
+            "code": "local_point_context = concat(frames.invert_apply(global_points), point_norms)",
+            "inputs": [
+              "values.global_point_context",
+              "ports.frames"
+            ],
+            "outputs": [
+              "values.local_point_context"
+            ]
+          },
+          {
+            "id": "aggregate_pair_values",
+            "templateFactRef": "standard_blocks.invariant_point_attention.steps.aggregate_pair_values",
+            "instanceFactRef": "block_instances.structure_ipa.steps.aggregate_pair_values",
+            "label": "Aggregate pair values",
+            "operation": "pair_value_aggregation",
+            "code": "pair_value_context = weighted_sum(attention, pair_context)",
+            "inputs": [
+              "values.attention_weights",
+              "ports.pair_context"
+            ],
+            "outputs": [
+              "values.pair_value_context"
+            ]
+          },
+          {
+            "id": "project_ipa_delta",
+            "templateFactRef": "standard_blocks.invariant_point_attention.steps.project_ipa_delta",
+            "instanceFactRef": "block_instances.structure_ipa.steps.project_ipa_delta",
+            "label": "Fuse IPA outputs",
+            "operation": "output_projection",
+            "code": "ipa_delta = output_projection(concat(scalar_context, local_points, pair_values))",
+            "inputs": [
+              "values.scalar_context",
+              "values.local_point_context",
+              "values.pair_value_context"
+            ],
+            "outputs": [
+              "values.ipa_delta"
+            ]
+          },
+          {
+            "id": "residual_norm",
+            "templateFactRef": "standard_blocks.invariant_point_attention.steps.residual_norm",
+            "instanceFactRef": "block_instances.structure_ipa.steps.residual_norm",
+            "label": "Residual, dropout, and norm",
+            "operation": "residual_normalization",
+            "code": "updated_single_state = layer_norm(single_state + dropout(ipa_delta))",
+            "inputs": [
+              "ports.single_state",
+              "values.ipa_delta"
+            ],
+            "outputs": [
+              "ports.updated_single_state"
+            ]
+          }
+        ]
       }
     ]
   }

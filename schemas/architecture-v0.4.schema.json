@@ -72,6 +72,10 @@
       "minItems": 1,
       "items": { "$ref": "#/$defs/module" }
     },
+    "block_instances": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/blockInstance" }
+    },
     "relations": {
       "type": "array",
       "minItems": 1,
@@ -463,6 +467,53 @@
         "pseudocode_ref": { "$ref": "#/$defs/nonEmptyString" },
         "frozen": { "type": "boolean" },
         "evidence": { "$ref": "#/$defs/evidence" }
+      },
+      "additionalProperties": false
+    },
+    "blockInstance": {
+      "type": "object",
+      "required": [
+        "id",
+        "block_ref",
+        "subject_ref",
+        "variant",
+        "use_scope",
+        "conformance",
+        "port_bindings",
+        "evidence"
+      ],
+      "properties": {
+        "id": { "$ref": "#/$defs/id" },
+        "block_ref": { "$ref": "#/$defs/nonEmptyString" },
+        "subject_ref": { "$ref": "#/$defs/moduleRef" },
+        "variant": { "$ref": "#/$defs/id" },
+        "use_scope": { "enum": ["whole_module", "internal_mechanism"] },
+        "conformance": { "enum": ["exact", "wrapped", "reduced"] },
+        "difference_summary": { "$ref": "#/$defs/nonEmptyString" },
+        "port_bindings": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "$ref": "#/$defs/blockPortBinding" }
+        },
+        "evidence": { "$ref": "#/$defs/evidence" }
+      },
+      "additionalProperties": false
+    },
+    "blockPortBinding": {
+      "type": "object",
+      "required": ["port_ref", "relation_refs"],
+      "properties": {
+        "port_ref": {
+          "type": "string",
+          "pattern": "^ports\\.[a-z][a-z0-9_]*$"
+        },
+        "relation_refs": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": { "$ref": "#/$defs/relationRef" }
+        },
+        "selector": { "$ref": "#/$defs/id" }
       },
       "additionalProperties": false
     },

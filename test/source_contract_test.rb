@@ -21,11 +21,36 @@ class SourceContractTest < Minitest::Test
       architectures/generic-feature-refinement.yaml
       views/dit-semantic-zoom.view.yaml
       views/generic-semantic-zoom.view.yaml
+      standard_blocks/pair-biased-attention.yaml
+      standard_blocks/invariant-point-attention.yaml
     ]
 
     paths.each do |path|
       assert_empty SourceContract.errors(load_yaml(path)), path
     end
+  end
+
+  def test_reusable_board_stub_has_a_separate_source_shape
+    view = load_yaml("views/genie3-semantic-zoom.view.yaml")
+    stub = view.fetch("boards").find do |board|
+      board.fetch("id") == "genie3_ipa_internals"
+    end
+    assert_equal "standard_block_instance", stub.fetch("kind")
+    assert_empty SourceContract.errors(view)
+
+    invalid = deep_copy(view)
+    invalid_stub = invalid.fetch("boards").find { |board| board.fetch("id") == stub.fetch("id") }
+    invalid_stub["grid"] = { "columns" => 1, "rows" => 1 }
+    invalid_stub["nodes"] = [{
+      "id" => "copied_internal",
+      "ref" => "modules.invariant_point_attention",
+      "col" => 1,
+      "row" => 1,
+    }]
+
+    diagnostics = SourceContract.errors(invalid)
+    assert_diagnostic diagnostics, "schema_unknown_property", /grid/
+    assert_diagnostic diagnostics, "schema_unknown_property", /nodes/
   end
 
   def test_rejects_unknown_fields_and_status_typos

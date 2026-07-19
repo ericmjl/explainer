@@ -93,7 +93,6 @@ conditioning:
   - id: group_pair_bias
     relation_ref: relations.pair_context_biases_pair_attention
     mode: pair_bias
-    standard_block_ref: standard_blocks/pair-biased-attention.yaml
     updates_source: false
     evidence:
       status: inferred
@@ -460,7 +459,6 @@ modules:
     mechanisms: [pair_biased_attention]
     role: update group state with full attention and pair/context logit bias
     scale: group
-    standard_block_ref: standard_blocks/pair-biased-attention.yaml
     attention:
       pattern: full
       query_scale: group
@@ -468,7 +466,6 @@ modules:
       heads: 8
       pair_bias: true
       pair_bias_source: pair_context
-      standard_block_ref: standard_blocks/pair-biased-attention.yaml
       positional_encoding:
         kind: relative_position
     evidence:
@@ -502,6 +499,26 @@ modules:
       refs:
         - source_ref: generic_feature_refinement_source
           role: scaffold_evidence
+block_instances:
+  - id: generic_group_pair_attention
+    block_ref: standard_blocks/pair-biased-attention.yaml
+    subject_ref: modules.pair_biased_attention
+    variant: logit_bias_only
+    use_scope: whole_module
+    conformance: exact
+    port_bindings:
+      - port_ref: ports.single_state
+        relation_refs: [relations.group_state_enters_pair_attention]
+      - port_ref: ports.pair_context
+        relation_refs: [relations.pair_context_biases_pair_attention]
+      - port_ref: ports.updated_single_state
+        relation_refs: [relations.pair_attention_updates_group_state]
+    evidence:
+      status: inferred
+      refs:
+        - source_ref: generic_feature_refinement_source
+          role: scaffold_evidence
+          note: The generic source set deliberately instantiates the logit-bias-only variant as reusable vocabulary.
 relations:
   - id: raw_records_enter_input_adapter
     from: value_sites.raw_records_input

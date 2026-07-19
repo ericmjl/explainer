@@ -37,9 +37,10 @@
     "executionLoopRef": { "type": "string", "pattern": "^execution\\.loops\\.[a-z][a-z0-9_]*$" },
     "board": {
       "type": "object",
-      "required": ["id", "title", "summary", "subject_ref", "expansion_depth", "grid", "nodes"],
+      "required": ["id", "title", "summary", "subject_ref", "expansion_depth"],
       "properties": {
         "id": { "$ref": "#/$defs/id" },
+        "kind": { "const": "standard_block_instance" },
         "title": { "$ref": "#/$defs/nonEmptyString" },
         "summary": { "$ref": "#/$defs/nonEmptyString" },
         "parent": { "$ref": "#/$defs/id" },
@@ -58,6 +59,39 @@
         "elide": { "type": "array", "items": { "$ref": "#/$defs/elide" } },
         "exclude": { "type": "array", "items": { "$ref": "#/$defs/exclude" } },
         "edge_overrides": { "type": "array", "items": { "$ref": "#/$defs/edgeOverride" } },
+        "notes": { "type": "array", "items": { "$ref": "#/$defs/nonEmptyString" } }
+        ,
+        "block_instance_ref": {
+          "type": "string",
+          "pattern": "^block_instances\\.[a-z][a-z0-9_]*$"
+        }
+      },
+      "additionalProperties": false
+    },
+    "standardBlockInstanceBoard": {
+      "type": "object",
+      "required": [
+        "id",
+        "kind",
+        "title",
+        "summary",
+        "parent",
+        "subject_ref",
+        "expansion_depth",
+        "block_instance_ref"
+      ],
+      "properties": {
+        "id": { "$ref": "#/$defs/id" },
+        "kind": { "const": "standard_block_instance" },
+        "title": { "$ref": "#/$defs/nonEmptyString" },
+        "summary": { "$ref": "#/$defs/nonEmptyString" },
+        "parent": { "$ref": "#/$defs/id" },
+        "subject_ref": { "$ref": "#/$defs/moduleRef" },
+        "expansion_depth": { "type": "integer", "minimum": 0 },
+        "block_instance_ref": {
+          "type": "string",
+          "pattern": "^block_instances\\.[a-z][a-z0-9_]*$"
+        },
         "notes": { "type": "array", "items": { "$ref": "#/$defs/nonEmptyString" } }
       },
       "additionalProperties": false

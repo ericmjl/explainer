@@ -9,16 +9,7 @@ require_relative "../lib/architecture_verifier"
 
 class ArchitectureEditApplyTest < Minitest::Test
   ROOT = File.expand_path("..", __dir__)
-  STAGED_DIRECTORIES = %w[
-    architectures
-    views
-    pseudocode
-    standard_blocks
-    references
-    schemas
-    lib
-    scripts
-  ].freeze
+  STAGED_DIRECTORIES = ArchitectureEdit::STAGED_SOURCE_DIRECTORIES
 
   def setup
     @temporary_root = Dir.mktmpdir("architecture-edit-apply-test-")

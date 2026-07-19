@@ -105,6 +105,15 @@ sources:
     path: genie/model/structure_net.py
     url: https://github.com/aqlaboratory/genie2/blob/9a954578f7b5a39552545eebc6d4794447794c87/genie/model/structure_net.py
 
+  - id: genie2_ipa_code
+    kind: code
+    title: Genie 2 invariant point attention module
+    organization: AQLaboratory
+    repository: aqlaboratory/genie2
+    revision: 9a954578f7b5a39552545eebc6d4794447794c87
+    path: genie/model/modules/invariant_point_attention.py
+    url: https://github.com/aqlaboratory/genie2/blob/9a954578f7b5a39552545eebc6d4794447794c87/genie/model/modules/invariant_point_attention.py
+
   - id: genie2_sampler_code
     kind: code
     title: Genie 2 reverse-diffusion sampler
@@ -210,6 +219,15 @@ sources:
     revision: d77ae5ac04212ff1e8b29b585859a3244c614804
     path: src/genie3/generation/model/structure_net.py
     url: https://github.com/aqlaboratory/genie3/blob/d77ae5ac04212ff1e8b29b585859a3244c614804/src/genie3/generation/model/structure_net.py
+
+  - id: genie3_ipa_code
+    kind: code
+    title: Genie 3 full and reduced invariant point attention modules
+    organization: AQLaboratory
+    repository: aqlaboratory/genie3
+    revision: d77ae5ac04212ff1e8b29b585859a3244c614804
+    path: src/genie3/generation/model/module/invariant_point_attention.py
+    url: https://github.com/aqlaboratory/genie3/blob/d77ae5ac04212ff1e8b29b585859a3244c614804/src/genie3/generation/model/module/invariant_point_attention.py
 
   - id: genie3_sequence_code
     kind: code

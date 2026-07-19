@@ -1,79 +1,120 @@
 # Architecture Comparison Protocol v0.1
 
-Status: **design proposal; not yet compiled or rendered**.
+Status: **implemented** by
+`schemas/architecture-comparison-v0.1.schema.json`,
+`lib/architecture_comparison_contract.rb`, and
+`lib/architecture_comparison_compiler.rb`.
 
-This protocol is for comparing architecture slices without binding the
-comparison to a specific domain.
+An architecture comparison is a curated lens over existing source facts. It
+does not become a third owner of modules, relations, reusable-block anatomy,
+or board scenes.
 
 ## Start With A Question
 
-Every comparison should begin with a concrete question:
+Every comparison begins with a narrow question that can be answered from
+stable facts on both sides:
 
 ```yaml
-question: Where does pair/context information enter attention?
+question: What does reduced attention retain and remove relative to full IPA?
 ```
 
-Good questions are narrow enough that the answer can be traced to modules,
-representations, relations, and evidence.
-
-## Comparison Axes
-
-Common axes:
-
-1. **Task and objective**: prediction, generation, denoising, planning,
-   retrieval, control.
-2. **Representations**: item, group, pair/context, memory, global, output.
-3. **State semantics**: mutable state, read-only conditioning, cached state,
-   output state.
-4. **Attention pattern**: full, local, sparse, cross, graph, recurrent.
-5. **Conditioning**: pair/context bias, adaptive normalization, additive
-   injection, gates, cross-attention.
-6. **Scale transitions**: item-to-group pooling, group-to-item broadcast,
-   memory retrieval, output projection.
-7. **Execution**: one-shot, looped refinement, recycling, sampling, cached
-   inference.
-8. **Output heads**: classification, regression, reconstruction, action, score.
-9. **Evidence level**: confirmed from code, paper/spec, docs, inferred, open.
-
-## Comparison Source Shape
+The two subjects each name a registered source set, a stable subject fact, and
+the board on which the subject is shown:
 
 ```yaml
-schema_version: architecture-comparison-v0.1
-id: comparison_id
-question: What exactly is being compared?
-sources:
-  - architectures/system_a.yaml
-  - architectures/system_b.yaml
-axes:
-  - id: conditioning_boundary
-    label: Conditioning boundary
-    fields:
-      - modules.attention.pair_bias
-      - conditioning.mode
-findings:
-  - id: finding_id
-    statement: Short evidence-backed statement.
+subjects:
+  primary:
+    label: Reduced latent attention
+    source_set: genie3
+    subject_ref: block_instances.latent_reduced_pair_attention
+    board_ref: genie3_reduced_pair_attention_internals
+  counterpart:
+    label: Full frame-aware IPA
+    source_set: genie3
+    subject_ref: block_instances.structure_ipa
+    board_ref: genie3_ipa_internals
+```
+
+`primary` is the board the reader started from. `counterpart` is the additional
+board being compared. Their visual placement is renderer policy rather than an
+architecture fact.
+
+## Groups And Alignments
+
+Groups organize the answer into human-readable regions such as shared,
+full-only, and reduced-only behavior. Alignments carry the actual mapping:
+
+```yaml
+groups:
+  - id: shared
+    label: Shared attention path
+    description: Operations that play the same role on both sides.
+
+alignments:
+  - id: pair_bias
+    group_ref: groups.shared
+    label: Pair representation biases attention
+    relationship: equivalent
+    primary_refs:
+      - block_instances.latent_reduced_pair_attention.steps.project_pair_bias
+    counterpart_refs:
+      - block_instances.structure_ipa.steps.project_pair_bias
+    explanation: Both project pair features into an additive logit bias.
     evidence:
       status: confirmed_from_code
-      refs:
-        - source_ref: implementation_source
-          role: implementation_evidence
-open_questions: []
+      refs: [...] # located evidence from both implementations
 ```
 
-## Evidence Rules
+Relationships have precise side requirements:
 
-- Do not compare from memory. Link each finding to architecture or pseudocode
-  source refs.
-- If one side is not checked, say so and mark it as `open_question`.
-- Avoid over-normalizing: if two systems use the same label for different
-  behavior, make that mismatch explicit.
+- `equivalent`, `analogous`, and `changed` require facts on both sides.
+- `primary_only` requires primary facts and an empty counterpart list.
+- `counterpart_only` requires counterpart facts and an empty primary list.
 
-## Output Shape
+For a reusable-block subject, every side fact must be instance-scoped and
+active in that instance's selected variant. The contract resolves it against
+the compiled standard-block board. A misspelled, inactive, or foreign-instance
+fact is therefore rejected before rendering.
 
-Render comparisons as:
+## Findings And Evidence
 
-- a short answer to the question;
-- a table organized by comparison axes;
-- findings ordered by confidence;
-- unresolved questions preserved as first-class rows.
+Findings summarize one or more alignments without copying their mappings:
+
+```yaml
+findings:
+  - id: geometry_is_removed
+    statement: The reduced path removes the frame-aware point path.
+    alignment_refs:
+      - alignments.frame_aware_point_path
+      - alignments.output_fusion
+    evidence:
+      status: confirmed_from_code
+      refs: [...] # evidence from both sides
+```
+
+Comparative absence must cite both sides. Showing that full IPA contains point
+attention is not enough to prove that a reduced implementation omits it.
+Unresolved issues remain first-class `open_questions` with
+`evidence.status: open_question`.
+
+## Registry And Compilation
+
+`comparisons/index.yaml` is the only comparison registry. The architecture
+registry's `comparisons` field points to `comparisons/index.yaml`; registry
+entries are paths only, so titles and subject metadata keep one owner.
+
+The deterministic compiler is versioned independently as
+`architecture-comparison-compiler-v0.1`. It emits:
+
+- stable subject source-set, subject, and board references;
+- reusable-block variant and conformance metadata;
+- ordered semantic groups and alignments;
+- per-fact board `nodeIds` and template fact references for highlighting;
+- findings, open questions, and evidence.
+
+It deliberately does not copy either board scene. Source-set manifests remain
+the owners of nodes and edges, and the renderer loads the two referenced boards
+into reusable board surfaces.
+
+The first registered source is
+`comparisons/genie3-reduced-vs-full-ipa.yaml`.

@@ -113,6 +113,21 @@ Common presentation fields:
 
 Do not author `expandable`; drilldown is determined only by `board_ref`.
 
+## Reusable-Block Detail Boards
+
+A reusable algorithm detail is the one exception to an architecture board's
+authored `grid` and `nodes`. It is an explicit source-level board stub with
+`kind: standard_block_instance`, a stable `id`, `parent`, `subject_ref`, and
+`block_instance_ref`. The referenced standard-block template supplies the
+internal grid, nodes, and step-derived edges during manifest compilation.
+
+The parent module still owns an explicit `board_ref`, so static deep links and
+breadcrumbs behave exactly like ordinary boards. Reusable template flows do
+not enter `ArchitectureProjection`: boundary flows retain canonical relation
+paths and internal flows declare `grounding: standard_block_template`. A stub
+must not author `grid`, `nodes`, `edge_overrides`, lanes, regions, elisions, or
+exclusions.
+
 When the same canonical object appears more than once on one board, bind the
 ambiguous projected relation explicitly:
 

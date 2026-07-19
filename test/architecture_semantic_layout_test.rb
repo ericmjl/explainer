@@ -219,6 +219,10 @@ class ArchitectureSemanticLayoutTest < Minitest::Test
       view = StrictYaml.load_file(File.join(root, source_set.fetch("view")))
       projector = ArchitectureProjection::Projector.new(architecture)
       view.fetch("boards").each do |board|
+        # Reusable algorithm-detail boards use the standard block's curated
+        # local layout and do not participate in canonical semantic ranking.
+        next if board["kind"] == "standard_block_instance"
+
         projection = projector.project(board)
         edges = projection.fetch("edges")
         result = ArchitectureSemanticLayout.compile(

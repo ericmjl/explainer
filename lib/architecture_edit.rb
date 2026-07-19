@@ -28,6 +28,17 @@ require_relative "yaml_source_patch"
 module ArchitectureEdit
   ROOT = File.expand_path("..", __dir__)
   REGISTRY_PATH = "architectures/index.yaml"
+  STAGED_SOURCE_DIRECTORIES = %w[
+    architectures
+    views
+    pseudocode
+    standard_blocks
+    comparisons
+    references
+    schemas
+    lib
+    scripts
+  ].freeze
   COLLECTIONS = {
     "modules" => "modules",
     "representations" => "representations",
@@ -834,6 +845,8 @@ module ArchitectureEdit
       validate_view_navigation!(architecture, view)
       projector = ArchitectureProjection::Projector.new(architecture)
       view.fetch("boards").each do |board|
+        next if board["kind"] == "standard_block_instance"
+
         projection = projector.project(board)
         lane_errors = ArchitectureViewLanes.errors(architecture, board, projection: projection)
         unless lane_errors.empty?
@@ -920,7 +933,7 @@ module ArchitectureEdit
 
     def stage_and_build!(result)
       Dir.mktmpdir("architecture-edit-") do |stage|
-        %w[architectures views pseudocode standard_blocks references schemas lib scripts].each do |directory|
+        STAGED_SOURCE_DIRECTORIES.each do |directory|
           FileUtils.cp_r(File.join(@root, directory), stage)
         end
         FileUtils.mkdir_p(File.join(stage, "renderer"))
@@ -962,8 +975,9 @@ module ArchitectureEdit
     end
 
     def staged_dependency_digests(stage, patched_paths)
-      roots = %w[architectures views pseudocode standard_blocks references schemas lib scripts]
-      staged_paths = roots.flat_map { |directory| Dir[File.join(stage, directory, "**", "*")] }
+      staged_paths = STAGED_SOURCE_DIRECTORIES.flat_map do |directory|
+        Dir[File.join(stage, directory, "**", "*")]
+      end
       staged_paths << File.join(stage, "renderer", "architecture", "build-manifest.rb")
       staged_paths.select! { |path| File.file?(path) }
       staged_paths.each_with_object({}) do |staged_path, expected|

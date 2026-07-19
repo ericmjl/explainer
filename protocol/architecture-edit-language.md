@@ -484,6 +484,13 @@ For an existing registry `source_set`, an agent should:
 7. Report any architectural facts that could not be represented by v0.2
    operations instead of silently editing around the compiler.
 
+Creating or changing a `standard-block-v0.2` template, architecture
+`block_instances` entry, or reusable-board stub is currently one such
+unsupported cross-source edit. Author that bounded declarative change through
+the normal source-first workflow, then run the full source-set verifier. Do not
+misrepresent it as an architecture-edit-v0.2 transaction; a later edit
+language version can add a typed multi-file operation.
+
 For a new method, v0.2 cannot create the initial registry entry or source
 bundle. The agent must first bootstrap the bibliography, architecture, root
 view, pseudocode, and registry files through the source-first authoring
@@ -506,6 +513,7 @@ Architecture edit v0.2 deliberately does not provide:
 - extracting architecture facts from raw code, papers, or documentation;
 - direct writes from an LLM to canonical sources;
 - arbitrary method-repository ingestion and new-source-set creation; or
+- standard-block template, block-instance, or reusable-board-stub authoring;
 - direct browser writes to canonical YAML; an authoring UI must emit the same
   reviewable, validated plan operations.
 

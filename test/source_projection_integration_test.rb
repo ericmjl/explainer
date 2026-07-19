@@ -4,6 +4,7 @@ require "minitest/autorun"
 require "json"
 require "digest"
 require_relative "../lib/architecture_projection"
+require_relative "../lib/standard_block_compiler"
 require_relative "../lib/strict_yaml"
 
 class SourceProjectionIntegrationTest < Minitest::Test
@@ -41,15 +42,32 @@ class SourceProjectionIntegrationTest < Minitest::Test
       end
 
       projector = ArchitectureProjection::Projector.new(architecture)
-      projections = view.fetch("boards").to_h do |board|
+      blocks_by_path = Array(source_set["standard_blocks"]).to_h do |path|
+        [path, load_yaml(path)]
+      end
+      compiled_boards = StandardBlockCompiler::Catalog.new(blocks_by_path: blocks_by_path).compile_boards(
+        architecture,
+        view.fetch("boards"),
+        registered_blocks: source_set["standard_blocks"],
+      )
+      projections = compiled_boards.filter_map do |board|
         refute board.key?("scale_lanes"), "#{source_set.fetch('id')}/#{board.fetch('id')} uses legacy renderer lanes"
+        if board["kind"] == "standard_block_instance"
+          assert_equal "standard_block_template", board.fetch("projectionMode")
+          refute_empty board.fetch("nodes")
+          refute_empty board.fetch("edges")
+          assert board.fetch("edges").all? do |edge|
+            %w[standard_block_template canonical_relation_path].include?(edge.fetch("grounding"))
+          end
+          next
+        end
         refute board.key?("edges"), "#{source_set.fetch('id')}/#{board.fetch('id')} re-authors semantic edges"
         projection = projector.project(board)
         refute_empty projection.fetch("edges"), "#{source_set.fetch('id')}/#{board.fetch('id')} has no projected flow"
         assert projection.fetch("edges").all? { |edge| edge.fetch("origin") == "canonical" }
         assert projection.fetch("edges").all? { |edge| !edge.fetch("relation_path").empty? }
         [board.fetch("id"), projection]
-      end
+      end.to_h
 
       root = projections.fetch(view.fetch("root_board"))
       boundary_refs = architecture.fetch("value_sites").filter_map do |site|

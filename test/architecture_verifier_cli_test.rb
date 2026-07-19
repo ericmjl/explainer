@@ -29,6 +29,9 @@ class ArchitectureVerifierCliTest < Minitest::Test
     assert_equal 0, report.fetch("summary").fetch("failed_count")
     assert_equal 0, report.fetch("summary").fetch("error_count")
     assert report.fetch("checks").all? { |check| check.fetch("status") == "passed" }
+    comparison = report.fetch("checks").find { |check| check.fetch("id") == "comparisons" }
+    refute_nil comparison
+    assert_equal({ "registered_count" => 1, "relevant_count" => 1 }, comparison.fetch("metrics"))
   end
 
   def test_json_failure_is_structured_and_exits_one

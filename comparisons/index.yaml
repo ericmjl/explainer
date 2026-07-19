@@ -1,0 +1,3 @@
+schema_version: comparison-registry-v0.1
+sources:
+  - comparisons/genie3-reduced-vs-full-ipa.yaml

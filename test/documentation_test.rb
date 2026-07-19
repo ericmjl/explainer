@@ -8,6 +8,7 @@ class DocumentationTest < Minitest::Test
   ROOT = File.expand_path("..", __dir__)
   CURRENT_PROTOCOLS = %w[
     architecture-language.md
+    architecture-comparison-protocol.md
     architecture-edit-language.md
     architecture-coverage.md
     architecture-projection-model.md
@@ -72,6 +73,9 @@ class DocumentationTest < Minitest::Test
       architecture-edit-v0.2.schema.json
       visualization-v0.4.schema.json
       bibliography-v0.1.schema.json
+      architecture-comparison-v0.1.schema.json
+      comparison-registry-v0.1.schema.json
+      standard-block-v0.2.schema.json
     ].each do |name|
       schema = JsonSchemaSubset.load(File.join(ROOT, "schemas", name))
       assert_equal "https://json-schema.org/draft/2020-12/schema", schema.fetch("$schema"), name
@@ -107,6 +111,27 @@ class DocumentationTest < Minitest::Test
     assert_includes renderer, "architecture-question-context-v0.1"
     assert_includes renderer, "complete ordered `relation_path`"
     assert_includes renderer, "does not\nsend source content to a service"
+  end
+
+  def test_comparison_docs_define_source_compiler_renderer_and_url_boundaries
+    guide = File.read(File.join(ROOT, "AGENTS.md"))
+    renderer = File.read(File.join(ROOT, "protocol/renderer-architecture.md"))
+    validation = File.read(File.join(ROOT, "protocol/source-validation.md"))
+
+    assert_includes guide, "## Comparison Authoring Rules"
+    assert_includes guide, "Never align by display label, node position"
+    assert_includes guide, "### Authoring a Comparison"
+    assert_includes guide, "comparisonIndex"
+
+    assert_includes renderer, "### Shareable Comparison Links"
+    assert_includes renderer, "&compare_arch=genie3"
+    assert_includes renderer, "at most one of `node` and `compare_node`"
+    assert_includes renderer, "not a third graph and not a copied scene"
+
+    assert_includes validation, "schemas/architecture-comparison-v0.1.schema.json"
+    assert_includes validation, "architecture-comparison-compiler-v0.1"
+    assert_includes validation, "never copies either\nmanifest-owned board scene"
+    assert_includes validation, "test/renderer_comparison_workspace_test.rb"
   end
 
   def test_semantic_layout_docs_define_the_authoring_and_runtime_boundary

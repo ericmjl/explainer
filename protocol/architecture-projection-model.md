@@ -131,9 +131,11 @@ node in another branch is never eligible merely because one board expands to
 depth four.
 
 Shared reusable mechanisms belong in `standard_blocks`; their concrete use in
-the architecture remains a module occurrence with one parent. Shared children
-and multiple parents are deferred until there is an architecture that requires
-them.
+the architecture remains a module occurrence with one parent plus an optional
+typed `block_instances` binding. Standard-block internal flows are compiled in
+a separate reusable-detail path and never enter canonical architecture
+projection. Shared children and multiple parents are deferred until there is
+an architecture that requires them.
 
 ### Representation Types and Value Sites
 

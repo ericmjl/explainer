@@ -5,15 +5,17 @@ require "json"
 require "digest"
 require "fileutils"
 require "rbconfig"
+require_relative "../../lib/architecture_comparison_compiler"
 require_relative "../../lib/architecture_coverage"
 require_relative "../../lib/architecture_projection"
 require_relative "../../lib/architecture_ownership"
 require_relative "../../lib/source_contract"
+require_relative "../../lib/standard_block_compiler"
 require_relative "../../lib/strict_yaml"
 
 ROOT = File.expand_path("../..", __dir__)
 REGISTRY = "architectures/index.yaml"
-GENERATOR_VERSION = "architecture-manifest-builder-v0.4.1"
+GENERATOR_VERSION = "architecture-manifest-builder-v0.4.2"
 CHECK_MODE = ARGV.delete("--check")
 abort "usage: ruby #{__FILE__} [--check]" unless ARGV.empty?
 
@@ -189,23 +191,38 @@ def normalize_module_refs(mod)
   mod
 end
 
-def standard_block_manifest(paths)
+def standard_block_manifest(paths, blocks_by_path)
   paths.each_with_object({}) do |path, acc|
-    block = load_yaml(path)
-    acc[block.fetch("id")] = {
+    block = blocks_by_path.fetch(path)
+    summary = {
       "id" => block.fetch("id"),
+      "schemaVersion" => block.fetch("schema_version"),
       "name" => block.fetch("name"),
       "sourceYaml" => web_ref(path),
       "description" => block.fetch("description"),
-      "math" => Array(block["math"]).map do |step|
+      "math" => Array(block["math"] || block["steps"]).map do |step|
         {
           "id" => step["id"],
-          "text" => step.fetch("text"),
+          "text" => step["text"] || step["code"],
           "tex" => step["tex"],
           "operation" => step["operation"],
         }.compact
       end,
     }
+    if block["schema_version"] == "standard-block-v0.2"
+      summary.merge!(
+        "kind" => block.fetch("kind"),
+        "status" => block.fetch("status"),
+        "ports" => block.fetch("ports"),
+        "variants" => block.fetch("variants"),
+        "defaultVariant" => block.fetch("default_variant"),
+        "values" => block.fetch("values"),
+        "steps" => block.fetch("steps"),
+        "visualTemplate" => block.fetch("visual_template"),
+        "evidencePolicy" => block.fetch("evidence_policy"),
+      )
+    end
+    acc[block.fetch("id")] = summary
   end
 end
 
@@ -228,6 +245,11 @@ def pseudocode_lines(pseudocode)
       "refs" => Array(line["source_refs"]).map { |ref| ref["lines"] || ref["locator"] }.compact.join(", "),
       "architectureRefs" => Array(line["architecture_refs"]),
       "standardBlockRef" => web_ref(line["standard_block_ref"]),
+      "blockInstanceRef" => line["block_instance_ref"],
+      "operation" => line["operation"],
+      "inputs" => Array(line["inputs"]),
+      "outputs" => Array(line["outputs"]),
+      "visual" => line["visual"],
     }.compact
   end
 end
@@ -241,6 +263,13 @@ def build_manifest(config, bibliography, bibliography_path)
   semantic_zoom = load_yaml(config.fetch("view"))
   SourceContract.validate!(semantic_zoom) if semantic_zoom["schema_version"] == "visualization-v0.4"
   modules = architecture.fetch("modules").map { |mod| normalize_module_refs(mod) }
+  blocks_by_path = config.fetch("standard_blocks").to_h { |path| [path, load_yaml(path)] }
+  block_catalog = StandardBlockCompiler::Catalog.new(blocks_by_path: blocks_by_path)
+  block_instances = block_catalog.compile_instances(
+    architecture,
+    registered_blocks: config.fetch("standard_blocks"),
+  )
+  block_instance_summaries = block_instances.map { |instance| instance.reject { |key, _value| key == "scene" } }
   projected_architecture_versions = %w[architecture-v0.3 architecture-v0.4]
   derived_projection = projected_architecture_versions.include?(architecture["schema_version"]) &&
                        semantic_zoom["schema_version"] == "visualization-v0.4"
@@ -250,14 +279,21 @@ def build_manifest(config, bibliography, bibliography_path)
   if semantic_zoom["schema_version"] == "visualization-v0.4" && !derived_projection
     raise "visualization-v0.4 requires architecture-v0.3 or architecture-v0.4 for #{config.fetch('id')}"
   end
+  compiled_view_boards = block_catalog.compile_boards(
+    architecture,
+    semantic_zoom.fetch("boards"),
+    registered_blocks: config.fetch("standard_blocks"),
+  )
   boards = if derived_projection
     projector = ArchitectureProjection::Projector.new(architecture)
-    semantic_zoom.fetch("boards").map do |board|
+    compiled_view_boards.map do |board|
+      next board if board["kind"] == "standard_block_instance"
+
       projection = projector.project(board)
       board.merge(projection).merge("projectionMode" => "derived")
     end
   else
-    semantic_zoom.fetch("boards").map { |board| board.merge("projectionMode" => "authored") }
+    compiled_view_boards.map { |board| board.merge("projectionMode" => "authored") }
   end
   one_owner_contract = architecture["schema_version"] == "architecture-v0.4"
   value_site_interfaces = one_owner_contract ? compile_value_site_interfaces(architecture) : {}
@@ -291,6 +327,7 @@ def build_manifest(config, bibliography, bibliography_path)
       "decomposition" => architecture["decomposition"] || {},
       "coverage" => ArchitectureCoverage.compile(architecture),
       "modules" => modules,
+      "blockInstances" => block_instance_summaries,
       "representations" => architecture.fetch("representations"),
       "valueSites" => architecture["value_sites"] || [],
       "valueSiteInterfaces" => value_site_interfaces,
@@ -305,7 +342,7 @@ def build_manifest(config, bibliography, bibliography_path)
       "openQuestions" => architecture["open_questions"] || [],
     },
     "bibliography" => bibliography_manifest(bibliography, bibliography_path),
-    "standardBlocks" => standard_block_manifest(config.fetch("standard_blocks")),
+    "standardBlocks" => standard_block_manifest(config.fetch("standard_blocks"), blocks_by_path),
     "pseudocode" => {
       pseudocode.fetch("id") => {
         "sourceYaml" => web_ref(config.fetch("pseudocode")),
@@ -324,12 +361,23 @@ def build_manifest(config, bibliography, bibliography_path)
   }
 end
 
+def comparison_source_set_context(config)
+  blocks_by_path = config.fetch("standard_blocks").to_h { |path| [path, load_yaml(path)] }
+  {
+    architecture: load_yaml(config.fetch("architecture")),
+    view: load_yaml(config.fetch("view")),
+    blocks_by_path: blocks_by_path,
+    registered_blocks: config.fetch("standard_blocks"),
+  }
+end
+
 validate_all_sources!
 registry = load_yaml(REGISTRY)
 bibliography_path = registry.fetch("bibliography")
 bibliography = load_yaml(bibliography_path)
 SourceContract.validate!(bibliography)
 index_entries = []
+source_set_contexts = {}
 stale_outputs = []
 
 write_output = lambda do |path, content|
@@ -344,6 +392,7 @@ end
 
 registry.fetch("source_sets").each do |config|
   set_id = config.fetch("id")
+  source_set_contexts[set_id] = comparison_source_set_context(config)
   out = File.join(ROOT, "renderer/architecture/manifest-#{set_id}.js")
   manifest = build_manifest(config, bibliography, bibliography_path)
   write_output.call(out, "export const manifest = #{JSON.pretty_generate(manifest)};\n")
@@ -355,8 +404,51 @@ registry.fetch("source_sets").each do |config|
   }
 end
 
+comparison_registry_path = registry.fetch("comparisons")
+comparison_registry = load_yaml(comparison_registry_path)
+comparison_paths = comparison_registry.fetch("sources")
+comparisons_by_path = comparison_paths.to_h { |path| [path, load_yaml(path)] }
+comparison_compiler = ArchitectureComparisonCompiler::Compiler.new(
+  source_sets: source_set_contexts,
+  bibliography_sources: bibliography.fetch("sources"),
+)
+compiled_comparisons = comparison_paths.map do |path|
+  comparison_compiler.compile(comparisons_by_path.fetch(path)).merge(
+    "sourceYaml" => web_ref(path),
+  )
+end
+comparison_index = {
+  "schemaVersion" => comparison_registry.fetch("schema_version"),
+  "compilerVersion" => ArchitectureComparisonCompiler::COMPILER_VERSION,
+  "sourceYaml" => web_ref(comparison_registry_path),
+  "build" => {
+    "generator" => GENERATOR_VERSION,
+    # Comparison highlights are resolved against compiled architecture boards,
+    # reusable-block variants, and bibliography evidence. Record those inputs
+    # as dependencies too; otherwise the comparison manifest would imply that
+    # its YAML lens alone determined the emitted node identities.
+    "inputDigests" => input_digests([
+      comparison_registry_path,
+      *comparison_paths,
+      bibliography_path,
+      *registry.fetch("source_sets").flat_map do |source_set|
+        [
+          source_set.fetch("architecture"),
+          source_set.fetch("view"),
+          *source_set.fetch("standard_blocks"),
+        ]
+      end,
+    ]),
+  },
+  "items" => compiled_comparisons,
+}
+
 index_out = File.join(ROOT, "renderer/architecture/manifest-index.js")
-write_output.call(index_out, "export const manifestIndex = #{JSON.pretty_generate(index_entries)};\n")
+write_output.call(
+  index_out,
+  "export const manifestIndex = #{JSON.pretty_generate(index_entries)};\n" \
+    "export const comparisonIndex = #{JSON.pretty_generate(comparison_index)};\n",
+)
 
 if CHECK_MODE
   unless stale_outputs.empty?

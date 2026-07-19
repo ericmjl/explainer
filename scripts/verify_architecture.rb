@@ -13,7 +13,7 @@ parser = OptionParser.new do |opts|
   opts.banner = <<~TEXT
     Usage: ruby scripts/verify_architecture.rb --source-set ID [options]
 
-    Read-only verification of one registered architecture source set.
+    Read-only verification of one registered architecture source set and its comparisons.
     The final manifest-freshness subcheck is repository-wide.
   TEXT
   opts.on("--source-set ID", "Registered source-set ID") { |value| options[:source_set] = value }

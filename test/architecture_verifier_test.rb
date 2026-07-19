@@ -11,6 +11,7 @@ class ArchitectureVerifierTest < Minitest::Test
   ROOT = File.expand_path("..", __dir__)
   STAGED_DIRECTORIES = %w[
     architectures
+    comparisons
     views
     references
     schemas
@@ -234,6 +235,70 @@ class ArchitectureVerifierTest < Minitest::Test
     assert_includes diagnostic.fetch("message"), "source set dit"
   end
 
+  def test_reusable_block_instance_bindings_are_verified_semantically
+    mutate_architecture("genie2") do |architecture|
+      instance = architecture.fetch("block_instances").first
+      instance.fetch("port_bindings").reject! do |binding|
+        binding.fetch("port_ref") == "ports.frames"
+      end
+    end
+
+    result = @verifier.verify(source_set_id: "genie2")
+
+    assert_equal "failed", result.status
+    diagnostic = diagnostic(result, "missing_required_port")
+    assert_equal "source_semantics", diagnostic.fetch("check")
+    assert_includes diagnostic.fetch("message"), "ports.frames"
+  end
+
+  def test_reusable_detail_board_is_verified_without_entering_architecture_projection
+    result = @verifier.verify(
+      source_set_id: "genie3",
+      board_id: "genie3_ipa_internals",
+    )
+
+    assert_equal "passed", result.status, result.to_text
+    %w[board_layout projection].each do |check_id|
+      check = result.checks.find { |candidate| candidate.fetch("id") == check_id }
+      assert_equal [], check.fetch("boards")
+    end
+  end
+
+  def test_comparison_facts_are_resolved_against_the_compiled_subject_boards
+    mutate_comparison("genie3_reduced_vs_full_ipa") do |comparison|
+      pair_bias = comparison.fetch("alignments").find { |item| item.fetch("id") == "pair_bias" }
+      pair_bias["primary_refs"] = [
+        "block_instances.latent_reduced_pair_attention.steps.project_attention_output",
+      ]
+    end
+
+    result = @verifier.verify(source_set_id: "genie3")
+
+    assert_equal "failed", result.status
+    diagnostic = diagnostic(result, "unknown_comparison_fact")
+    assert_equal "comparisons", diagnostic.fetch("check")
+    assert_equal "comparisons/genie3-reduced-vs-full-ipa.yaml", diagnostic.fetch("file")
+    check = result.checks.find { |candidate| candidate.fetch("id") == "comparisons" }
+    assert_equal({ "registered_count" => 1, "relevant_count" => 1 }, check.fetch("metrics"))
+
+    unrelated = @verifier.verify(source_set_id: "generic")
+    assert_equal "passed", unrelated.status, unrelated.to_text
+    unrelated_check = unrelated.checks.find { |candidate| candidate.fetch("id") == "comparisons" }
+    assert_equal({ "registered_count" => 1, "relevant_count" => 0 }, unrelated_check.fetch("metrics"))
+  end
+
+  def test_comparison_schema_errors_are_reported_for_every_source_set
+    mutate_comparison("genie3_reduced_vs_full_ipa") { |comparison| comparison.delete("summary") }
+
+    result = @verifier.verify(source_set_id: "generic")
+
+    assert_equal "failed", result.status
+    diagnostic = diagnostic(result, "schema_required")
+    assert_equal "comparisons", diagnostic.fetch("check")
+    assert_equal "comparisons/genie3-reduced-vs-full-ipa.yaml", diagnostic.fetch("file")
+    assert_equal "$.summary", diagnostic.fetch("path")
+  end
+
   private
 
   def expected_check_ids
@@ -242,6 +307,7 @@ class ArchitectureVerifierTest < Minitest::Test
       strict_yaml
       source_contract
       source_semantics
+      comparisons
       ownership
       coverage
       view_navigation
@@ -270,6 +336,28 @@ class ArchitectureVerifierTest < Minitest::Test
     registry = StrictYaml.load_file(path)
     yield registry
     File.write(path, YAML.dump(registry))
+  end
+
+  def mutate_architecture(source_set_id)
+    registry = StrictYaml.load_file(File.join(@temporary_root, "architectures/index.yaml"))
+    source_set = registry.fetch("source_sets").find { |candidate| candidate.fetch("id") == source_set_id }
+    path = File.join(@temporary_root, source_set.fetch("architecture"))
+    architecture = StrictYaml.load_file(path)
+    yield architecture
+    File.write(path, YAML.dump(architecture))
+  end
+
+  def mutate_comparison(comparison_id)
+    registry = StrictYaml.load_file(File.join(@temporary_root, "architectures/index.yaml"))
+    comparison_registry = StrictYaml.load_file(File.join(@temporary_root, registry.fetch("comparisons")))
+    path = comparison_registry.fetch("sources").find do |candidate|
+      StrictYaml.load_file(File.join(@temporary_root, candidate))["id"] == comparison_id
+    end
+    refute_nil path, "fixture is missing comparison #{comparison_id}"
+    absolute = File.join(@temporary_root, path)
+    comparison = StrictYaml.load_file(absolute)
+    yield comparison
+    File.write(absolute, YAML.dump(comparison))
   end
 
   def board(view, board_id)

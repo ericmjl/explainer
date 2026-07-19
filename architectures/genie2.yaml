@@ -783,6 +783,36 @@ modules:
     role: project each residue state to a six-parameter rigid increment and compose it into the current frame
     scale: residue
     evidence: *structure_module_evidence
+block_instances:
+  - id: structure_ipa
+    block_ref: standard_blocks/invariant-point-attention.yaml
+    subject_ref: modules.invariant_point_attention
+    variant: full_ipa_residual_norm
+    use_scope: whole_module
+    conformance: exact
+    port_bindings:
+      - port_ref: ports.single_state
+        relation_refs: [relations.single_features_enter_ipa]
+      - port_ref: ports.pair_context
+        relation_refs: [relations.refined_pair_features_bias_ipa]
+      - port_ref: ports.frames
+        relation_refs: [relations.current_frames_condition_ipa]
+      - port_ref: ports.mask
+        relation_refs: [relations.feature_bundle_masks_ipa]
+        selector: residue_mask
+      - port_ref: ports.updated_single_state
+        relation_refs: [relations.ipa_produces_updated_single_state]
+    evidence:
+      status: confirmed_from_code
+      refs:
+        - source_ref: genie2_ipa_code
+          role: implementation_evidence
+          locator: InvariantPointAttention.forward
+          note: The IPA module implements scalar, point, pair-bias, and pair-value attention terms.
+        - source_ref: genie2_structure_code
+          role: wrapper_evidence
+          locator: StructureLayer.forward
+          note: The structure layer applies the residual, dropout, and LayerNorm wrapper represented by this variant.
 relations:
   - id: generation_request_enters_feature_builder
     from: value_sites.generation_request

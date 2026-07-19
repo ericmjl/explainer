@@ -216,7 +216,7 @@ conditioning:
     evidence:
       status: confirmed_from_code
       refs:
-        - source_ref: genie3_latent_transformer_code
+        - source_ref: genie3_ipa_code
           role: implementation_evidence
           locator: ReducedInvariantPointAttention.forward
   - id: pair_conditioned_structure_attention
@@ -858,6 +858,61 @@ modules:
     role: regress and compose a six-parameter rigid increment for every valid token frame
     scale: token
     evidence: *structure_evidence
+block_instances:
+  - id: latent_reduced_pair_attention
+    block_ref: standard_blocks/pair-biased-attention.yaml
+    subject_ref: modules.pair_biased_attention_update
+    variant: pair_values_residual_norm_transition
+    use_scope: whole_module
+    conformance: reduced
+    difference_summary: Genie 3 removes frame-aware point terms, keeps pair-logit bias and pair-value aggregation, then adds residual normalization, a single transition, and final masking.
+    port_bindings:
+      - port_ref: ports.single_state
+        relation_refs: [relations.single_with_global_tokens_enters_attention]
+      - port_ref: ports.pair_context
+        relation_refs: [relations.pair_with_global_tokens_bias_attention]
+      - port_ref: ports.updated_single_state
+        relation_refs: [relations.pair_attention_produces_single_state]
+    evidence:
+      status: confirmed_from_code
+      refs:
+        - source_ref: genie3_ipa_code
+          role: implementation_evidence
+          locator: ReducedInvariantPointAttention.forward
+          note: Reduced IPA implements scalar attention with pair bias and pair-value aggregation while omitting frame-aware point terms.
+        - source_ref: genie3_latent_transformer_code
+          role: wrapper_evidence
+          locator: LatentTransformerBlock.forward
+          note: The latent block applies the residual normalization, transition, and output mask around ReducedIPA.
+  - id: structure_ipa
+    block_ref: standard_blocks/invariant-point-attention.yaml
+    subject_ref: modules.invariant_point_attention
+    variant: full_ipa_residual_norm
+    use_scope: whole_module
+    conformance: exact
+    port_bindings:
+      - port_ref: ports.single_state
+        relation_refs: [relations.decoder_single_state_enters_ipa]
+      - port_ref: ports.pair_context
+        relation_refs: [relations.refined_pair_features_bias_ipa]
+      - port_ref: ports.frames
+        relation_refs: [relations.decoder_frames_condition_ipa]
+      - port_ref: ports.mask
+        relation_refs: [relations.feature_bundle_masks_ipa]
+        selector: token_struct_frame_mask
+      - port_ref: ports.updated_single_state
+        relation_refs: [relations.ipa_produces_updated_single_state]
+    evidence:
+      status: confirmed_from_code
+      refs:
+        - source_ref: genie3_ipa_code
+          role: implementation_evidence
+          locator: InvariantPointAttention.forward
+          note: Full IPA implements scalar, point, pair-bias, and pair-value attention terms.
+        - source_ref: genie3_structure_code
+          role: wrapper_evidence
+          locator: StructureLayer.forward
+          note: The structure layer applies the residual, dropout, and LayerNorm wrapper represented by this variant.
 relations:
   - id: design_request_enters_feature_builder
     from: value_sites.design_request

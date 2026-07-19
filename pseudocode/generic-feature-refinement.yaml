@@ -92,7 +92,7 @@ lines:
   - id: pair_bias_refine
     text: "g = GroupRefiner(g, pair_bias=Linear(LayerNorm(c)))"
     operation: pair_bias_add
-    standard_block_ref: standard_blocks/pair-biased-attention.yaml
+    block_instance_ref: block_instances.generic_group_pair_attention
     inputs: [group_state, pair_context]
     outputs: [group_state]
     architecture_refs:
@@ -101,13 +101,6 @@ lines:
     source_refs:
       - source: demo_source
         locator: group_refiner
-    visual:
-      block: pair_biased_attention
-      slots:
-        query: group_state
-        key: group_state
-        value: group_state
-        pair: pair_context
   - id: broadcast_groups
     text: "o = OutputDecoder(gather(g, item_to_group), skip=x)"
     operation: gather
