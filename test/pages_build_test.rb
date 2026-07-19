@@ -100,7 +100,7 @@ class PagesBuildTest < Minitest::Test
     assert_includes renderer, "./board-surface.mjs?v=#{build_id}"
     assert_includes renderer, "./${activeManifestEntry.file}?v=#{build_id}"
     assert_includes landing, "./renderer/architecture/manifest-index.js?v=#{build_id}"
-    assert_includes landing, "./renderer/architecture/${indexEntry.file}?v=#{build_id}"
+    refute_includes landing, "await import"
     assert_includes File.read(File.join(@output, "_headers")),
       "Cache-Control: no-cache, must-revalidate"
   end
@@ -128,11 +128,22 @@ class PagesBuildTest < Minitest::Test
     end
   end
 
-  def test_filtered_directory_hides_an_empty_reference_section
+  def test_filtered_directory_is_a_minimal_architecture_only_list
     PagesBuild.build!(output: @output, validate: false, source_sets: ["genie3"])
 
+    html = File.read(File.join(@output, "index.html"))
     landing = File.read(File.join(@output, "landing.js"))
-    assert_includes landing, "referenceSection.hidden = references.length === 0"
+    index = File.read(File.join(@output, "renderer/architecture/manifest-index.js"))
+
+    assert_includes html, 'id="architectureList"'
+    refute_includes html, "Language reference"
+    refute_includes html, "Design language"
+    refute_includes html, "Authoring resources"
+    refute_includes landing, "referenceSection"
+    assert_includes landing, 'entry.role === "architecture"'
+    refute_includes landing, "await import"
+    assert_includes index, '"id": "genie3"'
+    refute_includes index, '"id": "generic"'
   end
 
   private

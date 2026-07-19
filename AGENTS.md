@@ -299,10 +299,10 @@ Shared infrastructure:
   cannot combine stale and current ES modules. Never publish the repository
   root; YAML, schemas, tests, and local review tooling must remain outside the
   deployed artifact.
-- Landing directory: `index.html` plus `landing.js` (derives architecture
-  cards from the generated manifests; `directory_role` in
-  `architectures/index.yaml` separates model architectures from language
-  references).
+- Landing directory: `index.html` plus `landing.js` (renders a minimal list
+  from the compiled manifest index without loading full manifests; only
+  `directory_role: architecture` entries appear, so language references and
+  authoring material stay out of the audience homepage).
 - Browser renderer: `renderer/architecture/renderer.js` (architecture chosen
   via `?arch=<id>`, default is the first registry entry).
 

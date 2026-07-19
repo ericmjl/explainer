@@ -148,19 +148,17 @@ workflow, after which supported follow-up changes should use edit plans.
 
 ## Architecture Directory
 
-The repository root is a registry-driven architecture directory. It loads
-`renderer/architecture/manifest-index.js` and the registered manifests, then
-derives each card's family, task modes, root-board summary, topology preview,
-semantic depth, module count, and breadth status. Do not hand-author model
-cards in `index.html`. Register the source set in `architectures/index.yaml`
-and set `directory_role` to `architecture` or `reference`; the generated
-directory will update with the manifests.
+The repository root is an intentionally minimal, registry-driven list of the
+model architectures included in the current build. It reads only
+`renderer/architecture/manifest-index.js`; full architecture manifests are
+loaded after a user opens the renderer. Do not hand-author model links in
+`index.html`. Register the source set in `architectures/index.yaml`, use
+`directory_role: architecture`, and include it in the Pages build allowlist.
 
-The public directory intentionally separates real **Model architectures**
-from the **Language reference**. The Generic Feature Refinement card is not a
-published model; it is a neutral example for learning the diagram grammar.
-Authoring protocols are contributor/agent documentation and are deliberately
-absent from the audience homepage and production artifact.
+Entries with `directory_role: reference`, design-language material, and
+authoring resources are deliberately absent from the audience homepage. They
+remain available to contributors in the source repository without competing
+with the published model list.
 
 ## Audience Renderer
 
