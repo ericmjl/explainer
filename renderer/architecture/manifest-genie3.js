@@ -4,8 +4,8 @@ export const manifest = {
     "generator": "architecture-manifest-builder-v0.4.6",
     "inputDigests": {
       "references/bibliography.yaml": "abe9226586bfb64261c81b7756b7275c48a3a172a9a18b5f91f7acfd3145e374",
-      "architectures/genie3.yaml": "30ed727051173ad7eb3f1381ae53b67e0bc12ade2727ab2421f4b0e728daec4d",
-      "views/genie3-semantic-zoom.view.yaml": "423a685b4a6699dece123336da699c3b3dc905ab9450b2c7dbad37c7135b5622",
+      "architectures/genie3.yaml": "ab080a316461c114b97be8ebc14576ef02a55710f5b1222453cc89edc07c9a5b",
+      "views/genie3-semantic-zoom.view.yaml": "e0568857adefbb91d4bf6bfb2a0c92b0a00269255306477869725f2142c9ec34",
       "pseudocode/genie3.yaml": "822369fcf368f6fc2cf07c70a810d408a122d4cc1bad4f33ef2fbbf6b848d09c",
       "standard_blocks/pair-biased-attention.yaml": "88379fcd3ad641e38da23ce3b5a9ccef84344149d9c8fac51792ad63cb9da7dc",
       "standard_blocks/invariant-point-attention.yaml": "a88d3bd473e6bbfeb6846085f7d5091e6e8b0e33fbbd8292af4d578df22b2c27"
@@ -2814,10 +2814,11 @@ export const manifest = {
       {
         "id": "feature_bundle",
         "scale": "mixed",
-        "semantic_role": "model-ready dictionary of token- and atom-indexed metadata, known values, and task-dependent conditioning masks",
-        "shape": "B x N token fields + B x A atom fields",
+        "semantic_role": "model-ready dictionary of residue metadata, atom identity and coordinates, frame construction, and task conditioning aligned to one padded atom-token axis",
+        "shape": "heterogeneous fields sharing a B x N atom-token prefix",
         "carries": [
-          "token, residue, chain, entity, and atom identities",
+          "one aligned row per C-alpha or side-chain heavy-atom token",
+          "residue, chain, entity, and atom identities",
           "known residue types and coordinates plus atomization and validity masks",
           "conditioning group, sequence, structure, frame, and interface masks"
         ],
@@ -2852,8 +2853,8 @@ export const manifest = {
               "entity_id",
               "is_atomized"
             ],
-            "semantic_role": "Defines which padded token slots are active, maps them to residues and chains, and marks tokens created by partial atomization.",
-            "task_behavior": "Present for every task; the selected featurizer determines the token count, chain layout, and atomization flags.",
+            "semantic_role": "Defines which padded atom-token slots are active, maps them to residues and chains, and marks tokens created by partial atomization.",
+            "task_behavior": "Present for every task; the selected featurizer determines the atom-token count, chain layout, and atomization flags.",
             "evidence": {
               "status": "confirmed_from_code",
               "refs": [
@@ -2874,12 +2875,12 @@ export const manifest = {
             "id": "residue_identity",
             "label": "Known residue identity",
             "axis": "token",
-            "shape": "B x N x residue type",
+            "shape": "B x N x 20",
             "fields": [
               "gt_restype"
             ],
-            "semantic_role": "Carries the one-hot amino-acid identity available at each token position.",
-            "task_behavior": "Unknown design positions are zeroed; conditioned motif or target residues retain known identities.",
+            "semantic_role": "Carries the one-hot amino-acid identity aligned to every atom-token belonging to that residue.",
+            "task_behavior": "Unknown design positions are zeroed; conditioned motif or target atom-tokens repeat their known residue identity.",
             "evidence": {
               "status": "confirmed_from_code",
               "refs": [
@@ -2897,18 +2898,93 @@ export const manifest = {
             }
           },
           {
-            "id": "atom_identity_and_coordinates",
-            "label": "Atom identity and coordinates",
-            "axis": "atom",
-            "shape": "B x A, with categorical or xyz trailing dimensions",
+            "id": "atom_type",
+            "label": "Atom type",
+            "axis": "token",
+            "shape": "B x N x 37",
             "fields": [
-              "atom_type",
-              "atom_symbol",
-              "gt_atom_mask",
+              "atom_type"
+            ],
+            "semantic_role": "Identifies which atom37 name each C-alpha or side-chain heavy-atom token represents.",
+            "task_behavior": "Every residue contributes a C-alpha token; selected known residues contribute additional Atom14-ordered side-chain heavy-atom tokens.",
+            "evidence": {
+              "status": "confirmed_from_code",
+              "refs": [
+                {
+                  "source_ref": "genie3_feature_code",
+                  "role": "implementation_evidence",
+                  "locator": "create_np_features_from_chain, batchify_np_features, and prepare_tensor_features"
+                },
+                {
+                  "source_ref": "genie3_feature_schema_code",
+                  "role": "schema_evidence",
+                  "locator": "FEATURES, FEATURE_LEVEL, and FEATURE_DTYPE"
+                }
+              ]
+            }
+          },
+          {
+            "id": "atom_element",
+            "label": "Atom element",
+            "axis": "token",
+            "shape": "B x N x 4",
+            "fields": [
+              "atom_symbol"
+            ],
+            "semantic_role": "Encodes the N, C, O, or S element associated with each atom-token.",
+            "task_behavior": "The element follows the C-alpha or side-chain atom selected for that token.",
+            "evidence": {
+              "status": "confirmed_from_code",
+              "refs": [
+                {
+                  "source_ref": "genie3_feature_code",
+                  "role": "implementation_evidence",
+                  "locator": "create_np_features_from_chain, batchify_np_features, and prepare_tensor_features"
+                },
+                {
+                  "source_ref": "genie3_feature_schema_code",
+                  "role": "schema_evidence",
+                  "locator": "FEATURES, FEATURE_LEVEL, and FEATURE_DTYPE"
+                }
+              ]
+            }
+          },
+          {
+            "id": "atom_validity",
+            "label": "Atom validity",
+            "axis": "token",
+            "shape": "B x N",
+            "fields": [
+              "gt_atom_mask"
+            ],
+            "semantic_role": "Marks whether a ground-truth coordinate is available for each aligned atom-token.",
+            "task_behavior": "Unknown or unavailable positions are masked even though their token slots remain part of the padded layout.",
+            "evidence": {
+              "status": "confirmed_from_code",
+              "refs": [
+                {
+                  "source_ref": "genie3_feature_code",
+                  "role": "implementation_evidence",
+                  "locator": "create_np_features_from_chain, batchify_np_features, and prepare_tensor_features"
+                },
+                {
+                  "source_ref": "genie3_feature_schema_code",
+                  "role": "schema_evidence",
+                  "locator": "FEATURES, FEATURE_LEVEL, and FEATURE_DTYPE"
+                }
+              ]
+            }
+          },
+          {
+            "id": "atom_coordinates",
+            "label": "Atom coordinates",
+            "axis": "token",
+            "shape": "B x N x 3",
+            "fields": [
               "gt_atom_positions"
             ],
-            "semantic_role": "Describes each atom row, whether it is valid, and its available three-dimensional coordinate.",
-            "task_behavior": "Every residue contributes a C-alpha row; selected known residues may contribute additional Atom14 side-chain heavy-atom rows.",
+            "semantic_role": "Stores one xyz coordinate for every aligned C-alpha or side-chain heavy-atom token.",
+            "task_behavior": "Conditioned coordinates are populated when supplied; unknown design coordinates begin as zero placeholders before diffusion initialization.",
             "evidence": {
               "status": "confirmed_from_code",
               "refs": [
@@ -2939,7 +3015,7 @@ export const manifest = {
               "token_frame_lindex_adj",
               "token_frame_rindex_adj"
             ],
-            "semantic_role": "Identifies structurally valid tokens and their neighboring token indices for local-frame construction.",
+            "semantic_role": "Identifies structurally valid atom-tokens and their neighboring token indices for local-frame construction.",
             "task_behavior": "Indices exist in every task; validity masks determine where current or conditioned frames may actually be used.",
             "evidence": {
               "status": "confirmed_from_code",
@@ -2969,7 +3045,7 @@ export const manifest = {
               "cond_struct_frame_mask",
               "cond_interface_mask"
             ],
-            "semantic_role": "States which token identities, coordinates, frames, motif groups, and target-interface positions are exposed to the model.",
+            "semantic_role": "States which atom-token identities, coordinates, frames, motif groups, and target-interface positions are exposed to the model.",
             "task_behavior": "Disabled for unconditional generation, set on known motif positions for scaffolding, and set on target or interface positions for binder design.",
             "evidence": {
               "status": "confirmed_from_code",
@@ -2995,7 +3071,7 @@ export const manifest = {
             "fields": [
               "plddt"
             ],
-            "semantic_role": "Preserves per-token confidence supplied by an input structure when that field is available.",
+            "semantic_role": "Repeats the input structure confidence across the atom-tokens belonging to each sourced residue.",
             "task_behavior": "Relevant to structure-sourced motif and target examples; it is not created by the length-only unconditional path.",
             "evidence": {
               "status": "confirmed_from_code",
@@ -3215,11 +3291,12 @@ export const manifest = {
       {
         "id": "sample_feature_dictionary",
         "scale": "mixed",
-        "semantic_role": "one source-specific unbatched dictionary of token- and atom-indexed features",
-        "shape": "N token fields + A atom fields",
+        "semantic_role": "one source-specific unbatched dictionary whose residue, atom, coordinate, frame, and conditioning fields align to one atom-token axis",
+        "shape": "heterogeneous fields sharing an N atom-token prefix",
         "glyph": "dictionary",
         "carries": [
-          "task-specific token and atom layout",
+          "one aligned row per C-alpha or side-chain heavy-atom token",
+          "task-specific atom-token layout and identities",
           "known sequence and coordinate values",
           "sequence, structure, frame, motif-group, and interface conditioning masks"
         ],
@@ -9738,7 +9815,7 @@ export const manifest = {
           "id": "feature_bundle",
           "name": "features",
           "type": "input",
-          "shape": "B x N token fields + B x A atom fields",
+          "shape": "heterogeneous fields sharing a B x N atom-token prefix",
           "representationRef": "representations.feature_bundle",
           "scale": "mixed",
           "glyph": "dictionary",
@@ -19566,7 +19643,7 @@ export const manifest = {
             "connection": {
               "title": "Model-ready feature batch",
               "role": "shared model interface",
-              "inside": "The assembler pads token and atom fields to common lengths, stacks samples, and prepares the typed tensors consumed by sampling."
+              "inside": "The assembler pads the shared atom-token axis, stacks samples into a batch, and prepares the typed tensors consumed by sampling."
             }
           }
         ],
@@ -19598,7 +19675,7 @@ export const manifest = {
               "connection": {
                 "title": "Model-ready feature batch",
                 "role": "shared model interface",
-                "inside": "The assembler pads token and atom fields to common lengths, stacks samples, and prepares the typed tensors consumed by sampling."
+                "inside": "The assembler pads the shared atom-token axis, stacks samples into a batch, and prepares the typed tensors consumed by sampling."
               }
             }
           },

@@ -490,6 +490,7 @@ class RendererSemanticPseudocodeBrowserTest < Minitest::Test
             .map((item) => item.textContent),
           axes: [...table.querySelectorAll('.representation-field-shape i')]
             .map((item) => item.textContent),
+          legend: document.querySelector('.representation-field-legend')?.textContent || '',
           text: table.textContent.replace(/\s+/g, ' ').trim(),
         };
       JS
@@ -500,13 +501,17 @@ class RendererSemanticPseudocodeBrowserTest < Minitest::Test
       "a heterogeneous dictionary must not display one tensor shape"
     assert_includes feature_table["preview"], "token_mask: tensor"
     assert_equal "feature dictionary", feature_table["meaning"]
-    assert_equal 6, feature_table["rows"]
+    assert_equal 9, feature_table["rows"]
     assert_includes feature_table["keys"], "token_mask"
     assert_includes feature_table["keys"], "gt_atom_positions"
     assert_includes feature_table["keys"], "cond_interface_mask"
     assert_includes feature_table["keys"], "plddt"
-    assert_includes feature_table["axes"], "token"
-    assert_includes feature_table["axes"], "atom"
+    assert_equal ["token"], feature_table["axes"].uniq
+    assert_includes feature_table["legend"], "N padded token axis"
+    refute_includes feature_table["legend"], "A padded atom axis"
+    assert_includes feature_table["text"], "B x N x 37"
+    assert_includes feature_table["text"], "B x N x 4"
+    assert_includes feature_table["text"], "B x N x 3"
     assert_includes feature_table["text"], "Disabled for unconditional generation"
 
     opened = browser.execute(<<~JS)

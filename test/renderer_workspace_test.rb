@@ -40,6 +40,7 @@ class RendererWorkspaceTest < Minitest::Test
     css = read("styles.css")
 
     assert_includes renderer, "function renderRepresentationFieldTable(rep)"
+    assert_includes renderer, "function representationFieldLegendMarkup(groups)"
     assert_includes renderer, "Feature bundle contents"
     assert_includes renderer, 'card.classList.add("has-field-table")'
     assert_includes renderer, 'kind === "scalar" || kind === "dictionary"'

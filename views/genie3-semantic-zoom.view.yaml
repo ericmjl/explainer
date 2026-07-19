@@ -1283,7 +1283,7 @@ boards:
       connection:
         title: Model-ready feature batch
         role: shared model interface
-        inside: The assembler pads token and atom fields to common lengths, stacks samples, and prepares the typed tensors consumed by sampling.
+        inside: The assembler pads the shared atom-token axis, stacks samples into a batch, and prepares the typed tensors consumed by sampling.
 
   - id: unconditional_task_featurization
     title: Unconditional Generation Task Featurization

@@ -3582,6 +3582,14 @@ function readableRefs(refs) {
   return (refs || []).map((ref) => humanizeRef(ref)).join(", ");
 }
 
+function representationFieldLegendMarkup(groups) {
+  const axes = new Set(groups.map((group) => group.axis));
+  const definitions = ["<code>B</code> batch"];
+  if (axes.has("token")) definitions.push("<code>N</code> padded token axis");
+  if (axes.has("atom")) definitions.push("<code>A</code> padded atom axis");
+  return definitions.join(" · ");
+}
+
 function renderRepresentationFieldTable(rep) {
   const groups = Array.isArray(rep?.field_groups) ? rep.field_groups : [];
   if (!groups.length) return "";
@@ -3608,7 +3616,7 @@ function renderRepresentationFieldTable(rep) {
   return `
     <section class="representation-field-section">
       <h3>Feature bundle contents</h3>
-      <p class="representation-field-legend"><code>B</code> batch · <code>N</code> padded token axis · <code>A</code> padded atom axis</p>
+      <p class="representation-field-legend">${representationFieldLegendMarkup(groups)}</p>
       <div class="representation-field-table-wrap">
         <table class="representation-field-table">
           <caption class="sr-only">Fields grouped by axis, shape, and purpose</caption>
