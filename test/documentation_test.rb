@@ -31,7 +31,7 @@ class DocumentationTest < Minitest::Test
   end
 
   def test_markdown_fences_and_yaml_examples_are_valid
-    protocol_paths.each do |path|
+    markdown_paths.each do |path|
       text = File.read(path)
       assert_even text.scan(/^```/).length, relative(path)
       text.scan(/```yaml\n(.*?)```/m).each_with_index do |(body), index|
@@ -148,14 +148,21 @@ class DocumentationTest < Minitest::Test
 
   def test_publication_docs_require_the_allowlisted_dist_boundary
     readme = File.read(File.join(ROOT, "README.md"))
+    deployment = File.read(File.join(ROOT, "docs/deployment.md"))
+    authoring = File.read(File.join(ROOT, "docs/authoring.md"))
     protocol = File.read(File.join(ROOT, "protocol/README.md"))
     agent_guide = File.read(File.join(ROOT, "AGENTS.md"))
 
-    assert_includes readme, "## Current Contract Versions"
-    assert_includes readme, "python3 -m http.server 8096 --directory dist"
-    assert_includes readme, "Never serve the repository root"
-    assert_includes readme, "one shared content fingerprint"
-    assert_includes readme, "ruby scripts/build_pages.rb --source-set genie3"
+    assert_includes readme, "docs/deployment.md"
+    assert_includes readme, "Do not serve the repository root"
+    assert_includes authoring, "## Current contracts"
+    assert_includes deployment, "python3 -m http.server 8096 --directory dist"
+    assert_includes deployment, "Publish that directory, never the repository root"
+    assert_includes deployment, "one shared\ncontent-derived fingerprint"
+    assert_includes deployment, "ruby scripts/build_pages.rb --source-set genie3"
+    assert_includes deployment, "LANG=C.UTF-8"
+    assert_includes deployment, "LC_ALL=C.UTF-8"
+    assert_includes deployment, "allowlisted raster reference\nimages"
     assert_includes protocol, "audience-only dist/"
     assert_includes protocol, "Never deploy or serve the repository root"
     assert_includes protocol, "deployment-consistent"
@@ -163,12 +170,26 @@ class DocumentationTest < Minitest::Test
     assert_includes agent_guide, "test/pages_build_test.rb"
   end
 
-  def test_renderer_docs_cover_direct_touch_pinch_and_trackpad_zoom
+  def test_readme_is_a_model_agnostic_human_entry_point
     readme = File.read(File.join(ROOT, "README.md"))
+    explorer = File.read(File.join(ROOT, "docs/using-the-explorer.md"))
+
+    assert_includes readme, "declarative YAML DSL"
+    assert_includes readme, "deterministic Ruby compiler"
+    assert_includes readme, "docs/using-the-explorer.md"
+    assert_includes readme, "docs/authoring.md"
+    refute_includes readme, "`?arch=af2`"
+    refute_includes readme, "48-block Evoformer"
+    assert_includes explorer, "implementation references"
+    assert_includes explorer, "`implementation_evidence`"
+  end
+
+  def test_renderer_docs_cover_direct_touch_pinch_and_trackpad_zoom
+    explorer = File.read(File.join(ROOT, "docs/using-the-explorer.md"))
     renderer = File.read(File.join(ROOT, "protocol/renderer-architecture.md"))
 
-    assert_includes readme, "two-finger pinch zoom"
-    assert_includes readme, "two-finger trackpad scroll"
+    assert_includes explorer, "two-finger trackpad scroll"
+    assert_includes explorer, "pinch with two fingers"
     assert_includes renderer, "direct-touch two-finger pinch/pan"
     assert_includes renderer, "can begin over a card without activating it"
   end
@@ -227,8 +248,16 @@ class DocumentationTest < Minitest::Test
     Dir[File.join(ROOT, "protocol", "*.md")]
   end
 
+  def guide_paths
+    Dir[File.join(ROOT, "docs", "*.md")]
+  end
+
+  def markdown_paths
+    protocol_paths + guide_paths + [File.join(ROOT, "README.md")]
+  end
+
   def documentation_paths
-    protocol_paths + %w[AGENTS.md CLAUDE.md README.md ROADMAP.md].map { |name| File.join(ROOT, name) }
+    protocol_paths + guide_paths + %w[AGENTS.md CLAUDE.md README.md ROADMAP.md].map { |name| File.join(ROOT, name) }
   end
 
   def relative(path)
