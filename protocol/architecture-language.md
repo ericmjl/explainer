@@ -177,6 +177,33 @@ on every value-site occurrence. A trailing axis of size three is not enough
 evidence: RGB channels and displacement vectors are not coordinate point
 clouds.
 
+A representation that is a dictionary or product rather than one homogeneous
+tensor may declare evidence-bearing `field_groups`. Group code-level keys by
+their shared token or atom axis and explain their common purpose; do not copy
+the same field into multiple groups. Give a named mapping of heterogeneous
+tensors `glyph: dictionary`, so the board does not imply that it is one tensor.
+
+```yaml
+field_groups:
+  - id: task_conditioning
+    label: Task conditioning
+    axis: token
+    shape: B x N
+    fields: [cond_seq_mask, cond_struct_mask, cond_interface_mask]
+    semantic_role: Marks which sequence, structure, and interface facts are exposed.
+    task_behavior: The selected task adapter determines which masks are active.
+    evidence:
+      status: confirmed_from_code
+      refs:
+        - source_ref: implementation_source
+          role: schema_evidence
+          locator: FEATURES
+```
+
+The browser renders these groups as a field table when a value occurrence of
+the representation is selected. The table is a projection of canonical
+representation facts, not independently authored view content.
+
 A value site describes one concrete architectural occurrence of that type:
 
 ```yaml

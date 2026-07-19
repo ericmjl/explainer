@@ -1,0 +1,348 @@
+schema_version: visualization-v0.4
+id: alphafold2_semantic_zoom
+title: AlphaFold 2 Monomer Network
+entry:
+  architecture: architectures/alphafold2.yaml
+root_board: monomer_prediction
+boards:
+  - id: monomer_prediction
+    title: AlphaFold 2 Monomer Network
+    summary: Following the paper's Figure 1e, one target sequence branches into MSA, target-pair, and template evidence; MSA and pair states pass through 48 Evoformer blocks; an eight-block Structure Module predicts a confidence-coloured all-atom structure; the final MSA first row, pair state, and geometry are recycled three times.
+    subject_ref: architecture
+    expansion_depth: 2
+    grid:
+      columns: 8
+      rows: 8
+      column_sizing: content
+      col_gap: 20
+      row_gap: 20
+    nodes:
+      - id: input_sequence
+        ref: value_sites.input_sequence
+        label: input sequence
+        notation: sequence
+        prominence: context
+        treatment: chip
+        density: micro
+        col: 1
+        row: 4
+      - id: genetic_database_search
+        ref: modules.genetic_database_search
+        label: genetic database search
+        prominence: secondary
+        treatment: compact
+        density: compact
+        col: 2
+        row: 2
+      - id: multiple_sequence_alignment
+        ref: value_sites.multiple_sequence_alignment
+        label: MSA
+        notation: M
+        prominence: secondary
+        treatment: compact
+        density: compact
+        glyph: matrix
+        col: 3
+        row: 2
+      - id: sequence_pairing
+        ref: modules.sequence_pairing
+        label: pairing
+        prominence: secondary
+        treatment: chip
+        density: micro
+        col: 2
+        row: 4
+      - id: structure_database_search
+        ref: modules.structure_database_search
+        label: structure database search
+        prominence: secondary
+        treatment: compact
+        density: compact
+        col: 2
+        row: 6
+      - id: structural_templates
+        ref: value_sites.structural_templates
+        label: templates
+        notation: templates
+        prominence: secondary
+        treatment: compact
+        density: compact
+        glyph: volume
+        col: 3
+        row: 6
+      - id: input_embedder
+        ref: modules.input_embedder
+        label: input integration
+        prominence: secondary
+        treatment: compact
+        density: compact
+        col: 4
+        row: 4
+      - id: msa_representation_before_evoformer
+        ref: value_sites.msa_representation_before_evoformer
+        label: MSA representation
+        notation: m
+        prominence: secondary
+        treatment: compact
+        density: compact
+        glyph: matrix
+        col: 4
+        row: 2
+      - id: pair_representation_before_evoformer
+        ref: value_sites.pair_representation_before_evoformer
+        label: pair representation
+        notation: z
+        prominence: secondary
+        treatment: compact
+        density: compact
+        glyph: pair
+        col: 4
+        row: 6
+      - id: evoformer_stack
+        ref: modules.evoformer_stack
+        label: Evoformer · 48 blocks
+        prominence: primary
+        treatment: compact
+        density: compact
+        col: 5
+        row: 4
+      - id: msa_representation_after_evoformer
+        ref: value_sites.msa_representation_after_evoformer
+        label: processed MSA
+        notation: m*
+        role: its target row is retained for recycling
+        prominence: secondary
+        treatment: compact
+        density: compact
+        glyph: matrix
+        col: 6
+        row: 2
+      - id: single_representation_after_evoformer
+        ref: value_sites.single_representation_after_evoformer
+        label: single representation
+        notation: s
+        prominence: secondary
+        treatment: compact
+        density: compact
+        glyph: single
+        col: 6
+        row: 4
+      - id: pair_representation_after_evoformer
+        ref: value_sites.pair_representation_after_evoformer
+        label: pair representation
+        notation: z*
+        prominence: secondary
+        treatment: compact
+        density: compact
+        glyph: pair
+        col: 6
+        row: 6
+      - id: structure_module
+        ref: modules.structure_module
+        label: Structure Module · 8 blocks
+        prominence: primary
+        treatment: compact
+        density: compact
+        col: 7
+        row: 4
+      - id: predicted_structure_output
+        ref: value_sites.predicted_structure_output
+        label: confidence-coloured 3D structure
+        notation: x, pLDDT
+        prominence: primary
+        treatment: compact
+        density: compact
+        glyph: coordinates
+        col: 8
+        row: 4
+      - id: recycling_embedder
+        ref: modules.recycling_embedder
+        label: recycling ×3
+        prominence: secondary
+        treatment: compact
+        density: compact
+        col: 6
+        row: 7
+    elide:
+      - ref: value_sites.target_pair_features
+      - ref: value_sites.recycled_msa_after_iteration
+      - ref: value_sites.recycled_msa_before_iteration
+      - ref: value_sites.recycled_pair_after_iteration
+      - ref: value_sites.recycled_pair_before_iteration
+      - ref: value_sites.recycled_coordinates_after_iteration
+      - ref: value_sites.recycled_coordinates_before_iteration
+      - ref: value_sites.msa_recycle_update
+      - ref: value_sites.pair_recycle_update
+    edge_overrides:
+      - match: { relation_ref: relations.input_sequence_queries_genetic_database }
+        label: sequence
+        connection:
+          title: Sequence to genetic search
+          role: evolutionary evidence query
+          inside: The target sequence launches searches across genetic databases for homologous sequences.
+      - match: { relation_ref: relations.genetic_search_produces_msa }
+        label: homologues
+        connection:
+          title: Multiple-sequence alignment
+          role: evolutionary input
+          inside: Search hits are deduplicated and aligned with the target to expose evolutionary variation across residues.
+      - match: { relation_ref: relations.input_sequence_enters_pairing }
+        label: target features
+        connection:
+          title: Target pairing branch
+          role: pair-state initialization
+          inside: Target residue features and relative residue indices seed the ordered residue-pair representation.
+      - match:
+          relation_path:
+            - relations.sequence_pairing_produces_target_pair_features
+            - relations.target_pair_features_enter_input_embedder
+        label: target pair seed
+        connection:
+          title: Target pair features
+          role: initial pair evidence
+          inside: Two projected target-feature tracks are combined by outer sum and augmented with clipped relative positions.
+      - match: { relation_ref: relations.input_sequence_queries_structure_database }
+        label: sequence-derived query
+        connection:
+          title: Sequence to structure search
+          role: template lookup
+          inside: The target's sequence-derived alignment is used to retrieve and featurize structural homologues.
+      - match: { relation_ref: relations.structure_search_produces_templates }
+        label: structural hits
+        connection:
+          title: Structural templates
+          role: known-structure evidence
+          inside: Template hits contribute residue, torsion, mask, and pair-geometry features to model input integration.
+      - match: { relation_ref: relations.msa_features_enter_input_embedder }
+        label: MSA features
+        connection:
+          title: MSA embedding
+          role: initialize evolutionary state
+          inside: Clustered MSA features initialize the main MSA track while extra sequences update the pair track through a shallow stack.
+      - match: { relation_ref: relations.templates_enter_input_embedder }
+        label: template features
+        connection:
+          title: Template integration
+          role: structure-derived input
+          inside: Template angle features extend the MSA track and template pair features add geometric evidence to the pair track.
+      - match: { relation_ref: relations.input_embedder_initializes_msa_representation }
+        label: m
+        connection:
+          title: Initial MSA representation
+          role: upper Evoformer track
+          inside: Embedded target, aligned-sequence, template-angle, and recycled target-row features form the MSA state.
+      - match: { relation_ref: relations.input_embedder_initializes_pair_representation }
+        label: z
+        connection:
+          title: Initial pair representation
+          role: lower Evoformer track
+          inside: Target pairing, relative positions, template geometry, extra-MSA updates, and recycled geometry form the pair state.
+      - match: { relation_ref: relations.initial_msa_enters_evoformer }
+        label: m
+        connection:
+          title: MSA track enters Evoformer
+          role: evolutionary state
+          inside: Every Evoformer block updates the MSA state and exchanges information with the pair state.
+      - match: { relation_ref: relations.initial_pair_enters_evoformer }
+        label: z
+        connection:
+          title: Pair track enters Evoformer
+          role: residue-pair state
+          inside: Every Evoformer block refines residue-pair relationships through outer-product and triangular updates.
+      - match: { relation_ref: relations.evoformer_produces_processed_msa }
+        label: processed MSA
+        connection:
+          title: Final MSA state
+          role: processed evolutionary representation
+          inside: After 48 blocks, the full MSA state is retained and its first target row becomes part of the recycling state.
+      - match: { relation_ref: relations.evoformer_projects_single_representation }
+        label: target-row projection
+        connection:
+          title: Single representation
+          role: per-residue structure input
+          inside: A learned projection of the final target MSA row produces one 384-channel feature vector per residue.
+      - match: { relation_ref: relations.evoformer_produces_processed_pair }
+        label: processed pair
+        connection:
+          title: Final pair state
+          role: geometric relationship input
+          inside: The refined residue-pair representation carries the relational context used by the Structure Module and recycling.
+      - match: { relation_ref: relations.single_representation_enters_structure_module }
+        label: s
+        connection:
+          title: Singles into Structure Module
+          role: mutable per-residue state
+          inside: The Structure Module repeatedly updates per-residue invariant features and rigid frames from the single representation.
+      - match: { relation_ref: relations.pair_representation_enters_structure_module }
+        label: z
+        connection:
+          title: Pairs into Structure Module
+          role: invariant point attention context
+          inside: The final pair representation biases residue-to-residue reasoning while the module constructs explicit 3D geometry.
+      - match: { relation_ref: relations.structure_module_predicts_structure_and_confidence }
+        label: coordinates + pLDDT
+        connection:
+          title: Confidence-coloured structure
+          role: task boundary output
+          inside: Eight structure blocks refine residue frames, predict torsions, reconstruct all heavy atoms, and attach per-residue confidence.
+      - match:
+          relation_path:
+            - relations.processed_msa_supplies_recycled_first_row
+            - relations.recycled_msa_advances_to_next_iteration
+            - relations.recycled_msa_enters_recycling_embedder
+        label: target MSA row
+        route_side: bottom
+        route_clearance: 26
+        connection:
+          title: Recycle target MSA row
+          role: previous evolutionary state
+          inside: The next execution receives a normalized copy of the previous Evoformer's first MSA row, not the derived single representation.
+      - match:
+          relation_path:
+            - relations.processed_pair_supplies_recycled_pair
+            - relations.recycled_pair_advances_to_next_iteration
+            - relations.recycled_pair_enters_recycling_embedder
+        label: pair state
+        route_side: bottom
+        route_clearance: 40
+        connection:
+          title: Recycle pair representation
+          role: previous relational state
+          inside: The complete final pair representation is normalized before contributing to the next pair input.
+      - match:
+          relation_path:
+            - relations.predicted_structure_supplies_recycled_coordinates
+            - relations.recycled_coordinates_advance_to_next_iteration
+            - relations.recycled_coordinates_enter_recycling_embedder
+        label: pseudo-beta geometry
+        route_side: bottom
+        route_clearance: 54
+        connection:
+          title: Recycle predicted geometry
+          role: previous structure state
+          inside: Previous pseudo-beta distances are binned and projected into a pair-representation update for the next execution.
+      - match:
+          relation_path:
+            - relations.recycling_embedder_produces_msa_update
+            - relations.msa_recycle_update_conditions_input_embedder
+        label: recycled MSA
+        route_side: bottom
+        route_clearance: 66
+        connection:
+          title: Inject recycled MSA state
+          role: additive target-row update
+          inside: The normalized previous target row is added to the newly embedded first MSA row.
+      - match:
+          relation_path:
+            - relations.recycling_embedder_produces_pair_update
+            - relations.pair_recycle_update_conditions_input_embedder
+        label: recycled pair + distances
+        route_side: bottom
+        route_clearance: 82
+        connection:
+          title: Inject recycled pair state
+          role: additive pair update
+          inside: The normalized previous pair state and the embedded previous distance map are added to the new pair representation.
+    notes:
+      - This starting board deliberately follows Nature Figure 1e rather than the released five-model ranking, Amber-relaxation, and artifact-export workflow.
+      - "The paper visually associates recycling with the post-Evoformer single path; the canonical facts preserve the supplement's exact state: final MSA first row, final pair state, and pseudo-beta coordinates."

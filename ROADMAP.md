@@ -82,16 +82,47 @@ Exit criteria are "architecture X renders legibly", not "feature Y exists".
   mismatches. Manifest generation runs full lint first, retains previously
   omitted canonical fields, records deterministic source digests, and supports
   byte-for-byte `--check` verification.
+- **Stage 5 — real architecture coverage** (2026-07): added registry-backed
+  Genie 2 and Genie 3 explainers beside DiT. Their semantic-zoom boards cover
+  diffusion loops, invariant/equivariant feature building, single/pair
+  representation flow, partial atomization, and fixed sampler updates without
+  introducing renderer-owned architecture facts.
+- **Stage 6 — reusable algorithms and honest reduction** (2026-07): added
+  `standard-block-v0.2`, typed relation-bound ports, variants, compiled
+  instance detail boards, and explicit exact/wrapped/reduced conformance.
+  Full IPA and Genie 3's reduced attention can reuse internal anatomy without
+  pretending that architecture-specific reductions are identical.
+- **Stage 7 — evidence-backed comparison** (2026-07): added registered
+  `architecture-comparison-v0.1` lenses, deterministic compiled alignments,
+  independent paired board surfaces, shared inspector selection, and stable
+  comparison URLs. The first lens compares Genie 3 reduced pair attention
+  with full frame-aware IPA.
+- **Stage 8 — synchronized explanation UX** (2026-07): added scoped semantic
+  pseudocode, MathJax-bound variables, board/code hover synchronization,
+  unrelated-component fading, one continuous Details/Pseudocode inspector,
+  question-context handoff, themes, component deep links, representation
+  lanes/glyphs, repeat regions, and direct-touch pinch/pan gestures.
+- **Stage 9 — authoring and publication boundaries** (2026-07): added the
+  architecture-edit-v0.2 prepare/show/apply workflow, source-set verifier,
+  loopback-only review workspace, semantic layout compiler, registry-driven
+  directory, and an allowlisted `dist/` builder that excludes YAML, schemas,
+  tests, and authoring tools from Cloudflare Pages.
 
 ## Next
 
-- **Stage 5 — more architectures**: port RFD3 / Genie3 slices from the
-  earlier branch into registry sets. Use fan-in, shared state, and branching
-  failures to evolve the projection contract rather than adding view-only
-  architecture facts.
-- **Stage 6 — comparison view**: generate a cross-architecture table from
-  the uniform `conditioning` / `state_semantics` / `scale_transitions`
-  fields. This is the highest research value in the design.
+- **Stage 10 — more source-backed architectures**: port AlphaFold-family and
+  RFD3 slices through the existing ownership, reusable-block, pseudocode, and
+  comparison contracts. Evolve the language only when a real architecture
+  exposes a missing concept.
+- **Stage 11 — assisted source-set onboarding**: design a reviewed bootstrap
+  workflow for a method repository, paper, configs, and code evidence. It may
+  use an LLM to propose facts, but deterministic validation and explicit
+  evidence/certainty must remain the write boundary. The current edit
+  transpiler intentionally starts only after a source set is registered.
+- **Stage 12 — optional runtime traces**: explore running a small inference
+  example and attaching captured representations to existing value sites, so
+  users can move from static architecture semantics to an observed execution
+  without making runtime data part of the canonical model definition.
 
 ## Deferred ideas
 
@@ -101,3 +132,6 @@ Exit criteria are "architecture X renders legibly", not "feature Y exists".
   boilerplate.
 - Clickable hops in the contracted-edge popover (jump to the elided module's
   focus panel).
+- A general trace-capture format for tensors, frames, and attention maps; this
+  remains deferred until at least one real method can provide safe,
+  reproducible inference artifacts.

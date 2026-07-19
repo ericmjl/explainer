@@ -146,6 +146,33 @@ class DocumentationTest < Minitest::Test
     assert_includes edit, "### `layout_board` (v0.2)"
   end
 
+  def test_publication_docs_require_the_allowlisted_dist_boundary
+    readme = File.read(File.join(ROOT, "README.md"))
+    protocol = File.read(File.join(ROOT, "protocol/README.md"))
+    agent_guide = File.read(File.join(ROOT, "AGENTS.md"))
+
+    assert_includes readme, "## Current Contract Versions"
+    assert_includes readme, "python3 -m http.server 8096 --directory dist"
+    assert_includes readme, "Never serve the repository root"
+    assert_includes readme, "one shared content fingerprint"
+    assert_includes readme, "ruby scripts/build_pages.rb --source-set genie3"
+    assert_includes protocol, "audience-only dist/"
+    assert_includes protocol, "Never deploy or serve the repository root"
+    assert_includes protocol, "deployment-consistent"
+    assert_includes protocol, "--source-set <id>"
+    assert_includes agent_guide, "test/pages_build_test.rb"
+  end
+
+  def test_renderer_docs_cover_direct_touch_pinch_and_trackpad_zoom
+    readme = File.read(File.join(ROOT, "README.md"))
+    renderer = File.read(File.join(ROOT, "protocol/renderer-architecture.md"))
+
+    assert_includes readme, "two-finger pinch zoom"
+    assert_includes readme, "two-finger trackpad scroll"
+    assert_includes renderer, "direct-touch two-finger pinch/pan"
+    assert_includes renderer, "can begin over a card without activating it"
+  end
+
   def test_visualization_docs_define_execution_backed_repeat_regions
     visualization = File.read(File.join(ROOT, "protocol/visualization-language.md"))
 
@@ -165,6 +192,23 @@ class DocumentationTest < Minitest::Test
     assert_includes visualization, "`row` is an authored grid rank"
     assert_includes visualization, "Projected relation\n`carries` remains the source of truth"
     assert_includes visualization, "Mixed-family flow stays"
+  end
+
+  def test_architecture_docs_define_evidence_bearing_dictionary_field_groups
+    architecture = File.read(File.join(ROOT, "protocol/architecture-language.md"))
+
+    assert_includes architecture, "may declare evidence-bearing `field_groups`"
+    assert_includes architecture, "fields: [cond_seq_mask, cond_struct_mask, cond_interface_mask]"
+    assert_includes architecture, "The browser renders these groups as a field table"
+    assert_includes architecture, "`glyph: dictionary`"
+  end
+
+
+  def test_visualization_docs_define_a_dictionary_glyph_for_named_tensor_mappings
+    visualization = File.read(File.join(ROOT, "protocol/visualization-language.md"))
+
+    assert_includes visualization, "Use `dictionary` when the value is a named mapping"
+    assert_includes visualization, "glyph: scalar|vector|single|matrix|pair|volume|dictionary|coordinates|frames"
   end
 
   def test_visualization_docs_define_opt_in_content_sized_rows

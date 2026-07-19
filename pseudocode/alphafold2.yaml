@@ -1,0 +1,582 @@
+schema_version: pseudocode-v0.2
+id: alphafold2
+title: AlphaFold 2 Monomer Network Trace
+sources:
+  - id: paper
+    source_ref: af2_2021
+  - id: supplement
+    source_ref: af2_2021_supplement
+  - id: data_pipeline_code
+    source_ref: af2_data_pipeline_code
+  - id: model_code
+    source_ref: af2_model_code
+  - id: structure_code
+    source_ref: af2_structure_code
+root_scope: monomer_prediction
+scopes:
+  - id: monomer_prediction
+    label: AlphaFold 2 monomer prediction
+    kind: program
+    parent_ref: pseudocode
+    subject_ref: architecture
+  - id: recycling_loop
+    label: Four shared-weight AlphaFold executions
+    kind: loop
+    parent_ref: scopes.monomer_prediction
+    subject_ref: modules.alphafold_iteration
+    execution_ref: execution.loops.recycling_loop
+symbols:
+  - id: input_sequence
+    name: sequence
+    type: input
+    scope_ref: scopes.monomer_prediction
+    architecture_ref: value_sites.input_sequence
+  - id: multiple_sequence_alignment
+    name: msa_features
+    type: representation
+    scope_ref: scopes.monomer_prediction
+    architecture_ref: value_sites.multiple_sequence_alignment
+  - id: target_pair_features
+    name: target_pair
+    type: representation
+    scope_ref: scopes.monomer_prediction
+    architecture_ref: value_sites.target_pair_features
+  - id: structural_templates
+    name: templates
+    type: representation
+    scope_ref: scopes.monomer_prediction
+    architecture_ref: value_sites.structural_templates
+  - id: predicted_structure_output
+    name: prediction
+    type: output
+    scope_ref: scopes.monomer_prediction
+    architecture_ref: value_sites.predicted_structure_output
+  - id: recycled_msa_before_iteration
+    name: prev_msa_row
+    type: state
+    scope_ref: scopes.recycling_loop
+    architecture_ref: value_sites.recycled_msa_before_iteration
+  - id: recycled_pair_before_iteration
+    name: prev_pair
+    type: state
+    scope_ref: scopes.recycling_loop
+    architecture_ref: value_sites.recycled_pair_before_iteration
+  - id: recycled_coordinates_before_iteration
+    name: prev_pseudo_beta
+    type: state
+    scope_ref: scopes.recycling_loop
+    architecture_ref: value_sites.recycled_coordinates_before_iteration
+  - id: msa_recycle_update
+    name: msa_recycle_update
+    type: conditioning
+    scope_ref: scopes.recycling_loop
+    architecture_ref: value_sites.msa_recycle_update
+  - id: pair_recycle_update
+    name: pair_recycle_update
+    type: conditioning
+    scope_ref: scopes.recycling_loop
+    architecture_ref: value_sites.pair_recycle_update
+  - id: msa_representation_before_evoformer
+    name: msa_state
+    type: state
+    scope_ref: scopes.recycling_loop
+    architecture_ref: value_sites.msa_representation_before_evoformer
+  - id: pair_representation_before_evoformer
+    name: pair_state
+    type: state
+    scope_ref: scopes.recycling_loop
+    architecture_ref: value_sites.pair_representation_before_evoformer
+  - id: msa_representation_after_evoformer
+    name: processed_msa
+    type: state
+    scope_ref: scopes.recycling_loop
+    architecture_ref: value_sites.msa_representation_after_evoformer
+  - id: single_representation_after_evoformer
+    name: single_state
+    type: representation
+    scope_ref: scopes.recycling_loop
+    architecture_ref: value_sites.single_representation_after_evoformer
+  - id: pair_representation_after_evoformer
+    name: processed_pair
+    type: state
+    scope_ref: scopes.recycling_loop
+    architecture_ref: value_sites.pair_representation_after_evoformer
+  - id: recycled_msa_after_iteration
+    name: next_msa_row
+    type: state
+    scope_ref: scopes.recycling_loop
+    architecture_ref: value_sites.recycled_msa_after_iteration
+  - id: recycled_pair_after_iteration
+    name: next_pair
+    type: state
+    scope_ref: scopes.recycling_loop
+    architecture_ref: value_sites.recycled_pair_after_iteration
+  - id: recycled_coordinates_after_iteration
+    name: next_pseudo_beta
+    type: state
+    scope_ref: scopes.recycling_loop
+    architecture_ref: value_sites.recycled_coordinates_after_iteration
+lines:
+  - id: search_genetic_databases
+    text: "msa_features = GeneticDatabaseSearch(sequence)"
+    comment: Search sequence databases, deduplicate homologues, and align them to the target sequence.
+    scope_ref: scopes.monomer_prediction
+    statement_ref: modules.genetic_database_search
+    operation: genetic_database_search
+    inputs: [input_sequence]
+    outputs: [multiple_sequence_alignment]
+    architecture_refs:
+      - relations.input_sequence_queries_genetic_database
+      - relations.genetic_search_produces_msa
+    source_refs:
+      - source: supplement
+        locator: Supplementary Methods 1.2.2
+      - source: data_pipeline_code
+        locator: DataPipeline.process
+    code_bindings:
+      - lexeme: msa_features
+        symbol_ref: multiple_sequence_alignment
+        access: write
+      - lexeme: GeneticDatabaseSearch
+        architecture_ref: modules.genetic_database_search
+        access: call
+      - lexeme: sequence
+        symbol_ref: input_sequence
+        access: read
+  - id: pair_target_sequence
+    text: "target_pair = PairTargetSequence(sequence)"
+    comment: Outer-sum projected target features and add clipped relative residue positions.
+    scope_ref: scopes.monomer_prediction
+    statement_ref: modules.sequence_pairing
+    operation: build_target_pair_seed
+    inputs: [input_sequence]
+    outputs: [target_pair_features]
+    architecture_refs:
+      - relations.input_sequence_enters_pairing
+      - relations.sequence_pairing_produces_target_pair_features
+    source_refs:
+      - source: supplement
+        locator: Supplementary Methods 1.5; Algorithms 3-4
+    code_bindings:
+      - lexeme: target_pair
+        symbol_ref: target_pair_features
+        access: write
+      - lexeme: PairTargetSequence
+        architecture_ref: modules.sequence_pairing
+        access: call
+      - lexeme: sequence
+        symbol_ref: input_sequence
+        access: read
+  - id: search_structure_database
+    text: "templates = StructureDatabaseSearch(sequence)"
+    comment: Retrieve structural homologues and featurize their residue, torsion, mask, and pair geometry.
+    scope_ref: scopes.monomer_prediction
+    statement_ref: modules.structure_database_search
+    operation: structure_database_search
+    inputs: [input_sequence]
+    outputs: [structural_templates]
+    architecture_refs:
+      - relations.input_sequence_queries_structure_database
+      - relations.structure_search_produces_templates
+    source_refs:
+      - source: supplement
+        locator: Supplementary Methods 1.2.3 and 1.2.9
+      - source: data_pipeline_code
+        locator: DataPipeline.process
+    code_bindings:
+      - lexeme: templates
+        symbol_ref: structural_templates
+        access: write
+      - lexeme: StructureDatabaseSearch
+        architecture_ref: modules.structure_database_search
+        access: call
+      - lexeme: sequence
+        symbol_ref: input_sequence
+        access: read
+  - id: run_recycling_loop
+    text: "prediction = RecycleAlphaFold(sequence, msa_features, target_pair, templates, passes=4)"
+    comment: Run one initial shared-weight execution and three feedback executions; return only the final structure and confidence.
+    scope_ref: scopes.monomer_prediction
+    statement_ref: modules.alphafold_iteration
+    callee_scope_ref: scopes.recycling_loop
+    operation: shared_weight_recycling_inference
+    inputs:
+      - input_sequence
+      - multiple_sequence_alignment
+      - target_pair_features
+      - structural_templates
+    outputs: [predicted_structure_output]
+    architecture_refs:
+      - execution.loops.recycling_loop
+      - claims.three_recycles_mean_four_executions
+    source_refs:
+      - source: paper
+        locator: Figure 1e
+      - source: supplement
+        locator: Supplementary Methods 1.4 and 1.10; Algorithms 2 and 30
+    code_bindings:
+      - lexeme: prediction
+        symbol_ref: predicted_structure_output
+        access: write
+      - lexeme: RecycleAlphaFold
+        architecture_ref: modules.alphafold_iteration
+        access: call
+      - lexeme: sequence
+        symbol_ref: input_sequence
+        access: read
+      - lexeme: msa_features
+        symbol_ref: multiple_sequence_alignment
+        access: read
+      - lexeme: target_pair
+        symbol_ref: target_pair_features
+        access: read
+      - lexeme: templates
+        symbol_ref: structural_templates
+        access: read
+  - id: initialize_recycled_msa
+    text: "prev_msa_row = zeros_like_target_row(msa_features)"
+    comment: The first execution receives a zero-valued previous target-row state.
+    scope_ref: scopes.recycling_loop
+    statement_ref: value_sites.recycled_msa_before_iteration
+    operation: initialize_recycled_msa_to_zero
+    inputs: [multiple_sequence_alignment]
+    outputs: [recycled_msa_before_iteration]
+    architecture_refs: []
+    source_refs:
+      - source: supplement
+        locator: Algorithm 2 line 1 and Supplementary Methods 1.10
+    code_bindings:
+      - lexeme: prev_msa_row
+        symbol_ref: recycled_msa_before_iteration
+        access: write
+      - lexeme: msa_features
+        symbol_ref: multiple_sequence_alignment
+        access: read
+  - id: initialize_recycled_pair
+    text: "prev_pair = zeros_like_pair(sequence)"
+    comment: The first execution receives a zero-valued previous pair state.
+    scope_ref: scopes.recycling_loop
+    statement_ref: value_sites.recycled_pair_before_iteration
+    operation: initialize_recycled_pair_to_zero
+    inputs: [input_sequence]
+    outputs: [recycled_pair_before_iteration]
+    architecture_refs: []
+    source_refs:
+      - source: supplement
+        locator: Algorithm 2 line 1 and Supplementary Methods 1.10
+    code_bindings:
+      - lexeme: prev_pair
+        symbol_ref: recycled_pair_before_iteration
+        access: write
+      - lexeme: sequence
+        symbol_ref: input_sequence
+        access: read
+  - id: initialize_recycled_coordinates
+    text: "prev_pseudo_beta = zeros_like_coordinates(sequence)"
+    comment: The first execution receives zero-valued previous pseudo-beta coordinates.
+    scope_ref: scopes.recycling_loop
+    statement_ref: value_sites.recycled_coordinates_before_iteration
+    operation: initialize_recycled_coordinates_to_zero
+    inputs: [input_sequence]
+    outputs: [recycled_coordinates_before_iteration]
+    architecture_refs: []
+    source_refs:
+      - source: supplement
+        locator: Algorithm 2 line 1 and Supplementary Methods 1.10
+    code_bindings:
+      - lexeme: prev_pseudo_beta
+        symbol_ref: recycled_coordinates_before_iteration
+        access: write
+      - lexeme: sequence
+        symbol_ref: input_sequence
+        access: read
+  - id: embed_recycled_state
+    text: "msa_recycle_update, pair_recycle_update = RecyclingEmbedder(prev_msa_row, prev_pair, prev_pseudo_beta)"
+    comment: Normalize previous latent states and add a binned pseudo-beta distance embedding to the pair update.
+    scope_ref: scopes.recycling_loop
+    statement_ref: modules.recycling_embedder
+    operation: embed_recycled_outputs
+    inputs:
+      - recycled_msa_before_iteration
+      - recycled_pair_before_iteration
+      - recycled_coordinates_before_iteration
+    outputs:
+      - msa_recycle_update
+      - pair_recycle_update
+    architecture_refs:
+      - relations.recycled_msa_enters_recycling_embedder
+      - relations.recycled_pair_enters_recycling_embedder
+      - relations.recycled_coordinates_enter_recycling_embedder
+      - relations.recycling_embedder_produces_msa_update
+      - relations.recycling_embedder_produces_pair_update
+    source_refs:
+      - source: supplement
+        locator: Supplementary Methods 1.10; Algorithm 32
+      - source: model_code
+        locator: AlphaFoldIteration; recycling feature embedding
+    code_bindings:
+      - lexeme: msa_recycle_update
+        symbol_ref: msa_recycle_update
+        access: write
+      - lexeme: pair_recycle_update
+        symbol_ref: pair_recycle_update
+        access: write
+      - lexeme: RecyclingEmbedder
+        architecture_ref: modules.recycling_embedder
+        access: call
+      - lexeme: prev_msa_row
+        symbol_ref: recycled_msa_before_iteration
+        access: read
+      - lexeme: prev_pair
+        symbol_ref: recycled_pair_before_iteration
+        access: read
+      - lexeme: prev_pseudo_beta
+        symbol_ref: recycled_coordinates_before_iteration
+        access: read
+  - id: embed_model_inputs
+    text: "msa_state, pair_state = InputEmbedder(sequence, msa_features, target_pair, templates, msa_recycle_update, pair_recycle_update)"
+    comment: Initialize both representation tracks and add the recycled updates to the new target-row and pair states.
+    scope_ref: scopes.recycling_loop
+    statement_ref: modules.input_embedder
+    operation: embed_and_integrate_model_inputs
+    inputs:
+      - input_sequence
+      - multiple_sequence_alignment
+      - target_pair_features
+      - structural_templates
+      - msa_recycle_update
+      - pair_recycle_update
+    outputs:
+      - msa_representation_before_evoformer
+      - pair_representation_before_evoformer
+    architecture_refs:
+      - relations.msa_features_enter_input_embedder
+      - relations.target_pair_features_enter_input_embedder
+      - relations.templates_enter_input_embedder
+      - relations.msa_recycle_update_conditions_input_embedder
+      - relations.pair_recycle_update_conditions_input_embedder
+      - relations.input_embedder_initializes_msa_representation
+      - relations.input_embedder_initializes_pair_representation
+    source_refs:
+      - source: supplement
+        locator: Supplementary Methods 1.4-1.5; Algorithms 2-4
+      - source: model_code
+        locator: EmbeddingsAndEvoformer
+    code_bindings:
+      - lexeme: msa_state
+        symbol_ref: msa_representation_before_evoformer
+        access: write
+      - lexeme: pair_state
+        symbol_ref: pair_representation_before_evoformer
+        access: write
+      - lexeme: InputEmbedder
+        architecture_ref: modules.input_embedder
+        access: call
+      - lexeme: sequence
+        symbol_ref: input_sequence
+        access: read
+      - lexeme: msa_features
+        symbol_ref: multiple_sequence_alignment
+        access: read
+      - lexeme: target_pair
+        symbol_ref: target_pair_features
+        access: read
+      - lexeme: templates
+        symbol_ref: structural_templates
+        access: read
+      - lexeme: msa_recycle_update
+        symbol_ref: msa_recycle_update
+        access: read
+      - lexeme: pair_recycle_update
+        symbol_ref: pair_recycle_update
+        access: read
+  - id: run_evoformer
+    text: "processed_msa, single_state, processed_pair = Evoformer48(msa_state, pair_state)"
+    comment: Forty-eight blocks exchange information between the MSA and pair towers and project the final target row to single features.
+    scope_ref: scopes.recycling_loop
+    statement_ref: modules.evoformer_stack
+    operation: joint_msa_pair_refinement
+    inputs:
+      - msa_representation_before_evoformer
+      - pair_representation_before_evoformer
+    outputs:
+      - msa_representation_after_evoformer
+      - single_representation_after_evoformer
+      - pair_representation_after_evoformer
+    architecture_refs:
+      - relations.initial_msa_enters_evoformer
+      - relations.initial_pair_enters_evoformer
+      - relations.evoformer_produces_processed_msa
+      - relations.evoformer_projects_single_representation
+      - relations.evoformer_produces_processed_pair
+    source_refs:
+      - source: paper
+        locator: Figure 1e and the Evoformer section
+      - source: supplement
+        locator: Supplementary Methods 1.6; Algorithm 6
+      - source: model_code
+        locator: EmbeddingsAndEvoformer
+    code_bindings:
+      - lexeme: processed_msa
+        symbol_ref: msa_representation_after_evoformer
+        access: write
+      - lexeme: single_state
+        symbol_ref: single_representation_after_evoformer
+        access: write
+      - lexeme: processed_pair
+        symbol_ref: pair_representation_after_evoformer
+        access: write
+      - lexeme: Evoformer48
+        architecture_ref: modules.evoformer_stack
+        access: call
+      - lexeme: msa_state
+        symbol_ref: msa_representation_before_evoformer
+        access: read
+      - lexeme: pair_state
+        symbol_ref: pair_representation_before_evoformer
+        access: read
+  - id: predict_structure
+    text: "prediction = StructureModule8(single_state, processed_pair)"
+    comment: Eight equivariant refinement blocks predict residue frames, torsions, all-heavy-atom coordinates, and per-residue confidence.
+    scope_ref: scopes.recycling_loop
+    statement_ref: modules.structure_module
+    operation: equivariant_structure_and_confidence_prediction
+    inputs:
+      - single_representation_after_evoformer
+      - pair_representation_after_evoformer
+    outputs: [predicted_structure_output]
+    architecture_refs:
+      - relations.single_representation_enters_structure_module
+      - relations.pair_representation_enters_structure_module
+      - relations.structure_module_predicts_structure_and_confidence
+    source_refs:
+      - source: paper
+        locator: Figure 1e and the end-to-end structure prediction section
+      - source: supplement
+        locator: Supplementary Methods 1.8 and 1.9.6; Algorithms 20 and 29
+      - source: structure_code
+        locator: StructureModule
+    code_bindings:
+      - lexeme: prediction
+        symbol_ref: predicted_structure_output
+        access: write
+      - lexeme: StructureModule8
+        architecture_ref: modules.structure_module
+        access: call
+      - lexeme: single_state
+        symbol_ref: single_representation_after_evoformer
+        access: read
+      - lexeme: processed_pair
+        symbol_ref: pair_representation_after_evoformer
+        access: read
+  - id: select_next_msa_recycle_state
+    text: "next_msa_row = processed_msa[0]"
+    comment: Select the final target row for recycling; this is distinct from the projected single representation.
+    scope_ref: scopes.recycling_loop
+    statement_ref: relations.processed_msa_supplies_recycled_first_row
+    operation: select_final_target_msa_row
+    inputs: [msa_representation_after_evoformer]
+    outputs: [recycled_msa_after_iteration]
+    architecture_refs:
+      - claims.recycling_uses_msa_pair_and_geometry
+    source_refs:
+      - source: supplement
+        locator: Supplementary Methods 1.10; Algorithm 32
+    code_bindings:
+      - lexeme: next_msa_row
+        symbol_ref: recycled_msa_after_iteration
+        access: write
+      - lexeme: processed_msa
+        symbol_ref: msa_representation_after_evoformer
+        access: read
+  - id: select_next_pair_recycle_state
+    text: "next_pair = processed_pair"
+    scope_ref: scopes.recycling_loop
+    statement_ref: relations.processed_pair_supplies_recycled_pair
+    operation: retain_final_pair_representation
+    inputs: [pair_representation_after_evoformer]
+    outputs: [recycled_pair_after_iteration]
+    architecture_refs: []
+    source_refs:
+      - source: supplement
+        locator: Supplementary Methods 1.10; Algorithm 32
+    code_bindings:
+      - lexeme: next_pair
+        symbol_ref: recycled_pair_after_iteration
+        access: write
+      - lexeme: processed_pair
+        symbol_ref: pair_representation_after_evoformer
+        access: read
+  - id: select_next_coordinate_recycle_state
+    text: "next_pseudo_beta = pseudo_beta(prediction)"
+    scope_ref: scopes.recycling_loop
+    statement_ref: relations.predicted_structure_supplies_recycled_coordinates
+    operation: extract_pseudo_beta_coordinates
+    inputs: [predicted_structure_output]
+    outputs: [recycled_coordinates_after_iteration]
+    architecture_refs: []
+    source_refs:
+      - source: supplement
+        locator: Supplementary Methods 1.10; Algorithm 32
+    code_bindings:
+      - lexeme: next_pseudo_beta
+        symbol_ref: recycled_coordinates_after_iteration
+        access: write
+      - lexeme: prediction
+        symbol_ref: predicted_structure_output
+        access: read
+  - id: advance_msa_recycle_state
+    text: "prev_msa_row = next_msa_row"
+    scope_ref: scopes.recycling_loop
+    statement_ref: relations.recycled_msa_advances_to_next_iteration
+    operation: advance_msa_recycling_state
+    inputs: [recycled_msa_after_iteration]
+    outputs: [recycled_msa_before_iteration]
+    architecture_refs: []
+    source_refs:
+      - source: supplement
+        locator: Algorithm 2 line 22
+    code_bindings:
+      - lexeme: prev_msa_row
+        symbol_ref: recycled_msa_before_iteration
+        access: write
+      - lexeme: next_msa_row
+        symbol_ref: recycled_msa_after_iteration
+        access: read
+  - id: advance_pair_recycle_state
+    text: "prev_pair = next_pair"
+    scope_ref: scopes.recycling_loop
+    statement_ref: relations.recycled_pair_advances_to_next_iteration
+    operation: advance_pair_recycling_state
+    inputs: [recycled_pair_after_iteration]
+    outputs: [recycled_pair_before_iteration]
+    architecture_refs: []
+    source_refs:
+      - source: supplement
+        locator: Algorithm 2 line 22
+    code_bindings:
+      - lexeme: prev_pair
+        symbol_ref: recycled_pair_before_iteration
+        access: write
+      - lexeme: next_pair
+        symbol_ref: recycled_pair_after_iteration
+        access: read
+  - id: advance_coordinate_recycle_state
+    text: "prev_pseudo_beta = next_pseudo_beta"
+    scope_ref: scopes.recycling_loop
+    statement_ref: relations.recycled_coordinates_advance_to_next_iteration
+    operation: advance_coordinate_recycling_state
+    inputs: [recycled_coordinates_after_iteration]
+    outputs: [recycled_coordinates_before_iteration]
+    architecture_refs: []
+    source_refs:
+      - source: supplement
+        locator: Algorithm 2 line 22
+    code_bindings:
+      - lexeme: prev_pseudo_beta
+        symbol_ref: recycled_coordinates_before_iteration
+        access: write
+      - lexeme: next_pseudo_beta
+        symbol_ref: recycled_coordinates_after_iteration
+        access: read
+claims: []

@@ -97,7 +97,7 @@
       "pattern": "^[a-z][a-z0-9_]*$"
     },
     "representationGlyph": {
-      "enum": ["scalar", "vector", "single", "matrix", "pair", "volume", "coordinates", "frames"]
+      "enum": ["scalar", "vector", "single", "matrix", "pair", "volume", "dictionary", "coordinates", "frames"]
     },
     "nonEmptyString": {
       "type": "string",
@@ -366,6 +366,31 @@
           "minItems": 1,
           "items": { "$ref": "#/$defs/nonEmptyString" }
         },
+        "field_groups": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "$ref": "#/$defs/representationFieldGroup" }
+        },
+        "evidence": { "$ref": "#/$defs/evidence" }
+      },
+      "additionalProperties": false
+    },
+    "representationFieldGroup": {
+      "type": "object",
+      "required": ["id", "label", "axis", "shape", "fields", "semantic_role", "evidence"],
+      "properties": {
+        "id": { "$ref": "#/$defs/id" },
+        "label": { "$ref": "#/$defs/nonEmptyString" },
+        "axis": { "enum": ["token", "atom"] },
+        "shape": { "$ref": "#/$defs/nonEmptyString" },
+        "fields": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": { "$ref": "#/$defs/id" }
+        },
+        "semantic_role": { "$ref": "#/$defs/nonEmptyString" },
+        "task_behavior": { "$ref": "#/$defs/nonEmptyString" },
         "evidence": { "$ref": "#/$defs/evidence" }
       },
       "additionalProperties": false

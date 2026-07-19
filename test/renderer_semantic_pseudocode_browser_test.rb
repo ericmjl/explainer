@@ -332,8 +332,10 @@ class RendererSemanticPseudocodeBrowserTest < Minitest::Test
     browser.set_window(width: 1440, height: 1000)
     verify_ipa_token_to_graph_and_back(browser, base)
     verify_high_level_call_drilldown(browser, base)
+    verify_published_reference_panel(browser, base)
     verify_grouped_inspector_and_stable_status(browser, base)
     verify_math_symbols_and_theme(browser, base)
+    verify_touch_pinch_zoom(browser, base)
     verify_mobile_board_trace(browser, base)
   end
 
@@ -431,9 +433,11 @@ class RendererSemanticPseudocodeBrowserTest < Minitest::Test
       browser.execute(<<~JS)
         const builder = document.querySelector('[data-node-id="feature_builder"]');
         const features = document.querySelector('[data-node-id="feature_bundle"]');
-        if (!builder || !features) return null;
+        const sampler = document.querySelector('[data-node-id="diffusion_sampler"]');
+        if (!builder || !features || !sampler) return null;
         return {
           gap: features.offsetLeft - (builder.offsetLeft + builder.offsetWidth),
+          rightGap: sampler.offsetLeft - (features.offsetLeft + features.offsetWidth),
           labels: [...document.querySelectorAll('.arch-edge-label')]
             .map((item) => item.dataset.label || item.textContent),
         };
@@ -441,6 +445,8 @@ class RendererSemanticPseudocodeBrowserTest < Minitest::Test
     end
     assert_operator overview_spacing["gap"], :<=, 70,
       "inspector-only prose should not stretch the feature-builder boundary"
+    assert_operator overview_spacing["rightGap"], :<=, 70,
+      "a sampler schedule label should not stretch the feature-bundle handoff"
     refute_includes overview_spacing["labels"], "partial atomization"
     formatting = browser.execute(<<~JS)
       const line = [...document.querySelectorAll('.semantic-trace-line')]
@@ -461,6 +467,46 @@ class RendererSemanticPseudocodeBrowserTest < Minitest::Test
     assert_operator formatting["commentWords"], :>, 1,
       "comment words should wrap only between complete words"
     assert_equal "Task dependent partial atomization", formatting["label"]
+
+    feature_table = wait_for(browser, "the feature bundle field table") do
+      browser.execute(<<~JS)
+        const featureNode = document.querySelector('[data-node-id="feature_bundle"]');
+        if (!featureNode) return null;
+        if (!featureNode.classList.contains('is-focused')) {
+          featureNode.click();
+          return null;
+        }
+        const table = document.querySelector('.representation-field-table');
+        if (!table) return null;
+        return {
+          badge: featureNode.dataset.fieldCount || '',
+          dictionaryGlyph: featureNode.classList.contains('tensor-dictionary'),
+          hasTensorDimensions: Boolean(featureNode.querySelector('.tensor-dims')),
+          preview: featureNode.querySelector('.dictionary-glyph')?.textContent || '',
+          meaning: featureNode.querySelector('.tensor-meaning')?.textContent || '',
+          rows: table.querySelectorAll('tbody tr').length,
+          keys: [...table.querySelectorAll('.representation-field-names code')]
+            .map((item) => item.textContent),
+          axes: [...table.querySelectorAll('.representation-field-shape i')]
+            .map((item) => item.textContent),
+          text: table.textContent.replace(/\s+/g, ' ').trim(),
+        };
+      JS
+    end
+    assert_equal "25", feature_table["badge"]
+    assert feature_table["dictionaryGlyph"]
+    refute feature_table["hasTensorDimensions"],
+      "a heterogeneous dictionary must not display one tensor shape"
+    assert_includes feature_table["preview"], "token_mask: tensor"
+    assert_equal "feature dictionary", feature_table["meaning"]
+    assert_equal 6, feature_table["rows"]
+    assert_includes feature_table["keys"], "token_mask"
+    assert_includes feature_table["keys"], "gt_atom_positions"
+    assert_includes feature_table["keys"], "cond_interface_mask"
+    assert_includes feature_table["keys"], "plddt"
+    assert_includes feature_table["axes"], "token"
+    assert_includes feature_table["axes"], "atom"
+    assert_includes feature_table["text"], "Disabled for unconditional generation"
 
     opened = browser.execute(<<~JS)
       const line = [...document.querySelectorAll('.semantic-trace-line')]
@@ -485,6 +531,113 @@ class RendererSemanticPseudocodeBrowserTest < Minitest::Test
     assert drilldown["hasReverseStep"]
     assert_equal "Directional DDIM sampling", drilldown["heading"]
     assert_includes drilldown["subtitle"], "repeat ×100"
+
+    cached_dictionary = browser.execute(<<~JS)
+      const node = document.querySelector('[data-node-id="feature_bundle"]');
+      return {
+        dictionaryGlyph: node?.classList.contains('tensor-dictionary') || false,
+        pairGlyph: node?.classList.contains('tensor-pair') || false,
+        meaning: node?.querySelector('.tensor-meaning')?.textContent || '',
+        symbol: node?.querySelector('.tensor-symbol')?.textContent || '',
+      };
+    JS
+    assert cached_dictionary["dictionaryGlyph"]
+    refute cached_dictionary["pairGlyph"]
+    assert_equal "cached feature dictionary", cached_dictionary["meaning"]
+    assert_equal "features", cached_dictionary["symbol"]
+  end
+
+  def verify_published_reference_panel(browser, base)
+    browser.navigate("#{base}?arch=genie3&board=motif_task_featurization")
+    panel = wait_for(browser, "the cited Genie 3 partial-atomization figure") do
+      browser.execute(<<~JS)
+        const layer = document.querySelector('#referencePanelLayer');
+        const figure = layer?.querySelector('[data-reference-panel-id="authors_partial_atomization"]');
+        const image = figure?.querySelector('img');
+        const canvas = document.querySelector('#architectureCanvas');
+        const modules = document.querySelector('#moduleLayer');
+        const zoom = document.querySelector('.canvas-zoom-value')?.textContent || '';
+        if (!figure || !image?.complete || image.naturalWidth <= 0 || zoom === '100%') return null;
+        const layerRect = layer.getBoundingClientRect();
+        const canvasRect = canvas.getBoundingClientRect();
+        const nodeRects = [...modules.querySelectorAll('[data-node-id]')]
+          .map((node) => node.getBoundingClientRect());
+        return {
+          panelCount: layer.querySelectorAll('.reference-panel').length,
+          imageWidth: image.naturalWidth,
+          imageHeight: image.naturalHeight,
+          alt: image.alt,
+          sourceLinked: Boolean(figure.querySelector('.reference-panel-citation[href]')),
+          license: figure.querySelector('.reference-panel-license')?.textContent || '',
+          position: getComputedStyle(layer).position,
+          transform: getComputedStyle(layer).transform,
+          canvasHasRail: canvas.classList.contains('has-reference-panels'),
+          separatedFromGraph: Math.max(...nodeRects.map((rect) => rect.right)) <= layerRect.left + 1,
+          graphInsideCanvas: Math.min(...nodeRects.map((rect) => rect.left)) >= canvasRect.left - 1,
+        };
+      JS
+    end
+
+    assert_equal 1, panel["panelCount"]
+    assert_operator panel["imageWidth"], :>, 0
+    assert_operator panel["imageHeight"], :>, 0
+    assert_includes panel["alt"], "Partial Atomization"
+    assert panel["sourceLinked"]
+    assert_includes panel["license"], "CC BY 4.0"
+    assert_equal "absolute", panel["position"]
+    assert_equal "none", panel["transform"]
+    assert panel["canvasHasRail"]
+    assert panel["separatedFromGraph"], "the cited figure should not cover the architecture grid"
+    assert panel["graphInsideCanvas"], "fitting the cited board should keep every node inside the canvas"
+
+    viewer = wait_for(browser, "the opened reference-figure viewer") do
+      browser.execute(<<~JS)
+        const dialog = document.querySelector('#referenceFigureDialog');
+        if (!dialog.open) {
+          document.querySelector('.reference-panel-image-button')?.click();
+          return null;
+        }
+        const image = document.querySelector('#referenceFigureImage');
+        if (!image.complete || image.naturalWidth <= 0) return null;
+        return {
+          title: document.querySelector('#referenceFigureTitle')?.textContent || '',
+          alt: image.alt,
+          width: image.getBoundingClientRect().width,
+          zoom: document.querySelector('#referenceFigureZoomValue')?.textContent || '',
+          citation: Boolean(document.querySelector('#referenceFigureCitation[href]')),
+        };
+      JS
+    end
+    assert_equal "Authors' partial-atomization diagram", viewer["title"]
+    assert_includes viewer["alt"], "Partial Atomization"
+    assert_equal "100%", viewer["zoom"]
+    assert viewer["citation"]
+
+    zoomed = wait_for(browser, "the enlarged reference figure") do
+      browser.execute(<<~JS)
+        const zoomIn = document.querySelector('[data-reference-zoom="in"]');
+        if (document.querySelector('#referenceFigureZoomValue')?.textContent === '100%') {
+          zoomIn.click();
+          zoomIn.click();
+          return null;
+        }
+        const image = document.querySelector('#referenceFigureImage');
+        return {
+          width: image.getBoundingClientRect().width,
+          zoom: document.querySelector('#referenceFigureZoomValue')?.textContent || '',
+          zoomedClass: document.querySelector('#referenceFigureViewport')?.classList.contains('is-zoomed'),
+        };
+      JS
+    end
+    assert_operator zoomed["width"], :>, viewer["width"]
+    refute_equal "100%", zoomed["zoom"]
+    assert zoomed["zoomedClass"]
+
+    closed = browser.execute(<<~JS)
+      document.querySelector('#referenceFigureClose').click();
+      return !document.querySelector('#referenceFigureDialog').open;
+    JS
+    assert closed
   end
 
   def verify_mobile_board_trace(browser, base)
@@ -641,6 +794,61 @@ class RendererSemanticPseudocodeBrowserTest < Minitest::Test
       switcher.dispatchEvent(new Event('change', { bubbles: true }));
       return true;
     JS
+  end
+
+  def verify_touch_pinch_zoom(browser, base)
+    browser.set_window(width: 1440, height: 1000)
+    browser.navigate("#{base}?arch=genie3")
+    initial = wait_for(browser, "the touchscreen pinch gesture target") do
+      browser.execute(<<~JS)
+        const canvas = document.querySelector('#architectureCanvas');
+        const node = document.querySelector('[data-node-id="diffusion_sampler"]');
+        const label = document.querySelector('#canvasControls .canvas-zoom-value');
+        if (!canvas || !node || !label) return null;
+        const rect = node.getBoundingClientRect();
+        const y = rect.top + rect.height / 2;
+        const firstX = rect.left + rect.width * 0.35;
+        const secondX = rect.left + rect.width * 0.65;
+        const dispatch = (target, type, pointerId, clientX) => target.dispatchEvent(
+          new PointerEvent(type, {
+            bubbles: true,
+            cancelable: true,
+            pointerId,
+            pointerType: 'touch',
+            isPrimary: pointerId === 41,
+            button: 0,
+            buttons: type === 'pointerup' ? 0 : 1,
+            clientX,
+            clientY: y,
+          }),
+        );
+        const before = Number.parseInt(label.textContent, 10);
+        dispatch(node, 'pointerdown', 41, firstX);
+        dispatch(node, 'pointerdown', 42, secondX);
+        dispatch(canvas, 'pointermove', 42, secondX + 80);
+        dispatch(canvas, 'pointerup', 41, firstX);
+        dispatch(canvas, 'pointerup', 42, secondX + 80);
+        node.click();
+        return { before };
+      JS
+    end
+    result = wait_for(browser, "the touchscreen pinch zoom update") do
+      browser.execute(<<~JS)
+        const canvas = document.querySelector('#architectureCanvas');
+        const label = document.querySelector('#canvasControls .canvas-zoom-value');
+        const after = Number.parseInt(label?.textContent || '', 10);
+        if (!(after > #{Integer(initial["before"])})) return null;
+        return {
+          after,
+          panning: canvas.classList.contains('is-panning'),
+          selected: new URLSearchParams(window.location.search).has('node'),
+        };
+      JS
+    end
+    assert_operator result["after"], :>, initial["before"],
+      "spreading two touches should zoom the main architecture board in"
+    refute result["panning"], "lifting both touches should end the gesture"
+    refute result["selected"], "a pinch beginning on a node must not activate it"
   end
 
   def wait_for(browser, description, timeout: 15)

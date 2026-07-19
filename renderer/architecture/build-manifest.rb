@@ -4,6 +4,7 @@
 require "json"
 require "digest"
 require "fileutils"
+require "optparse"
 require "rbconfig"
 require_relative "../../lib/architecture_comparison_compiler"
 require_relative "../../lib/architecture_coverage"
@@ -17,9 +18,31 @@ require_relative "../../lib/strict_yaml"
 
 ROOT = File.expand_path("../..", __dir__)
 REGISTRY = "architectures/index.yaml"
-GENERATOR_VERSION = "architecture-manifest-builder-v0.4.5"
-CHECK_MODE = ARGV.delete("--check")
-abort "usage: ruby #{__FILE__} [--check]" unless ARGV.empty?
+GENERATOR_VERSION = "architecture-manifest-builder-v0.4.6"
+options = {
+  check: false,
+  output_dir: File.join(ROOT, "renderer/architecture"),
+  source_sets: [],
+}
+parser = OptionParser.new do |opts|
+  opts.banner = "usage: ruby #{__FILE__} [options]"
+  opts.on("--check", "Check generated output without writing") { options[:check] = true }
+  opts.on("--source-set ID", "Compile only this registered source set; repeatable") do |value|
+    options[:source_sets] << value
+  end
+  opts.on("--output-dir PATH", "Write manifests under PATH") do |value|
+    options[:output_dir] = File.expand_path(value, ROOT)
+  end
+end
+begin
+  parser.parse!(ARGV)
+  raise OptionParser::InvalidArgument, "unexpected arguments: #{ARGV.join(' ')}" unless ARGV.empty?
+rescue OptionParser::ParseError => e
+  abort "#{e.message}\n#{parser}"
+end
+CHECK_MODE = options.fetch(:check)
+OUTPUT_DIR = options.fetch(:output_dir)
+REQUESTED_SOURCE_SET_IDS = options.fetch(:source_sets).uniq.freeze
 
 def load_yaml(path)
   StrictYaml.load_file(File.join(ROOT, path))
@@ -162,6 +185,17 @@ def web_ref(path)
   "../../#{path}"
 end
 
+def normalize_reference_panels(board)
+  panels = Array(board["reference_panels"])
+  return board if panels.empty?
+
+  board.merge(
+    "reference_panels" => panels.map do |panel|
+      panel.merge("asset" => web_ref(panel.fetch("asset")))
+    end,
+  )
+end
+
 def bibliography_manifest(bibliography, path)
   {
     "schemaVersion" => bibliography.fetch("schema_version"),
@@ -264,7 +298,7 @@ def build_manifest(config, bibliography, bibliography_path)
     architecture,
     semantic_zoom.fetch("boards"),
     registered_blocks: config.fetch("standard_blocks"),
-  )
+  ).map { |board| normalize_reference_panels(board) }
   boards = if derived_projection
     projector = ArchitectureProjection::Projector.new(architecture)
     compiled_view_boards.map do |board|
@@ -348,8 +382,19 @@ def comparison_source_set_context(config)
   }
 end
 
-validate_all_sources!
 registry = load_yaml(REGISTRY)
+all_source_set_configs = registry.fetch("source_sets")
+available_source_set_ids = all_source_set_configs.map { |config| config.fetch("id") }
+unknown_source_set_ids = REQUESTED_SOURCE_SET_IDS - available_source_set_ids
+unless unknown_source_set_ids.empty?
+  abort "unknown source set#{unknown_source_set_ids.length == 1 ? '' : 's'}: #{unknown_source_set_ids.join(', ')}"
+end
+selected_source_set_configs = if REQUESTED_SOURCE_SET_IDS.empty?
+  validate_all_sources!
+  all_source_set_configs
+else
+  all_source_set_configs.select { |config| REQUESTED_SOURCE_SET_IDS.include?(config.fetch("id")) }
+end
 bibliography_path = registry.fetch("bibliography")
 bibliography = load_yaml(bibliography_path)
 SourceContract.validate!(bibliography)
@@ -367,10 +412,10 @@ write_output = lambda do |path, content|
   end
 end
 
-registry.fetch("source_sets").each do |config|
+selected_source_set_configs.each do |config|
   set_id = config.fetch("id")
   source_set_contexts[set_id] = comparison_source_set_context(config)
-  out = File.join(ROOT, "renderer/architecture/manifest-#{set_id}.js")
+  out = File.join(OUTPUT_DIR, "manifest-#{set_id}.js")
   manifest = build_manifest(config, bibliography, bibliography_path)
   write_output.call(out, "export const manifest = #{JSON.pretty_generate(manifest)};\n")
   index_entries << {
@@ -385,11 +430,17 @@ comparison_registry_path = registry.fetch("comparisons")
 comparison_registry = load_yaml(comparison_registry_path)
 comparison_paths = comparison_registry.fetch("sources")
 comparisons_by_path = comparison_paths.to_h { |path| [path, load_yaml(path)] }
+selected_source_set_ids = selected_source_set_configs.map { |config| config.fetch("id") }
+selected_comparison_paths = comparison_paths.select do |path|
+  comparison = comparisons_by_path.fetch(path)
+  subject_source_sets = comparison.fetch("subjects").values.map { |subject| subject.fetch("source_set") }
+  subject_source_sets.all? { |source_set_id| selected_source_set_ids.include?(source_set_id) }
+end
 comparison_compiler = ArchitectureComparisonCompiler::Compiler.new(
   source_sets: source_set_contexts,
   bibliography_sources: bibliography.fetch("sources"),
 )
-compiled_comparisons = comparison_paths.map do |path|
+compiled_comparisons = selected_comparison_paths.map do |path|
   comparison_compiler.compile(comparisons_by_path.fetch(path)).merge(
     "sourceYaml" => web_ref(path),
   )
@@ -406,9 +457,9 @@ comparison_index = {
     # its YAML lens alone determined the emitted node identities.
     "inputDigests" => input_digests([
       comparison_registry_path,
-      *comparison_paths,
+      *selected_comparison_paths,
       bibliography_path,
-      *registry.fetch("source_sets").flat_map do |source_set|
+      *selected_source_set_configs.flat_map do |source_set|
         [
           source_set.fetch("architecture"),
           source_set.fetch("view"),
@@ -420,7 +471,7 @@ comparison_index = {
   "items" => compiled_comparisons,
 }
 
-index_out = File.join(ROOT, "renderer/architecture/manifest-index.js")
+index_out = File.join(OUTPUT_DIR, "manifest-index.js")
 write_output.call(
   index_out,
   "export const manifestIndex = #{JSON.pretty_generate(index_entries)};\n" \

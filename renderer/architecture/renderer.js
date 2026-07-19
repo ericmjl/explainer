@@ -88,6 +88,7 @@ import {
   semanticTexFallbackParts,
   semanticTexForBinding,
 } from "./semantic-pseudocode.mjs";
+import { pinchViewportBetween } from "./board-surface.mjs";
 import { installThemeSwitcher } from "../../theme-state.mjs";
 
 const pageParams = new URLSearchParams(window.location.search);
@@ -156,6 +157,17 @@ const elements = {
   moduleLayer: document.getElementById("moduleLayer"),
   regionLayer: document.getElementById("boardRegionLayer"),
   edgeLayer: document.getElementById("edgeLayer"),
+  referencePanelLayer: document.getElementById("referencePanelLayer"),
+  referenceFigureDialog: document.getElementById("referenceFigureDialog"),
+  referenceFigureTitle: document.getElementById("referenceFigureTitle"),
+  referenceFigureImage: document.getElementById("referenceFigureImage"),
+  referenceFigureViewport: document.getElementById("referenceFigureViewport"),
+  referenceFigureCaption: document.getElementById("referenceFigureCaption"),
+  referenceFigureCitation: document.getElementById("referenceFigureCitation"),
+  referenceFigureLicense: document.getElementById("referenceFigureLicense"),
+  referenceFigureClose: document.getElementById("referenceFigureClose"),
+  referenceFigureControls: document.getElementById("referenceFigureControls"),
+  referenceFigureZoomValue: document.getElementById("referenceFigureZoomValue"),
   focusPanel: document.querySelector(".focus-panel"),
   focusHeader: document.getElementById("focusHeader"),
   focusEyebrow: document.getElementById("focusEyebrow"),
@@ -206,6 +218,8 @@ let questionMenuTarget = null;
 let questionMenuInvoker = null;
 let questionCopyStatus = null;
 let questionCopyStatusTimer = null;
+let referenceFigureScale = 1;
+let referenceFigurePan = null;
 let questionCopyFallback = null;
 let questionCopyFallbackText = null;
 let questionCopyFallbackInvoker = null;
@@ -258,7 +272,11 @@ const viewport = {
   startClientY: 0,
   startX: 0,
   startY: 0,
+  pointerId: null,
 };
+const canvasTouchPointers = new Map();
+let canvasPinch = null;
+let suppressCanvasClicksUntil = 0;
 
 function render() {
   installThemeSwitcher(document.getElementById("rendererThemeSwitcher"));
@@ -2292,6 +2310,7 @@ function renderBoard() {
   elements.canvas.dataset.boardId = board.id;
   elements.canvas.setAttribute("aria-label", `${board.title} architecture map`);
   elements.canvas.classList.toggle("is-root-board", state.boardStack.length === 1);
+  renderReferencePanels(board);
 
   renderAudienceNavigation();
   state.modelMapDirty = true;
@@ -2347,6 +2366,195 @@ function renderScaleLanes(board) {
     guide.appendChild(label);
     elements.representationLaneLayer.appendChild(guide);
   }
+}
+
+function renderReferencePanels(board) {
+  const panels = Array.isArray(board.reference_panels) ? board.reference_panels : [];
+  elements.referencePanelLayer.replaceChildren();
+  elements.referencePanelLayer.hidden = panels.length === 0;
+  elements.canvas.classList.toggle("has-reference-panels", panels.length > 0);
+
+  for (const panel of panels) {
+    const figure = document.createElement("figure");
+    figure.className = "reference-panel";
+    figure.dataset.referencePanelId = panel.id;
+
+    const heading = document.createElement("div");
+    heading.className = "reference-panel-heading";
+    const eyebrow = document.createElement("span");
+    eyebrow.className = "reference-panel-eyebrow";
+    eyebrow.textContent = "Published reference";
+    const title = document.createElement("strong");
+    title.textContent = panel.title;
+    heading.append(eyebrow, title);
+    figure.appendChild(heading);
+
+    const asset = audienceHref(panel.asset);
+    if (asset) {
+      const imageButton = document.createElement("button");
+      imageButton.type = "button";
+      imageButton.className = "reference-panel-image-button";
+      imageButton.setAttribute("aria-label", `Zoom into reference figure: ${panel.title}`);
+      imageButton.title = `Zoom into ${panel.title}`;
+      const image = document.createElement("img");
+      image.src = asset;
+      image.alt = panel.alt;
+      image.loading = "eager";
+      image.decoding = "async";
+      const zoomCue = document.createElement("span");
+      zoomCue.className = "reference-panel-zoom-cue";
+      zoomCue.setAttribute("aria-hidden", "true");
+      zoomCue.innerHTML = `${magnifyIconMarkup()}<span>Zoom</span>`;
+      imageButton.append(image, zoomCue);
+      imageButton.addEventListener("click", () => openReferenceFigure(panel));
+      figure.appendChild(imageButton);
+    }
+
+    const caption = document.createElement("figcaption");
+    caption.className = "reference-panel-caption";
+    caption.textContent = panel.caption;
+    figure.appendChild(caption);
+
+    const source = bibliographySource(panel.source_ref);
+    const sourceHref = audienceHref(source?.href || source?.url);
+    const citation = document.createElement(sourceHref ? "a" : "span");
+    citation.className = "reference-panel-citation";
+    citation.textContent = [source?.title || panel.source_ref, panel.locator]
+      .filter(Boolean)
+      .join(" · ");
+    if (sourceHref) {
+      citation.href = sourceHref;
+      citation.target = "_blank";
+      citation.rel = "noreferrer";
+    }
+    figure.appendChild(citation);
+
+    const license = document.createElement("small");
+    license.className = "reference-panel-license";
+    license.textContent = panel.license_note;
+    figure.appendChild(license);
+    elements.referencePanelLayer.appendChild(figure);
+  }
+}
+
+const REFERENCE_FIGURE_MIN_SCALE = 1;
+const REFERENCE_FIGURE_MAX_SCALE = 4;
+const REFERENCE_FIGURE_ZOOM_STEP = 1.25;
+
+function referenceFigureBaseWidth() {
+  const available = Math.max(240, elements.referenceFigureViewport.clientWidth - 48);
+  return Math.min(elements.referenceFigureImage.naturalWidth || available, available);
+}
+
+function setReferenceFigureScale(nextScale, anchor = null) {
+  const viewport = elements.referenceFigureViewport;
+  const image = elements.referenceFigureImage;
+  const previousWidth = Math.max(viewport.scrollWidth, viewport.clientWidth);
+  const previousHeight = Math.max(viewport.scrollHeight, viewport.clientHeight);
+  const rect = viewport.getBoundingClientRect();
+  const anchorX = anchor ? anchor.clientX - rect.left : viewport.clientWidth / 2;
+  const anchorY = anchor ? anchor.clientY - rect.top : viewport.clientHeight / 2;
+  const contentX = (viewport.scrollLeft + anchorX) / previousWidth;
+  const contentY = (viewport.scrollTop + anchorY) / previousHeight;
+
+  referenceFigureScale = clamp(
+    nextScale,
+    REFERENCE_FIGURE_MIN_SCALE,
+    REFERENCE_FIGURE_MAX_SCALE,
+  );
+  image.style.width = `${Math.round(referenceFigureBaseWidth() * referenceFigureScale)}px`;
+  elements.referenceFigureZoomValue.textContent = `${Math.round(referenceFigureScale * 100)}%`;
+  viewport.classList.toggle("is-zoomed", referenceFigureScale > 1);
+
+  window.requestAnimationFrame(() => {
+    viewport.scrollLeft = contentX * Math.max(viewport.scrollWidth, viewport.clientWidth) - anchorX;
+    viewport.scrollTop = contentY * Math.max(viewport.scrollHeight, viewport.clientHeight) - anchorY;
+  });
+}
+
+function resetReferenceFigureZoom() {
+  referenceFigureScale = 1;
+  elements.referenceFigureViewport.scrollLeft = 0;
+  elements.referenceFigureViewport.scrollTop = 0;
+  setReferenceFigureScale(1);
+}
+
+function openReferenceFigure(panel) {
+  const asset = audienceHref(panel.asset);
+  if (!asset) return;
+  const source = bibliographySource(panel.source_ref);
+  const sourceHref = audienceHref(source?.href || source?.url);
+
+  elements.referenceFigureTitle.textContent = panel.title;
+  elements.referenceFigureCaption.textContent = panel.caption;
+  elements.referenceFigureLicense.textContent = panel.license_note;
+  elements.referenceFigureCitation.textContent = [source?.title || panel.source_ref, panel.locator]
+    .filter(Boolean)
+    .join(" · ");
+  if (sourceHref) {
+    elements.referenceFigureCitation.href = sourceHref;
+    elements.referenceFigureCitation.hidden = false;
+  } else {
+    elements.referenceFigureCitation.removeAttribute("href");
+    elements.referenceFigureCitation.hidden = true;
+  }
+  elements.referenceFigureImage.alt = panel.alt;
+  elements.referenceFigureImage.src = asset;
+  elements.referenceFigureImage.onload = resetReferenceFigureZoom;
+  if (!elements.referenceFigureDialog.open) elements.referenceFigureDialog.showModal();
+  if (elements.referenceFigureImage.complete && elements.referenceFigureImage.naturalWidth > 0) {
+    resetReferenceFigureZoom();
+  }
+  elements.referenceFigureViewport.focus({ preventScroll: true });
+}
+
+function closeReferenceFigure() {
+  if (elements.referenceFigureDialog.open) elements.referenceFigureDialog.close();
+}
+
+function onReferenceFigureControl(event) {
+  const action = event.target.closest("[data-reference-zoom]")?.dataset.referenceZoom;
+  if (!action) return;
+  if (action === "in") setReferenceFigureScale(referenceFigureScale * REFERENCE_FIGURE_ZOOM_STEP);
+  if (action === "out") setReferenceFigureScale(referenceFigureScale / REFERENCE_FIGURE_ZOOM_STEP);
+  if (action === "reset") resetReferenceFigureZoom();
+}
+
+function onReferenceFigureWheel(event) {
+  event.preventDefault();
+  const factor = Math.exp(-clamp(event.deltaY, -120, 120) * 0.003);
+  setReferenceFigureScale(referenceFigureScale * factor, event);
+}
+
+function beginReferenceFigurePan(event) {
+  if (event.button !== 0 || referenceFigureScale <= 1) return;
+  referenceFigurePan = {
+    pointerId: event.pointerId,
+    clientX: event.clientX,
+    clientY: event.clientY,
+    scrollLeft: elements.referenceFigureViewport.scrollLeft,
+    scrollTop: elements.referenceFigureViewport.scrollTop,
+  };
+  elements.referenceFigureViewport.setPointerCapture(event.pointerId);
+  elements.referenceFigureViewport.classList.add("is-panning");
+}
+
+function moveReferenceFigurePan(event) {
+  if (!referenceFigurePan || event.pointerId !== referenceFigurePan.pointerId) return;
+  event.preventDefault();
+  elements.referenceFigureViewport.scrollLeft = referenceFigurePan.scrollLeft
+    - (event.clientX - referenceFigurePan.clientX);
+  elements.referenceFigureViewport.scrollTop = referenceFigurePan.scrollTop
+    - (event.clientY - referenceFigurePan.clientY);
+}
+
+function endReferenceFigurePan(event) {
+  if (!referenceFigurePan || event.pointerId !== referenceFigurePan.pointerId) return;
+  if (elements.referenceFigureViewport.hasPointerCapture(event.pointerId)) {
+    elements.referenceFigureViewport.releasePointerCapture(event.pointerId);
+  }
+  referenceFigurePan = null;
+  elements.referenceFigureViewport.classList.remove("is-panning");
 }
 
 let elkInstance = null;
@@ -2508,7 +2716,7 @@ function fitViewport(width, height) {
 function boardViewportAvailableSize(canvasRect, baseX, baseY) {
   const lowerChromeReserve = modelMap?.offsetParent ? modelMap.offsetHeight + 42 : 74;
   return {
-    availableW: Math.max(120, canvasRect.width - baseX * 2),
+    availableW: Math.max(120, elements.moduleLayer.offsetWidth || canvasRect.width - baseX * 2),
     availableH: Math.max(120, canvasRect.height - baseY - lowerChromeReserve),
   };
 }
@@ -2841,6 +3049,7 @@ function modelMapNodeGeometry(board, nodes) {
         matrix: [76, 70],
         pair: [70, 70],
         volume: [84, 66],
+        dictionary: [90, 66],
         coordinates: [82, 70],
         frames: [88, 72],
       };
@@ -3090,6 +3299,20 @@ function renderModelMapTensorShape(entry) {
     return group;
   }
 
+  if (entry.glyph === "dictionary") {
+    [0.28, 0.5, 0.72].forEach((fraction) => {
+      group.appendChild(modelMapSvgElement("line", {
+        class: "model-map-dictionary-row",
+        x1: frontLeft + width * 0.18,
+        y1: frontTop + height * fraction,
+        x2: frontLeft + width * 0.82,
+        y2: frontTop + height * fraction,
+        "vector-effect": "non-scaling-stroke",
+      }));
+    });
+    return group;
+  }
+
   if (entry.glyph !== "scalar") {
     [0.33, 0.66].forEach((fraction) => {
       group.appendChild(modelMapSvgElement("line", {
@@ -3267,27 +3490,46 @@ function renderRepresentationNode(node) {
   const symbol = node.notation
     ? symbolMarkup(null, node.notation)
     : symbolMarkup(symbolDefinition, fullLabel);
-  const dims = kind === "scalar" ? "" : shapeDimsLabel(shape);
+  const dims = kind === "scalar" || kind === "dictionary" ? "" : shapeDimsLabel(shape);
   const displayMeaning = representationDisplayMeaning(node, rep, fullLabel);
   const semanticGlyphLabel = kind === "coordinates"
     ? "coordinate point cloud"
     : kind === "frames"
       ? "local coordinate frames"
-      : null;
+      : kind === "dictionary"
+        ? "dictionary of named tensors"
+        : null;
   const card = document.createElement("button");
   card.type = "button";
   card.className = `arch-rep tensor-${kind} scale-${scale} prominence-${prominence}`;
+  const fieldGroups = Array.isArray(rep?.field_groups) ? rep.field_groups : [];
+  if (fieldGroups.length) {
+    card.classList.add("has-field-table");
+    card.dataset.fieldCount = String(
+      fieldGroups.reduce((count, group) => count + (group.fields?.length || 0), 0),
+    );
+  }
   applyFlowFamily(card, node.flow_family, node.flow_families);
   card.dataset.nodeId = node.id;
   const canonicalRef = canonicalNodeRef(node);
   if (canonicalRef) card.dataset.canonicalRef = canonicalRef;
   card.setAttribute(
     "aria-label",
-    [fullLabel, semanticGlyphLabel, displayMeaning, shape].filter(Boolean).join(" — "),
+    [
+      fullLabel,
+      semanticGlyphLabel,
+      displayMeaning,
+      shape,
+      fieldGroups.length ? "select to inspect the field table" : null,
+    ].filter(Boolean).join(" — "),
   );
   placeNode(card, node);
   const symbolHtml = `<strong class="tensor-symbol">${symbol}</strong>`;
-  const box = (inner) => `<span class="tensor-box">${tensorGlyphSvg(kind)}${inner}</span>`;
+  const dictionaryPreviewFields = fieldGroups
+    .map((group) => group.fields?.[0])
+    .filter(Boolean)
+    .slice(0, 3);
+  const box = (inner) => `<span class="tensor-box">${tensorGlyphSvg(kind, dictionaryPreviewFields)}${inner}</span>`;
   card.innerHTML = `
     ${symbolHtml}
     ${box(dims ? `<small class="tensor-dims">${dims}</small>` : "")}
@@ -3340,6 +3582,44 @@ function readableRefs(refs) {
   return (refs || []).map((ref) => humanizeRef(ref)).join(", ");
 }
 
+function renderRepresentationFieldTable(rep) {
+  const groups = Array.isArray(rep?.field_groups) ? rep.field_groups : [];
+  if (!groups.length) return "";
+  const rows = groups.map((group) => `
+    <tr>
+      <th scope="row">
+        <strong>${escapeHtml(group.label)}</strong>
+        <span class="representation-field-names">
+          ${(group.fields || []).map((field) => `<code>${escapeHtml(field)}</code>`).join("")}
+        </span>
+      </th>
+      <td>
+        <span class="representation-field-shape">
+          <i>${escapeHtml(group.axis)}</i>
+          <code>${escapeHtml(group.shape)}</code>
+        </span>
+        <span>${escapeHtml(group.semantic_role)}</span>
+        ${group.task_behavior
+          ? `<small><strong>Across tasks:</strong> ${escapeHtml(group.task_behavior)}</small>`
+          : ""}
+      </td>
+    </tr>
+  `).join("");
+  return `
+    <section class="representation-field-section">
+      <h3>Feature bundle contents</h3>
+      <p class="representation-field-legend"><code>B</code> batch · <code>N</code> padded token axis · <code>A</code> padded atom axis</p>
+      <div class="representation-field-table-wrap">
+        <table class="representation-field-table">
+          <caption class="sr-only">Fields grouped by axis, shape, and purpose</caption>
+          <thead><tr><th>Feature family and keys</th><th>Shape and use</th></tr></thead>
+          <tbody>${rows}</tbody>
+        </table>
+      </div>
+    </section>
+  `;
+}
+
 function repFocusHtml(node, rep) {
   const shape = node.shape || rep?.shape || "";
   const semantics = stateSemanticsFor(node, rep);
@@ -3355,6 +3635,7 @@ function repFocusHtml(node, rep) {
         ${valueSiteInterface?.producerRefs?.length ? `<dt>produced by</dt><dd>${escapeHtml(readableRefs(valueSiteInterface.producerRefs))}</dd>` : ""}
         ${valueSiteInterface?.consumerRefs?.length ? `<dt>consumed by</dt><dd>${escapeHtml(readableRefs(valueSiteInterface.consumerRefs))}</dd>` : ""}
       </dl>
+      ${renderRepresentationFieldTable(rep)}
       ${semantics?.notes?.length ? semantics.notes.map((note) => `<p>${escapeHtml(note)}</p>`).join("") : ""}
       ${carries.length ? `<h3>Carries</h3><ul class="claim-list">${carries.map((item) => `<li>${escapeHtml(item)}</li>`).join("")}</ul>` : ""}
       ${node.template_fact_ref ? `<p><strong>Reusable template:</strong> <code>${escapeHtml(node.template_fact_ref)}</code></p>` : ""}
@@ -5027,6 +5308,7 @@ function ensurePanZoom() {
   elements.canvas.addEventListener("pointermove", onCanvasPointerMove);
   elements.canvas.addEventListener("pointerup", endPan);
   elements.canvas.addEventListener("pointercancel", endPan);
+  elements.canvas.addEventListener("click", onCanvasClickCapture, true);
 }
 
 function onCanvasControlClick(event) {
@@ -5070,22 +5352,117 @@ function normalizedWheelDelta(event) {
 }
 
 function onCanvasPointerDown(event) {
+  if (event.pointerType === "touch") {
+    if (event.target.closest(".board-chrome")) return;
+    canvasTouchPointers.set(event.pointerId, {
+      clientX: event.clientX,
+      clientY: event.clientY,
+    });
+    if (canvasTouchPointers.size === 2) {
+      event.preventDefault();
+      beginCanvasPinch(event);
+      return;
+    }
+    if (canvasTouchPointers.size > 2) return;
+    if (event.target.closest(".arch-node, .arch-rep, .edge-hit")) return;
+    beginCanvasPan(event);
+    return;
+  }
   if (event.button !== 0 && event.button !== 1) return;
   if (event.target.closest(".arch-node, .arch-rep, .edge-hit, .board-chrome")) return;
+  beginCanvasPan(event);
+}
+
+function beginCanvasPan(event) {
   if (state.selection) focusOverview();
   hideCanvasTooltip();
   viewport.isPanning = true;
+  viewport.pointerId = event.pointerId;
   state.userMovedViewport = true;
   viewport.startClientX = event.clientX;
   viewport.startClientY = event.clientY;
   viewport.startX = viewport.x;
   viewport.startY = viewport.y;
   elements.canvas.classList.add("is-panning");
-  elements.canvas.setPointerCapture(event.pointerId);
+  captureCanvasPointer(event.pointerId);
+}
+
+function canvasPoint(pointer) {
+  const rect = elements.canvas.getBoundingClientRect();
+  return {
+    x: pointer.clientX - rect.left,
+    y: pointer.clientY - rect.top,
+  };
+}
+
+function captureCanvasPointer(pointerId) {
+  try {
+    elements.canvas.setPointerCapture(pointerId);
+  } catch (_error) {
+    // Pointer capture is an optimization; bubbling events remain sufficient.
+  }
+}
+
+function releaseCanvasPointer(pointerId) {
+  try {
+    if (elements.canvas.hasPointerCapture(pointerId)) {
+      elements.canvas.releasePointerCapture(pointerId);
+    }
+  } catch (_error) {
+    // The browser may implicitly release a touch before pointerup is handled.
+  }
+}
+
+function beginCanvasPinch(event) {
+  const entries = Array.from(canvasTouchPointers.entries()).slice(0, 2);
+  if (entries.length < 2) return;
+  if (state.selection) focusOverview();
+  closeQuestionMenu({ restoreFocus: true });
+  hideCanvasTooltip();
+  viewport.isPanning = false;
+  viewport.pointerId = null;
+  canvasPinch = {
+    pointerIds: entries.map(([pointerId]) => pointerId),
+    viewport: { ...viewport },
+    points: entries.map(([, pointer]) => canvasPoint(pointer)),
+  };
+  suppressCanvasClicksUntil = Number.POSITIVE_INFINITY;
+  state.userMovedViewport = true;
+  elements.canvas.classList.add("is-panning");
+  canvasPinch.pointerIds.forEach(captureCanvasPointer);
 }
 
 function onCanvasPointerMove(event) {
+  if (event.pointerType === "touch" && canvasTouchPointers.has(event.pointerId)) {
+    canvasTouchPointers.set(event.pointerId, {
+      clientX: event.clientX,
+      clientY: event.clientY,
+    });
+    if (canvasPinch) {
+      const currentPoints = canvasPinch.pointerIds.map(
+        (pointerId) => canvasTouchPointers.get(pointerId),
+      );
+      if (currentPoints.every(Boolean)) {
+        event.preventDefault();
+        const next = pinchViewportBetween(
+          canvasPinch.viewport,
+          canvasPinch.points,
+          currentPoints.map(canvasPoint),
+          {
+            x: elements.moduleLayer.offsetLeft,
+            y: elements.moduleLayer.offsetTop,
+          },
+        );
+        viewport.x = next.x;
+        viewport.y = next.y;
+        viewport.scale = next.scale;
+        applyViewport();
+      }
+      return;
+    }
+  }
   if (!viewport.isPanning) return;
+  if (event.pointerId != null && event.pointerId !== viewport.pointerId) return;
   event.preventDefault();
   viewport.x = viewport.startX + event.clientX - viewport.startClientX;
   viewport.y = viewport.startY + event.clientY - viewport.startClientY;
@@ -5093,12 +5470,42 @@ function onCanvasPointerMove(event) {
 }
 
 function endPan(event) {
+  if (event?.pointerType === "touch" || canvasTouchPointers.has(event?.pointerId)) {
+    canvasTouchPointers.delete(event.pointerId);
+    releaseCanvasPointer(event.pointerId);
+    if (canvasPinch) {
+      suppressCanvasClicksUntil = Date.now() + 450;
+      if (canvasTouchPointers.size >= 2) {
+        beginCanvasPinch(event);
+        return;
+      }
+      canvasPinch = null;
+      if (canvasTouchPointers.size === 1) {
+        const [pointerId, pointer] = canvasTouchPointers.entries().next().value;
+        viewport.isPanning = true;
+        viewport.pointerId = pointerId;
+        viewport.startClientX = pointer.clientX;
+        viewport.startClientY = pointer.clientY;
+        viewport.startX = viewport.x;
+        viewport.startY = viewport.y;
+        return;
+      }
+    }
+    if (!viewport.isPanning || viewport.pointerId !== event.pointerId) return;
+  }
   if (!viewport.isPanning) return;
   viewport.isPanning = false;
+  viewport.pointerId = null;
   elements.canvas.classList.remove("is-panning");
-  if (event?.pointerId && elements.canvas.hasPointerCapture(event.pointerId)) {
-    elements.canvas.releasePointerCapture(event.pointerId);
-  }
+  if (event?.pointerId != null) releaseCanvasPointer(event.pointerId);
+}
+
+function onCanvasClickCapture(event) {
+  if (Date.now() >= suppressCanvasClicksUntil) return;
+  if (event.target.closest(".board-chrome")) return;
+  event.preventDefault();
+  event.stopPropagation();
+  event.stopImmediatePropagation();
 }
 
 function zoomAtCanvasCenter(factor) {
@@ -5184,4 +5591,20 @@ if (typeof ResizeObserver === "function") {
     refreshResponsiveGeometry();
   }).observe(elements.canvas);
 }
+elements.referenceFigureClose.addEventListener("click", closeReferenceFigure);
+elements.referenceFigureControls.addEventListener("click", onReferenceFigureControl);
+elements.referenceFigureViewport.addEventListener("wheel", onReferenceFigureWheel, { passive: false });
+elements.referenceFigureViewport.addEventListener("pointerdown", beginReferenceFigurePan);
+elements.referenceFigureViewport.addEventListener("pointermove", moveReferenceFigurePan);
+elements.referenceFigureViewport.addEventListener("pointerup", endReferenceFigurePan);
+elements.referenceFigureViewport.addEventListener("pointercancel", endReferenceFigurePan);
+elements.referenceFigureDialog.addEventListener("click", (event) => {
+  if (event.target === elements.referenceFigureDialog) closeReferenceFigure();
+});
+elements.referenceFigureDialog.addEventListener("close", () => {
+  referenceFigurePan = null;
+  elements.referenceFigureViewport.classList.remove("is-panning");
+  resetReferenceFigureZoom();
+});
 render();
+window.__architectureRendererBoot?.ready?.();

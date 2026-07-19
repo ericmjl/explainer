@@ -5,6 +5,7 @@ export const REPRESENTATION_GLYPH_KINDS = Object.freeze([
   "matrix",
   "pair",
   "volume",
+  "dictionary",
   "coordinates",
   "frames",
 ]);
@@ -145,7 +146,32 @@ function frameGlyphSvg() {
     </svg>`;
 }
 
-export function tensorGlyphSvg(kind) {
+function escapeSvgText(value) {
+  return String(value)
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&apos;");
+}
+
+function dictionaryGlyphSvg(fieldNames = []) {
+  const labels = [...fieldNames, "…"].slice(0, 4);
+  const rows = labels.map((label, index) => {
+    const y = 16 + index * 13;
+    const rendered = label === "…" ? label : `${label}: tensor`;
+    return `<text class="dictionary-glyph-row" x="17" y="${y}">${escapeSvgText(rendered)}</text>`;
+  }).join("");
+  return `
+    <svg class="tensor-geometry dictionary-glyph" viewBox="0 0 142 64" aria-hidden="true">
+      <text class="dictionary-glyph-brace" x="4" y="41">{</text>
+      ${rows}
+      <text class="dictionary-glyph-brace" x="130" y="41">}</text>
+    </svg>`;
+}
+
+export function tensorGlyphSvg(kind, fieldNames = []) {
+  if (kind === "dictionary") return dictionaryGlyphSvg(fieldNames);
   if (kind === "coordinates") return coordinateGlyphSvg();
   if (kind === "frames") return frameGlyphSvg();
   return gridCellsSvg(kind);

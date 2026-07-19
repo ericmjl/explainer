@@ -54,6 +54,34 @@ class SourceContractTest < Minitest::Test
     assert_diagnostic diagnostics, "schema_unknown_property", /nodes/
   end
 
+  def test_reference_panels_are_cited_raster_presentation_not_graph_nodes
+    view = deep_copy(@view)
+    board = view.fetch("boards").first
+    board["reference_panels"] = [{
+      "id" => "authors_diagram",
+      "title" => "Authors' diagram",
+      "asset" => "assets/reference-panels/example/figure_1.png",
+      "alt" => "A diagram explaining the architecture.",
+      "caption" => "A board-specific reading of the published diagram.",
+      "source_ref" => "generic_method_note",
+      "locator" => "Figure 1",
+      "license_note" => "Used with attribution.",
+      "position" => "right",
+    }]
+
+    assert_empty SourceContract.errors(view)
+
+    invalid = deep_copy(view)
+    panel = invalid.fetch("boards").first.fetch("reference_panels").first
+    panel["asset"] = "references/source.svg"
+    panel["position"] = "inside_grid"
+    panel.delete("license_note")
+    diagnostics = SourceContract.errors(invalid)
+    assert_diagnostic diagnostics, "schema_pattern", /reference_panels\[0\]\.asset/
+    assert_diagnostic diagnostics, "schema_enum", /reference_panels\[0\]\.position/
+    assert_diagnostic diagnostics, "schema_required", /reference_panels\[0\]/
+  end
+
   def test_rejects_unknown_fields_and_status_typos
     architecture = deep_copy(@architecture)
     architecture.fetch("modules").first["ouputs"] = []
@@ -175,8 +203,10 @@ class SourceContractTest < Minitest::Test
 
   def test_geometry_glyphs_are_valid_on_representations_and_view_nodes
     architecture = load_yaml("architectures/genie3.yaml")
+    feature_bundle = architecture.fetch("representations").find { |rep| rep.fetch("id") == "feature_bundle" }
     coordinates = architecture.fetch("representations").find { |rep| rep.fetch("id") == "token_coordinates" }
     frames = architecture.fetch("representations").find { |rep| rep.fetch("id") == "token_frames" }
+    assert_equal "dictionary", feature_bundle.fetch("glyph")
     assert_equal "coordinates", coordinates.fetch("glyph")
     assert_equal "frames", frames.fetch("glyph")
     assert_empty SourceContract.errors(architecture)
@@ -189,6 +219,46 @@ class SourceContractTest < Minitest::Test
     view.fetch("boards").first.fetch("nodes").first["glyph"] = "rigid_transform"
     assert_diagnostic SourceContract.errors(architecture), "schema_enum", /representations\[2\].glyph/
     assert_diagnostic SourceContract.errors(view), "schema_enum", /boards\[0\].nodes\[0\].glyph/
+  end
+
+  def test_dictionary_representations_accept_evidence_bearing_field_groups
+    architecture = deep_copy(@architecture)
+    representation = architecture.fetch("representations").first
+    representation["field_groups"] = [{
+      "id" => "task_conditioning",
+      "label" => "Task conditioning",
+      "axis" => "token",
+      "shape" => "B x N",
+      "fields" => %w[cond_seq_mask cond_struct_mask cond_interface_mask],
+      "semantic_role" => "Marks which sequence, structure, and interface facts are exposed.",
+      "task_behavior" => "The selected task adapter determines which masks are active.",
+      "evidence" => deep_copy(representation.fetch("evidence")),
+    }]
+
+    assert_empty SourceContract.errors(architecture)
+
+    invalid = deep_copy(architecture)
+    group = invalid.fetch("representations").first.fetch("field_groups").first
+    group["axis"] = "sample"
+    group["fields"] << group.fetch("fields").first
+    group.delete("evidence")
+    group["color"] = "blue"
+    diagnostics = SourceContract.errors(invalid)
+    assert_diagnostic diagnostics, "schema_enum", /field_groups\[0\].axis/
+    assert_diagnostic diagnostics, "schema_unique_items", /field_groups\[0\].fields/
+    assert_diagnostic diagnostics, "schema_required", /field_groups\[0\]/
+    assert_diagnostic diagnostics, "schema_unknown_property", /field_groups\[0\].color/
+  end
+
+  def test_genie3_sampling_loop_preserves_the_feature_dictionary_identity
+    view = load_yaml("views/genie3-semantic-zoom.view.yaml")
+    board = view.fetch("boards").find { |item| item.fetch("id") == "sampling_loop" }
+    occurrence = board.fetch("nodes").find { |node| node.fetch("id") == "feature_bundle" }
+
+    assert_equal "value_sites.feature_bundle", occurrence.fetch("ref")
+    assert_equal "cached feature dictionary", occurrence.fetch("label")
+    refute occurrence.key?("glyph"), "the occurrence should inherit the canonical dictionary glyph"
+    refute occurrence.key?("notation"), "the occurrence should not imply one tensor named F"
   end
 
   def test_rejects_parentheses_as_tex_subscript_grouping
@@ -210,6 +280,7 @@ class SourceContractTest < Minitest::Test
       architecture_schema.dig("$defs", "representationGlyph", "enum"),
       view_schema.dig("$defs", "representationGlyph", "enum"),
     )
+    assert_includes architecture_schema.dig("$defs", "representationGlyph", "enum"), "dictionary"
   end
 
   def test_rejects_duplicate_keys_in_executable_schema_json

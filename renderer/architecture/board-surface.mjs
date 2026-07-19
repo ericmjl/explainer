@@ -83,6 +83,50 @@ export function zoomViewportAt(
   };
 }
 
+function twoPointGesture(points) {
+  if (!Array.isArray(points) || points.length < 2) return null;
+  const first = points[0];
+  const second = points[1];
+  const firstX = finiteNumber(first?.x, 0);
+  const firstY = finiteNumber(first?.y, 0);
+  const secondX = finiteNumber(second?.x, 0);
+  const secondY = finiteNumber(second?.y, 0);
+  return {
+    midpoint: {
+      x: (firstX + secondX) / 2,
+      y: (firstY + secondY) / 2,
+    },
+    distance: Math.hypot(secondX - firstX, secondY - firstY),
+  };
+}
+
+// Map the content beneath the initial two-finger midpoint to the current
+// midpoint while scaling by the change in finger separation. This treats a
+// pinch as one continuous zoom-and-pan gesture instead of two competing drags.
+export function pinchViewportBetween(
+  viewport,
+  startPoints,
+  currentPoints,
+  origin = {},
+) {
+  const state = createViewportState(viewport);
+  const start = twoPointGesture(startPoints);
+  const current = twoPointGesture(currentPoints);
+  if (!start || !current || start.distance < 0.01) return state;
+
+  const zoomed = zoomViewportAt(
+    state,
+    start.midpoint,
+    current.distance / start.distance,
+    origin,
+  );
+  return {
+    ...zoomed,
+    x: zoomed.x + current.midpoint.x - start.midpoint.x,
+    y: zoomed.y + current.midpoint.y - start.midpoint.y,
+  };
+}
+
 export function fitViewportToBounds(
   viewport,
   bounds,
@@ -258,6 +302,9 @@ export function createBoardSurface({
   let destroyed = false;
   let userMovedViewport = false;
   let pan = null;
+  const touchPointers = new Map();
+  let pinch = null;
+  let suppressClicksUntil = 0;
 
   function snapshot() {
     return { ...viewport };
@@ -411,9 +458,34 @@ export function createBoardSurface({
     );
   }
 
-  function onPointerDown(event) {
-    if (event.button !== 0 && event.button !== 1) return;
-    if (panBlockSelector && closestMatch(event.target, panBlockSelector)) return;
+  function canvasPoint(pointer) {
+    const rect = elements.canvas.getBoundingClientRect();
+    return {
+      x: pointer.clientX - rect.left,
+      y: pointer.clientY - rect.top,
+    };
+  }
+
+  function capturePointer(pointerId) {
+    try {
+      elements.canvas.setPointerCapture?.(pointerId);
+    } catch (_error) {
+      // Pointer capture is an optimization. The gesture still works through
+      // bubbling pointer events when a browser declines capture.
+    }
+  }
+
+  function releasePointer(pointerId) {
+    try {
+      if (elements.canvas.hasPointerCapture?.(pointerId)) {
+        elements.canvas.releasePointerCapture?.(pointerId);
+      }
+    } catch (_error) {
+      // The pointer may already have been implicitly released by the browser.
+    }
+  }
+
+  function beginPan(event) {
     onBeforeGesture?.({ kind: "pan", event, surfaceKey });
     markUserMoved("pan", event);
     pan = {
@@ -424,10 +496,70 @@ export function createBoardSurface({
       y: viewport.y,
     };
     elements.canvas.classList?.add("is-panning");
-    elements.canvas.setPointerCapture?.(event.pointerId);
+    capturePointer(event.pointerId);
+  }
+
+  function beginPinch(event) {
+    const entries = Array.from(touchPointers.entries()).slice(0, 2);
+    if (entries.length < 2) return;
+    pan = null;
+    pinch = {
+      pointerIds: entries.map(([pointerId]) => pointerId),
+      viewport: snapshot(),
+      points: entries.map(([, pointer]) => canvasPoint(pointer)),
+    };
+    suppressClicksUntil = Number.POSITIVE_INFINITY;
+    onBeforeGesture?.({ kind: "pinch", event, surfaceKey });
+    markUserMoved("pinch", event);
+    elements.canvas.classList?.add("is-panning");
+    pinch.pointerIds.forEach(capturePointer);
+  }
+
+  function onPointerDown(event) {
+    if (event.pointerType === "touch") {
+      if (excludeGestureSelector && closestMatch(event.target, excludeGestureSelector)) return;
+      touchPointers.set(event.pointerId, {
+        clientX: event.clientX,
+        clientY: event.clientY,
+      });
+      if (touchPointers.size === 2) {
+        event.preventDefault?.();
+        beginPinch(event);
+        return;
+      }
+      if (touchPointers.size > 2) return;
+      if (panBlockSelector && closestMatch(event.target, panBlockSelector)) return;
+      beginPan(event);
+      return;
+    }
+    if (event.button !== 0 && event.button !== 1) return;
+    if (panBlockSelector && closestMatch(event.target, panBlockSelector)) return;
+    beginPan(event);
   }
 
   function onPointerMove(event) {
+    if (event.pointerType === "touch" && touchPointers.has(event.pointerId)) {
+      touchPointers.set(event.pointerId, {
+        clientX: event.clientX,
+        clientY: event.clientY,
+      });
+      if (pinch) {
+        const currentPoints = pinch.pointerIds.map(
+          (pointerId) => touchPointers.get(pointerId),
+        );
+        if (currentPoints.every(Boolean)) {
+          event.preventDefault?.();
+          viewport = pinchViewportBetween(
+            pinch.viewport,
+            pinch.points,
+            currentPoints.map(canvasPoint),
+            origin(),
+          );
+          apply();
+        }
+        return;
+      }
+    }
     if (!pan || (event.pointerId != null && event.pointerId !== pan.pointerId)) return;
     event.preventDefault?.();
     viewport = {
@@ -439,13 +571,43 @@ export function createBoardSurface({
   }
 
   function endPan(event = null) {
+    if (event?.pointerType === "touch" || touchPointers.has(event?.pointerId)) {
+      touchPointers.delete(event.pointerId);
+      releasePointer(event.pointerId);
+      if (pinch) {
+        suppressClicksUntil = Date.now() + 450;
+        if (touchPointers.size >= 2) {
+          beginPinch(event);
+          return;
+        }
+        pinch = null;
+        if (touchPointers.size === 1) {
+          const [pointerId, pointer] = touchPointers.entries().next().value;
+          pan = {
+            pointerId,
+            clientX: pointer.clientX,
+            clientY: pointer.clientY,
+            x: viewport.x,
+            y: viewport.y,
+          };
+          return;
+        }
+      }
+      if (!pan || pan.pointerId !== event.pointerId) return;
+    }
     if (!pan) return;
     const pointerId = pan.pointerId;
     pan = null;
     elements.canvas.classList?.remove("is-panning");
-    if (pointerId != null && elements.canvas.hasPointerCapture?.(pointerId)) {
-      elements.canvas.releasePointerCapture?.(pointerId);
-    }
+    if (pointerId != null) releasePointer(pointerId);
+  }
+
+  function onClickCapture(event) {
+    if (Date.now() >= suppressClicksUntil) return;
+    if (excludeGestureSelector && closestMatch(event.target, excludeGestureSelector)) return;
+    event.preventDefault?.();
+    event.stopPropagation?.();
+    event.stopImmediatePropagation?.();
   }
 
   function bind() {
@@ -457,6 +619,7 @@ export function createBoardSurface({
     elements.canvas.addEventListener("pointermove", onPointerMove);
     elements.canvas.addEventListener("pointerup", endPan);
     elements.canvas.addEventListener("pointercancel", endPan);
+    elements.canvas.addEventListener("click", onClickCapture, true);
     return api;
   }
 
@@ -473,6 +636,7 @@ export function createBoardSurface({
     elements.canvas.removeEventListener("pointermove", onPointerMove);
     elements.canvas.removeEventListener("pointerup", endPan);
     elements.canvas.removeEventListener("pointercancel", endPan);
+    elements.canvas.removeEventListener("click", onClickCapture, true);
   }
 
   const api = {

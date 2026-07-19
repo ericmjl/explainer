@@ -33,7 +33,7 @@
       "pattern": "^(?!.*_\\().+$"
     },
     "representationGlyph": {
-      "enum": ["scalar", "vector", "single", "matrix", "pair", "volume", "coordinates", "frames"]
+      "enum": ["scalar", "vector", "single", "matrix", "pair", "volume", "dictionary", "coordinates", "frames"]
     },
     "nodeRef": { "type": "string", "pattern": "^(modules|value_sites)\\.[a-z][a-z0-9_]*$" },
     "moduleRef": { "type": "string", "pattern": "^modules\\.[a-z][a-z0-9_]*$" },
@@ -64,12 +64,46 @@
         "elide": { "type": "array", "items": { "$ref": "#/$defs/elide" } },
         "exclude": { "type": "array", "items": { "$ref": "#/$defs/exclude" } },
         "edge_overrides": { "type": "array", "items": { "$ref": "#/$defs/edgeOverride" } },
+        "reference_panels": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "$ref": "#/$defs/referencePanel" }
+        },
         "notes": { "type": "array", "items": { "$ref": "#/$defs/nonEmptyString" } }
         ,
         "block_instance_ref": {
           "type": "string",
           "pattern": "^block_instances\\.[a-z][a-z0-9_]*$"
         }
+      },
+      "additionalProperties": false
+    },
+    "referencePanel": {
+      "type": "object",
+      "required": [
+        "id",
+        "title",
+        "asset",
+        "alt",
+        "caption",
+        "source_ref",
+        "locator",
+        "license_note",
+        "position"
+      ],
+      "properties": {
+        "id": { "$ref": "#/$defs/id" },
+        "title": { "$ref": "#/$defs/nonEmptyString" },
+        "asset": {
+          "type": "string",
+          "pattern": "^assets/reference-panels/[a-z0-9][a-z0-9_/-]*\\.(png|jpg|jpeg|webp)$"
+        },
+        "alt": { "$ref": "#/$defs/nonEmptyString" },
+        "caption": { "$ref": "#/$defs/nonEmptyString" },
+        "source_ref": { "$ref": "#/$defs/id" },
+        "locator": { "$ref": "#/$defs/nonEmptyString" },
+        "license_note": { "$ref": "#/$defs/nonEmptyString" },
+        "position": { "enum": ["right"] }
       },
       "additionalProperties": false
     },

@@ -43,6 +43,7 @@ test("geometry glyph vocabulary is explicit and schema-sized", () => {
     "matrix",
     "pair",
     "volume",
+    "dictionary",
     "coordinates",
     "frames",
   ]);
@@ -66,6 +67,15 @@ test("frame glyph depicts repeated local axis triads", () => {
   assert.match(svg, />x<\/text>/);
   assert.match(svg, />y<\/text>/);
   assert.match(svg, />z<\/text>/);
+});
+
+test("dictionary glyph depicts named tensor entries instead of one tensor grid", () => {
+  const svg = tensorGlyphSvg("dictionary", ["token_mask", "gt_restype", "gt_atom_positions"]);
+  assert.match(svg, /dictionary-glyph/);
+  assert.match(svg, /token_mask: tensor/);
+  assert.match(svg, /gt_restype: tensor/);
+  assert.match(svg, /gt_atom_positions: tensor/);
+  assert.doesNotMatch(svg, /class="tensor-cells"/);
 });
 
 test("generic tensor glyphs retain their cell grids", () => {

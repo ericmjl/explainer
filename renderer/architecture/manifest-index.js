@@ -12,6 +12,12 @@ export const manifestIndex = [
     "file": "manifest-dit.js"
   },
   {
+    "id": "af2",
+    "name": "AlphaFold 2 Monomer",
+    "role": "architecture",
+    "file": "manifest-af2.js"
+  },
+  {
     "id": "genie2",
     "name": "Genie 2 Protein Backbone Diffusion",
     "role": "architecture",
@@ -29,11 +35,11 @@ export const comparisonIndex = {
   "compilerVersion": "architecture-comparison-compiler-v0.1",
   "sourceYaml": "../../comparisons/index.yaml",
   "build": {
-    "generator": "architecture-manifest-builder-v0.4.5",
+    "generator": "architecture-manifest-builder-v0.4.6",
     "inputDigests": {
       "comparisons/index.yaml": "54059100527b7b47f0096e90227ce5668a3d2693e0b48c8af971a200feed97e4",
       "comparisons/genie3-reduced-vs-full-ipa.yaml": "4b7a986fb8a30349e8f3117f43e09be7f26eaa15a489929ad0b7addcb3fcbfc9",
-      "references/bibliography.yaml": "8ddccafa8ac6452643f652d69730c06644298c00bde10cbcca4a9f557a8f95c7",
+      "references/bibliography.yaml": "abe9226586bfb64261c81b7756b7275c48a3a172a9a18b5f91f7acfd3145e374",
       "architectures/generic-feature-refinement.yaml": "60b45e458ee2037560fc3011507148f3f236d19d8957b9d1826fa7b5a2e0cc0e",
       "views/generic-semantic-zoom.view.yaml": "2212d81c8217db03c68fa7d59f44dc36e55052503d8d503b3386bded040b5714",
       "standard_blocks/pair-biased-attention.yaml": "88379fcd3ad641e38da23ce3b5a9ccef84344149d9c8fac51792ad63cb9da7dc",
@@ -43,11 +49,13 @@ export const comparisonIndex = {
       "views/dit-semantic-zoom.view.yaml": "ebca6fefd29f612792b8957db940cc3237132140722d52b76999194823dbc5eb",
       "standard_blocks/adaln-zero-conditioning.yaml": "33cd9afbe3b6867c4ce328c25d41a33210a5e387a195a93b19bc8696ee9e0b32",
       "standard_blocks/sinusoidal-timestep-embedding.yaml": "8cb2d467fe967e9a83da657ef85940406be89836de502d24cb7f557152763039",
+      "architectures/alphafold2.yaml": "23c41cc0dacde426b7981272401e113f6d713b1868844135d9a2dab5bb6f00bc",
+      "views/alphafold2-semantic-zoom.view.yaml": "6b317c6d224a7e3b8416839247c0c12d6b9e0cd34d859475f4529a939d51fe8e",
       "architectures/genie2.yaml": "d5fbf1c1a91ef74dcef47388855e83b7e5571deb7d63a5eb2657177355c2f96a",
       "views/genie2-semantic-zoom.view.yaml": "8b8fe70a2866cad0051913e38e4d2a5b0fef68b0aeb14127c4d27eb36d353158",
       "standard_blocks/invariant-point-attention.yaml": "a88d3bd473e6bbfeb6846085f7d5091e6e8b0e33fbbd8292af4d578df22b2c27",
-      "architectures/genie3.yaml": "fbdf1ce7f0d0683abbb37d5ce86e1be9d3c1cbac69df71105fbf6a37308b830a",
-      "views/genie3-semantic-zoom.view.yaml": "0234d7ffa56d5ddc8225626c86d00f477710396adf270305a301ad9b8996a473"
+      "architectures/genie3.yaml": "d5fa7111d849a7e83ec13468283da422c9e3de8973c995324ae1ff457b6a2bc3",
+      "views/genie3-semantic-zoom.view.yaml": "e9574098fcaa8cde9cbe3b508dc0a6a4d0431919af338ad1fb4146f57f638fe9"
     }
   },
   "items": [

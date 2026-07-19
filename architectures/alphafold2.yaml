@@ -1,0 +1,756 @@
+schema_version: architecture-v0.4
+id: alphafold2
+name: AlphaFold 2 Monomer Network
+family: protein_structure_prediction
+status: draft
+task_modes:
+  - monomer_structure_prediction
+reference_configuration:
+  visual_basis: nature_figure_1e
+  evoformer_blocks: 48
+  structure_module_blocks: 8
+  network_executions: 4
+  recycling_feedback_passes: 3
+  evidence:
+    status: confirmed_from_paper
+    refs:
+      - source_ref: af2_2021
+        role: architecture_evidence
+        locator: Figure 1e and the AlphaFold network section
+      - source_ref: af2_2021_supplement
+        role: configuration_evidence
+        locator: Supplementary Methods 1.4, 1.6, 1.8, and 1.10; Algorithms 2, 6, 20, and 30-32
+sources:
+  - source_ref: af2_2021
+    role: architecture_description
+  - source_ref: af2_2021_supplement
+    role: detailed_architecture_description
+  - source_ref: af2_data_pipeline_code
+    role: feature_pipeline_implementation
+  - source_ref: af2_model_code
+    role: monomer_model_implementation
+  - source_ref: af2_structure_code
+    role: structure_module_implementation
+  - source_ref: af2_config_code
+    role: reference_configuration
+decomposition:
+  status: complete
+  evidence: &paper_overview_evidence
+    status: confirmed_from_paper
+    refs:
+      - source_ref: af2_2021
+        role: architecture_evidence
+        locator: Figure 1e and the AlphaFold network section
+        note: The root follows the paper's model-level information flow rather than the released command-line workflow.
+      - source_ref: af2_2021_supplement
+        role: detailed_architecture_evidence
+        locator: Supplementary Methods 1.4; Algorithm 2
+execution:
+  loops:
+    - id: recycling_loop
+      repeats: 4
+      reruns:
+        - modules.input_embedder
+        - modules.evoformer_stack
+        - modules.structure_module
+        - modules.recycling_embedder
+      cached:
+        - value_sites.input_sequence
+        - value_sites.multiple_sequence_alignment
+        - value_sites.target_pair_features
+        - value_sites.structural_templates
+      notes:
+        - Figure 1e's "recycling (three times)" means one initial execution followed by three shared-weight feedback executions.
+        - The first execution receives zero-valued recycled state.
+        - The final MSA first row, final pair representation, and predicted pseudo-beta coordinates form the feedback state.
+      evidence: &recycling_evidence
+        status: confirmed_from_paper
+        refs:
+          - source_ref: af2_2021
+            role: architecture_evidence
+            locator: Figure 1e; Recycling (three times)
+          - source_ref: af2_2021_supplement
+            role: execution_evidence
+            locator: Supplementary Methods 1.10; Algorithms 2 and 30-32
+state_semantics:
+  recycled_msa_first_row:
+    representation_ref: representations.msa_first_row
+    value_site_refs:
+      - value_sites.recycled_msa_after_iteration
+      - value_sites.recycled_msa_before_iteration
+      - value_sites.msa_recycle_update
+    lifecycle: iterative_loop_state
+    notes:
+      - The final first row of the Evoformer MSA representation is normalized and added to the next iteration's first MSA row.
+    evidence: *recycling_evidence
+  recycled_pair_representation:
+    representation_ref: representations.pair_representation
+    value_site_refs:
+      - value_sites.recycled_pair_after_iteration
+      - value_sites.recycled_pair_before_iteration
+      - value_sites.pair_recycle_update
+    lifecycle: iterative_loop_state
+    notes:
+      - The final Evoformer pair representation is normalized and combined with a binned-distance embedding of the previous structure.
+    evidence: *recycling_evidence
+  recycled_pseudo_beta_coordinates:
+    representation_ref: representations.pseudo_beta_coordinates
+    value_site_refs:
+      - value_sites.recycled_coordinates_after_iteration
+      - value_sites.recycled_coordinates_before_iteration
+    lifecycle: iterative_loop_state
+    notes:
+      - Pseudo-beta coordinates, using alpha carbon for glycine, are converted to pairwise distance bins for the next pair update.
+    evidence: *recycling_evidence
+conditioning:
+  - id: recycled_msa_additive_injection
+    relation_ref: relations.msa_recycle_update_conditions_input_embedder
+    mode: additive_injection
+    updates_source: false
+    evidence: *recycling_evidence
+  - id: recycled_pair_additive_injection
+    relation_ref: relations.pair_recycle_update_conditions_input_embedder
+    mode: additive_injection
+    updates_source: false
+    evidence: *recycling_evidence
+scale_transitions:
+  - id: target_msa_row_selection
+    relation_path:
+      - relations.processed_msa_supplies_recycled_first_row
+    aggregation: first_row_selection
+    copy_vs_pool: copy
+    evidence: *recycling_evidence
+  - id: pseudo_beta_coordinates_to_pair_update
+    relation_path:
+      - relations.recycled_coordinates_enter_recycling_embedder
+      - relations.recycling_embedder_produces_pair_update
+    aggregation: pairwise_distance_binning
+    copy_vs_pool: expand
+    evidence: *recycling_evidence
+training_inference:
+  objective:
+    kind: composite_structure_and_auxiliary_losses
+    notes:
+      - Structure prediction is trained with FAPE and auxiliary objectives, including confidence and masked-MSA prediction.
+      - Only the final randomly selected recycling iteration receives the training loss in the approximate recycling procedure.
+  schedule:
+    kind: initial_training_then_fine_tuning
+  sampler:
+    kind: shared_weight_recycling_inference
+    steps: 4
+    configurable: true
+  teacher_forcing: none
+  self_conditioning: recycled_previous_outputs
+  checkpoint_notes:
+    - This source set uses the paper's monomer network abstraction and its four total shared-weight executions.
+    - Released monomer presets may configure the same behavior as three recycles before the final prediction.
+  evidence:
+    status: confirmed_from_paper
+    refs:
+      - source_ref: af2_2021_supplement
+        role: training_and_inference_evidence
+        locator: Supplementary Methods 1.9-1.11; Algorithms 2 and 30-32
+representations:
+  - id: amino_acid_sequence
+    scale: residue
+    semantic_role: primary sequence whose monomer structure is predicted
+    shape: N_res residues
+    glyph: vector
+    carries:
+      - ordered amino-acid identities
+      - residue indices
+    evidence: *paper_overview_evidence
+  - id: msa_features
+    scale: msa
+    semantic_role: homologous sequences aligned to the target sequence
+    shape: N_seq x N_res aligned residues and deletion features
+    glyph: matrix
+    carries:
+      - target and homologous residue identities
+      - deletion indicators and counts
+      - evolutionary variation across aligned sequences
+    evidence: &data_pipeline_evidence
+      status: confirmed_from_paper
+      refs:
+        - source_ref: af2_2021
+          role: architecture_evidence
+          locator: Figure 1e; MSA input branch
+        - source_ref: af2_2021_supplement
+          role: data_pipeline_evidence
+          locator: Supplementary Methods 1.2.2, 1.2.7, and 1.2.9
+  - id: target_pair_features
+    scale: pair
+    semantic_role: target-sequence pair seed used to initialize residue-pair reasoning
+    shape: N_res x N_res x f_pair
+    glyph: pair
+    carries:
+      - ordered residue-pair target features
+      - clipped relative residue positions
+    evidence: &embedding_evidence
+      status: confirmed_from_paper
+      refs:
+        - source_ref: af2_2021
+          role: architecture_evidence
+          locator: Figure 1e; Pairing branch and pair representation
+        - source_ref: af2_2021_supplement
+          role: embedding_evidence
+          locator: Supplementary Methods 1.5; Algorithms 3-4
+  - id: template_features
+    scale: template
+    semantic_role: sequence and pair geometry features derived from structural template hits
+    shape: N_templ x N_res x N_res x f_template
+    glyph: volume
+    carries:
+      - template residue identities and torsion features
+      - template residue-pair geometry
+      - template masks
+    evidence: *data_pipeline_evidence
+  - id: msa_representation
+    scale: msa
+    semantic_role: learned MSA state refined jointly with residue-pair state
+    shape: N_seq x N_res x 256
+    glyph: matrix
+    carries:
+      - learned evolutionary and sequence context
+      - target-row information shared with structure prediction
+    evidence: *embedding_evidence
+  - id: pair_representation
+    scale: pair
+    semantic_role: learned directed residue-pair state used for geometric reasoning
+    shape: N_res x N_res x 128
+    glyph: pair
+    carries:
+      - residue-pair relationships
+      - template and evolutionary constraints
+      - implicit geometric hypotheses
+    evidence: *embedding_evidence
+  - id: single_representation
+    scale: residue
+    semantic_role: per-residue state projected from the final target row of the MSA representation
+    shape: N_res x 384
+    glyph: single
+    carries:
+      - per-residue context for equivariant structure refinement
+    evidence: &evoformer_evidence
+      status: confirmed_from_paper
+      refs:
+        - source_ref: af2_2021
+          role: architecture_evidence
+          locator: Figure 1e and the Evoformer section
+        - source_ref: af2_2021_supplement
+          role: evoformer_evidence
+          locator: Supplementary Methods 1.6; Algorithm 6
+  - id: structure_prediction
+    scale: atom
+    semantic_role: predicted all-heavy-atom monomer structure with per-residue confidence
+    shape: N_res x 37 x 3 coordinates plus N_res pLDDT
+    glyph: coordinates
+    carries:
+      - all-heavy-atom coordinates
+      - per-residue pLDDT confidence
+    evidence: &structure_evidence
+      status: confirmed_from_paper
+      refs:
+        - source_ref: af2_2021
+          role: architecture_evidence
+          locator: Figure 1e and the end-to-end structure prediction section
+        - source_ref: af2_2021_supplement
+          role: structure_evidence
+          locator: Supplementary Methods 1.8 and 1.9.6; Algorithms 20, 24, and 29
+  - id: msa_first_row
+    scale: residue
+    semantic_role: target-sequence row retained from the final MSA representation for recycling
+    shape: N_res x 256
+    glyph: single
+    carries:
+      - final target-row Evoformer state
+    evidence: *recycling_evidence
+  - id: pseudo_beta_coordinates
+    scale: residue
+    semantic_role: pseudo-beta coordinates retained from the predicted structure for recycling
+    shape: N_res x 3
+    glyph: coordinates
+    carries:
+      - beta-carbon coordinates
+      - alpha-carbon coordinates for glycine
+    evidence: *recycling_evidence
+value_sites:
+  - id: input_sequence
+    representation_ref: representations.amino_acid_sequence
+    scope_ref: architecture
+    boundary: input
+    role: task_input
+    evidence: *paper_overview_evidence
+  - id: multiple_sequence_alignment
+    representation_ref: representations.msa_features
+    scope_ref: modules.feature_preparation
+    role: searched_and_deduplicated_alignment
+    evidence: *data_pipeline_evidence
+  - id: target_pair_features
+    representation_ref: representations.target_pair_features
+    scope_ref: modules.feature_preparation
+    role: target_pair_seed
+    evidence: *embedding_evidence
+  - id: structural_templates
+    representation_ref: representations.template_features
+    scope_ref: modules.feature_preparation
+    role: searched_template_features
+    evidence: *data_pipeline_evidence
+  - id: msa_representation_before_evoformer
+    representation_ref: representations.msa_representation
+    scope_ref: modules.alphafold_iteration
+    role: initial_msa_state
+    evidence: *embedding_evidence
+  - id: pair_representation_before_evoformer
+    representation_ref: representations.pair_representation
+    scope_ref: modules.alphafold_iteration
+    role: initial_pair_state
+    evidence: *embedding_evidence
+  - id: msa_representation_after_evoformer
+    representation_ref: representations.msa_representation
+    scope_ref: modules.alphafold_iteration
+    role: processed_msa_state
+    evidence: *evoformer_evidence
+  - id: single_representation_after_evoformer
+    representation_ref: representations.single_representation
+    scope_ref: modules.alphafold_iteration
+    role: structure_module_single_input
+    evidence: *evoformer_evidence
+  - id: pair_representation_after_evoformer
+    representation_ref: representations.pair_representation
+    scope_ref: modules.alphafold_iteration
+    role: processed_pair_state
+    evidence: *evoformer_evidence
+  - id: predicted_structure_output
+    representation_ref: representations.structure_prediction
+    scope_ref: architecture
+    boundary: output
+    role: task_output
+    evidence: *structure_evidence
+  - id: recycled_msa_after_iteration
+    representation_ref: representations.msa_first_row
+    scope_ref: modules.alphafold_iteration
+    role: recycle_state_after_iteration
+    evidence: *recycling_evidence
+  - id: recycled_msa_before_iteration
+    representation_ref: representations.msa_first_row
+    scope_ref: modules.alphafold_iteration
+    role: recycle_state_before_iteration
+    evidence: *recycling_evidence
+  - id: recycled_pair_after_iteration
+    representation_ref: representations.pair_representation
+    scope_ref: modules.alphafold_iteration
+    role: recycle_state_after_iteration
+    evidence: *recycling_evidence
+  - id: recycled_pair_before_iteration
+    representation_ref: representations.pair_representation
+    scope_ref: modules.alphafold_iteration
+    role: recycle_state_before_iteration
+    evidence: *recycling_evidence
+  - id: recycled_coordinates_after_iteration
+    representation_ref: representations.pseudo_beta_coordinates
+    scope_ref: modules.alphafold_iteration
+    role: recycle_state_after_iteration
+    evidence: *recycling_evidence
+  - id: recycled_coordinates_before_iteration
+    representation_ref: representations.pseudo_beta_coordinates
+    scope_ref: modules.alphafold_iteration
+    role: recycle_state_before_iteration
+    evidence: *recycling_evidence
+  - id: msa_recycle_update
+    representation_ref: representations.msa_first_row
+    scope_ref: modules.alphafold_iteration
+    role: additive_update_for_next_msa_input
+    evidence: *recycling_evidence
+  - id: pair_recycle_update
+    representation_ref: representations.pair_representation
+    scope_ref: modules.alphafold_iteration
+    role: additive_update_for_next_pair_input
+    evidence: *recycling_evidence
+modules:
+  - id: feature_preparation
+    parent_ref: architecture
+    decomposition:
+      status: complete
+    label: Sequence, MSA, and Template Preparation
+    kind: adapter
+    mechanisms:
+      - genetic_database_search
+      - target_pairing
+      - structure_database_search
+    role: derive the three paper-level input branches from the target amino-acid sequence
+    scale: mixed
+    evidence: *data_pipeline_evidence
+  - id: genetic_database_search
+    parent_ref: modules.feature_preparation
+    decomposition:
+      status: partial
+      reason: Search tools, database-specific limits, deduplication, clustering, and extra-MSA processing are reserved for a later data-pipeline board.
+    label: Genetic Database Search
+    kind: adapter
+    mechanisms:
+      - jackhmmer_search
+      - hhblits_search
+      - msa_deduplication
+    role: search sequence databases and assemble homologous sequences aligned to the target
+    scale: msa
+    evidence: *data_pipeline_evidence
+  - id: sequence_pairing
+    parent_ref: modules.feature_preparation
+    decomposition:
+      status: leaf
+    label: Target Pairing
+    kind: adapter
+    mechanisms:
+      - outer_sum
+      - relative_position_encoding
+    role: turn target residue features and relative residue indices into the initial pairwise seed
+    scale: pair
+    evidence: *embedding_evidence
+  - id: structure_database_search
+    parent_ref: modules.feature_preparation
+    decomposition:
+      status: partial
+      reason: Hit filtering, realignment, atom extraction, and template featurization are reserved for a later template-pipeline board.
+    label: Structure Database Search
+    kind: adapter
+    mechanisms:
+      - hhsearch
+      - template_hit_featurization
+    role: retrieve structural homologues and encode their sequence, torsion, mask, and pair-geometry features
+    scale: template
+    evidence: *data_pipeline_evidence
+  - id: alphafold_iteration
+    parent_ref: architecture
+    decomposition:
+      status: complete
+    label: Shared-Weight AlphaFold Iteration
+    kind: controller
+    mechanisms:
+      - recycling
+      - shared_weights
+    role: embed prepared inputs, jointly refine MSA and pair state, predict structure and confidence, and prepare feedback for the next execution
+    scale: mixed
+    repeats: 4
+    pseudocode_ref: pseudocode/alphafold2.yaml
+    evidence: *paper_overview_evidence
+  - id: input_embedder
+    parent_ref: modules.alphafold_iteration
+    decomposition:
+      status: partial
+      reason: Template pair attention, template-angle concatenation, extra-MSA processing, and the exact recycling additions will be expanded on child boards.
+    label: Input Embedding and Integration
+    kind: adapter
+    mechanisms:
+      - msa_embedding
+      - pair_embedding
+      - template_integration
+      - extra_msa_stack
+      - recycled_state_injection
+    role: initialize MSA and pair representations from target, alignment, template, relative-position, extra-MSA, and recycled features
+    scale: mixed
+    evidence: *embedding_evidence
+  - id: evoformer_stack
+    parent_ref: modules.alphafold_iteration
+    decomposition:
+      status: partial
+      reason: The two-tower Evoformer block internals and their bidirectional MSA-pair communication are reserved for the next architecture level.
+    label: Evoformer Stack
+    kind: refiner
+    mechanisms:
+      - msa_attention
+      - pair_biased_attention
+      - outer_product_mean
+      - triangle_multiplication
+      - triangle_attention
+    role: jointly refine MSA and residue-pair representations through 48 repeated blocks and project the final target row to a single representation
+    scale: mixed
+    repeats: 48
+    evidence: *evoformer_evidence
+  - id: structure_module
+    parent_ref: modules.alphafold_iteration
+    decomposition:
+      status: partial
+      reason: Invariant point attention, rigid-frame updates, torsion prediction, and atom reconstruction are reserved for the structure-module board.
+    label: Structure Module
+    kind: decoder
+    mechanisms:
+      - invariant_point_attention
+      - rigid_frame_refinement
+      - torsion_angle_prediction
+      - all_atom_reconstruction
+      - confidence_prediction
+    role: refine per-residue frames for eight blocks and decode all-heavy-atom coordinates with per-residue confidence
+    scale: atom
+    repeats: 8
+    evidence: *structure_evidence
+  - id: recycling_embedder
+    parent_ref: modules.alphafold_iteration
+    decomposition:
+      status: leaf
+    label: Recycling Embedder
+    kind: adapter
+    mechanisms:
+      - layer_normalization
+      - pseudo_beta_distance_binning
+      - additive_injection
+    role: normalize the previous MSA row and pair state, embed previous pseudo-beta distances, and form additive inputs for the next shared-weight execution
+    scale: mixed
+    evidence: *recycling_evidence
+relations:
+  - id: input_sequence_queries_genetic_database
+    from: value_sites.input_sequence
+    to: modules.genetic_database_search
+    kind: data_flow
+    carries: [representations.amino_acid_sequence]
+    operation: search_sequence_databases
+    evidence: *data_pipeline_evidence
+  - id: genetic_search_produces_msa
+    from: modules.genetic_database_search
+    to: value_sites.multiple_sequence_alignment
+    kind: data_flow
+    carries: [representations.msa_features]
+    operation: deduplicate_and_stack_alignments
+    evidence: *data_pipeline_evidence
+  - id: input_sequence_enters_pairing
+    from: value_sites.input_sequence
+    to: modules.sequence_pairing
+    kind: data_flow
+    carries: [representations.amino_acid_sequence]
+    operation: build_target_pair_seed
+    evidence: *embedding_evidence
+  - id: sequence_pairing_produces_target_pair_features
+    from: modules.sequence_pairing
+    to: value_sites.target_pair_features
+    kind: data_flow
+    carries: [representations.target_pair_features]
+    operation: outer_sum_target_features_and_add_relative_positions
+    evidence: *embedding_evidence
+  - id: input_sequence_queries_structure_database
+    from: value_sites.input_sequence
+    to: modules.structure_database_search
+    kind: data_flow
+    carries: [representations.amino_acid_sequence]
+    operation: initiate_sequence_derived_template_search
+    evidence: *data_pipeline_evidence
+  - id: structure_search_produces_templates
+    from: modules.structure_database_search
+    to: value_sites.structural_templates
+    kind: data_flow
+    carries: [representations.template_features]
+    operation: featurize_template_hits
+    evidence: *data_pipeline_evidence
+  - id: msa_features_enter_input_embedder
+    from: value_sites.multiple_sequence_alignment
+    to: modules.input_embedder
+    kind: data_flow
+    carries: [representations.msa_features]
+    operation: embed_clustered_and_extra_msa_features
+    evidence: *embedding_evidence
+  - id: target_pair_features_enter_input_embedder
+    from: value_sites.target_pair_features
+    to: modules.input_embedder
+    kind: data_flow
+    carries: [representations.target_pair_features]
+    operation: initialize_pair_representation
+    evidence: *embedding_evidence
+  - id: templates_enter_input_embedder
+    from: value_sites.structural_templates
+    to: modules.input_embedder
+    kind: conditioning
+    carries: [representations.template_features]
+    operation: integrate_template_angle_and_pair_features
+    evidence: *embedding_evidence
+  - id: input_embedder_initializes_msa_representation
+    from: modules.input_embedder
+    to: value_sites.msa_representation_before_evoformer
+    kind: data_flow
+    carries: [representations.msa_representation]
+    operation: assemble_initial_msa_representation
+    evidence: *embedding_evidence
+  - id: input_embedder_initializes_pair_representation
+    from: modules.input_embedder
+    to: value_sites.pair_representation_before_evoformer
+    kind: data_flow
+    carries: [representations.pair_representation]
+    operation: assemble_initial_pair_representation
+    evidence: *embedding_evidence
+  - id: initial_msa_enters_evoformer
+    from: value_sites.msa_representation_before_evoformer
+    to: modules.evoformer_stack
+    kind: data_flow
+    carries: [representations.msa_representation]
+    operation: refine_msa_state
+    evidence: *evoformer_evidence
+  - id: initial_pair_enters_evoformer
+    from: value_sites.pair_representation_before_evoformer
+    to: modules.evoformer_stack
+    kind: data_flow
+    carries: [representations.pair_representation]
+    operation: refine_pair_state
+    evidence: *evoformer_evidence
+  - id: evoformer_produces_processed_msa
+    from: modules.evoformer_stack
+    to: value_sites.msa_representation_after_evoformer
+    kind: data_flow
+    carries: [representations.msa_representation]
+    operation: emit_final_msa_representation
+    evidence: *evoformer_evidence
+  - id: evoformer_projects_single_representation
+    from: modules.evoformer_stack
+    to: value_sites.single_representation_after_evoformer
+    kind: data_flow
+    carries: [representations.single_representation]
+    operation: project_final_target_row
+    evidence: *evoformer_evidence
+  - id: evoformer_produces_processed_pair
+    from: modules.evoformer_stack
+    to: value_sites.pair_representation_after_evoformer
+    kind: data_flow
+    carries: [representations.pair_representation]
+    operation: emit_final_pair_representation
+    evidence: *evoformer_evidence
+  - id: single_representation_enters_structure_module
+    from: value_sites.single_representation_after_evoformer
+    to: modules.structure_module
+    kind: data_flow
+    carries: [representations.single_representation]
+    operation: initialize_per_residue_structure_state
+    evidence: *structure_evidence
+  - id: pair_representation_enters_structure_module
+    from: value_sites.pair_representation_after_evoformer
+    to: modules.structure_module
+    kind: conditioning
+    carries: [representations.pair_representation]
+    operation: condition_invariant_point_attention
+    evidence: *structure_evidence
+  - id: structure_module_predicts_structure_and_confidence
+    from: modules.structure_module
+    to: value_sites.predicted_structure_output
+    kind: data_flow
+    carries: [representations.structure_prediction]
+    operation: decode_atom_coordinates_and_plddt
+    evidence: *structure_evidence
+  - id: processed_msa_supplies_recycled_first_row
+    from: value_sites.msa_representation_after_evoformer
+    to: value_sites.recycled_msa_after_iteration
+    kind: state_update
+    carries: [representations.msa_first_row]
+    operation: select_final_target_msa_row
+    evidence: *recycling_evidence
+  - id: processed_pair_supplies_recycled_pair
+    from: value_sites.pair_representation_after_evoformer
+    to: value_sites.recycled_pair_after_iteration
+    kind: state_update
+    carries: [representations.pair_representation]
+    operation: retain_final_pair_representation
+    evidence: *recycling_evidence
+  - id: predicted_structure_supplies_recycled_coordinates
+    from: value_sites.predicted_structure_output
+    to: value_sites.recycled_coordinates_after_iteration
+    kind: state_update
+    carries: [representations.pseudo_beta_coordinates]
+    operation: extract_pseudo_beta_coordinates
+    evidence: *recycling_evidence
+  - id: recycled_msa_advances_to_next_iteration
+    from: value_sites.recycled_msa_after_iteration
+    to: value_sites.recycled_msa_before_iteration
+    kind: state_update
+    carries: [representations.msa_first_row]
+    operation: carry_msa_row_to_next_shared_weight_execution
+    evidence: *recycling_evidence
+  - id: recycled_pair_advances_to_next_iteration
+    from: value_sites.recycled_pair_after_iteration
+    to: value_sites.recycled_pair_before_iteration
+    kind: state_update
+    carries: [representations.pair_representation]
+    operation: carry_pair_state_to_next_shared_weight_execution
+    evidence: *recycling_evidence
+  - id: recycled_coordinates_advance_to_next_iteration
+    from: value_sites.recycled_coordinates_after_iteration
+    to: value_sites.recycled_coordinates_before_iteration
+    kind: state_update
+    carries: [representations.pseudo_beta_coordinates]
+    operation: carry_coordinates_to_next_shared_weight_execution
+    evidence: *recycling_evidence
+  - id: recycled_msa_enters_recycling_embedder
+    from: value_sites.recycled_msa_before_iteration
+    to: modules.recycling_embedder
+    kind: state_update
+    carries: [representations.msa_first_row]
+    operation: normalize_recycled_msa_row
+    evidence: *recycling_evidence
+  - id: recycled_pair_enters_recycling_embedder
+    from: value_sites.recycled_pair_before_iteration
+    to: modules.recycling_embedder
+    kind: state_update
+    carries: [representations.pair_representation]
+    operation: normalize_recycled_pair_representation
+    evidence: *recycling_evidence
+  - id: recycled_coordinates_enter_recycling_embedder
+    from: value_sites.recycled_coordinates_before_iteration
+    to: modules.recycling_embedder
+    kind: state_update
+    carries: [representations.pseudo_beta_coordinates]
+    operation: bin_recycled_pseudo_beta_distances
+    evidence: *recycling_evidence
+  - id: recycling_embedder_produces_msa_update
+    from: modules.recycling_embedder
+    to: value_sites.msa_recycle_update
+    kind: conditioning
+    carries: [representations.msa_first_row]
+    operation: produce_normalized_msa_update
+    evidence: *recycling_evidence
+  - id: recycling_embedder_produces_pair_update
+    from: modules.recycling_embedder
+    to: value_sites.pair_recycle_update
+    kind: conditioning
+    carries: [representations.pair_representation]
+    operation: combine_normalized_pair_and_distance_embedding
+    evidence: *recycling_evidence
+  - id: msa_recycle_update_conditions_input_embedder
+    from: value_sites.msa_recycle_update
+    to: modules.input_embedder
+    kind: conditioning
+    carries: [representations.msa_first_row]
+    operation: add_to_next_target_msa_row
+    evidence: *recycling_evidence
+  - id: pair_recycle_update_conditions_input_embedder
+    from: value_sites.pair_recycle_update
+    to: modules.input_embedder
+    kind: conditioning
+    carries: [representations.pair_representation]
+    operation: add_to_next_pair_representation
+    evidence: *recycling_evidence
+claims:
+  - id: paper_root_has_two_learned_stages
+    statement: The paper-level AlphaFold network consists of a 48-block Evoformer trunk followed by an eight-block Structure Module.
+    evidence: *paper_overview_evidence
+  - id: recycling_uses_msa_pair_and_geometry
+    statement: Recycling feeds back the final MSA first row, final pair representation, and predicted pseudo-beta geometry; the derived single representation is not itself recycled.
+    scope:
+      module_ref: modules.recycling_embedder
+    evidence: *recycling_evidence
+  - id: three_recycles_mean_four_executions
+    statement: Figure 1e's three recycling feedback passes correspond to four total shared-weight network executions including the initial pass.
+    scope:
+      module_ref: modules.alphafold_iteration
+    evidence: *recycling_evidence
+open_questions:
+  - id: choose_first_internal_drilldown
+    question: Should the next authored child board expand the two-tower Evoformer block or the complete recycling iteration first?
+    status: deferred
+    affected_refs:
+      - modules.evoformer_stack
+      - modules.alphafold_iteration
+    blocking: false
+    resolution_criteria: Select the next board according to whether the immediate explanatory priority is learned representation exchange or whole-network iterative refinement.
+    evidence:
+      status: open_question
+      refs:
+        - source_ref: af2_2021
+          role: architecture_context
+          locator: Figures 1e and 3a
+        - source_ref: af2_2021_supplement
+          role: architecture_context
+          locator: Supplementary Methods 1.6 and 1.10
