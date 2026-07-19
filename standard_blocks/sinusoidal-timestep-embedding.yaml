@@ -1,0 +1,46 @@
+schema_version: standard-block-v0.1
+id: sinusoidal_timestep_embedding
+name: Sinusoidal Timestep Embedding
+kind: featurization
+status: draft
+description: Expand a scalar diffusion timestep into a fixed sinusoidal frequency embedding, then project it to model width with a two-layer SiLU MLP. A reusable atom for diffusion-style architectures.
+canonical_operation: sinusoidal_embedding
+input_slots:
+  - id: timestep
+    label: t
+    scale: sample
+    kind: representation
+    required: true
+output_slots:
+  - id: timestep_embedding
+    label: t_emb
+    scale: sample
+    kind: representation
+math:
+  - id: frequencies
+    text: "freqs = exp(-ln(10^4) * arange(128) / 128)"
+    tex: '\omega_k = \exp\!\left(-\tfrac{k \ln 10^4}{128}\right),\; k = 0..127'
+    operation: frequency_table
+    inputs: [timestep]
+    outputs: [timestep_embedding]
+  - id: sinusoid
+    text: "emb = concat(cos(t * freqs), sin(t * freqs))  # 256-dim"
+    tex: 'e = [\cos(t\,\omega);\; \sin(t\,\omega)] \in \mathbb{R}^{256}'
+    operation: sinusoidal_expansion
+    inputs: [timestep]
+    outputs: [timestep_embedding]
+  - id: mlp_projection
+    text: "t_emb = Linear_d(SiLU(Linear_d(emb)))"
+    tex: 't_{\mathrm{emb}} = W_2\,\operatorname{SiLU}(W_1 e)'
+    operation: mlp_projection
+    inputs: [timestep]
+    outputs: [timestep_embedding]
+visual_template:
+  type: pipeline
+  lanes: [timestep]
+renderer_contract:
+  shows:
+    - the frequency expansion happens before any learned projection
+    - the learned part is a small MLP, not the sinusoid itself
+evidence_policy:
+  require_usage_evidence: true

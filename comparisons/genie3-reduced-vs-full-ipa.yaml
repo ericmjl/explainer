@@ -1,0 +1,169 @@
+schema_version: architecture-comparison-v0.1
+id: genie3_reduced_vs_full_ipa
+title: Genie 3 Reduced Attention vs Full Frame-Aware IPA
+status: review
+question: What does Genie 3's reduced latent attention retain, change, and remove relative to full frame-aware IPA?
+summary: Both paths use scalar attention, pair-logit bias, pair-value aggregation, and a residual-normalized single-state update. Full IPA additionally forms frame-aware point logits and point outputs; the reduced latent path omits that geometry and adds its latent-block transition and final mask.
+subjects:
+  primary:
+    label: Reduced latent attention
+    source_set: genie3
+    subject_ref: block_instances.latent_reduced_pair_attention
+    board_ref: genie3_reduced_pair_attention_internals
+  counterpart:
+    label: Full frame-aware IPA
+    source_set: genie3
+    subject_ref: block_instances.structure_ipa
+    board_ref: genie3_ipa_internals
+groups:
+  - id: shared
+    label: Shared attention path
+    description: Scalar attention and pair-conditioned operations that play the same algorithmic role in both implementations.
+  - id: full_only
+    label: Full IPA only
+    description: Frame-aware point operations present only in the full structure-decoder IPA path.
+  - id: reduced_only
+    label: Reduced wrapper only
+    description: Latent-block wrapper behavior added after the reduced attention update.
+alignments:
+  - id: scalar_projection
+    group_ref: groups.shared
+    label: Scalar query, key, and value projection
+    relationship: analogous
+    primary_refs:
+      - block_instances.latent_reduced_pair_attention.steps.project_qkv
+    counterpart_refs:
+      - block_instances.structure_ipa.steps.project_scalar_terms
+    explanation: Both steps derive scalar queries, keys, and values from the incoming single state, although the concrete projection modules and dimensions belong to their respective implementations.
+    evidence: &both_attention_evidence
+      status: confirmed_from_code
+      refs:
+        - source_ref: genie3_ipa_code
+          role: primary_implementation_evidence
+          locator: ReducedInvariantPointAttention.forward
+        - source_ref: genie3_ipa_code
+          role: counterpart_implementation_evidence
+          locator: InvariantPointAttention.forward
+  - id: scalar_logits
+    group_ref: groups.shared
+    label: Scalar attention logits
+    relationship: analogous
+    primary_refs:
+      - block_instances.latent_reduced_pair_attention.steps.scalar_logits
+    counterpart_refs:
+      - block_instances.structure_ipa.steps.scalar_attention_logits
+    explanation: Both implementations form query-key scalar logits before adding non-scalar attention terms.
+    evidence: *both_attention_evidence
+  - id: pair_bias
+    group_ref: groups.shared
+    label: Pair representation biases attention
+    relationship: equivalent
+    primary_refs:
+      - block_instances.latent_reduced_pair_attention.steps.project_pair_bias
+    counterpart_refs:
+      - block_instances.structure_ipa.steps.project_pair_bias
+    explanation: Both implementations project the pair representation into a per-head additive attention-logit bias.
+    evidence: *both_attention_evidence
+  - id: logit_mask_and_softmax
+    group_ref: groups.shared
+    label: Compose, mask, and normalize logits
+    relationship: changed
+    primary_refs:
+      - block_instances.latent_reduced_pair_attention.steps.combine_logits
+      - block_instances.latent_reduced_pair_attention.steps.apply_attention_mask
+      - block_instances.latent_reduced_pair_attention.steps.softmax_attention_masked
+    counterpart_refs:
+      - block_instances.structure_ipa.steps.combine_and_mask_logits
+      - block_instances.structure_ipa.steps.softmax_attention
+    explanation: Both paths add pair bias, apply the validity mask, and normalize over keys, but full IPA also adds its point-distance term during logit composition.
+    evidence: *both_attention_evidence
+  - id: scalar_value_aggregation
+    group_ref: groups.shared
+    label: Aggregate scalar values
+    relationship: analogous
+    primary_refs:
+      - block_instances.latent_reduced_pair_attention.steps.aggregate_scalar_values
+    counterpart_refs:
+      - block_instances.structure_ipa.steps.aggregate_scalar_values
+    explanation: Both paths use the normalized attention weights to aggregate scalar values into a per-token context.
+    evidence: *both_attention_evidence
+  - id: pair_value_aggregation
+    group_ref: groups.shared
+    label: Aggregate pair values
+    relationship: equivalent
+    primary_refs:
+      - block_instances.latent_reduced_pair_attention.steps.aggregate_pair_values
+    counterpart_refs:
+      - block_instances.structure_ipa.steps.aggregate_pair_values
+    explanation: Both paths use the same attention weights to aggregate the pair representation as an output value stream, not only as a logit bias.
+    evidence: *both_attention_evidence
+  - id: output_fusion
+    group_ref: groups.shared
+    label: Fuse attention outputs
+    relationship: changed
+    primary_refs:
+      - block_instances.latent_reduced_pair_attention.steps.project_reduced_output
+    counterpart_refs:
+      - block_instances.structure_ipa.steps.project_ipa_delta
+    explanation: Reduced attention fuses scalar and pair contexts, whereas full IPA also fuses the frame-aware local point context.
+    evidence: *both_attention_evidence
+  - id: residual_normalization
+    group_ref: groups.shared
+    label: Residual, dropout, and normalization
+    relationship: analogous
+    primary_refs:
+      - block_instances.latent_reduced_pair_attention.steps.residual_norm
+    counterpart_refs:
+      - block_instances.structure_ipa.steps.residual_norm
+    explanation: Each architecture wrapper adds the attention delta back to the incoming single state and normalizes the result.
+    evidence: &both_wrapper_evidence
+      status: confirmed_from_code
+      refs:
+        - source_ref: genie3_latent_transformer_code
+          role: primary_wrapper_evidence
+          locator: LatentTransformerBlock.forward
+        - source_ref: genie3_structure_code
+          role: counterpart_wrapper_evidence
+          locator: StructureLayer.forward
+  - id: frame_aware_point_path
+    group_ref: groups.full_only
+    label: Frame-aware point attention
+    relationship: counterpart_only
+    primary_refs: []
+    counterpart_refs:
+      - block_instances.structure_ipa.steps.project_local_points
+      - block_instances.structure_ipa.steps.transform_points_to_global
+      - block_instances.structure_ipa.steps.point_distance_logits
+      - block_instances.structure_ipa.steps.aggregate_global_points
+      - block_instances.structure_ipa.steps.return_points_to_local_frame
+    explanation: Only full IPA projects points, expresses them through token frames, uses invariant point distances in the logits, and returns aggregated point values to the query frame.
+    evidence: *both_attention_evidence
+  - id: latent_transition_and_output_mask
+    group_ref: groups.reduced_only
+    label: Latent transition and final output mask
+    relationship: primary_only
+    primary_refs:
+      - block_instances.latent_reduced_pair_attention.steps.transition_and_mask
+    counterpart_refs: []
+    explanation: The reduced latent block follows residual normalization with its transition MLP and reapplies the token mask; that wrapper step is not part of the selected full IPA variant.
+    evidence: *both_wrapper_evidence
+findings:
+  - id: pair_path_is_retained
+    statement: Reduced attention retains both pair-logit bias and attention-weighted pair-value aggregation.
+    alignment_refs:
+      - alignments.pair_bias
+      - alignments.pair_value_aggregation
+    evidence: *both_attention_evidence
+  - id: geometry_is_removed
+    statement: The reduction removes the complete frame-aware point path rather than merely simplifying its visualization.
+    alignment_refs:
+      - alignments.frame_aware_point_path
+      - alignments.output_fusion
+    evidence: *both_attention_evidence
+  - id: wrappers_are_not_identical
+    statement: Both uses apply residual normalization, but only the reduced latent wrapper includes the selected transition-and-final-mask step.
+    alignment_refs:
+      - alignments.residual_normalization
+      - alignments.latent_transition_and_output_mask
+    evidence: *both_wrapper_evidence
+open_questions: []

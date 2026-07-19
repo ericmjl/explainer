@@ -1,0 +1,809 @@
+schema_version: architecture-v0.4
+id: generic_feature_refinement
+name: Generic Feature Refinement Pipeline
+family: transformer
+status: draft
+task_modes:
+  - prediction
+  - generation
+sources:
+  - source_ref: generic_feature_refinement_source
+    role: architecture_source
+  - source_ref: architecture_language_protocol
+    role: specification
+decomposition:
+  status: complete
+  evidence:
+    status: inferred
+    refs:
+      - source_ref: generic_feature_refinement_source
+        role: scaffold_evidence
+        note: The root child set is exhaustive for this intentionally bounded demonstration architecture.
+execution:
+  loops:
+    - id: refinement_loop
+      repeats: configurable_refinement_steps
+      reruns:
+        - modules.input_adapter
+        - modules.item_encoder
+        - modules.group_refiner
+        - modules.output_decoder
+      cached:
+        - value_sites.item_to_group_index
+        - value_sites.pair_context
+      notes:
+        - Context, attention masks, and grouping indices can be cached when the inputs and grouping map do not change.
+      evidence:
+        status: inferred
+        refs:
+          - source_ref: architecture_language_protocol
+            role: specification
+            note: Demonstrates how loops are represented.
+state_semantics:
+  item_state:
+    representation_ref: representations.item_state
+    value_site_refs:
+      - value_sites.item_state_before_encoder
+      - value_sites.item_state_after_encoder
+    lifecycle: transformed_within_refinement_loop
+    notes:
+      - The before and after sites make the fine-scale state update explicit without conflating two temporal values.
+    evidence:
+      status: inferred
+      refs:
+        - source_ref: generic_feature_refinement_source
+          role: scaffold_evidence
+  pair_context:
+    representation_ref: representations.pair_context
+    value_site_refs:
+      - value_sites.pair_context
+    lifecycle: cached_read_only_context
+    notes:
+      - It is projected to attention-logit bias but is not updated by the refiner in this demo.
+    evidence:
+      status: inferred
+      refs:
+        - source_ref: generic_feature_refinement_source
+          role: scaffold_evidence
+  group_state:
+    representation_ref: representations.group_state
+    value_site_refs:
+      - value_sites.group_state_before_refiner
+      - value_sites.group_state_after_refiner
+    lifecycle: transformed_within_refinement_loop
+    notes:
+      - The before and after sites distinguish pooled group state from refined group state.
+    evidence:
+      status: inferred
+      refs:
+        - source_ref: generic_feature_refinement_source
+          role: scaffold_evidence
+conditioning:
+  - id: item_adaln
+    relation_ref: relations.conditioning_signal_modulates_item_adaln
+    mode: per_item_adaln
+    standard_block_ref: standard_blocks/per-item-adaln-conditioning.yaml
+    updates_source: false
+    evidence:
+      status: inferred
+      refs:
+        - source_ref: generic_feature_refinement_source
+          role: scaffold_evidence
+          note: Neutral demo conditioning path.
+  - id: group_pair_bias
+    relation_ref: relations.pair_context_biases_pair_attention
+    mode: pair_bias
+    updates_source: false
+    evidence:
+      status: inferred
+      refs:
+        - source_ref: generic_feature_refinement_source
+          role: scaffold_evidence
+          note: Neutral demo pair/context bias path.
+scale_transitions:
+  - id: item_to_group_pool
+    relation_path:
+      - relations.encoded_item_state_enters_group_pool
+      - relations.item_to_group_pool_produces_group_state
+    index_relation_ref: relations.item_to_group_index_guides_pooling
+    aggregation: scatter_mean
+    copy_vs_pool: pool
+    evidence:
+      status: inferred
+      refs:
+        - source_ref: generic_feature_refinement_source
+          role: scaffold_evidence
+          note: Neutral demo compression path.
+  - id: group_to_item_broadcast
+    relation_path:
+      - relations.refined_group_state_enters_output_decoder
+      - relations.output_decoder_produces_item_output_state
+    index_relation_ref: relations.item_to_group_index_guides_output_decoder
+    aggregation: gather
+    copy_vs_pool: copy
+    evidence:
+      status: inferred
+      refs:
+        - source_ref: generic_feature_refinement_source
+          role: scaffold_evidence
+          note: Neutral demo broadcast path.
+training_inference:
+  objective:
+    kind: unknown
+  schedule:
+    kind: none
+  sampler:
+    kind: one_shot
+  teacher_forcing: unknown
+  self_conditioning: unknown
+  checkpoint_notes:
+    - This demo is architectural only; it is not tied to a training recipe.
+  evidence:
+    status: inferred
+    refs:
+      - source_ref: generic_feature_refinement_source
+        role: scaffold_evidence
+        note: The training and inference fields are deliberately unknown or schematic in this domain-neutral demonstration.
+representations:
+  - id: raw_records
+    scale: item
+    semantic_role: input records before embedding
+    shape: "B x N_item x input_fields"
+    carries:
+      - raw features
+      - masks
+    evidence:
+      status: inferred
+      refs:
+        - source_ref: generic_feature_refinement_source
+          role: scaffold_evidence
+  - id: item_state
+    scale: item
+    semantic_role: mutable fine-scale latent state
+    shape: "B x N_item x d_item"
+    carries:
+      - local content
+      - positional features
+    evidence:
+      status: inferred
+      refs:
+        - source_ref: generic_feature_refinement_source
+          role: scaffold_evidence
+  - id: conditioning_signal
+    scale: item
+    semantic_role: per-item conditioning stream
+    shape: "B x N_item x d_cond"
+    carries:
+      - control signal
+    evidence:
+      status: inferred
+      refs:
+        - source_ref: generic_feature_refinement_source
+          role: scaffold_evidence
+  - id: pair_context
+    scale: item_pair
+    semantic_role: pair/context attention bias source
+    shape: "B x N_group x N_group x d_pair"
+    carries:
+      - relation features
+      - mask features
+    evidence:
+      status: inferred
+      refs:
+        - source_ref: generic_feature_refinement_source
+          role: scaffold_evidence
+  - id: item_to_group_index
+    scale: index_map
+    semantic_role: maps fine items to coarse groups
+    shape: "B x N_item"
+    carries:
+      - group ownership
+    evidence:
+      status: inferred
+      refs:
+        - source_ref: generic_feature_refinement_source
+          role: scaffold_evidence
+  - id: group_state
+    scale: group
+    semantic_role: compressed coarse latent state
+    shape: "B x N_group x d_group"
+    carries:
+      - pooled item evidence
+      - refined context
+    evidence:
+      status: inferred
+      refs:
+        - source_ref: generic_feature_refinement_source
+          role: scaffold_evidence
+  - id: item_output_state
+    scale: item
+    semantic_role: item-scale decoded state
+    shape: "B x N_item x d_out"
+    carries:
+      - broadcast group context
+      - fine item skip
+    evidence:
+      status: inferred
+      refs:
+        - source_ref: generic_feature_refinement_source
+          role: scaffold_evidence
+  - id: predictions
+    scale: output
+    semantic_role: task-specific output values
+    shape: "B x N_item x output_fields"
+    carries:
+      - prediction heads
+    evidence:
+      status: inferred
+      refs:
+        - source_ref: generic_feature_refinement_source
+          role: scaffold_evidence
+value_sites:
+  - id: raw_records_input
+    representation_ref: representations.raw_records
+    scope_ref: architecture
+    boundary: input
+    role: task_input
+    evidence:
+      status: inferred
+      refs:
+        - source_ref: generic_feature_refinement_source
+          role: scaffold_evidence
+  - id: item_state_before_encoder
+    representation_ref: representations.item_state
+    scope_ref: modules.input_adapter
+    role: state_write
+    evidence:
+      status: inferred
+      refs:
+        - source_ref: generic_feature_refinement_source
+          role: scaffold_evidence
+  - id: conditioning_signal
+    representation_ref: representations.conditioning_signal
+    scope_ref: modules.input_adapter
+    role: read_only_conditioning
+    evidence:
+      status: inferred
+      refs:
+        - source_ref: generic_feature_refinement_source
+          role: scaffold_evidence
+  - id: item_to_group_index
+    representation_ref: representations.item_to_group_index
+    scope_ref: modules.input_adapter
+    role: index_map
+    evidence:
+      status: inferred
+      refs:
+        - source_ref: generic_feature_refinement_source
+          role: scaffold_evidence
+  - id: pair_context
+    representation_ref: representations.pair_context
+    scope_ref: modules.context_builder
+    role: read_only_conditioning
+    evidence:
+      status: inferred
+      refs:
+        - source_ref: generic_feature_refinement_source
+          role: scaffold_evidence
+  - id: item_state_after_encoder
+    representation_ref: representations.item_state
+    scope_ref: modules.item_encoder
+    role: state_write
+    evidence:
+      status: inferred
+      refs:
+        - source_ref: generic_feature_refinement_source
+          role: scaffold_evidence
+  - id: group_state_before_refiner
+    representation_ref: representations.group_state
+    scope_ref: modules.item_to_group_pool
+    role: state_write
+    evidence:
+      status: inferred
+      refs:
+        - source_ref: generic_feature_refinement_source
+          role: scaffold_evidence
+  - id: group_state_after_refiner
+    representation_ref: representations.group_state
+    scope_ref: modules.group_refiner
+    role: state_write
+    evidence:
+      status: inferred
+      refs:
+        - source_ref: generic_feature_refinement_source
+          role: scaffold_evidence
+  - id: item_output_state
+    representation_ref: representations.item_output_state
+    scope_ref: modules.output_decoder
+    role: decoded_state
+    evidence:
+      status: inferred
+      refs:
+        - source_ref: generic_feature_refinement_source
+          role: scaffold_evidence
+  - id: predictions_output
+    representation_ref: representations.predictions
+    scope_ref: architecture
+    boundary: output
+    role: task_output
+    evidence:
+      status: inferred
+      refs:
+        - source_ref: generic_feature_refinement_source
+          role: scaffold_evidence
+modules:
+  - id: input_adapter
+    parent_ref: architecture
+    decomposition:
+      status: leaf
+    label: Input Adapter
+    kind: adapter
+    mechanisms: [input_featurization]
+    role: embed raw records and build initial item state, conditioning signal, masks, and grouping indices
+    scale: item
+    evidence:
+      status: inferred
+      refs:
+        - source_ref: generic_feature_refinement_source
+          role: scaffold_evidence
+  - id: context_builder
+    parent_ref: architecture
+    decomposition:
+      status: leaf
+    label: Context Builder
+    kind: encoder
+    mechanisms: [pair_context]
+    role: construct pair/context features used later as attention bias
+    scale: item_pair
+    evidence:
+      status: inferred
+      refs:
+        - source_ref: generic_feature_refinement_source
+          role: scaffold_evidence
+  - id: item_encoder
+    parent_ref: architecture
+    decomposition:
+      status: complete
+    label: Item Encoder
+    kind: encoder
+    mechanisms: [attention, adaptive_normalization]
+    role: update fine-scale item state with local attention and per-item conditioning
+    scale: item
+    repeats: 3
+    pseudocode_ref: pseudocode/generic-feature-refinement.yaml
+    depth:
+      blocks: 3
+      heads: 8
+    evidence:
+      status: inferred
+      refs:
+        - source_ref: generic_feature_refinement_source
+          role: scaffold_evidence
+  - id: item_adaln
+    parent_ref: modules.item_encoder
+    decomposition:
+      status: leaf
+    label: Per-item AdaLN
+    kind: normalization
+    mechanisms: [adaptive_normalization]
+    role: produce shift, scale, and gate for each item update
+    scale: item
+    standard_block_ref: standard_blocks/per-item-adaln-conditioning.yaml
+    evidence:
+      status: inferred
+      refs:
+        - source_ref: generic_feature_refinement_source
+          role: scaffold_evidence
+  - id: local_attention_stack
+    parent_ref: modules.item_encoder
+    decomposition:
+      status: leaf
+    label: Local Attention Stack
+    kind: attention
+    mechanisms: [local_attention]
+    role: apply local attention and feedforward updates to the modulated item stream
+    scale: item
+    attention:
+      pattern: local
+      query_scale: item
+      key_value_scale: item
+      heads: 8
+      pair_bias: false
+      pair_bias_source: none
+      positional_encoding:
+        kind: relative_position
+    evidence:
+      status: inferred
+      refs:
+        - source_ref: generic_feature_refinement_source
+          role: scaffold_evidence
+  - id: item_to_group_pool
+    parent_ref: architecture
+    decomposition:
+      status: leaf
+    label: Item-to-Group Pool
+    kind: adapter
+    mechanisms: [pooling]
+    role: compress item states into group states using an ownership index
+    scale: group
+    evidence:
+      status: inferred
+      refs:
+        - source_ref: generic_feature_refinement_source
+          role: scaffold_evidence
+  - id: group_refiner
+    parent_ref: architecture
+    decomposition:
+      status: complete
+    label: Group Refiner
+    kind: refiner
+    mechanisms: [attention, pair_biased_attention]
+    role: update compressed group state with full attention and pair/context bias
+    scale: group
+    repeats: 6
+    pseudocode_ref: pseudocode/generic-feature-refinement.yaml
+    depth:
+      blocks: 6
+      heads: 8
+    evidence:
+      status: inferred
+      refs:
+        - source_ref: generic_feature_refinement_source
+          role: scaffold_evidence
+  - id: pair_biased_attention
+    parent_ref: modules.group_refiner
+    decomposition:
+      status: leaf
+    label: Pair-biased Attention
+    kind: attention
+    mechanisms: [pair_biased_attention]
+    role: update group state with full attention and pair/context logit bias
+    scale: group
+    attention:
+      pattern: full
+      query_scale: group
+      key_value_scale: group
+      heads: 8
+      pair_bias: true
+      pair_bias_source: pair_context
+      positional_encoding:
+        kind: relative_position
+    evidence:
+      status: inferred
+      refs:
+        - source_ref: generic_feature_refinement_source
+          role: scaffold_evidence
+  - id: output_decoder
+    parent_ref: architecture
+    decomposition:
+      status: leaf
+    label: Output Decoder
+    kind: decoder
+    role: broadcast group output back to item resolution and fuse the item skip state
+    scale: item
+    evidence:
+      status: inferred
+      refs:
+        - source_ref: generic_feature_refinement_source
+          role: scaffold_evidence
+  - id: output_heads
+    parent_ref: architecture
+    decomposition:
+      status: leaf
+    label: Output Heads
+    kind: prediction_head
+    role: project decoded item state to task-specific predictions
+    scale: output
+    evidence:
+      status: inferred
+      refs:
+        - source_ref: generic_feature_refinement_source
+          role: scaffold_evidence
+block_instances:
+  - id: generic_group_pair_attention
+    block_ref: standard_blocks/pair-biased-attention.yaml
+    subject_ref: modules.pair_biased_attention
+    variant: logit_bias_only
+    use_scope: whole_module
+    conformance: exact
+    port_bindings:
+      - port_ref: ports.single_state
+        relation_refs: [relations.group_state_enters_pair_attention]
+      - port_ref: ports.pair_context
+        relation_refs: [relations.pair_context_biases_pair_attention]
+      - port_ref: ports.updated_single_state
+        relation_refs: [relations.pair_attention_updates_group_state]
+    evidence:
+      status: inferred
+      refs:
+        - source_ref: generic_feature_refinement_source
+          role: scaffold_evidence
+          note: The generic source set deliberately instantiates the logit-bias-only variant as reusable vocabulary.
+relations:
+  - id: raw_records_enter_input_adapter
+    from: value_sites.raw_records_input
+    to: modules.input_adapter
+    kind: data_flow
+    carries: [representations.raw_records]
+    operation: embed_inputs
+    evidence:
+      status: inferred
+      refs:
+        - source_ref: generic_feature_refinement_source
+          role: scaffold_evidence
+  - id: input_adapter_initializes_item_state
+    from: modules.input_adapter
+    to: value_sites.item_state_before_encoder
+    kind: data_flow
+    carries: [representations.item_state]
+    operation: initialize_state
+    evidence:
+      status: inferred
+      refs:
+        - source_ref: generic_feature_refinement_source
+          role: scaffold_evidence
+  - id: input_adapter_initializes_conditioning_signal
+    from: modules.input_adapter
+    to: value_sites.conditioning_signal
+    kind: data_flow
+    carries: [representations.conditioning_signal]
+    operation: initialize_conditioning
+    evidence:
+      status: inferred
+      refs:
+        - source_ref: generic_feature_refinement_source
+          role: scaffold_evidence
+  - id: input_adapter_produces_item_to_group_index
+    from: modules.input_adapter
+    to: value_sites.item_to_group_index
+    kind: index_flow
+    carries: [representations.item_to_group_index]
+    operation: assign_group_ownership
+    evidence:
+      status: inferred
+      refs:
+        - source_ref: generic_feature_refinement_source
+          role: scaffold_evidence
+  - id: item_state_feeds_context_builder
+    from: value_sites.item_state_before_encoder
+    to: modules.context_builder
+    kind: data_flow
+    carries: [representations.item_state]
+    operation: pair_context_construction
+    evidence:
+      status: inferred
+      refs:
+        - source_ref: generic_feature_refinement_source
+          role: scaffold_evidence
+  - id: item_to_group_index_guides_context_builder
+    from: value_sites.item_to_group_index
+    to: modules.context_builder
+    kind: index_flow
+    carries: [representations.item_to_group_index]
+    operation: group_context_by_ownership
+    evidence:
+      status: inferred
+      refs:
+        - source_ref: generic_feature_refinement_source
+          role: scaffold_evidence
+  - id: context_builder_produces_pair_context
+    from: modules.context_builder
+    to: value_sites.pair_context
+    kind: data_flow
+    carries: [representations.pair_context]
+    operation: build_pair_context
+    evidence:
+      status: inferred
+      refs:
+        - source_ref: generic_feature_refinement_source
+          role: scaffold_evidence
+  - id: item_state_enters_item_adaln
+    from: value_sites.item_state_before_encoder
+    to: modules.item_adaln
+    kind: data_flow
+    carries: [representations.item_state]
+    operation: normalize_item_state
+    evidence:
+      status: inferred
+      refs:
+        - source_ref: generic_feature_refinement_source
+          role: scaffold_evidence
+  - id: conditioning_signal_modulates_item_adaln
+    from: value_sites.conditioning_signal
+    to: modules.item_adaln
+    kind: conditioning
+    carries: [representations.conditioning_signal]
+    operation: adaptive_conditioning
+    evidence:
+      status: inferred
+      refs:
+        - source_ref: generic_feature_refinement_source
+          role: scaffold_evidence
+  - id: item_adaln_feeds_local_attention
+    from: modules.item_adaln
+    to: modules.local_attention_stack
+    kind: data_flow
+    carries: [representations.item_state]
+    operation: apply_modulation
+    evidence:
+      status: inferred
+      refs:
+        - source_ref: generic_feature_refinement_source
+          role: scaffold_evidence
+  - id: local_attention_updates_item_state
+    from: modules.local_attention_stack
+    to: value_sites.item_state_after_encoder
+    kind: data_flow
+    carries: [representations.item_state]
+    operation: item_attention_update
+    evidence:
+      status: inferred
+      refs:
+        - source_ref: generic_feature_refinement_source
+          role: scaffold_evidence
+  - id: encoded_item_state_enters_group_pool
+    from: value_sites.item_state_after_encoder
+    to: modules.item_to_group_pool
+    kind: data_flow
+    carries: [representations.item_state]
+    operation: prepare_compression
+    evidence:
+      status: inferred
+      refs:
+        - source_ref: generic_feature_refinement_source
+          role: scaffold_evidence
+  - id: item_to_group_index_guides_pooling
+    from: value_sites.item_to_group_index
+    to: modules.item_to_group_pool
+    kind: index_flow
+    carries: [representations.item_to_group_index]
+    operation: scatter_by_group_ownership
+    evidence:
+      status: inferred
+      refs:
+        - source_ref: generic_feature_refinement_source
+          role: scaffold_evidence
+  - id: item_to_group_pool_produces_group_state
+    from: modules.item_to_group_pool
+    to: value_sites.group_state_before_refiner
+    kind: data_flow
+    carries: [representations.group_state]
+    operation: scatter_mean
+    evidence:
+      status: inferred
+      refs:
+        - source_ref: generic_feature_refinement_source
+          role: scaffold_evidence
+  - id: group_state_enters_pair_attention
+    from: value_sites.group_state_before_refiner
+    to: modules.pair_biased_attention
+    kind: data_flow
+    carries: [representations.group_state]
+    operation: project_queries_keys_values
+    evidence:
+      status: inferred
+      refs:
+        - source_ref: generic_feature_refinement_source
+          role: scaffold_evidence
+  - id: pair_context_biases_pair_attention
+    from: value_sites.pair_context
+    to: modules.pair_biased_attention
+    kind: conditioning
+    carries: [representations.pair_context]
+    operation: pair_bias
+    evidence:
+      status: inferred
+      refs:
+        - source_ref: generic_feature_refinement_source
+          role: scaffold_evidence
+  - id: pair_attention_updates_group_state
+    from: modules.pair_biased_attention
+    to: value_sites.group_state_after_refiner
+    kind: data_flow
+    carries: [representations.group_state]
+    operation: group_attention_update
+    evidence:
+      status: inferred
+      refs:
+        - source_ref: generic_feature_refinement_source
+          role: scaffold_evidence
+  - id: refined_group_state_enters_output_decoder
+    from: value_sites.group_state_after_refiner
+    to: modules.output_decoder
+    kind: data_flow
+    carries: [representations.group_state]
+    operation: decode_groups
+    evidence:
+      status: inferred
+      refs:
+        - source_ref: generic_feature_refinement_source
+          role: scaffold_evidence
+  - id: encoded_item_state_skips_to_output_decoder
+    from: value_sites.item_state_after_encoder
+    to: modules.output_decoder
+    kind: skip
+    carries: [representations.item_state]
+    operation: fuse_item_skip
+    evidence:
+      status: inferred
+      refs:
+        - source_ref: generic_feature_refinement_source
+          role: scaffold_evidence
+  - id: item_to_group_index_guides_output_decoder
+    from: value_sites.item_to_group_index
+    to: modules.output_decoder
+    kind: index_flow
+    carries: [representations.item_to_group_index]
+    operation: gather_by_group_ownership
+    evidence:
+      status: inferred
+      refs:
+        - source_ref: generic_feature_refinement_source
+          role: scaffold_evidence
+  - id: output_decoder_produces_item_output_state
+    from: modules.output_decoder
+    to: value_sites.item_output_state
+    kind: data_flow
+    carries: [representations.item_output_state]
+    operation: broadcast_and_fuse
+    evidence:
+      status: inferred
+      refs:
+        - source_ref: generic_feature_refinement_source
+          role: scaffold_evidence
+  - id: item_output_state_feeds_output_heads
+    from: value_sites.item_output_state
+    to: modules.output_heads
+    kind: data_flow
+    carries: [representations.item_output_state]
+    operation: output_projection
+    evidence:
+      status: inferred
+      refs:
+        - source_ref: generic_feature_refinement_source
+          role: scaffold_evidence
+  - id: output_heads_produce_predictions
+    from: modules.output_heads
+    to: value_sites.predictions_output
+    kind: data_flow
+    carries: [representations.predictions]
+    operation: predict
+    evidence:
+      status: inferred
+      refs:
+        - source_ref: generic_feature_refinement_source
+          role: scaffold_evidence
+claims:
+  - id: context_bias_is_read_only
+    statement: The pair/context stream is used as attention-logit conditioning in the group refiner and is not updated there.
+    scope:
+      module_ref: modules.group_refiner
+    evidence:
+      status: inferred
+      refs:
+        - source_ref: generic_feature_refinement_source
+          role: scaffold_evidence
+  - id: compression_is_explicit
+    statement: The item-to-group transition is modeled as pooling, while the group-to-item transition is modeled as broadcast/gather.
+    scope:
+      scale_transition: item_to_group_pool
+    evidence:
+      status: inferred
+      refs:
+        - source_ref: generic_feature_refinement_source
+          role: scaffold_evidence
+open_questions:
+  - id: update_pair_context
+    question: Should a concrete architecture update pair/context state or keep it read-only?
+    status: unresolved
+    affected_refs:
+      - state_semantics.pair_context
+      - value_sites.pair_context
+    blocking: false
+    resolution_criteria: Resolve when this scaffold is specialized to an architecture with explicit pair/context update semantics.
+    evidence:
+      status: open_question
+      refs:
+        - source_ref: generic_feature_refinement_source
+          role: scaffold_evidence
+          note: The generic source intentionally leaves this specialization choice open.

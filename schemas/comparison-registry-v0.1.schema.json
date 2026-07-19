@@ -1,0 +1,20 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://explainer.local/schemas/comparison-registry-v0.1.schema.json",
+  "title": "Architecture Comparison Registry v0.1",
+  "type": "object",
+  "required": ["schema_version", "sources"],
+  "properties": {
+    "schema_version": { "const": "comparison-registry-v0.1" },
+    "sources": {
+      "type": "array",
+      "minItems": 1,
+      "uniqueItems": true,
+      "items": {
+        "type": "string",
+        "pattern": "^comparisons/[a-z][a-z0-9_-]*\\.yaml$"
+      }
+    }
+  },
+  "additionalProperties": false
+}

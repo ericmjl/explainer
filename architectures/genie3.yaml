@@ -1,0 +1,1533 @@
+schema_version: architecture-v0.4
+id: genie3
+name: Genie 3 Atom-Aware Protein Diffusion
+family: protein_structure_diffusion
+status: draft
+task_modes:
+  - unconditional_generation
+  - single_motif_scaffolding
+  - multi_motif_scaffolding
+  - binder_design
+reference_configuration:
+  checkpoint: pretrained_v1_step_600000
+  protein_representation: atom14_capable_partial_atomization
+  diffusion_steps: 1000
+  default_sampling_steps: 100
+  single_feature_dimension: 384
+  pair_feature_dimension: 128
+  latent_transformer_blocks: 5
+  global_tokens: 10
+  structure_layers: 8
+  ipa_heads: 12
+  evidence:
+    status: confirmed_from_code
+    refs:
+      - source_ref: genie3_config_code
+        role: configuration_evidence
+        locator: config
+      - source_ref: genie3_ddim_code
+        role: implementation_evidence
+        locator: DDIMSampler._step
+sources:
+  - source_ref: genie3_2026
+    role: architecture_description
+  - source_ref: genie3_model_code
+    role: reference_implementation
+  - source_ref: genie3_sampler_code
+    role: sampling_implementation
+  - source_ref: genie3_diffusion_code
+    role: training_implementation
+decomposition:
+  status: complete
+  evidence:
+    status: confirmed_from_code
+    refs:
+      - source_ref: genie3_sampler_code
+        role: implementation_evidence
+        locator: Sampler.sample
+        note: The source set accounts for feature preparation, reverse diffusion, optional sequence sampling, and PDB postprocessing.
+execution:
+  loops:
+    - id: reverse_diffusion_loop
+      repeats: 100
+      reruns:
+        - modules.reverse_diffusion_step
+      cached:
+        - value_sites.feature_bundle
+      notes:
+        - The released inference path defaults to DDIM with 100 selected timesteps from the 1000-step training schedule.
+        - Frenet-Serret frames are reconstructed from the current token coordinates before every denoiser call.
+      evidence:
+        status: confirmed_from_code
+        refs:
+          - source_ref: genie3_sampler_code
+            role: implementation_evidence
+            locator: Sampler.sample and Sampler._sample
+          - source_ref: genie3_ddim_code
+            role: implementation_evidence
+            locator: DDIMSampler._step
+    - id: latent_reasoning_stack
+      repeats: 5
+      reruns:
+        - modules.pair_biased_attention_update
+        - modules.single_to_pair_update
+        - modules.triangle_multiplication_stack
+        - modules.pair_transition
+      cached: []
+      notes:
+        - Every block communicates pair information into singles, then singles back into pairs before triangular pair refinement.
+        - One block maps the indexed state pair (s_i, z_i) to (s_(i+1), z_(i+1)); for the first four blocks those writes become the next block's reads, and global tokens are removed only after block five.
+      evidence:
+        status: confirmed_from_code
+        refs:
+          - source_ref: genie3_latent_transformer_code
+            role: implementation_evidence
+            locator: LatentTransformer.forward and LatentTransformerBlock.forward
+    - id: structure_refinement_stack
+      repeats: 8
+      reruns:
+        - modules.invariant_point_attention
+        - modules.structure_transition
+        - modules.frame_update
+      cached:
+        - value_sites.refined_pair_features
+      notes:
+        - Each layer updates single features and composes a learned rigid increment into the current token frames.
+      evidence:
+        status: confirmed_from_code
+        refs:
+          - source_ref: genie3_structure_code
+            role: implementation_evidence
+            locator: StructureNet.forward and StructureLayer.forward
+state_semantics:
+  diffusion_coordinates:
+    representation_ref: representations.token_coordinates
+    value_site_refs:
+      - value_sites.initial_coordinates
+      - value_sites.current_coordinates
+      - value_sites.step_coordinates
+      - value_sites.next_coordinates
+      - value_sites.final_coordinates
+    lifecycle: iterative_loop_state
+    notes:
+      - Coordinates are the stochastic state; rotations are deterministically reconstructed from neighboring token coordinates.
+      - A token is one C-alpha for an unatomized residue or one modeled heavy atom for an atomized known residue.
+    evidence:
+      status: confirmed_from_code
+      refs:
+        - source_ref: genie3_sampler_code
+          role: implementation_evidence
+          locator: Sampler._sample
+        - source_ref: genie3_feature_code
+          role: implementation_evidence
+          locator: create_np_features_from_chain
+  denoiser_frames:
+    representation_ref: representations.token_frames
+    value_site_refs:
+      - value_sites.current_frames
+      - value_sites.decoder_frames
+      - value_sites.updated_frames
+      - value_sites.decoder_output_frames
+    lifecycle: derived_then_transformed_within_denoiser
+    notes:
+      - Current frames package x_t translations with Frenet rotations derived from x_t; frames are not independently noised.
+      - Within one structure layer, decoder_frames is T_l and updated_frames is T_(l+1); only the eighth layer's write becomes decoder_output_frames, T_hat.
+    evidence:
+      status: confirmed_from_code
+      refs:
+        - source_ref: genie3_geometry_code
+          role: implementation_evidence
+          locator: compute_noisy_structure_frames
+        - source_ref: genie3_structure_code
+          role: implementation_evidence
+          locator: StructureNet.forward
+  latent_single_state:
+    representation_ref: representations.single_features
+    value_site_refs:
+      - value_sites.initial_single_features
+      - value_sites.single_with_global_tokens
+      - value_sites.single_after_pair_attention
+      - value_sites.refined_single_features
+    lifecycle: transformed_within_denoiser
+    notes:
+      - The global-token state entering one latent block is s_i and that block writes s_(i+1); only the fifth write becomes the globals-removed mature single output.
+    evidence:
+      status: confirmed_from_code
+      refs:
+        - source_ref: genie3_latent_transformer_code
+          role: implementation_evidence
+          locator: LatentTransformer.forward
+  latent_pair_state:
+    representation_ref: representations.pair_features
+    value_site_refs:
+      - value_sites.initial_pair_features
+      - value_sites.pair_with_global_tokens
+      - value_sites.pair_after_single_update
+      - value_sites.pair_after_triangle_updates
+      - value_sites.pair_after_transition
+      - value_sites.refined_pair_features
+    lifecycle: transformed_within_denoiser
+    notes:
+      - The global-row/column state entering one latent block is z_i and the pair transition writes z_(i+1); only the fifth write becomes the globals-removed mature pair output.
+    evidence:
+      status: confirmed_from_code
+      refs:
+        - source_ref: genie3_latent_transformer_code
+          role: implementation_evidence
+          locator: LatentTransformerBlock.forward
+  conditioning_features:
+    representation_ref: representations.feature_bundle
+    value_site_refs:
+      - value_sites.feature_bundle
+    lifecycle: read_only_across_sampling
+    notes:
+      - The bundle carries task-dependent sequence, structure, atomization, chain, and interface masks.
+    evidence:
+      status: confirmed_from_code
+      refs:
+        - source_ref: genie3_feature_code
+          role: implementation_evidence
+          locator: create_np_features_from_chain
+conditioning:
+  - id: sequence_and_task_conditioning
+    relation_ref: relations.feature_bundle_conditions_single_embedder
+    mode: masked_sequence_and_task_features
+    updates_source: false
+    evidence:
+      status: confirmed_from_code
+      refs:
+        - source_ref: genie3_single_feature_code
+          role: implementation_evidence
+          locator: V1SingleFeatureNet.forward
+  - id: conditioned_geometry_injection
+    relation_ref: relations.feature_bundle_conditions_pair_embedder
+    mode: masked_structure_frames_and_group_geometry
+    updates_source: false
+    evidence:
+      status: confirmed_from_code
+      refs:
+        - source_ref: genie3_pair_feature_code
+          role: implementation_evidence
+          locator: V1PairFeatureNet.forward
+  - id: pair_biases_single_attention
+    relation_ref: relations.pair_with_global_tokens_bias_attention
+    mode: pair_bias_and_value_injection
+    updates_source: false
+    evidence:
+      status: confirmed_from_code
+      refs:
+        - source_ref: genie3_ipa_code
+          role: implementation_evidence
+          locator: ReducedInvariantPointAttention.forward
+  - id: pair_conditioned_structure_attention
+    relation_ref: relations.refined_pair_features_bias_ipa
+    mode: pair_bias
+    updates_source: false
+    evidence:
+      status: confirmed_from_code
+      refs:
+        - source_ref: genie3_structure_code
+          role: implementation_evidence
+          locator: StructureLayer.forward
+  - id: frame_conditioned_structure_attention
+    relation_ref: relations.decoder_frames_condition_ipa
+    mode: invariant_point_geometry
+    updates_source: false
+    evidence:
+      status: confirmed_from_code
+      refs:
+        - source_ref: genie3_structure_code
+          role: implementation_evidence
+          locator: StructureLayer.forward
+scale_transitions:
+  - id: single_to_pair_expansion
+    relation_path:
+      - relations.single_after_pair_attention_enters_single_to_pair_update
+      - relations.single_to_pair_update_produces_pair_state
+    aggregation: projected_outer_product
+    copy_vs_pool: expand
+    evidence:
+      status: confirmed_from_code
+      refs:
+        - source_ref: genie3_latent_transformer_code
+          role: implementation_evidence
+          locator: LatentTransformerBlock.forward
+  - id: coordinates_to_pdb_records
+    relation_path:
+      - relations.final_coordinates_enter_pdb_exporter
+      - relations.pdb_exporter_writes_design_pdb
+    aggregation: serialize_modeled_atom_records
+    copy_vs_pool: copy
+    evidence:
+      status: confirmed_from_code
+      refs:
+        - source_ref: genie3_export_code
+          role: implementation_evidence
+          locator: PostProcessor.save and PostProcessor._update_structure
+training_inference:
+  objective:
+    kind: coordinate_noise_prediction_with_auxiliary_structure_and_sequence_losses
+    notes:
+      - Training adds isotropic Gaussian noise to token coordinates and minimizes coordinate-noise error.
+      - The V1 training configuration also supports auxiliary FAPE and sequence losses.
+  schedule:
+    kind: cosine_variance
+    steps: 1000
+  sampler:
+    kind: ddim_directional_scaling
+    steps: 100
+    configurable: true
+    base_schedule_steps: 1000
+    timestep_selection: strided_reverse_chain
+    initial_state: standard_normal_token_coordinates
+    guidance: direction_scale
+    update: reconstructed_x0_plus_scaled_direction_and_noise
+    clip_denoised: false
+  teacher_forcing: not_applicable
+  self_conditioning: none
+  checkpoint_notes:
+    - The command-line loader defaults generation to the released V1 checkpoint and the DDIM sampler.
+    - Sequence and sidechain prediction are optional sampler settings and are disabled by default.
+    - Unconditional unknown residues remain C-alpha tokens; atom14 sidechain tokens are introduced for known atomized motif or interface residues.
+  evidence:
+    status: confirmed_from_code
+    refs:
+      - source_ref: genie3_diffusion_code
+        role: implementation_evidence
+        locator: DDPM.forward and DDPM.loss
+      - source_ref: genie3_ddim_code
+        role: implementation_evidence
+        locator: DDIMSampler._step and DDIMSampler._sample_sequence
+representations:
+  - id: design_request
+    scale: sample
+    semantic_role: unconditional, motif-scaffolding, or binder-design request
+    shape: "B x request metadata"
+    carries:
+      - target length or conditional structure specification
+      - optional motif groups, target chains, and hotspot/interface annotations
+    evidence: &request_evidence
+      status: confirmed_from_code
+      refs:
+        - source_ref: genie3_feature_code
+          role: implementation_evidence
+          locator: create_np_features_from_length, create_np_features_from_motif_config, and create_np_features_from_target_config
+  - id: feature_bundle
+    scale: mixed
+    semantic_role: token layout and task-dependent sequence, structure, atomization, and interface conditioning
+    shape: "B x N token metadata + B x N x N pairwise masks"
+    carries:
+      - token, residue, chain, entity, and atom identities
+      - atomization and valid-frame masks
+      - optional sequence, coordinate, motif-group, and interface masks
+    evidence: &feature_evidence
+      status: confirmed_from_code
+      refs:
+        - source_ref: genie3_feature_code
+          role: implementation_evidence
+          locator: create_np_features_from_chain
+  - id: token_coordinates
+    scale: token
+    semantic_role: point-cloud diffusion state over C-alpha and optionally atomized heavy-atom tokens
+    shape: "B x N x 3"
+    carries:
+      - one three-dimensional coordinate per active token
+    evidence: &coordinate_evidence
+      status: confirmed_from_code
+      refs:
+        - source_ref: genie3_sampler_code
+          role: implementation_evidence
+          locator: Sampler._sample
+        - source_ref: genie3_feature_code
+          role: implementation_evidence
+          locator: create_np_features_from_chain
+    glyph: coordinates
+  - id: token_frames
+    scale: token
+    semantic_role: Frenet-Serret frames derived along C-alpha and atom14-ordered sidechain traces
+    shape: "B x N x (3 x 3 + 3)"
+    carries:
+      - derived rotation
+      - current token translation
+    evidence: &frame_evidence
+      status: confirmed_from_code
+      refs:
+        - source_ref: genie3_geometry_code
+          role: implementation_evidence
+          locator: compute_noisy_structure_frames and compute_frenet_frames
+    glyph: frames
+  - id: timestep
+    scale: sample
+    semantic_role: selected diffusion noise level
+    shape: "B"
+    carries:
+      - one of 100 selected reverse steps from the 1000-step schedule
+    evidence: &sampler_evidence
+      status: confirmed_from_code
+      refs:
+        - source_ref: genie3_sampler_code
+          role: implementation_evidence
+          locator: Sampler._sample
+        - source_ref: genie3_ddim_code
+          role: implementation_evidence
+          locator: DDIMSampler._step
+  - id: coordinate_noise
+    scale: token
+    semantic_role: predicted or sampled coordinate noise
+    shape: "B x N x 3"
+    carries:
+      - one displacement vector per active token
+    evidence: *sampler_evidence
+  - id: single_features
+    scale: token
+    semantic_role: SE(3)-invariant per-token latent state
+    shape: "B x N x 384"
+    carries:
+      - token, residue, chain, atom, timestep, and task-conditioning features
+    evidence: &single_evidence
+      status: confirmed_from_code
+      refs:
+        - source_ref: genie3_single_feature_code
+          role: implementation_evidence
+          locator: V1SingleFeatureNet.forward
+  - id: pair_features
+    scale: pair
+    semantic_role: SE(3)-invariant token-pair latent state
+    shape: "B x N x N x 128"
+    carries:
+      - relative index and chain features
+      - noisy and conditioned frame geometry
+      - learned single-to-pair communication
+    evidence: &pair_evidence
+      status: confirmed_from_code
+      refs:
+        - source_ref: genie3_pair_feature_code
+          role: implementation_evidence
+          locator: V1PairFeatureNet.forward
+        - source_ref: genie3_latent_transformer_code
+          role: implementation_evidence
+          locator: LatentTransformerBlock.forward
+  - id: sequence_logits
+    scale: token
+    semantic_role: optional amino-acid logits for C-alpha tokens
+    shape: "B x N x 20"
+    carries:
+      - categorical residue-type scores
+    evidence: &sequence_evidence
+      status: confirmed_from_code
+      refs:
+        - source_ref: genie3_sequence_code
+          role: implementation_evidence
+          locator: SequenceNet.forward
+  - id: protein_sequence
+    scale: residue
+    semantic_role: optional sampled amino-acid identities
+    shape: "B x R"
+    carries:
+      - one residue type per designed residue
+    evidence: *sequence_evidence
+  - id: protein_pdb
+    scale: output
+    semantic_role: serialized generated protein design
+    shape: "modeled atom records"
+    carries:
+      - generated coordinates
+      - conditioned or optionally predicted residue identities
+    evidence: &export_evidence
+      status: confirmed_from_code
+      refs:
+        - source_ref: genie3_export_code
+          role: implementation_evidence
+          locator: PostProcessor.save
+value_sites:
+  - id: design_request
+    representation_ref: representations.design_request
+    scope_ref: architecture
+    boundary: input
+    role: task_input
+    evidence: *request_evidence
+  - id: feature_bundle
+    representation_ref: representations.feature_bundle
+    scope_ref: architecture
+    role: prepared_conditioning
+    evidence: *feature_evidence
+  - id: initial_coordinates
+    representation_ref: representations.token_coordinates
+    scope_ref: modules.diffusion_sampler
+    role: initial_state
+    evidence: *sampler_evidence
+  - id: current_coordinates
+    representation_ref: representations.token_coordinates
+    scope_ref: modules.diffusion_sampler
+    role: state_read
+    evidence: *sampler_evidence
+  - id: step_coordinates
+    representation_ref: representations.token_coordinates
+    scope_ref: modules.reverse_diffusion_step
+    role: reverse_step_input
+    evidence: *sampler_evidence
+  - id: current_frames
+    representation_ref: representations.token_frames
+    scope_ref: modules.denoiser
+    role: derived_model_input
+    evidence: *frame_evidence
+  - id: timestep
+    representation_ref: representations.timestep
+    scope_ref: modules.reverse_diffusion_step
+    role: loop_control
+    evidence: *sampler_evidence
+  - id: coordinate_prediction
+    representation_ref: representations.token_coordinates
+    scope_ref: modules.denoiser
+    role: denoised_coordinate_estimate
+    evidence: &model_evidence
+      status: confirmed_from_code
+      refs:
+        - source_ref: genie3_model_code
+          role: implementation_evidence
+          locator: V1Denoiser.forward
+  - id: sampler_step_coordinates
+    representation_ref: representations.token_coordinates
+    scope_ref: modules.directional_ddim_sampler_math
+    role: fixed_sampler_math_input
+    evidence: *sampler_evidence
+  - id: predicted_noise
+    representation_ref: representations.coordinate_noise
+    scope_ref: modules.directional_ddim_sampler_math
+    role: model_prediction
+    evidence: *sampler_evidence
+  - id: fresh_step_noise
+    representation_ref: representations.coordinate_noise
+    scope_ref: modules.directional_ddim_sampler_math
+    role: stochastic_input
+    evidence: *sampler_evidence
+  - id: next_coordinates
+    representation_ref: representations.token_coordinates
+    scope_ref: modules.diffusion_sampler
+    role: state_write
+    evidence: *sampler_evidence
+  - id: final_coordinates
+    representation_ref: representations.token_coordinates
+    scope_ref: architecture
+    role: sampler_output
+    evidence: *sampler_evidence
+  - id: initial_single_features
+    representation_ref: representations.single_features
+    scope_ref: modules.denoiser
+    role: embedder_output
+    evidence: *single_evidence
+  - id: initial_pair_features
+    representation_ref: representations.pair_features
+    scope_ref: modules.denoiser
+    role: embedder_output
+    evidence: *pair_evidence
+  - id: single_with_global_tokens
+    representation_ref: representations.single_features
+    scope_ref: modules.latent_transformer
+    role: latent_block_single_state_read
+    evidence: &latent_evidence
+      status: confirmed_from_code
+      refs:
+        - source_ref: genie3_latent_transformer_code
+          role: implementation_evidence
+          locator: LatentTransformer.forward
+  - id: pair_with_global_tokens
+    representation_ref: representations.pair_features
+    scope_ref: modules.latent_transformer
+    role: latent_block_pair_state_read
+    evidence: *latent_evidence
+  - id: single_after_pair_attention
+    representation_ref: representations.single_features
+    scope_ref: modules.latent_transformer
+    role: latent_block_single_state_write
+    evidence: *latent_evidence
+  - id: pair_after_single_update
+    representation_ref: representations.pair_features
+    scope_ref: modules.latent_transformer
+    role: single_updated_pair_state
+    evidence: *latent_evidence
+  - id: pair_after_triangle_updates
+    representation_ref: representations.pair_features
+    scope_ref: modules.latent_transformer
+    role: triangle_updated_pair_state
+    evidence: *latent_evidence
+  - id: pair_after_transition
+    representation_ref: representations.pair_features
+    scope_ref: modules.latent_transformer
+    role: latent_block_pair_state_write
+    evidence: *latent_evidence
+  - id: refined_single_features
+    representation_ref: representations.single_features
+    scope_ref: modules.denoiser
+    role: latent_transformer_output
+    evidence: *latent_evidence
+  - id: refined_pair_features
+    representation_ref: representations.pair_features
+    scope_ref: modules.denoiser
+    role: latent_transformer_output
+    evidence: *latent_evidence
+  - id: decoder_single_state
+    representation_ref: representations.single_features
+    scope_ref: modules.structure_decoder
+    role: structure_layer_state_read
+    evidence: &structure_evidence
+      status: confirmed_from_code
+      refs:
+        - source_ref: genie3_structure_code
+          role: implementation_evidence
+          locator: StructureNet.forward and StructureLayer.forward
+  - id: decoder_frames
+    representation_ref: representations.token_frames
+    scope_ref: modules.structure_decoder
+    role: structure_layer_frame_read
+    evidence: *structure_evidence
+  - id: single_after_ipa
+    representation_ref: representations.single_features
+    scope_ref: modules.structure_decoder
+    role: attention_updated_state
+    evidence: *structure_evidence
+  - id: single_after_transition
+    representation_ref: representations.single_features
+    scope_ref: modules.structure_decoder
+    role: transition_updated_state
+    evidence: *structure_evidence
+  - id: updated_frames
+    representation_ref: representations.token_frames
+    scope_ref: modules.structure_decoder
+    role: frame_state_write
+    evidence: *structure_evidence
+  - id: decoder_output_frames
+    representation_ref: representations.token_frames
+    scope_ref: modules.denoiser
+    role: structure_decoder_output
+    evidence: *structure_evidence
+  - id: sequence_logits
+    representation_ref: representations.sequence_logits
+    scope_ref: modules.denoiser
+    role: optional_model_output
+    evidence: *sequence_evidence
+  - id: predicted_sequence
+    representation_ref: representations.protein_sequence
+    scope_ref: architecture
+    role: optional_sampler_output
+    evidence: *sequence_evidence
+  - id: generated_design_pdb
+    representation_ref: representations.protein_pdb
+    scope_ref: architecture
+    boundary: output
+    role: task_output
+    evidence: *export_evidence
+modules:
+  - id: feature_builder
+    parent_ref: architecture
+    decomposition: { status: leaf }
+    label: Task Feature Builder
+    kind: adapter
+    mechanisms: [task_featurization]
+    role: translate an unconditional, motif, or binder request into tokenization and conditioning features
+    scale: mixed
+    evidence: *feature_evidence
+  - id: diffusion_sampler
+    parent_ref: architecture
+    decomposition: { status: complete }
+    label: Genie 3 Diffusion Sampler
+    kind: sampler
+    mechanisms: [reverse_diffusion, directional_ddim]
+    role: initialize random token coordinates and run the default 100-step directional DDIM reverse chain
+    scale: token
+    repeats: 100
+    pseudocode_ref: pseudocode/genie3.yaml
+    evidence: *sampler_evidence
+  - id: pdb_exporter
+    parent_ref: architecture
+    decomposition: { status: leaf }
+    label: Protein PDB Exporter
+    kind: serializer
+    role: combine generated token coordinates with conditioned or optionally predicted identities and write PDB structures
+    scale: output
+    evidence: *export_evidence
+  - id: coordinate_initializer
+    parent_ref: modules.diffusion_sampler
+    decomposition: { status: leaf }
+    label: Gaussian Coordinate Initializer
+    kind: sampler
+    mechanisms: [gaussian_initialization]
+    role: sample one standard-normal coordinate for every active C-alpha or atomized heavy-atom token
+    scale: token
+    evidence: *sampler_evidence
+  - id: reverse_diffusion_step
+    parent_ref: modules.diffusion_sampler
+    decomposition: { status: complete }
+    label: Directional DDIM Reverse Step
+    kind: sampler
+    mechanisms: [directional_ddim]
+    role: select one reverse timestep, rebuild frames, call the learned denoiser, recover predicted coordinate noise, and apply the fixed directional DDIM update
+    scale: token
+    pseudocode_ref: pseudocode/genie3.yaml
+    evidence: *sampler_evidence
+  - id: timestep_controller
+    parent_ref: modules.reverse_diffusion_step
+    decomposition: { status: leaf }
+    label: Strided Timestep Controller
+    kind: controller
+    mechanisms: [timestep_schedule]
+    role: provide the current reverse index from 100 descending noise levels selected from the 1000-step training schedule
+    scale: sample
+    evidence: *sampler_evidence
+  - id: frenet_frame_builder
+    parent_ref: modules.reverse_diffusion_step
+    decomposition: { status: leaf }
+    label: Branched Frenet Frame Builder
+    kind: adapter
+    mechanisms: [frenet_frames]
+    role: derive rotations along C-alpha and atom14-ordered sidechain traces while preserving current coordinate translations
+    scale: token
+    evidence: *frame_evidence
+  - id: denoiser
+    parent_ref: modules.reverse_diffusion_step
+    decomposition: { status: complete }
+    label: V1 SE(3)-Equivariant Denoiser
+    kind: denoiser
+    role: map current frames, timestep, and task features to denoised token coordinates plus optional sequence logits
+    scale: mixed
+    evidence: *model_evidence
+  - id: directional_ddim_sampler_math
+    parent_ref: modules.reverse_diffusion_step
+    decomposition: { status: complete }
+    label: Fixed Directional DDIM Math
+    kind: sampler
+    mechanisms: [vector_difference, directional_ddim, gaussian_noise]
+    role: convert the denoiser coordinate estimate into a denoising direction and apply the fixed schedule formula to sample the next coordinate state
+    scale: token
+    evidence: *sampler_evidence
+  - id: noise_readout
+    parent_ref: modules.directional_ddim_sampler_math
+    decomposition: { status: leaf }
+    label: Coordinate Noise Readout
+    kind: operator
+    mechanisms: [vector_difference]
+    role: subtract the denoiser coordinate estimate from x_t to recover predicted coordinate noise
+    scale: token
+    evidence: *sampler_evidence
+  - id: ddim_update
+    parent_ref: modules.directional_ddim_sampler_math
+    decomposition: { status: leaf }
+    label: Directional DDIM Update
+    kind: operator
+    mechanisms: [directional_ddim]
+    role: combine reconstructed x_0, scaled denoising direction, and Gaussian noise into x_(t-10)
+    scale: token
+    evidence: *sampler_evidence
+  - id: sequence_sampler
+    parent_ref: modules.diffusion_sampler
+    decomposition: { status: leaf }
+    label: Optional Sequence Sampler
+    kind: sampler
+    mechanisms: [categorical_sampling]
+    role: after structure sampling, make a final model call and sample residue identities when sequence prediction is enabled
+    scale: residue
+    evidence: *sequence_evidence
+  - id: single_feature_embedder
+    parent_ref: modules.denoiser
+    decomposition: { status: leaf }
+    label: Single-Feature Embedder
+    kind: encoder
+    role: project token, residue, chain, atom, timestep, and task-conditioning metadata into 384-dimensional single features
+    scale: token
+    evidence: *single_evidence
+  - id: pair_feature_embedder
+    parent_ref: modules.denoiser
+    decomposition: { status: leaf }
+    label: Pair-Feature Embedder
+    kind: encoder
+    role: combine single outer sums, relative indices, noisy frame geometry, and conditioned geometry into 128-dimensional pair features
+    scale: pair
+    evidence: *pair_evidence
+  - id: latent_transformer
+    parent_ref: modules.denoiser
+    decomposition: { status: complete }
+    label: Bidirectional Latent Transformer
+    kind: refiner
+    mechanisms: [attention, outer_product, triangular_multiplication]
+    role: refine single and pair states through five blocks with communication in both directions at every block
+    scale: mixed
+    repeats: 5
+    evidence: *latent_evidence
+  - id: sequence_head
+    parent_ref: modules.denoiser
+    decomposition: { status: leaf }
+    label: Optional Sequence Head
+    kind: prediction_head
+    mechanisms: [classification]
+    role: map refined single features to 20 amino-acid logits per token
+    scale: token
+    evidence: *sequence_evidence
+  - id: structure_decoder
+    parent_ref: modules.denoiser
+    decomposition: { status: complete }
+    label: SE(3)-Equivariant Structure Decoder
+    kind: refiner
+    mechanisms: [invariant_point_attention, rigid_transform]
+    role: use eight IPA layers to update invariant single states and compose rigid increments into the input frames
+    scale: token
+    repeats: 8
+    evidence: *structure_evidence
+  - id: global_token_adapter
+    parent_ref: modules.latent_transformer
+    decomposition: { status: leaf }
+    label: Global Token Adapter
+    kind: adapter
+    mechanisms: [global_tokens]
+    role: append ten zero-initialized global tokens and remove them after latent reasoning
+    scale: mixed
+    evidence: *latent_evidence
+  - id: pair_biased_attention_update
+    parent_ref: modules.latent_transformer
+    decomposition: { status: leaf }
+    label: Pair-Biased Single Attention
+    kind: attention
+    mechanisms: [pair_biased_attention, pair_value_injection]
+    role: update single features using pair-biased self-attention with pair-derived value injection and no frame geometry
+    scale: token
+    attention:
+      pattern: full
+      query_scale: token
+      key_value_scale: token
+      heads: 12
+      pair_bias: true
+      pair_bias_source: pair_with_global_tokens
+      positional_encoding: { kind: none }
+    evidence: *latent_evidence
+  - id: single_to_pair_update
+    parent_ref: modules.latent_transformer
+    decomposition: { status: leaf }
+    label: Single-to-Pair Outer Product
+    kind: operator
+    mechanisms: [outer_product]
+    role: project the updated single state into a residual pair update
+    scale: pair
+    evidence: *latent_evidence
+  - id: triangle_multiplication_stack
+    parent_ref: modules.latent_transformer
+    decomposition: { status: leaf }
+    label: Outgoing + Incoming Triangle Updates
+    kind: operator
+    mechanisms: [triangular_multiplication]
+    role: apply row-dropped outgoing and incoming triangular multiplication updates to the pair state
+    scale: pair
+    evidence: *latent_evidence
+  - id: pair_transition
+    parent_ref: modules.latent_transformer
+    decomposition: { status: leaf }
+    label: Pair Transition
+    kind: feed_forward
+    role: apply the residual pair-wise transition at the end of each latent block
+    scale: pair
+    evidence: *latent_evidence
+  - id: invariant_point_attention
+    parent_ref: modules.structure_decoder
+    decomposition: { status: leaf }
+    label: Invariant Point Attention
+    kind: attention
+    mechanisms: [invariant_point_attention]
+    role: update the decoder single state using pair bias and points expressed in the current token frames
+    scale: token
+    attention:
+      pattern: full
+      query_scale: token
+      key_value_scale: token
+      heads: 12
+      pair_bias: true
+      pair_bias_source: refined_pair_features
+      positional_encoding: { kind: rigid_frame_points }
+    evidence: *structure_evidence
+  - id: structure_transition
+    parent_ref: modules.structure_decoder
+    decomposition: { status: leaf }
+    label: Structure Transition
+    kind: feed_forward
+    role: normalize and transform the IPA-updated single state
+    scale: token
+    evidence: *structure_evidence
+  - id: frame_update
+    parent_ref: modules.structure_decoder
+    decomposition: { status: leaf }
+    label: Token Frame Update
+    kind: operator
+    mechanisms: [rigid_transform]
+    role: regress and compose a six-parameter rigid increment for every valid token frame
+    scale: token
+    evidence: *structure_evidence
+block_instances:
+  - id: latent_reduced_pair_attention
+    block_ref: standard_blocks/pair-biased-attention.yaml
+    subject_ref: modules.pair_biased_attention_update
+    variant: pair_values_residual_norm_transition
+    use_scope: whole_module
+    conformance: reduced
+    difference_summary: Genie 3 removes frame-aware point terms, keeps pair-logit bias and pair-value aggregation, then adds residual normalization, a single transition, and final masking.
+    port_bindings:
+      - port_ref: ports.single_state
+        relation_refs: [relations.single_with_global_tokens_enters_attention]
+      - port_ref: ports.pair_context
+        relation_refs: [relations.pair_with_global_tokens_bias_attention]
+      - port_ref: ports.updated_single_state
+        relation_refs: [relations.pair_attention_produces_single_state]
+    evidence:
+      status: confirmed_from_code
+      refs:
+        - source_ref: genie3_ipa_code
+          role: implementation_evidence
+          locator: ReducedInvariantPointAttention.forward
+          note: Reduced IPA implements scalar attention with pair bias and pair-value aggregation while omitting frame-aware point terms.
+        - source_ref: genie3_latent_transformer_code
+          role: wrapper_evidence
+          locator: LatentTransformerBlock.forward
+          note: The latent block applies the residual normalization, transition, and output mask around ReducedIPA.
+  - id: structure_ipa
+    block_ref: standard_blocks/invariant-point-attention.yaml
+    subject_ref: modules.invariant_point_attention
+    variant: full_ipa_residual_norm
+    use_scope: whole_module
+    conformance: exact
+    port_bindings:
+      - port_ref: ports.single_state
+        relation_refs: [relations.decoder_single_state_enters_ipa]
+      - port_ref: ports.pair_context
+        relation_refs: [relations.refined_pair_features_bias_ipa]
+      - port_ref: ports.frames
+        relation_refs: [relations.decoder_frames_condition_ipa]
+      - port_ref: ports.mask
+        relation_refs: [relations.feature_bundle_masks_ipa]
+        selector: token_struct_frame_mask
+      - port_ref: ports.updated_single_state
+        relation_refs: [relations.ipa_produces_updated_single_state]
+    evidence:
+      status: confirmed_from_code
+      refs:
+        - source_ref: genie3_ipa_code
+          role: implementation_evidence
+          locator: InvariantPointAttention.forward
+          note: Full IPA implements scalar, point, pair-bias, and pair-value attention terms.
+        - source_ref: genie3_structure_code
+          role: wrapper_evidence
+          locator: StructureLayer.forward
+          note: The structure layer applies the residual, dropout, and LayerNorm wrapper represented by this variant.
+relations:
+  - id: design_request_enters_feature_builder
+    from: value_sites.design_request
+    to: modules.feature_builder
+    kind: data_flow
+    carries: [representations.design_request]
+    operation: parse_design_request
+    evidence: &request_relation_evidence
+      status: confirmed_from_code
+      refs:
+        - source_ref: genie3_feature_code
+          role: implementation_evidence
+          locator: create_np_features_from_length, create_np_features_from_motif_config, and create_np_features_from_target_config
+  - id: feature_builder_produces_feature_bundle
+    from: modules.feature_builder
+    to: value_sites.feature_bundle
+    kind: data_flow
+    carries: [representations.feature_bundle]
+    operation: build_token_and_conditioning_features
+    evidence: *request_relation_evidence
+  - id: feature_bundle_sizes_coordinate_initializer
+    from: value_sites.feature_bundle
+    to: modules.coordinate_initializer
+    kind: conditioning
+    carries: [representations.feature_bundle]
+    operation: size_active_token_tensor
+    evidence: &sampler_relation_evidence
+      status: confirmed_from_code
+      refs:
+        - source_ref: genie3_sampler_code
+          role: implementation_evidence
+          locator: Sampler._sample
+        - source_ref: genie3_ddim_code
+          role: implementation_evidence
+          locator: DDIMSampler._step
+  - id: coordinate_initializer_produces_initial_coordinates
+    from: modules.coordinate_initializer
+    to: value_sites.initial_coordinates
+    kind: state_update
+    carries: [representations.token_coordinates]
+    operation: sample_standard_normal_coordinates
+    evidence: *sampler_relation_evidence
+  - id: initial_coordinates_begin_sampling_state
+    from: value_sites.initial_coordinates
+    to: value_sites.current_coordinates
+    kind: state_update
+    carries: [representations.token_coordinates]
+    operation: initialize_reverse_chain
+    evidence: *sampler_relation_evidence
+  - id: current_coordinates_enter_reverse_step
+    from: value_sites.current_coordinates
+    to: value_sites.step_coordinates
+    kind: data_flow
+    carries: [representations.token_coordinates]
+    operation: read_current_reverse_state
+    evidence: *sampler_relation_evidence
+  - id: step_coordinates_enter_frame_builder
+    from: value_sites.step_coordinates
+    to: modules.frenet_frame_builder
+    kind: data_flow
+    carries: [representations.token_coordinates]
+    operation: provide_current_point_cloud
+    evidence: &geometry_relation_evidence
+      status: confirmed_from_code
+      refs:
+        - source_ref: genie3_geometry_code
+          role: implementation_evidence
+          locator: compute_noisy_structure_frames
+  - id: feature_bundle_conditions_frame_builder
+    from: value_sites.feature_bundle
+    to: modules.frenet_frame_builder
+    kind: conditioning
+    carries: [representations.feature_bundle]
+    operation: provide_frame_neighbor_indices_and_masks
+    evidence: *geometry_relation_evidence
+  - id: frame_builder_produces_current_frames
+    from: modules.frenet_frame_builder
+    to: value_sites.current_frames
+    kind: data_flow
+    carries: [representations.token_frames]
+    operation: derive_branched_frenet_frames
+    evidence: *geometry_relation_evidence
+  - id: timestep_controller_produces_timestep
+    from: modules.timestep_controller
+    to: value_sites.timestep
+    kind: control
+    carries: [representations.timestep]
+    operation: select_reverse_timestep
+    evidence: *sampler_relation_evidence
+  - id: feature_bundle_conditions_single_embedder
+    from: value_sites.feature_bundle
+    to: modules.single_feature_embedder
+    kind: conditioning
+    carries: [representations.feature_bundle]
+    operation: provide_token_and_task_features
+    evidence: &single_relation_evidence
+      status: confirmed_from_code
+      refs:
+        - source_ref: genie3_single_feature_code
+          role: implementation_evidence
+          locator: V1SingleFeatureNet.forward
+  - id: timestep_conditions_single_embedder
+    from: value_sites.timestep
+    to: modules.single_feature_embedder
+    kind: conditioning
+    carries: [representations.timestep]
+    operation: sinusoidal_timestep_embedding
+    evidence: *single_relation_evidence
+  - id: single_embedder_produces_initial_single_features
+    from: modules.single_feature_embedder
+    to: value_sites.initial_single_features
+    kind: data_flow
+    carries: [representations.single_features]
+    operation: concatenate_and_project
+    evidence: *single_relation_evidence
+  - id: initial_single_features_enter_pair_embedder
+    from: value_sites.initial_single_features
+    to: modules.pair_feature_embedder
+    kind: data_flow
+    carries: [representations.single_features]
+    operation: project_outer_sum
+    evidence: &pair_relation_evidence
+      status: confirmed_from_code
+      refs:
+        - source_ref: genie3_pair_feature_code
+          role: implementation_evidence
+          locator: V1PairFeatureNet.forward
+  - id: current_frames_enter_pair_embedder
+    from: value_sites.current_frames
+    to: modules.pair_feature_embedder
+    kind: data_flow
+    carries: [representations.token_frames]
+    operation: encode_noisy_frame_geometry
+    evidence: *pair_relation_evidence
+  - id: feature_bundle_conditions_pair_embedder
+    from: value_sites.feature_bundle
+    to: modules.pair_feature_embedder
+    kind: conditioning
+    carries: [representations.feature_bundle]
+    operation: provide_relative_and_conditioned_geometry
+    evidence: *pair_relation_evidence
+  - id: pair_embedder_produces_initial_pair_features
+    from: modules.pair_feature_embedder
+    to: value_sites.initial_pair_features
+    kind: data_flow
+    carries: [representations.pair_features]
+    operation: sum_projected_pair_terms
+    evidence: *pair_relation_evidence
+  - id: initial_single_features_enter_global_adapter
+    from: value_sites.initial_single_features
+    to: modules.global_token_adapter
+    kind: data_flow
+    carries: [representations.single_features]
+    operation: append_global_single_tokens
+    evidence: &latent_relation_evidence
+      status: confirmed_from_code
+      refs:
+        - source_ref: genie3_latent_transformer_code
+          role: implementation_evidence
+          locator: LatentTransformer.forward and LatentTransformerBlock.forward
+  - id: initial_pair_features_enter_global_adapter
+    from: value_sites.initial_pair_features
+    to: modules.global_token_adapter
+    kind: data_flow
+    carries: [representations.pair_features]
+    operation: append_global_pair_rows_and_columns
+    evidence: *latent_relation_evidence
+  - id: global_adapter_produces_single_state
+    from: modules.global_token_adapter
+    to: value_sites.single_with_global_tokens
+    kind: state_update
+    carries: [representations.single_features]
+    operation: expand_single_state
+    evidence: *latent_relation_evidence
+  - id: global_adapter_produces_pair_state
+    from: modules.global_token_adapter
+    to: value_sites.pair_with_global_tokens
+    kind: state_update
+    carries: [representations.pair_features]
+    operation: expand_pair_state
+    evidence: *latent_relation_evidence
+  - id: single_with_global_tokens_enters_attention
+    from: value_sites.single_with_global_tokens
+    to: modules.pair_biased_attention_update
+    kind: data_flow
+    carries: [representations.single_features]
+    operation: attend_over_single_state
+    evidence: *latent_relation_evidence
+  - id: pair_with_global_tokens_bias_attention
+    from: value_sites.pair_with_global_tokens
+    to: modules.pair_biased_attention_update
+    kind: conditioning
+    carries: [representations.pair_features]
+    operation: bias_attention_and_inject_pair_values
+    evidence: *latent_relation_evidence
+  - id: pair_attention_produces_single_state
+    from: modules.pair_biased_attention_update
+    to: value_sites.single_after_pair_attention
+    kind: state_update
+    carries: [representations.single_features]
+    operation: residual_single_update
+    evidence: *latent_relation_evidence
+  - id: single_after_pair_attention_enters_single_to_pair_update
+    from: value_sites.single_after_pair_attention
+    to: modules.single_to_pair_update
+    kind: data_flow
+    carries: [representations.single_features]
+    operation: projected_outer_product
+    evidence: *latent_relation_evidence
+  - id: pair_with_global_tokens_enters_single_to_pair_update
+    from: value_sites.pair_with_global_tokens
+    to: modules.single_to_pair_update
+    kind: state_update
+    carries: [representations.pair_features]
+    operation: receive_residual_pair_update
+    evidence: *latent_relation_evidence
+  - id: single_to_pair_update_produces_pair_state
+    from: modules.single_to_pair_update
+    to: value_sites.pair_after_single_update
+    kind: state_update
+    carries: [representations.pair_features]
+    operation: add_outer_product_update
+    evidence: *latent_relation_evidence
+  - id: pair_after_single_update_enters_triangle_stack
+    from: value_sites.pair_after_single_update
+    to: modules.triangle_multiplication_stack
+    kind: data_flow
+    carries: [representations.pair_features]
+    operation: outgoing_then_incoming_triangle_updates
+    evidence: *latent_relation_evidence
+  - id: triangle_stack_produces_pair_state
+    from: modules.triangle_multiplication_stack
+    to: value_sites.pair_after_triangle_updates
+    kind: state_update
+    carries: [representations.pair_features]
+    operation: residual_triangle_updates
+    evidence: *latent_relation_evidence
+  - id: pair_after_triangle_updates_enter_transition
+    from: value_sites.pair_after_triangle_updates
+    to: modules.pair_transition
+    kind: data_flow
+    carries: [representations.pair_features]
+    operation: pair_transition_mlp
+    evidence: *latent_relation_evidence
+  - id: pair_transition_produces_block_pair_output
+    from: modules.pair_transition
+    to: value_sites.pair_after_transition
+    kind: state_update
+    carries: [representations.pair_features]
+    operation: residual_pair_transition
+    evidence: *latent_relation_evidence
+  - id: block_single_output_becomes_refined_single_features
+    from: value_sites.single_after_pair_attention
+    to: value_sites.refined_single_features
+    kind: state_update
+    carries: [representations.single_features]
+    operation: remove_global_single_tokens_after_final_block
+    evidence: *latent_relation_evidence
+  - id: block_pair_output_becomes_refined_pair_features
+    from: value_sites.pair_after_transition
+    to: value_sites.refined_pair_features
+    kind: state_update
+    carries: [representations.pair_features]
+    operation: remove_global_pair_rows_and_columns_after_final_block
+    evidence: *latent_relation_evidence
+  - id: block_single_output_reenters_next_latent_block
+    from: value_sites.single_after_pair_attention
+    to: value_sites.single_with_global_tokens
+    kind: state_update
+    carries: [representations.single_features]
+    operation: advance_latent_block_single_state
+    evidence: *latent_relation_evidence
+  - id: block_pair_output_reenters_next_latent_block
+    from: value_sites.pair_after_transition
+    to: value_sites.pair_with_global_tokens
+    kind: state_update
+    carries: [representations.pair_features]
+    operation: advance_latent_block_pair_state
+    evidence: *latent_relation_evidence
+  - id: refined_single_features_enter_sequence_head
+    from: value_sites.refined_single_features
+    to: modules.sequence_head
+    kind: data_flow
+    carries: [representations.single_features]
+    operation: classify_residue_identity
+    evidence: &sequence_relation_evidence
+      status: confirmed_from_code
+      refs:
+        - source_ref: genie3_sequence_code
+          role: implementation_evidence
+          locator: SequenceNet.forward
+        - source_ref: genie3_ddim_code
+          role: implementation_evidence
+          locator: DDIMSampler._sample_sequence
+  - id: sequence_head_produces_logits
+    from: modules.sequence_head
+    to: value_sites.sequence_logits
+    kind: data_flow
+    carries: [representations.sequence_logits]
+    operation: project_amino_acid_logits
+    evidence: *sequence_relation_evidence
+  - id: refined_single_features_initialize_decoder_state
+    from: value_sites.refined_single_features
+    to: value_sites.decoder_single_state
+    kind: state_update
+    carries: [representations.single_features]
+    operation: initialize_structure_single_state
+    evidence: &structure_relation_evidence
+      status: confirmed_from_code
+      refs:
+        - source_ref: genie3_structure_code
+          role: implementation_evidence
+          locator: StructureNet.forward and StructureLayer.forward
+  - id: current_frames_initialize_decoder_frames
+    from: value_sites.current_frames
+    to: value_sites.decoder_frames
+    kind: state_update
+    carries: [representations.token_frames]
+    operation: initialize_structure_frame_state
+    evidence: *structure_relation_evidence
+  - id: decoder_single_state_enters_ipa
+    from: value_sites.decoder_single_state
+    to: modules.invariant_point_attention
+    kind: data_flow
+    carries: [representations.single_features]
+    operation: attend_from_single_state
+    evidence: *structure_relation_evidence
+  - id: refined_pair_features_bias_ipa
+    from: value_sites.refined_pair_features
+    to: modules.invariant_point_attention
+    kind: conditioning
+    carries: [representations.pair_features]
+    operation: pair_conditioned_attention
+    evidence: *structure_relation_evidence
+  - id: decoder_frames_condition_ipa
+    from: value_sites.decoder_frames
+    to: modules.invariant_point_attention
+    kind: conditioning
+    carries: [representations.token_frames]
+    operation: express_attention_points_in_frames
+    evidence: *structure_relation_evidence
+  - id: feature_bundle_masks_ipa
+    from: value_sites.feature_bundle
+    to: modules.invariant_point_attention
+    kind: conditioning
+    carries: [representations.feature_bundle]
+    operation: mask_invalid_token_frames
+    evidence: *structure_relation_evidence
+  - id: ipa_produces_updated_single_state
+    from: modules.invariant_point_attention
+    to: value_sites.single_after_ipa
+    kind: state_update
+    carries: [representations.single_features]
+    operation: residual_attention_update
+    evidence: *structure_relation_evidence
+  - id: ipa_state_enters_structure_transition
+    from: value_sites.single_after_ipa
+    to: modules.structure_transition
+    kind: data_flow
+    carries: [representations.single_features]
+    operation: transition_single_state
+    evidence: *structure_relation_evidence
+  - id: structure_transition_produces_single_state
+    from: modules.structure_transition
+    to: value_sites.single_after_transition
+    kind: state_update
+    carries: [representations.single_features]
+    operation: feed_forward_update
+    evidence: *structure_relation_evidence
+  - id: transition_state_enters_frame_update
+    from: value_sites.single_after_transition
+    to: modules.frame_update
+    kind: data_flow
+    carries: [representations.single_features]
+    operation: regress_rigid_increment
+    evidence: *structure_relation_evidence
+  - id: decoder_frames_enter_frame_update
+    from: value_sites.decoder_frames
+    to: modules.frame_update
+    kind: state_update
+    carries: [representations.token_frames]
+    operation: compose_rigid_increment
+    evidence: *structure_relation_evidence
+  - id: frame_update_produces_updated_frames
+    from: modules.frame_update
+    to: value_sites.updated_frames
+    kind: state_update
+    carries: [representations.token_frames]
+    operation: compose_updated_frames
+    evidence: *structure_relation_evidence
+  - id: transition_state_reenters_decoder
+    from: value_sites.single_after_transition
+    to: value_sites.decoder_single_state
+    kind: state_update
+    carries: [representations.single_features]
+    operation: continue_structure_layers
+    evidence: *structure_relation_evidence
+  - id: updated_frames_reenter_decoder
+    from: value_sites.updated_frames
+    to: value_sites.decoder_frames
+    kind: state_update
+    carries: [representations.token_frames]
+    operation: continue_structure_layers
+    evidence: *structure_relation_evidence
+  - id: updated_frames_become_decoder_output_frames
+    from: value_sites.updated_frames
+    to: value_sites.decoder_output_frames
+    kind: state_update
+    carries: [representations.token_frames]
+    operation: expose_final_structure_layer_frames
+    evidence: *structure_relation_evidence
+  - id: updated_frames_produce_coordinate_prediction
+    from: value_sites.decoder_output_frames
+    to: value_sites.coordinate_prediction
+    kind: data_flow
+    carries: [representations.token_coordinates]
+    operation: read_updated_frame_translations
+    evidence: *structure_relation_evidence
+  - id: step_coordinates_enter_sampler_math
+    from: value_sites.step_coordinates
+    to: value_sites.sampler_step_coordinates
+    kind: data_flow
+    carries: [representations.token_coordinates]
+    operation: prepare_fixed_sampler_math_input
+    evidence: *sampler_relation_evidence
+  - id: sampler_coordinates_enter_noise_readout
+    from: value_sites.sampler_step_coordinates
+    to: modules.noise_readout
+    kind: data_flow
+    carries: [representations.token_coordinates]
+    operation: retain_noisy_coordinates
+    evidence: *sampler_relation_evidence
+  - id: coordinate_prediction_enters_noise_readout
+    from: value_sites.coordinate_prediction
+    to: modules.noise_readout
+    kind: data_flow
+    carries: [representations.token_coordinates]
+    operation: provide_denoised_coordinate_estimate
+    evidence: *sampler_relation_evidence
+  - id: noise_readout_produces_predicted_noise
+    from: modules.noise_readout
+    to: value_sites.predicted_noise
+    kind: data_flow
+    carries: [representations.coordinate_noise]
+    operation: subtract_prediction_from_current_coordinates
+    evidence: *sampler_relation_evidence
+  - id: sampler_coordinates_enter_ddim_update
+    from: value_sites.sampler_step_coordinates
+    to: modules.ddim_update
+    kind: data_flow
+    carries: [representations.token_coordinates]
+    operation: provide_current_coordinates
+    evidence: *sampler_relation_evidence
+  - id: predicted_noise_enters_ddim_update
+    from: value_sites.predicted_noise
+    to: modules.ddim_update
+    kind: data_flow
+    carries: [representations.coordinate_noise]
+    operation: reconstruct_x0_and_direction
+    evidence: *sampler_relation_evidence
+  - id: timestep_enters_ddim_update
+    from: value_sites.timestep
+    to: modules.ddim_update
+    kind: control
+    carries: [representations.timestep]
+    operation: select_schedule_coefficients
+    evidence: *sampler_relation_evidence
+  - id: ddim_update_samples_fresh_noise
+    from: modules.ddim_update
+    to: value_sites.fresh_step_noise
+    kind: data_flow
+    carries: [representations.coordinate_noise]
+    operation: sample_gaussian_noise
+    evidence: *sampler_relation_evidence
+  - id: fresh_noise_reenters_ddim_update
+    from: value_sites.fresh_step_noise
+    to: modules.ddim_update
+    kind: data_flow
+    carries: [representations.coordinate_noise]
+    operation: add_scaled_step_noise
+    evidence: *sampler_relation_evidence
+  - id: ddim_update_produces_next_coordinates
+    from: modules.ddim_update
+    to: value_sites.next_coordinates
+    kind: state_update
+    carries: [representations.token_coordinates]
+    operation: sample_next_token_coordinates
+    evidence: *sampler_relation_evidence
+  - id: next_coordinates_reenter_sampling_state
+    from: value_sites.next_coordinates
+    to: value_sites.current_coordinates
+    kind: state_update
+    carries: [representations.token_coordinates]
+    operation: continue_reverse_chain
+    evidence: *sampler_relation_evidence
+  - id: terminal_coordinates_become_final_coordinates
+    from: value_sites.next_coordinates
+    to: value_sites.final_coordinates
+    kind: state_update
+    carries: [representations.token_coordinates]
+    operation: select_terminal_coordinates
+    evidence: *sampler_relation_evidence
+  - id: final_coordinates_enter_sequence_sampler
+    from: value_sites.final_coordinates
+    to: modules.sequence_sampler
+    kind: data_flow
+    carries: [representations.token_coordinates]
+    operation: optionally_request_terminal_sequence
+    evidence: *sequence_relation_evidence
+  - id: feature_bundle_conditions_sequence_sampler
+    from: value_sites.feature_bundle
+    to: modules.sequence_sampler
+    kind: conditioning
+    carries: [representations.feature_bundle]
+    operation: retain_known_sequence_and_sample_unknown_residues
+    evidence: *sequence_relation_evidence
+  - id: sequence_sampler_produces_predicted_sequence
+    from: modules.sequence_sampler
+    to: value_sites.predicted_sequence
+    kind: data_flow
+    carries: [representations.protein_sequence]
+    operation: sample_categorical_sequence
+    evidence: *sequence_relation_evidence
+  - id: final_coordinates_enter_pdb_exporter
+    from: value_sites.final_coordinates
+    to: modules.pdb_exporter
+    kind: data_flow
+    carries: [representations.token_coordinates]
+    operation: prepare_modeled_atom_records
+    evidence: &export_relation_evidence
+      status: confirmed_from_code
+      refs:
+        - source_ref: genie3_export_code
+          role: implementation_evidence
+          locator: PostProcessor.save and PostProcessor._update_structure
+  - id: predicted_sequence_enters_pdb_exporter
+    from: value_sites.predicted_sequence
+    to: modules.pdb_exporter
+    kind: conditioning
+    carries: [representations.protein_sequence]
+    operation: optionally_assign_predicted_residue_types
+    evidence: *export_relation_evidence
+  - id: pdb_exporter_writes_design_pdb
+    from: modules.pdb_exporter
+    to: value_sites.generated_design_pdb
+    kind: data_flow
+    carries: [representations.protein_pdb]
+    operation: serialize_pdb
+    evidence: *export_relation_evidence
+claims:
+  - id: atomization_is_task_dependent
+    statement: Genie 3 does not represent every generated residue with atom14 coordinates. Unknown scaffold residues use one C-alpha token, while known motif or interface residues can be expanded into atom14-ordered heavy-atom tokens.
+    scope:
+      module_ref: modules.feature_builder
+    evidence:
+      status: confirmed_from_code
+      refs:
+        - source_ref: genie3_feature_code
+          role: implementation_evidence
+          locator: create_np_features_from_chain and create_np_features_from_length
+        - source_ref: genie3_2026
+          role: supporting_evidence
+          locator: Sections 3.1-3.2 and Figure 1
+  - id: frames_are_derived_not_diffused
+    statement: The reverse-chain state is a token-coordinate point cloud. Frenet-Serret rotations are rebuilt from that point cloud at each denoiser call and are not an independently noised state.
+    scope:
+      module_ref: modules.frenet_frame_builder
+    evidence:
+      status: confirmed_from_code
+      refs:
+        - source_ref: genie3_model_code
+          role: implementation_evidence
+          locator: V1Denoiser.forward
+        - source_ref: genie3_geometry_code
+          role: implementation_evidence
+          locator: compute_noisy_structure_frames
+  - id: latent_communication_is_bidirectional_per_block
+    statement: Unlike Genie 2's separated single and pair reasoning, every Genie 3 latent block updates singles from pairs and then pairs from the updated singles before triangular refinement.
+    scope:
+      module_ref: modules.latent_transformer
+    evidence:
+      status: confirmed_from_paper
+      refs:
+        - source_ref: genie3_2026
+          role: supporting_evidence
+          locator: Section 3.1 and Appendix A.2 Algorithm 1
+        - source_ref: genie3_latent_transformer_code
+          role: implementation_evidence
+          locator: LatentTransformerBlock.forward
+  - id: sampler_math_is_outside_the_denoiser
+    statement: The learned denoiser returns a coordinate estimate; subtraction into predicted noise and the directional DDIM update are fixed sampler operations outside the model.
+    scope:
+      module_ref: modules.reverse_diffusion_step
+    evidence:
+      status: confirmed_from_code
+      refs:
+        - source_ref: genie3_model_code
+          role: implementation_evidence
+          locator: V1Denoiser.forward
+        - source_ref: genie3_ddim_code
+          role: implementation_evidence
+          locator: DDIMSampler._step
+open_questions:
+  - id: released_sequence_prediction_quality
+    question: Which released V1 checkpoints are intended for sequence prediction, and how should that optional output be validated independently of structure generation?
+    status: unresolved
+    affected_refs:
+      - modules.sequence_head
+      - modules.sequence_sampler
+    blocking: false
+    resolution_criteria: Identify a released evaluation protocol and checkpoint-specific sequence-recovery metrics.
+    evidence:
+      status: open_question
+      refs:
+        - source_ref: genie3_ddim_code
+          role: question_source
+          locator: DDIMSampler._sample_sequence
+          note: The sampler exposes sequence prediction as an optional flag, disabled by default.

@@ -1,0 +1,312 @@
+schema_version: bibliography-v0.1
+sources:
+  - id: dit_2022
+    kind: paper
+    title: Scalable Diffusion Models with Transformers
+    authors:
+      - William Peebles
+      - Saining Xie
+    year: 2022
+    identifiers:
+      arxiv: "2212.09748"
+    url: https://arxiv.org/abs/2212.09748
+
+  - id: dit_models_code
+    kind: code
+    title: DiT model implementation
+    organization: facebookresearch
+    repository: facebookresearch/DiT
+    revision: ed81ce2229091fd4ecc9a223645f95cf379d582b
+    path: facebookresearch/DiT/models.py
+    url: https://github.com/facebookresearch/DiT/blob/ed81ce2229091fd4ecc9a223645f95cf379d582b/models.py
+
+  - id: dit_sample_code
+    kind: code
+    title: DiT sampling entry point
+    organization: facebookresearch
+    repository: facebookresearch/DiT
+    revision: ed81ce2229091fd4ecc9a223645f95cf379d582b
+    path: facebookresearch/DiT/sample.py
+    url: https://github.com/facebookresearch/DiT/blob/ed81ce2229091fd4ecc9a223645f95cf379d582b/sample.py
+
+  - id: dit_gaussian_diffusion_code
+    kind: code
+    title: DiT Gaussian diffusion implementation
+    organization: facebookresearch
+    repository: facebookresearch/DiT
+    revision: ed81ce2229091fd4ecc9a223645f95cf379d582b
+    path: facebookresearch/DiT/diffusion/gaussian_diffusion.py
+    url: https://github.com/facebookresearch/DiT/blob/ed81ce2229091fd4ecc9a223645f95cf379d582b/diffusion/gaussian_diffusion.py
+
+  - id: dit_train_code
+    kind: code
+    title: DiT training entry point
+    organization: facebookresearch
+    repository: facebookresearch/DiT
+    revision: ed81ce2229091fd4ecc9a223645f95cf379d582b
+    path: facebookresearch/DiT/train.py
+    url: https://github.com/facebookresearch/DiT/blob/ed81ce2229091fd4ecc9a223645f95cf379d582b/train.py
+
+  - id: genie2_2024
+    kind: paper
+    title: "Out of Many, One: Designing and Scaffolding Proteins at the Scale of the Structural Universe with Genie 2"
+    authors:
+      - Yeqing Lin
+      - Minji Lee
+      - Zhao Zhang
+      - Mohammed AlQuraishi
+    year: 2024
+    identifiers:
+      arxiv: "2405.15489"
+    url: https://arxiv.org/abs/2405.15489
+
+  - id: genie2_model_code
+    kind: code
+    title: Genie 2 denoiser composition
+    organization: AQLaboratory
+    repository: aqlaboratory/genie2
+    revision: 9a954578f7b5a39552545eebc6d4794447794c87
+    path: genie/model/model.py
+    url: https://github.com/aqlaboratory/genie2/blob/9a954578f7b5a39552545eebc6d4794447794c87/genie/model/model.py
+
+  - id: genie2_single_feature_code
+    kind: code
+    title: Genie 2 single-feature network
+    organization: AQLaboratory
+    repository: aqlaboratory/genie2
+    revision: 9a954578f7b5a39552545eebc6d4794447794c87
+    path: genie/model/single_feature_net.py
+    url: https://github.com/aqlaboratory/genie2/blob/9a954578f7b5a39552545eebc6d4794447794c87/genie/model/single_feature_net.py
+
+  - id: genie2_pair_feature_code
+    kind: code
+    title: Genie 2 pair-feature network
+    organization: AQLaboratory
+    repository: aqlaboratory/genie2
+    revision: 9a954578f7b5a39552545eebc6d4794447794c87
+    path: genie/model/pair_feature_net.py
+    url: https://github.com/aqlaboratory/genie2/blob/9a954578f7b5a39552545eebc6d4794447794c87/genie/model/pair_feature_net.py
+
+  - id: genie2_pair_transform_code
+    kind: code
+    title: Genie 2 pair-transform network
+    organization: AQLaboratory
+    repository: aqlaboratory/genie2
+    revision: 9a954578f7b5a39552545eebc6d4794447794c87
+    path: genie/model/pair_transform_net.py
+    url: https://github.com/aqlaboratory/genie2/blob/9a954578f7b5a39552545eebc6d4794447794c87/genie/model/pair_transform_net.py
+
+  - id: genie2_structure_code
+    kind: code
+    title: Genie 2 equivariant structure network
+    organization: AQLaboratory
+    repository: aqlaboratory/genie2
+    revision: 9a954578f7b5a39552545eebc6d4794447794c87
+    path: genie/model/structure_net.py
+    url: https://github.com/aqlaboratory/genie2/blob/9a954578f7b5a39552545eebc6d4794447794c87/genie/model/structure_net.py
+
+  - id: genie2_ipa_code
+    kind: code
+    title: Genie 2 invariant point attention module
+    organization: AQLaboratory
+    repository: aqlaboratory/genie2
+    revision: 9a954578f7b5a39552545eebc6d4794447794c87
+    path: genie/model/modules/invariant_point_attention.py
+    url: https://github.com/aqlaboratory/genie2/blob/9a954578f7b5a39552545eebc6d4794447794c87/genie/model/modules/invariant_point_attention.py
+
+  - id: genie2_sampler_code
+    kind: code
+    title: Genie 2 reverse-diffusion sampler
+    organization: AQLaboratory
+    repository: aqlaboratory/genie2
+    revision: 9a954578f7b5a39552545eebc6d4794447794c87
+    path: genie/sampler/base.py
+    url: https://github.com/aqlaboratory/genie2/blob/9a954578f7b5a39552545eebc6d4794447794c87/genie/sampler/base.py
+
+  - id: genie2_scaffold_sampler_code
+    kind: code
+    title: Genie 2 motif-scaffolding sampler
+    organization: AQLaboratory
+    repository: aqlaboratory/genie2
+    revision: 9a954578f7b5a39552545eebc6d4794447794c87
+    path: genie/sampler/scaffold.py
+    url: https://github.com/aqlaboratory/genie2/blob/9a954578f7b5a39552545eebc6d4794447794c87/genie/sampler/scaffold.py
+
+  - id: genie2_training_code
+    kind: code
+    title: Genie 2 diffusion training step
+    organization: AQLaboratory
+    repository: aqlaboratory/genie2
+    revision: 9a954578f7b5a39552545eebc6d4794447794c87
+    path: genie/diffusion/genie.py
+    url: https://github.com/aqlaboratory/genie2/blob/9a954578f7b5a39552545eebc6d4794447794c87/genie/diffusion/genie.py
+
+  - id: genie2_config_code
+    kind: code
+    title: Genie 2 model and diffusion configuration
+    organization: AQLaboratory
+    repository: aqlaboratory/genie2
+    revision: 9a954578f7b5a39552545eebc6d4794447794c87
+    path: genie/config.py
+    url: https://github.com/aqlaboratory/genie2/blob/9a954578f7b5a39552545eebc6d4794447794c87/genie/config.py
+
+  - id: genie2_base_config
+    kind: code
+    title: Genie 2 released base-checkpoint configuration
+    organization: AQLaboratory
+    repository: aqlaboratory/genie2
+    revision: 9a954578f7b5a39552545eebc6d4794447794c87
+    path: results/base/configuration
+    url: https://github.com/aqlaboratory/genie2/blob/9a954578f7b5a39552545eebc6d4794447794c87/results/base/configuration
+
+  - id: genie3_2026
+    kind: paper
+    title: "Fast and Ultra-Capable Protein Design: Advancing the Frontier Through Atomistic SE(3)-Equivariance with Genie 3"
+    authors:
+      - Yeqing Lin
+      - Minji Lee
+      - Siddharth Vermani
+      - Yuwei Jiang
+      - Robbe De Cooman
+      - Bryan Spetko
+      - Mohammed AlQuraishi
+    year: 2026
+    identifiers:
+      doi: "10.64898/2026.05.01.722168"
+    url: https://www.biorxiv.org/content/10.64898/2026.05.01.722168v1
+
+  - id: genie3_model_code
+    kind: code
+    title: Genie 3 V1 denoiser composition
+    organization: AQLaboratory
+    repository: aqlaboratory/genie3
+    revision: d77ae5ac04212ff1e8b29b585859a3244c614804
+    path: src/genie3/generation/model/implementation/v1.py
+    url: https://github.com/aqlaboratory/genie3/blob/d77ae5ac04212ff1e8b29b585859a3244c614804/src/genie3/generation/model/implementation/v1.py
+
+  - id: genie3_single_feature_code
+    kind: code
+    title: Genie 3 V1 single-feature embedder
+    organization: AQLaboratory
+    repository: aqlaboratory/genie3
+    revision: d77ae5ac04212ff1e8b29b585859a3244c614804
+    path: src/genie3/generation/model/embedder/single/v1.py
+    url: https://github.com/aqlaboratory/genie3/blob/d77ae5ac04212ff1e8b29b585859a3244c614804/src/genie3/generation/model/embedder/single/v1.py
+
+  - id: genie3_pair_feature_code
+    kind: code
+    title: Genie 3 V1 pair-feature embedder
+    organization: AQLaboratory
+    repository: aqlaboratory/genie3
+    revision: d77ae5ac04212ff1e8b29b585859a3244c614804
+    path: src/genie3/generation/model/embedder/pair/v1.py
+    url: https://github.com/aqlaboratory/genie3/blob/d77ae5ac04212ff1e8b29b585859a3244c614804/src/genie3/generation/model/embedder/pair/v1.py
+
+  - id: genie3_latent_transformer_code
+    kind: code
+    title: Genie 3 latent transformer
+    organization: AQLaboratory
+    repository: aqlaboratory/genie3
+    revision: d77ae5ac04212ff1e8b29b585859a3244c614804
+    path: src/genie3/generation/model/latent/transformer.py
+    url: https://github.com/aqlaboratory/genie3/blob/d77ae5ac04212ff1e8b29b585859a3244c614804/src/genie3/generation/model/latent/transformer.py
+
+  - id: genie3_structure_code
+    kind: code
+    title: Genie 3 equivariant structure decoder
+    organization: AQLaboratory
+    repository: aqlaboratory/genie3
+    revision: d77ae5ac04212ff1e8b29b585859a3244c614804
+    path: src/genie3/generation/model/structure_net.py
+    url: https://github.com/aqlaboratory/genie3/blob/d77ae5ac04212ff1e8b29b585859a3244c614804/src/genie3/generation/model/structure_net.py
+
+  - id: genie3_ipa_code
+    kind: code
+    title: Genie 3 full and reduced invariant point attention modules
+    organization: AQLaboratory
+    repository: aqlaboratory/genie3
+    revision: d77ae5ac04212ff1e8b29b585859a3244c614804
+    path: src/genie3/generation/model/module/invariant_point_attention.py
+    url: https://github.com/aqlaboratory/genie3/blob/d77ae5ac04212ff1e8b29b585859a3244c614804/src/genie3/generation/model/module/invariant_point_attention.py
+
+  - id: genie3_sequence_code
+    kind: code
+    title: Genie 3 optional sequence head
+    organization: AQLaboratory
+    repository: aqlaboratory/genie3
+    revision: d77ae5ac04212ff1e8b29b585859a3244c614804
+    path: src/genie3/generation/model/sequence_net.py
+    url: https://github.com/aqlaboratory/genie3/blob/d77ae5ac04212ff1e8b29b585859a3244c614804/src/genie3/generation/model/sequence_net.py
+
+  - id: genie3_geometry_code
+    kind: code
+    title: Genie 3 Frenet frame construction
+    organization: AQLaboratory
+    repository: aqlaboratory/genie3
+    revision: d77ae5ac04212ff1e8b29b585859a3244c614804
+    path: src/genie3/generation/utils/geo_utils.py
+    url: https://github.com/aqlaboratory/genie3/blob/d77ae5ac04212ff1e8b29b585859a3244c614804/src/genie3/generation/utils/geo_utils.py
+
+  - id: genie3_feature_code
+    kind: code
+    title: Genie 3 protein tokenization and conditioning features
+    organization: AQLaboratory
+    repository: aqlaboratory/genie3
+    revision: d77ae5ac04212ff1e8b29b585859a3244c614804
+    path: src/genie3/generation/utils/feat_utils.py
+    url: https://github.com/aqlaboratory/genie3/blob/d77ae5ac04212ff1e8b29b585859a3244c614804/src/genie3/generation/utils/feat_utils.py
+
+  - id: genie3_diffusion_code
+    kind: code
+    title: Genie 3 DDPM training objective
+    organization: AQLaboratory
+    repository: aqlaboratory/genie3
+    revision: d77ae5ac04212ff1e8b29b585859a3244c614804
+    path: src/genie3/generation/diffusion/ddpm.py
+    url: https://github.com/aqlaboratory/genie3/blob/d77ae5ac04212ff1e8b29b585859a3244c614804/src/genie3/generation/diffusion/ddpm.py
+
+  - id: genie3_sampler_code
+    kind: code
+    title: Genie 3 base reverse-diffusion sampler
+    organization: AQLaboratory
+    repository: aqlaboratory/genie3
+    revision: d77ae5ac04212ff1e8b29b585859a3244c614804
+    path: src/genie3/generation/diffusion/sampler/sampler.py
+    url: https://github.com/aqlaboratory/genie3/blob/d77ae5ac04212ff1e8b29b585859a3244c614804/src/genie3/generation/diffusion/sampler/sampler.py
+
+  - id: genie3_ddim_code
+    kind: code
+    title: Genie 3 DDIM directional-scaling sampler
+    organization: AQLaboratory
+    repository: aqlaboratory/genie3
+    revision: d77ae5ac04212ff1e8b29b585859a3244c614804
+    path: src/genie3/generation/diffusion/sampler/ddim.py
+    url: https://github.com/aqlaboratory/genie3/blob/d77ae5ac04212ff1e8b29b585859a3244c614804/src/genie3/generation/diffusion/sampler/ddim.py
+
+  - id: genie3_config_code
+    kind: code
+    title: Genie 3 V1 architecture configuration
+    organization: AQLaboratory
+    repository: aqlaboratory/genie3
+    revision: d77ae5ac04212ff1e8b29b585859a3244c614804
+    path: src/genie3/generation/config/model/v1.py
+    url: https://github.com/aqlaboratory/genie3/blob/d77ae5ac04212ff1e8b29b585859a3244c614804/src/genie3/generation/config/model/v1.py
+
+  - id: genie3_export_code
+    kind: code
+    title: Genie 3 generated-structure postprocessing
+    organization: AQLaboratory
+    repository: aqlaboratory/genie3
+    revision: d77ae5ac04212ff1e8b29b585859a3244c614804
+    path: src/genie3/generation/runner/postprocess.py
+    url: https://github.com/aqlaboratory/genie3/blob/d77ae5ac04212ff1e8b29b585859a3244c614804/src/genie3/generation/runner/postprocess.py
+
+  - id: generic_feature_refinement_source
+    kind: source
+    title: Generic Feature Refinement architecture source
+    path: architectures/generic-feature-refinement.yaml
+
+  - id: architecture_language_protocol
+    kind: protocol
+    title: Architecture language protocol
+    path: protocol/architecture-language.md

@@ -1,0 +1,358 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://explainer.local/schemas/architecture-edit-v0.2.schema.json",
+  "title": "Architecture Edit Plan v0.2",
+  "type": "object",
+  "required": ["schema_version", "id", "target", "intent", "operations"],
+  "properties": {
+    "schema_version": { "const": "architecture-edit-v0.2" },
+    "id": { "$ref": "#/$defs/id" },
+    "target": { "$ref": "#/$defs/target" },
+    "intent": { "$ref": "#/$defs/nonEmptyString" },
+    "operations": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "oneOf": [
+          { "$ref": "#/$defs/addModule" },
+          { "$ref": "#/$defs/addRepresentation" },
+          { "$ref": "#/$defs/addValueSite" },
+          { "$ref": "#/$defs/addRelation" },
+          { "$ref": "#/$defs/updateEntity" },
+          { "$ref": "#/$defs/scaffoldBoard" },
+          { "$ref": "#/$defs/layoutBoard" },
+          { "$ref": "#/$defs/updateViewEntity" },
+          { "$ref": "#/$defs/setEdgeOverride" },
+          { "$ref": "#/$defs/setBoardVisibility" }
+        ]
+      }
+    }
+  },
+  "additionalProperties": false,
+  "$defs": {
+    "id": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9_]*$"
+    },
+    "nonEmptyString": {
+      "type": "string",
+      "minLength": 1
+    },
+    "nullableNonEmptyString": {
+      "oneOf": [
+        { "$ref": "#/$defs/nonEmptyString" },
+        { "type": "null" }
+      ]
+    },
+    "sha256": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$"
+    },
+    "moduleRef": {
+      "type": "string",
+      "pattern": "^modules\\.[a-z][a-z0-9_]*$"
+    },
+    "nodeRef": {
+      "type": "string",
+      "pattern": "^(modules|value_sites)\\.[a-z][a-z0-9_]*$"
+    },
+    "relationRef": {
+      "type": "string",
+      "pattern": "^relations\\.[a-z][a-z0-9_]*$"
+    },
+    "entityRef": {
+      "type": "string",
+      "pattern": "^(modules|representations|value_sites|relations)\\.[a-z][a-z0-9_]*$"
+    },
+    "boardEntityRef": {
+      "type": "string",
+      "pattern": "^boards\\.[a-z][a-z0-9_]*$"
+    },
+    "boardNodeEntityRef": {
+      "type": "string",
+      "pattern": "^boards\\.[a-z][a-z0-9_]*\\.nodes\\.[a-z][a-z0-9_]*$"
+    },
+    "payload": {
+      "type": "object",
+      "additionalProperties": true
+    },
+    "target": {
+      "type": "object",
+      "required": ["source_set"],
+      "properties": {
+        "source_set": { "$ref": "#/$defs/id" },
+        "architecture_sha256": { "$ref": "#/$defs/sha256" },
+        "view_sha256": { "$ref": "#/$defs/sha256" }
+      },
+      "additionalProperties": false
+    },
+    "addModule": {
+      "type": "object",
+      "required": ["op", "module"],
+      "properties": {
+        "op": { "const": "add_module" },
+        "module": { "$ref": "#/$defs/payload" }
+      },
+      "additionalProperties": false
+    },
+    "addRepresentation": {
+      "type": "object",
+      "required": ["op", "representation"],
+      "properties": {
+        "op": { "const": "add_representation" },
+        "representation": { "$ref": "#/$defs/payload" }
+      },
+      "additionalProperties": false
+    },
+    "addValueSite": {
+      "type": "object",
+      "required": ["op", "value_site"],
+      "properties": {
+        "op": { "const": "add_value_site" },
+        "value_site": { "$ref": "#/$defs/payload" }
+      },
+      "additionalProperties": false
+    },
+    "addRelation": {
+      "type": "object",
+      "required": ["op", "relation"],
+      "properties": {
+        "op": { "const": "add_relation" },
+        "relation": { "$ref": "#/$defs/payload" }
+      },
+      "additionalProperties": false
+    },
+    "updateEntity": {
+      "type": "object",
+      "required": ["op", "ref", "set"],
+      "properties": {
+        "op": { "const": "update_entity" },
+        "ref": { "$ref": "#/$defs/entityRef" },
+        "expect": { "$ref": "#/$defs/payload" },
+        "set": { "$ref": "#/$defs/payload" }
+      },
+      "additionalProperties": false
+    },
+    "scaffoldBoardSpec": {
+      "type": "object",
+      "required": ["id", "title", "summary", "subject_ref"],
+      "properties": {
+        "id": { "$ref": "#/$defs/id" },
+        "title": { "$ref": "#/$defs/nonEmptyString" },
+        "summary": { "$ref": "#/$defs/nonEmptyString" },
+        "parent": { "$ref": "#/$defs/id" },
+        "subject_ref": {
+          "oneOf": [
+            { "const": "architecture" },
+            { "$ref": "#/$defs/moduleRef" }
+          ]
+        },
+        "expansion_depth": { "type": "integer", "minimum": 0 },
+        "columns": { "type": "integer", "minimum": 1 },
+        "node_refs": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": { "$ref": "#/$defs/nodeRef" }
+        }
+      },
+      "additionalProperties": false
+    },
+    "scaffoldBoard": {
+      "type": "object",
+      "required": ["op", "board"],
+      "properties": {
+        "op": { "const": "scaffold_board" },
+        "board": { "$ref": "#/$defs/scaffoldBoardSpec" }
+      },
+      "additionalProperties": false
+    },
+    "layoutBoard": {
+      "type": "object",
+      "required": ["op", "board_id", "policy"],
+      "properties": {
+        "op": { "const": "layout_board" },
+        "board_id": { "$ref": "#/$defs/id" },
+        "policy": { "const": "semantic_flow_v1" },
+        "columns": { "type": "integer", "minimum": 1 }
+      },
+      "additionalProperties": false
+    },
+    "boardSummaryFields": {
+      "type": "object",
+      "required": ["summary"],
+      "properties": {
+        "summary": { "$ref": "#/$defs/nonEmptyString" }
+      },
+      "additionalProperties": false
+    },
+    "boardSummaryExpect": {
+      "type": "object",
+      "properties": {
+        "summary": { "$ref": "#/$defs/nullableNonEmptyString" }
+      },
+      "additionalProperties": false
+    },
+    "boardNodeFields": {
+      "type": "object",
+      "properties": {
+        "role": { "$ref": "#/$defs/nonEmptyString" },
+        "detail": { "$ref": "#/$defs/nonEmptyString" }
+      },
+      "additionalProperties": false
+    },
+    "boardNodeExpect": {
+      "type": "object",
+      "properties": {
+        "role": { "$ref": "#/$defs/nullableNonEmptyString" },
+        "detail": { "$ref": "#/$defs/nullableNonEmptyString" }
+      },
+      "additionalProperties": false
+    },
+    "updateBoardSummary": {
+      "type": "object",
+      "required": ["op", "ref", "set"],
+      "properties": {
+        "op": { "const": "update_view_entity" },
+        "ref": { "$ref": "#/$defs/boardEntityRef" },
+        "expect": { "$ref": "#/$defs/boardSummaryExpect" },
+        "set": { "$ref": "#/$defs/boardSummaryFields" }
+      },
+      "additionalProperties": false
+    },
+    "updateBoardNode": {
+      "type": "object",
+      "required": ["op", "ref", "set"],
+      "properties": {
+        "op": { "const": "update_view_entity" },
+        "ref": { "$ref": "#/$defs/boardNodeEntityRef" },
+        "expect": { "$ref": "#/$defs/boardNodeExpect" },
+        "set": { "$ref": "#/$defs/boardNodeFields" }
+      },
+      "additionalProperties": false
+    },
+    "updateViewEntity": {
+      "oneOf": [
+        { "$ref": "#/$defs/updateBoardSummary" },
+        { "$ref": "#/$defs/updateBoardNode" }
+      ]
+    },
+    "pathMatch": {
+      "oneOf": [
+        {
+          "type": "object",
+          "required": ["relation_ref"],
+          "properties": {
+            "relation_ref": { "$ref": "#/$defs/relationRef" }
+          },
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "required": ["relation_path"],
+          "properties": {
+            "relation_path": {
+              "type": "array",
+              "minItems": 1,
+              "items": { "$ref": "#/$defs/relationRef" }
+            }
+          },
+          "additionalProperties": false
+        }
+      ]
+    },
+    "connection": {
+      "type": "object",
+      "required": ["title", "role", "inside"],
+      "properties": {
+        "title": { "$ref": "#/$defs/nonEmptyString" },
+        "role": { "$ref": "#/$defs/nonEmptyString" },
+        "inside": { "$ref": "#/$defs/nonEmptyString" }
+      },
+      "additionalProperties": false
+    },
+    "nullableConnection": {
+      "oneOf": [
+        { "$ref": "#/$defs/connection" },
+        { "type": "null" }
+      ]
+    },
+    "edgeOverrideFields": {
+      "type": "object",
+      "properties": {
+        "label": { "$ref": "#/$defs/nonEmptyString" },
+        "connection": { "$ref": "#/$defs/connection" }
+      },
+      "additionalProperties": false
+    },
+    "edgeOverrideExpect": {
+      "type": "object",
+      "properties": {
+        "label": { "$ref": "#/$defs/nullableNonEmptyString" },
+        "connection": { "$ref": "#/$defs/nullableConnection" }
+      },
+      "additionalProperties": false
+    },
+    "setEdgeOverrideFields": {
+      "type": "object",
+      "required": ["op", "board_id", "match", "set"],
+      "properties": {
+        "op": { "const": "set_edge_override" },
+        "board_id": { "$ref": "#/$defs/id" },
+        "match": { "$ref": "#/$defs/pathMatch" },
+        "expect": { "$ref": "#/$defs/edgeOverrideExpect" },
+        "set": { "$ref": "#/$defs/edgeOverrideFields" }
+      },
+      "additionalProperties": false
+    },
+    "removeEdgeOverride": {
+      "type": "object",
+      "required": ["op", "board_id", "match", "remove"],
+      "properties": {
+        "op": { "const": "set_edge_override" },
+        "board_id": { "$ref": "#/$defs/id" },
+        "match": { "$ref": "#/$defs/pathMatch" },
+        "expect": { "$ref": "#/$defs/edgeOverrideExpect" },
+        "remove": { "const": true }
+      },
+      "additionalProperties": false
+    },
+    "setEdgeOverride": {
+      "oneOf": [
+        { "$ref": "#/$defs/setEdgeOverrideFields" },
+        { "$ref": "#/$defs/removeEdgeOverride" }
+      ]
+    },
+    "setBoardElided": {
+      "type": "object",
+      "required": ["op", "board_id", "occurrence_id", "ref", "decision"],
+      "properties": {
+        "op": { "const": "set_board_visibility" },
+        "board_id": { "$ref": "#/$defs/id" },
+        "occurrence_id": { "$ref": "#/$defs/id" },
+        "ref": { "$ref": "#/$defs/nodeRef" },
+        "decision": { "const": "elided" }
+      },
+      "additionalProperties": false
+    },
+    "setBoardExcluded": {
+      "type": "object",
+      "required": ["op", "board_id", "occurrence_id", "ref", "decision", "reason"],
+      "properties": {
+        "op": { "const": "set_board_visibility" },
+        "board_id": { "$ref": "#/$defs/id" },
+        "occurrence_id": { "$ref": "#/$defs/id" },
+        "ref": { "$ref": "#/$defs/nodeRef" },
+        "decision": { "const": "excluded" },
+        "reason": { "$ref": "#/$defs/nonEmptyString" }
+      },
+      "additionalProperties": false
+    },
+    "setBoardVisibility": {
+      "oneOf": [
+        { "$ref": "#/$defs/setBoardElided" },
+        { "$ref": "#/$defs/setBoardExcluded" }
+      ]
+    }
+  }
+}

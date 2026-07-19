@@ -1,0 +1,51 @@
+schema_version: standard-block-v0.1
+id: per_item_adaln_conditioning
+name: Per-Item AdaLN Conditioning
+kind: conditioning
+status: draft
+description: Use a per-item conditioning stream to produce adaptive normalization shifts, scales, and gates for item updates.
+canonical_operation: per_item_adaln
+input_slots:
+  - id: item_state
+    label: x_i
+    scale: item
+    kind: representation
+    required: true
+  - id: conditioning_signal
+    label: s_i
+    scale: item
+    kind: conditioning
+    required: true
+output_slots:
+  - id: modulated_item_state
+    label: modulated item state
+    scale: item
+    kind: representation
+math:
+  - id: normalize_item
+    text: "u_i = LayerNorm(x_i)"
+    tex: "u_i = \\operatorname{LN}(x_i)"
+    operation: normalize
+    inputs: [item_state]
+    outputs: [modulated_item_state]
+  - id: project_conditioning
+    text: "shift_i, scale_i, gate_i = Linear(s_i)"
+    tex: "\\beta_i, \\gamma_i, g_i = W s_i"
+    operation: conditioning_projection
+    inputs: [conditioning_signal]
+    outputs: [modulated_item_state]
+  - id: modulate
+    text: "y_i = gate_i * (scale_i * u_i + shift_i)"
+    tex: "y_i = g_i \\odot (\\gamma_i \\odot u_i + \\beta_i)"
+    operation: adaptive_modulation
+    inputs: [item_state, conditioning_signal]
+    outputs: [modulated_item_state]
+visual_template:
+  type: conditioning_overlay
+  lanes: [item_state, conditioning_signal]
+renderer_contract:
+  shows:
+    - per-item conditioning, not only global conditioning
+    - adaptive normalization/gating before an item update
+evidence_policy:
+  require_usage_evidence: true

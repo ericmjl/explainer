@@ -1,0 +1,137 @@
+architecture:
+  schema_version: architecture-v0.3
+  id: projection_fixture
+  representations:
+    - id: signal
+      shape: B x D
+  modules:
+    - id: encoder
+      parent_ref: architecture
+    - id: preprocess
+      parent_ref: modules.encoder
+    - id: transform
+      parent_ref: modules.encoder
+    - id: decoder
+      parent_ref: architecture
+    - id: auxiliary
+      parent_ref: architecture
+  value_sites:
+    - id: input
+      representation_ref: representations.signal
+      scope_ref: architecture
+      boundary: input
+    - id: output
+      representation_ref: representations.signal
+      scope_ref: architecture
+      boundary: output
+  relations:
+    - id: input_enters_preprocess
+      from: value_sites.input
+      to: modules.preprocess
+      kind: data_flow
+      carries: [representations.signal]
+    - id: preprocess_enters_transform
+      from: modules.preprocess
+      to: modules.transform
+      kind: data_flow
+      carries: [representations.signal]
+    - id: transform_enters_decoder
+      from: modules.transform
+      to: modules.decoder
+      kind: data_flow
+      carries: [representations.signal]
+    - id: decoder_produces_output
+      from: modules.decoder
+      to: value_sites.output
+      kind: data_flow
+      carries: [representations.signal]
+    - id: input_enters_auxiliary
+      from: value_sites.input
+      to: modules.auxiliary
+      kind: conditioning
+      carries: [representations.signal]
+
+boards:
+  direct:
+    id: direct
+    subject_ref: architecture
+    expansion_depth: 2
+    nodes:
+      - { id: input, ref: value_sites.input }
+      - { id: preprocess, ref: modules.preprocess }
+      - { id: transform, ref: modules.transform }
+      - { id: decoder, ref: modules.decoder }
+      - { id: output, ref: value_sites.output }
+    exclude:
+      - ref: modules.auxiliary
+        reason: Auxiliary diagnostics are outside this board.
+
+  collapsed:
+    id: collapsed
+    subject_ref: architecture
+    expansion_depth: 2
+    nodes:
+      - { id: input, ref: value_sites.input }
+      - { id: encoder, ref: modules.encoder }
+      - { id: decoder, ref: modules.decoder }
+      - { id: output, ref: value_sites.output }
+    exclude:
+      - ref: modules.auxiliary
+        reason: Auxiliary diagnostics are outside this board.
+
+  elided:
+    id: elided
+    subject_ref: architecture
+    expansion_depth: 2
+    nodes:
+      - { id: input, ref: value_sites.input }
+      - { id: transform, ref: modules.transform }
+      - { id: decoder, ref: modules.decoder }
+      - { id: output, ref: value_sites.output }
+    elide:
+      - ref: modules.preprocess
+    exclude:
+      - ref: modules.auxiliary
+        reason: Auxiliary diagnostics are outside this board.
+    edge_overrides:
+      - match:
+          relation_path:
+            - relations.input_enters_preprocess
+            - relations.preprocess_enters_transform
+        label: prepared signal
+        route_side: bottom
+
+  unclassified:
+    id: unclassified
+    subject_ref: architecture
+    expansion_depth: 2
+    nodes:
+      - { id: input, ref: value_sites.input }
+      - { id: transform, ref: modules.transform }
+      - { id: decoder, ref: modules.decoder }
+      - { id: output, ref: value_sites.output }
+    exclude:
+      - ref: modules.auxiliary
+        reason: Auxiliary diagnostics are outside this board.
+
+  repeated:
+    id: repeated
+    subject_ref: architecture
+    expansion_depth: 2
+    nodes:
+      - { id: input, ref: value_sites.input }
+      - { id: preprocess, ref: modules.preprocess }
+      - { id: transform_before, ref: modules.transform }
+      - { id: transform_after, ref: modules.transform }
+      - { id: decoder, ref: modules.decoder }
+      - { id: output, ref: value_sites.output }
+    exclude:
+      - ref: modules.auxiliary
+        reason: Auxiliary diagnostics are outside this board.
+    occurrence_bindings:
+      - match: { relation_ref: relations.preprocess_enters_transform }
+        from_occurrence: preprocess
+        to_occurrence: transform_before
+      - match: { relation_ref: relations.transform_enters_decoder }
+        from_occurrence: transform_before
+        to_occurrence: decoder

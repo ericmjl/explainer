@@ -1,0 +1,254 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://explainer.local/schemas/standard-block-v0.2.schema.json",
+  "title": "Reusable Standard Block v0.2",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "id",
+    "name",
+    "kind",
+    "status",
+    "description",
+    "ports",
+    "variants",
+    "default_variant",
+    "values",
+    "steps",
+    "visual_template",
+    "evidence_policy"
+  ],
+  "properties": {
+    "schema_version": { "const": "standard-block-v0.2" },
+    "id": { "$ref": "#/$defs/id" },
+    "name": { "$ref": "#/$defs/nonEmptyString" },
+    "kind": { "$ref": "#/$defs/id" },
+    "status": { "enum": ["draft", "review", "published", "deprecated"] },
+    "description": { "$ref": "#/$defs/nonEmptyString" },
+    "ports": {
+      "type": "array",
+      "minItems": 2,
+      "items": { "$ref": "#/$defs/port" }
+    },
+    "variants": {
+      "type": "array",
+      "minItems": 1,
+      "items": { "$ref": "#/$defs/variant" }
+    },
+    "default_variant": { "$ref": "#/$defs/id" },
+    "values": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/value" }
+    },
+    "steps": {
+      "type": "array",
+      "minItems": 1,
+      "items": { "$ref": "#/$defs/step" }
+    },
+    "visual_template": { "$ref": "#/$defs/visualTemplate" },
+    "evidence_policy": { "$ref": "#/$defs/evidencePolicy" }
+  },
+  "additionalProperties": false,
+  "$defs": {
+    "id": { "type": "string", "pattern": "^[a-z][a-z0-9_]*$" },
+    "nonEmptyString": { "type": "string", "minLength": 1 },
+    "texString": {
+      "type": "string",
+      "minLength": 1,
+      "pattern": "^(?!.*_\\().+$"
+    },
+    "localRef": {
+      "type": "string",
+      "pattern": "^(ports|values|steps)\\.[a-z][a-z0-9_]*$"
+    },
+    "dataRef": {
+      "type": "string",
+      "pattern": "^(ports|values)\\.[a-z][a-z0-9_]*$"
+    },
+    "codeIdentifier": {
+      "type": "string",
+      "pattern": "^[A-Za-z_][A-Za-z0-9_]*$"
+    },
+    "portRef": {
+      "type": "string",
+      "pattern": "^ports\\.[a-z][a-z0-9_]*$"
+    },
+    "stepRef": {
+      "type": "string",
+      "pattern": "^steps\\.[a-z][a-z0-9_]*$"
+    },
+    "representationGlyph": {
+      "enum": ["scalar", "vector", "single", "matrix", "pair", "volume", "coordinates", "frames"]
+    },
+    "port": {
+      "type": "object",
+      "required": ["id", "label", "direction", "kind", "required", "cardinality", "relation_kinds"],
+      "properties": {
+        "id": { "$ref": "#/$defs/id" },
+        "label": { "$ref": "#/$defs/nonEmptyString" },
+        "direction": { "enum": ["input", "conditioning", "output"] },
+        "kind": { "enum": ["representation", "mask", "control"] },
+        "required": { "type": "boolean" },
+        "cardinality": { "enum": ["one", "many"] },
+        "relation_kinds": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": { "enum": ["data_flow", "conditioning", "state_update", "index_flow", "skip", "control"] }
+        },
+        "scale": { "$ref": "#/$defs/id" },
+        "glyph": { "$ref": "#/$defs/representationGlyph" },
+        "shape": { "$ref": "#/$defs/nonEmptyString" },
+        "notation": { "$ref": "#/$defs/texString" },
+        "role": { "$ref": "#/$defs/nonEmptyString" }
+      },
+      "additionalProperties": false
+    },
+    "variant": {
+      "type": "object",
+      "required": ["id", "label", "description", "step_refs"],
+      "properties": {
+        "id": { "$ref": "#/$defs/id" },
+        "label": { "$ref": "#/$defs/nonEmptyString" },
+        "description": { "$ref": "#/$defs/nonEmptyString" },
+        "step_refs": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": { "$ref": "#/$defs/stepRef" }
+        }
+      },
+      "additionalProperties": false
+    },
+    "value": {
+      "type": "object",
+      "required": ["id", "label", "kind"],
+      "properties": {
+        "id": { "$ref": "#/$defs/id" },
+        "label": { "$ref": "#/$defs/nonEmptyString" },
+        "kind": { "enum": ["representation", "geometry", "logit", "weight", "mask", "control"] },
+        "scale": { "$ref": "#/$defs/id" },
+        "glyph": { "$ref": "#/$defs/representationGlyph" },
+        "shape": { "$ref": "#/$defs/nonEmptyString" },
+        "notation": { "$ref": "#/$defs/texString" },
+        "role": { "$ref": "#/$defs/nonEmptyString" }
+      },
+      "additionalProperties": false
+    },
+    "step": {
+      "type": "object",
+      "required": ["id", "label", "operation", "inputs", "outputs", "code"],
+      "properties": {
+        "id": { "$ref": "#/$defs/id" },
+        "label": { "$ref": "#/$defs/nonEmptyString" },
+        "operation": { "$ref": "#/$defs/id" },
+        "inputs": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": { "$ref": "#/$defs/localRef" }
+        },
+        "outputs": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": { "$ref": "#/$defs/localRef" }
+        },
+        "code": { "$ref": "#/$defs/nonEmptyString" },
+        "code_bindings": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": { "$ref": "#/$defs/codeBinding" }
+        },
+        "tex": { "$ref": "#/$defs/texString" },
+        "role": { "$ref": "#/$defs/nonEmptyString" }
+      },
+      "additionalProperties": false
+    },
+    "codeBinding": {
+      "type": "object",
+      "required": ["lexeme", "ref", "access"],
+      "properties": {
+        "lexeme": { "$ref": "#/$defs/codeIdentifier" },
+        "ref": { "$ref": "#/$defs/dataRef" },
+        "access": { "enum": ["read", "write"] }
+      },
+      "additionalProperties": false
+    },
+    "grid": {
+      "type": "object",
+      "required": ["columns", "rows"],
+      "properties": {
+        "columns": { "type": "integer", "minimum": 1 },
+        "rows": { "type": "integer", "minimum": 1 },
+        "column_sizing": { "enum": ["uniform", "content"] },
+        "row_sizing": { "enum": ["uniform", "content"] },
+        "col_gap": { "type": "number", "minimum": 0 },
+        "row_gap": { "type": "number", "minimum": 0 }
+      },
+      "additionalProperties": false
+    },
+    "visualNode": {
+      "type": "object",
+      "required": ["id", "ref", "col", "row"],
+      "properties": {
+        "id": { "$ref": "#/$defs/id" },
+        "ref": { "$ref": "#/$defs/localRef" },
+        "col": { "type": "integer", "minimum": 1 },
+        "row": { "type": "integer", "minimum": 1 },
+        "prominence": { "enum": ["primary", "secondary", "context"] },
+        "treatment": { "enum": ["block", "compact", "chip"] },
+        "density": { "enum": ["normal", "compact", "micro"] }
+      },
+      "additionalProperties": false
+    },
+    "visualSegment": {
+      "type": "object",
+      "required": ["id", "label", "node_refs"],
+      "properties": {
+        "id": { "$ref": "#/$defs/id" },
+        "label": { "$ref": "#/$defs/nonEmptyString" },
+        "description": { "$ref": "#/$defs/nonEmptyString" },
+        "node_refs": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": { "$ref": "#/$defs/localRef" }
+        }
+      },
+      "additionalProperties": false
+    },
+    "visualTemplate": {
+      "type": "object",
+      "required": ["grid", "nodes"],
+      "properties": {
+        "grid": { "$ref": "#/$defs/grid" },
+        "nodes": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "$ref": "#/$defs/visualNode" }
+        },
+        "segments": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "$ref": "#/$defs/visualSegment" }
+        }
+      },
+      "additionalProperties": false
+    },
+    "evidencePolicy": {
+      "type": "object",
+      "required": ["generic_definition", "usage_requires"],
+      "properties": {
+        "generic_definition": { "$ref": "#/$defs/nonEmptyString" },
+        "usage_requires": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "$ref": "#/$defs/nonEmptyString" }
+        }
+      },
+      "additionalProperties": false
+    }
+  }
+}

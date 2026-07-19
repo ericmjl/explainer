@@ -1,0 +1,43 @@
+schema_version: registry-v0.1
+# Single source of truth for which source sets exist. build-manifest.rb and
+# scripts/lint_sources.rb both read this file; do not duplicate the lists there.
+bibliography: references/bibliography.yaml
+comparisons: comparisons/index.yaml
+source_sets:
+  - id: generic
+    label: Generic Feature Refinement
+    directory_role: reference
+    architecture: architectures/generic-feature-refinement.yaml
+    view: views/generic-semantic-zoom.view.yaml
+    pseudocode: pseudocode/generic-feature-refinement.yaml
+    standard_blocks:
+      - standard_blocks/pair-biased-attention.yaml
+      - standard_blocks/per-item-adaln-conditioning.yaml
+      - standard_blocks/additive-conditioning.yaml
+  - id: dit
+    label: Diffusion Transformer (DiT)
+    directory_role: architecture
+    architecture: architectures/diffusion-transformer.yaml
+    view: views/dit-semantic-zoom.view.yaml
+    pseudocode: pseudocode/diffusion-transformer.yaml
+    standard_blocks:
+      - standard_blocks/adaln-zero-conditioning.yaml
+      - standard_blocks/sinusoidal-timestep-embedding.yaml
+      - standard_blocks/per-item-adaln-conditioning.yaml
+  - id: genie2
+    label: Genie 2 Protein Backbone Diffusion
+    directory_role: architecture
+    architecture: architectures/genie2.yaml
+    view: views/genie2-semantic-zoom.view.yaml
+    pseudocode: pseudocode/genie2.yaml
+    standard_blocks:
+      - standard_blocks/invariant-point-attention.yaml
+  - id: genie3
+    label: Genie 3 Atom-Aware Protein Diffusion
+    directory_role: architecture
+    architecture: architectures/genie3.yaml
+    view: views/genie3-semantic-zoom.view.yaml
+    pseudocode: pseudocode/genie3.yaml
+    standard_blocks:
+      - standard_blocks/pair-biased-attention.yaml
+      - standard_blocks/invariant-point-attention.yaml

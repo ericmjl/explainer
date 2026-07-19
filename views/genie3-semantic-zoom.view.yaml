@@ -1,0 +1,1139 @@
+schema_version: visualization-v0.4
+id: genie3_semantic_zoom
+title: Genie 3 Atom-Aware Protein Diffusion
+entry:
+  architecture: architectures/genie3.yaml
+root_board: design_overview
+boards:
+  - id: design_overview
+    title: Genie 3 Protein Design
+    summary: A length, motif, or binder request becomes task-dependent token features. Genie 3 denoises a coordinate point cloud, optionally predicts residue identities, and exports a protein design.
+    subject_ref: architecture
+    expansion_depth: 1
+    grid:
+      columns: 9
+      rows: 4
+      column_sizing: content
+      col_gap: 44
+    nodes:
+      - id: design_request
+        ref: value_sites.design_request
+        label: design request
+        notation: length / motif / target
+        prominence: context
+        treatment: compact
+        density: compact
+        glyph: vector
+        col: 1
+        row: 2
+      - id: feature_builder
+        ref: modules.feature_builder
+        prominence: primary
+        treatment: block
+        col: 2
+        row: 2
+      - id: feature_bundle
+        ref: value_sites.feature_bundle
+        label: token + conditioning features
+        notation: F
+        prominence: secondary
+        treatment: compact
+        density: compact
+        glyph: pair
+        col: 3
+        row: 2
+      - id: diffusion_sampler
+        ref: modules.diffusion_sampler
+        prominence: primary
+        treatment: block
+        col: 4
+        row: 2
+        board_ref: sampling_loop
+      - id: final_coordinates
+        ref: value_sites.final_coordinates
+        label: generated token coordinates
+        notation: x_0
+        prominence: secondary
+        treatment: compact
+        density: compact
+        col: 5
+        row: 2
+      - id: predicted_sequence
+        ref: value_sites.predicted_sequence
+        label: optional sequence
+        notation: a
+        prominence: context
+        treatment: chip
+        density: micro
+        glyph: vector
+        col: 5
+        row: 3
+      - id: pdb_exporter
+        ref: modules.pdb_exporter
+        prominence: primary
+        treatment: compact
+        density: compact
+        col: 6
+        row: 2
+      - id: generated_design_pdb
+        ref: value_sites.generated_design_pdb
+        label: generated protein PDB
+        notation: .pdb
+        prominence: context
+        treatment: chip
+        density: micro
+        glyph: volume
+        col: 7
+        row: 2
+    exclude:
+      - ref: modules.single_feature_embedder
+        reason: Internal uses of task features are expanded on the denoiser board; the root keeps one feature-bundle-to-sampler connection.
+      - ref: modules.pair_feature_embedder
+        reason: Pair geometry construction is internal to the denoiser.
+      - ref: modules.invariant_point_attention
+        reason: Token masks and frame conditioning inside IPA are expanded on the structure-decoder board.
+      - ref: modules.frenet_frame_builder
+        reason: Frame construction is expanded inside the sampling loop.
+      - ref: modules.sequence_sampler
+        reason: The optional sequence branch is represented by its root-level output rather than another task-level module.
+    edge_overrides:
+      - match: { relation_ref: relations.design_request_enters_feature_builder }
+        label: task + constraints
+        connection:
+          title: Design request
+          role: task boundary input
+          inside: The request selects unconditional generation, motif scaffolding, or binder design and supplies the corresponding length or structural constraints.
+      - match: { relation_ref: relations.feature_builder_produces_feature_bundle }
+        tone: conditioning
+        connection:
+          title: Task-dependent tokenization
+          role: prepared conditioning
+          inside: Unknown scaffold residues become C-alpha tokens; known motif or interface residues can expand into atom14-ordered heavy-atom tokens.
+      - match: { relation_ref: relations.feature_bundle_sizes_coordinate_initializer }
+        label: 100 DDIM steps
+        connection:
+          title: Features enter sampling
+          role: cached sampling context
+          inside: The bundle fixes the active token layout and remains read-only throughout reverse diffusion.
+      - match: { relation_ref: relations.terminal_coordinates_become_final_coordinates }
+        label: x_0
+        connection:
+          title: Generated point cloud
+          role: sampler output
+          inside: The terminal state contains one coordinate for every active C-alpha or atomized heavy-atom token.
+      - match: { relation_ref: relations.predicted_sequence_enters_pdb_exporter }
+        label: optional identities
+        tone: conditioning
+        connection:
+          title: Optional sequence assignment
+          role: export context
+          inside: When sequence prediction is enabled, sampled residue identities fill unknown designed positions before serialization.
+      - match: { relation_ref: relations.pdb_exporter_writes_design_pdb }
+        label: PDB records
+        connection:
+          title: Generated protein design
+          role: task boundary output
+          inside: The exporter restores coordinates and identities to PDB records for the modeled token set.
+
+  - id: sampling_loop
+    title: 100-Step Directional DDIM Sampling
+    summary: Gaussian token coordinates initialize x_T. One drillable reverse-step unit reruns 100 times with cached task features, then optional sequence sampling happens after the terminal coordinates are selected.
+    parent: design_overview
+    subject_ref: modules.diffusion_sampler
+    expansion_depth: 1
+    grid:
+      columns: 7
+      rows: 4
+      column_sizing: content
+      col_gap: 44
+    regions:
+      - id: reverse_diffusion_iteration
+        kind: repeat
+        execution_ref: execution.loops.reverse_diffusion_loop
+        label: one reverse step
+        node_ids:
+          - current_coordinates
+          - reverse_diffusion_step
+          - next_coordinates
+        iteration_relation_refs:
+          - relations.next_coordinates_reenter_sampling_state
+    nodes:
+      - id: feature_bundle
+        ref: value_sites.feature_bundle
+        label: cached task features
+        notation: F
+        prominence: secondary
+        treatment: compact
+        density: compact
+        glyph: pair
+        col: 1
+        row: 1
+      - id: coordinate_initializer
+        ref: modules.coordinate_initializer
+        prominence: secondary
+        treatment: compact
+        density: compact
+        col: 1
+        row: 3
+      - id: current_coordinates
+        ref: value_sites.current_coordinates
+        label: current coordinate point cloud
+        notation: x_t
+        prominence: secondary
+        treatment: compact
+        density: compact
+        col: 2
+        row: 3
+      - id: reverse_diffusion_step
+        ref: modules.reverse_diffusion_step
+        label: Directional DDIM Reverse Step
+        prominence: primary
+        treatment: block
+        col: 3
+        row: 3
+        board_ref: reverse_diffusion_step
+      - id: next_coordinates
+        ref: value_sites.next_coordinates
+        label: next coordinate point cloud
+        notation: 'x_{t-10}'
+        prominence: secondary
+        treatment: compact
+        density: compact
+        col: 4
+        row: 3
+      - id: final_coordinates
+        ref: value_sites.final_coordinates
+        label: final coordinates
+        notation: x_0
+        prominence: context
+        treatment: compact
+        density: compact
+        col: 5
+        row: 3
+      - id: sequence_sampler
+        ref: modules.sequence_sampler
+        prominence: context
+        treatment: compact
+        density: compact
+        col: 6
+        row: 4
+      - id: predicted_sequence
+        ref: value_sites.predicted_sequence
+        label: optional sequence
+        notation: a
+        prominence: context
+        treatment: chip
+        density: micro
+        glyph: vector
+        col: 7
+        row: 4
+    elide:
+      - ref: value_sites.initial_coordinates
+    exclude:
+      - ref: modules.single_feature_embedder
+        reason: Learned feature conditioning is expanded through the reverse-step and denoiser boards.
+      - ref: modules.pair_feature_embedder
+        reason: Learned pair-feature construction is expanded through the reverse-step and denoiser boards.
+      - ref: modules.invariant_point_attention
+        reason: Frame-point attention is expanded below the reverse-step board on the structure-decoder board.
+      - ref: modules.frame_update
+        reason: Internal frame updates are summarized by the drillable reverse-step unit at this zoom level.
+      - ref: value_sites.sequence_logits
+        reason: The sampler overview shows the optional terminal sequence rather than intermediate model logits.
+    edge_overrides:
+      - match: { relation_ref: relations.feature_bundle_sizes_coordinate_initializer }
+        label: active token layout
+        tone: conditioning
+        connection:
+          title: Coordinate-state shape
+          role: initialization context
+          inside: The cached token layout fixes the B by N by 3 tensor initialized at the start of sampling.
+      - match:
+          relation_path:
+            - relations.coordinate_initializer_produces_initial_coordinates
+            - relations.initial_coordinates_begin_sampling_state
+        label: Gaussian x_T
+        connection:
+          title: Initial point cloud
+          role: reverse-chain initialization
+          inside: The active token layout sizes a standard-normal B by N by 3 coordinate tensor.
+      - match: { relation_ref: relations.feature_bundle_conditions_frame_builder }
+        label: cached features
+        tone: conditioning
+        connection:
+          title: Read-only step context
+          role: repeated conditioning
+          inside: Each reverse step reuses the cached neighbor indices and masks; the child boards expose the remaining learned feature uses.
+      - match: { relation_ref: relations.current_coordinates_enter_reverse_step }
+        label: x_t
+        connection:
+          title: Current reverse state
+          role: reverse-step input
+          inside: The drillable step rebuilds geometry, invokes the learned model, and applies fixed sampler math to the current coordinate point cloud.
+      - match: { relation_ref: relations.ddim_update_produces_next_coordinates }
+        label: one reverse step
+        connection:
+          title: Updated coordinate state
+          role: reverse-step output
+          inside: Directional DDIM math produces the coordinate point cloud for the next selected schedule index.
+      - match: { relation_ref: relations.terminal_coordinates_become_final_coordinates }
+        label: after final step
+        connection:
+          title: Terminal structure
+          role: sampler output
+          inside: When no selected timesteps remain, the next coordinate state is exposed as x_0.
+      - match: { relation_ref: relations.final_coordinates_enter_sequence_sampler }
+        label: optional final call
+        tone: conditioning
+        connection:
+          title: Optional sequence prediction
+          role: post-structure branch
+          inside: When enabled, the sampler calls the model once more on the generated structure before sampling residue identities.
+
+  - id: reverse_diffusion_step
+    title: One Reverse Step
+    summary: Each step does three things—build local geometry from the current coordinates, predict a cleaner structure with the learned model, and apply fixed DDIM math to produce the next coordinates.
+    parent: sampling_loop
+    subject_ref: modules.reverse_diffusion_step
+    expansion_depth: 1
+    grid:
+      columns: 6
+      rows: 3
+      column_sizing: content
+      col_gap: 56
+    nodes:
+    - id: feature_bundle
+      ref: value_sites.feature_bundle
+      label: cached task context
+      notation: F
+      prominence: context
+      treatment: chip
+      density: micro
+      col: 3
+      row: 1
+    - id: timestep
+      ref: value_sites.timestep
+      label: selected level
+      notation: t
+      prominence: context
+      treatment: chip
+      density: micro
+      glyph: scalar
+      col: 5
+      row: 1
+    - id: step_coordinates
+      ref: value_sites.step_coordinates
+      label: current coordinates
+      notation: x_t
+      prominence: secondary
+      treatment: compact
+      density: compact
+      col: 1
+      row: 2
+    - id: frenet_frame_builder
+      ref: modules.frenet_frame_builder
+      label: Build local frames
+      prominence: secondary
+      treatment: compact
+      density: compact
+      col: 2
+      row: 2
+    - id: current_frames
+      ref: value_sites.current_frames
+      label: local frames
+      notation: T_t
+      prominence: context
+      treatment: compact
+      density: compact
+      col: 3
+      row: 2
+    - id: denoiser
+      ref: modules.denoiser
+      label: Predict cleaner coordinates
+      prominence: secondary
+      treatment: block
+      col: 4
+      row: 2
+      board_ref: denoiser_forward
+    - id: directional_ddim_sampler_math
+      ref: modules.directional_ddim_sampler_math
+      label: Apply fixed DDIM update
+      prominence: primary
+      treatment: block
+      col: 5
+      row: 2
+      board_ref: directional_ddim_sampler_math
+    - id: next_coordinates
+      ref: value_sites.next_coordinates
+      label: next coordinates
+      notation: 'x_{t-10}'
+      prominence: secondary
+      treatment: compact
+      density: compact
+      col: 6
+      row: 2
+    elide:
+    - ref: value_sites.coordinate_prediction
+    exclude:
+    - ref: value_sites.current_coordinates
+      reason: The step-local x_t value is shown explicitly; the sampler-level state handoff is already visible on the parent board.
+    - ref: modules.timestep_controller
+      reason: This board starts from the already-selected noise level; the enclosing 100-step sampling board owns the strided reverse schedule.
+    - ref: modules.pair_feature_embedder
+      reason: Noisy frame geometry is expanded on the denoiser board.
+    - ref: modules.invariant_point_attention
+      reason: Frame-point attention is expanded on the structure-decoder board.
+    - ref: modules.frame_update
+      reason: The coordinate estimate summarizes the structure decoder's internal frame updates.
+    - ref: value_sites.sequence_logits
+      reason: Optional sequence logits are sampled only after the reverse chain and are outside one coordinate-update step.
+    edge_overrides:
+    - match:
+        relation_ref: relations.step_coordinates_enter_frame_builder
+      label: build geometry
+      connection:
+        title: Build local geometry
+        role: first step action
+        inside: The current point cloud supplies translations for deterministic local frame construction.
+    - match:
+        relation_ref: relations.feature_bundle_conditions_frame_builder
+      label: token layout
+      tone: conditioning
+      connection:
+        title: Cached geometry context
+        role: frame-building context
+        inside: Neighbor indices and masks say which coordinates define each local frame.
+    - match:
+        relation_ref: relations.timestep_conditions_single_embedder
+      label: noise level
+      tone: conditioning
+      connection:
+        title: Model noise level
+        role: learned-model context
+        inside: The selected reverse index tells the denoiser how noisy the current coordinates are.
+    - match:
+        relation_ref: relations.feature_bundle_conditions_single_embedder
+      label: task context
+      tone: conditioning
+      connection:
+        title: Cached task context
+        role: learned-model context
+        inside: Token identity, masks, and design constraints condition the learned coordinate prediction.
+    - match:
+        relation_ref: relations.frame_builder_produces_current_frames
+      label: local frames
+      connection:
+        title: Rebuilt local frames
+        role: geometric intermediate
+        inside: Deterministic rotations are rebuilt while translations remain the current token coordinates.
+    - match:
+        relation_ref: relations.current_frames_initialize_decoder_frames
+      label: use geometry
+      connection:
+        title: Predict cleaner coordinates
+        role: second step action
+        inside: The learned model uses the rebuilt local frames to estimate cleaner token coordinates.
+    - match:
+        relation_path:
+        - relations.updated_frames_produce_coordinate_prediction
+        - relations.coordinate_prediction_enters_noise_readout
+      label: cleaner estimate
+      connection:
+        title: Apply fixed sampler math
+        role: third step action
+        inside: Fixed sampler math compares the cleaner estimate with the current coordinates and constructs the next state.
+    - match:
+        relation_ref: relations.step_coordinates_enter_sampler_math
+      label: reuse x_t
+      route_side: bottom
+      route_clearance: 46
+      connection:
+        title: Current-state term
+        role: fixed-math input
+        inside: The DDIM formula also uses the current coordinates directly when reconstructing the next state.
+    - match:
+        relation_ref: relations.timestep_enters_ddim_update
+      label: schedule coefficients
+      tone: conditioning
+      connection:
+        title: Fixed schedule coefficients
+        role: fixed-math context
+        inside: The selected reverse index chooses the coefficients used by the directional DDIM formula.
+    - match:
+        relation_ref: relations.ddim_update_produces_next_coordinates
+      label: next state
+      connection:
+        title: Next coordinate state
+        role: reverse-step output
+        inside: The fixed update emits the point cloud used by the following reverse step.
+
+  - id: directional_ddim_sampler_math
+    title: Fixed Directional DDIM Math
+    summary: This board exposes the non-learned part of one reverse step. It converts the model's cleaner-coordinate estimate into a denoising direction, selects fixed schedule coefficients, and optionally adds fresh Gaussian noise.
+    parent: reverse_diffusion_step
+    subject_ref: modules.directional_ddim_sampler_math
+    expansion_depth: 1
+    grid:
+      columns: 5
+      rows: 4
+      column_sizing: content
+      col_gap: 46
+    nodes:
+      - id: timestep
+        ref: value_sites.timestep
+        label: selected noise level
+        notation: t
+        prominence: context
+        treatment: chip
+        density: micro
+        glyph: scalar
+        col: 1
+        row: 1
+      - id: step_coordinates
+        ref: value_sites.sampler_step_coordinates
+        label: current coordinates
+        notation: x_t
+        prominence: secondary
+        treatment: compact
+        density: compact
+        col: 1
+        row: 3
+      - id: coordinate_prediction
+        ref: value_sites.coordinate_prediction
+        label: cleaner coordinate estimate
+        prominence: secondary
+        treatment: compact
+        density: compact
+        col: 1
+        row: 2
+      - id: noise_readout
+        ref: modules.noise_readout
+        label: Compute denoising direction
+        prominence: secondary
+        treatment: compact
+        density: compact
+        col: 2
+        row: 2
+      - id: predicted_noise
+        ref: value_sites.predicted_noise
+        label: denoising direction
+        prominence: secondary
+        treatment: compact
+        density: compact
+        glyph: matrix
+        col: 3
+        row: 2
+      - id: ddim_update
+        ref: modules.ddim_update
+        label: Combine schedule terms
+        prominence: primary
+        treatment: block
+        col: 4
+        row: 2
+      - id: next_coordinates
+        ref: value_sites.next_coordinates
+        label: next coordinates
+        notation: 'x_{t-10}'
+        prominence: secondary
+        treatment: compact
+        density: compact
+        col: 5
+        row: 2
+    exclude:
+      - ref: value_sites.step_coordinates
+        reason: The sampler-math-local coordinate occurrence is shown explicitly; the enclosing reverse-step handoff is visible on the parent board.
+      - ref: value_sites.fresh_step_noise
+        reason: The optional fresh Gaussian term is summarized by the fixed update; drawing its internal module-to-value-to-module loop would obscure the main formula.
+    edge_overrides:
+      - match: { relation_ref: relations.sampler_coordinates_enter_noise_readout }
+        label: x_t
+        connection:
+          title: Current coordinate input
+          role: direction calculation
+          inside: The fixed readout retains the current coordinates for comparison with the model estimate.
+      - match: { relation_ref: relations.coordinate_prediction_enters_noise_readout }
+        label: x_hat
+        connection:
+          title: Cleaner estimate input
+          role: direction calculation
+          inside: The fixed readout subtracts the cleaner estimate from the current coordinates.
+      - match: { relation_ref: relations.noise_readout_produces_predicted_noise }
+        label: x_t - x_hat
+        connection:
+          title: Denoising direction
+          role: fixed intermediate
+          inside: Coordinate subtraction produces the direction used by the DDIM update.
+      - match: { relation_ref: relations.predicted_noise_enters_ddim_update }
+        label: direction
+        connection:
+          title: Directional term
+          role: update input
+          inside: The update scales the denoising direction separately from the stochastic noise term.
+      - match: { relation_ref: relations.sampler_coordinates_enter_ddim_update }
+        label: current state
+        route_side: bottom
+        route_clearance: 42
+        connection:
+          title: Current-state term
+          role: update input
+          inside: The formula uses x_t directly when reconstructing the clean-coordinate estimate.
+      - match: { relation_ref: relations.timestep_enters_ddim_update }
+        label: coefficients
+        tone: conditioning
+        route_side: top
+        route_clearance: 42
+        connection:
+          title: Schedule coefficients
+          role: update control
+          inside: The selected reverse index chooses the fixed alpha and sigma coefficients.
+      - match: { relation_ref: relations.ddim_update_produces_next_coordinates }
+        label: next state
+        connection:
+          title: Updated coordinates
+          role: reverse-step output
+          inside: The reconstructed clean estimate, scaled direction, and optional Gaussian term produce the next point cloud.
+
+  - id: denoiser_forward
+    title: V1 Denoiser Forward Path
+    summary: Task and timestep features form invariant single and pair states. A five-block transformer exchanges information in both directions, then an eight-layer equivariant decoder predicts coordinates while a parallel head emits optional sequence logits.
+    parent: reverse_diffusion_step
+    subject_ref: modules.denoiser
+    expansion_depth: 1
+    grid:
+      columns: 7
+      rows: 5
+      column_sizing: content
+      row_sizing: content
+      col_gap: 36
+      row_gap: 24
+    lanes:
+    - id: single_stream
+      label: single representations
+      kind: representation
+      row: 2
+      representation_refs: [representations.single_features, representations.sequence_logits]
+      glyph: single
+    - id: pair_stream
+      label: pair representations
+      kind: representation
+      row: 4
+      representation_refs: [representations.pair_features]
+      glyph: pair
+    nodes:
+    - id: feature_bundle
+      ref: value_sites.feature_bundle
+      label: task features
+      notation: F
+      prominence: secondary
+      treatment: compact
+      density: compact
+      col: 2
+      row: 1
+    - id: timestep
+      ref: value_sites.timestep
+      label: timestep
+      notation: t
+      prominence: context
+      treatment: chip
+      density: micro
+      glyph: scalar
+      col: 1
+      row: 1
+    - id: current_frames
+      ref: value_sites.current_frames
+      label: frames derived from x_t
+      notation: T_t
+      prominence: secondary
+      treatment: compact
+      density: compact
+      col: 1
+      row: 5
+    - id: single_feature_embedder
+      ref: modules.single_feature_embedder
+      prominence: primary
+      treatment: block
+      col: 2
+      row: 2
+    - id: pair_feature_embedder
+      ref: modules.pair_feature_embedder
+      prominence: primary
+      treatment: block
+      col: 2
+      row: 4
+    - id: latent_transformer
+      ref: modules.latent_transformer
+      prominence: primary
+      treatment: block
+      col: 3
+      row: 3
+      board_ref: latent_transformer
+    - id: refined_single_features
+      ref: value_sites.refined_single_features
+      label: mature singles
+      notation: s_out
+      prominence: secondary
+      treatment: compact
+      density: compact
+      col: 4
+      row: 2
+    - id: refined_pair_features
+      ref: value_sites.refined_pair_features
+      label: mature pairs
+      notation: z_out
+      prominence: secondary
+      treatment: compact
+      density: compact
+      glyph: pair
+      col: 4
+      row: 4
+    - id: structure_decoder
+      ref: modules.structure_decoder
+      prominence: primary
+      treatment: block
+      col: 5
+      row: 3
+      board_ref: structure_decoder
+    - id: updated_frames
+      ref: value_sites.decoder_output_frames
+      label: updated token frames
+      notation: T_hat
+      prominence: context
+      treatment: compact
+      density: compact
+      col: 6
+      row: 5
+    - id: coordinate_prediction
+      ref: value_sites.coordinate_prediction
+      label: coordinate estimate
+      prominence: secondary
+      treatment: compact
+      density: compact
+      col: 7
+      row: 5
+    - id: sequence_head
+      ref: modules.sequence_head
+      prominence: secondary
+      treatment: compact
+      density: compact
+      col: 6
+      row: 2
+    - id: sequence_logits
+      ref: value_sites.sequence_logits
+      label: optional amino-acid logits
+      prominence: context
+      treatment: compact
+      density: compact
+      col: 7
+      row: 2
+    elide:
+    - ref: value_sites.initial_single_features
+    - ref: value_sites.initial_pair_features
+    exclude:
+    - ref: modules.frenet_frame_builder
+      reason: This board starts from the already-derived current frames; Frenet construction belongs to the parent sampling-loop board.
+    - ref: modules.noise_readout
+      reason: Coordinate-noise subtraction belongs to the parent sampling-loop board; this board ends at the denoiser's coordinate estimate.
+    edge_overrides:
+    - match:
+        relation_ref: relations.feature_bundle_conditions_single_embedder
+      label: token + task metadata
+      tone: conditioning
+      connection:
+        title: Single-feature inputs
+        role: invariant conditioning
+        inside: Token identity, chain, atom type, masks, known sequence, and task indicators are concatenated before projection.
+    - match:
+        relation_ref: relations.current_frames_enter_pair_embedder
+      label: noisy geometry
+      connection:
+        title: Current frame geometry
+        role: pair-feature input
+        inside: Pair distances and orientations are computed from frames derived from the current coordinate point cloud.
+    - match:
+        relation_ref: relations.feature_bundle_conditions_pair_embedder
+      label: known geometry
+      tone: conditioning
+      connection:
+        title: Conditioned geometry
+        role: pair-feature conditioning
+        inside: Motif groups, known structure frames, and relative chain information add task-dependent pair features.
+    - match:
+        relation_ref: relations.refined_single_features_initialize_decoder_state
+      label: mature singles
+      connection:
+        title: Latent state to decoder
+        role: structural decoding input
+        inside: The five-block latent transformer removes global tokens and passes mature per-token features into equivariant decoding.
+    - match:
+        relation_ref: relations.updated_frames_produce_coordinate_prediction
+      label: updated translations
+      connection:
+        title: Coordinate estimate
+        role: denoiser output
+        inside: The decoder exposes the translation component of its final updated frames.
+    - match:
+        relation_ref: relations.sequence_head_produces_logits
+      label: 20 residue types
+      connection:
+        title: Optional sequence logits
+        role: auxiliary model output
+        inside: A parallel MLP maps mature single features to categorical amino-acid scores.
+
+  - id: latent_transformer
+    title: Five-Block Bidirectional Latent Transformer
+    summary: Ten global tokens are appended once. The repeated region shows one block, where pairs update singles through pair-biased attention, the updated singles feed pairs through an outer product, and triangle plus transition operations update the pair state. The block outputs become the next block inputs; after block five, global entries are removed to form the mature outputs.
+    parent: denoiser_forward
+    subject_ref: modules.latent_transformer
+    expansion_depth: 1
+    grid:
+      columns: 11
+      rows: 4
+      column_sizing: content
+      col_gap: 24
+    regions:
+      - id: latent_block_iteration
+        kind: repeat
+        execution_ref: execution.loops.latent_reasoning_stack
+        label: one latent block
+        node_ids:
+          - single_with_global_tokens
+          - pair_with_global_tokens
+          - pair_biased_attention_update
+          - single_after_pair_attention
+          - single_to_pair_update
+          - pair_after_single_update
+          - triangle_multiplication_stack
+          - pair_after_triangle_updates
+          - pair_transition
+          - pair_after_transition
+        iteration_relation_refs:
+          - relations.block_single_output_reenters_next_latent_block
+          - relations.block_pair_output_reenters_next_latent_block
+    nodes:
+      - id: initial_single_features
+        ref: value_sites.initial_single_features
+        label: initial singles
+        notation: s
+        prominence: secondary
+        treatment: compact
+        density: compact
+        col: 1
+        row: 2
+      - id: initial_pair_features
+        ref: value_sites.initial_pair_features
+        label: initial pairs
+        notation: z
+        prominence: secondary
+        treatment: compact
+        density: compact
+        glyph: pair
+        col: 1
+        row: 4
+      - id: global_token_adapter
+        ref: modules.global_token_adapter
+        prominence: secondary
+        treatment: compact
+        density: compact
+        col: 2
+        row: 3
+      - id: single_with_global_tokens
+        ref: value_sites.single_with_global_tokens
+        label: block-input singles + globals
+        notation: s_i
+        prominence: context
+        treatment: compact
+        density: compact
+        col: 3
+        row: 2
+      - id: pair_with_global_tokens
+        ref: value_sites.pair_with_global_tokens
+        label: block-input pairs + globals
+        notation: z_i
+        prominence: context
+        treatment: compact
+        density: compact
+        glyph: pair
+        col: 3
+        row: 4
+      - id: pair_biased_attention_update
+        ref: modules.pair_biased_attention_update
+        prominence: primary
+        treatment: block
+        col: 4
+        row: 2
+        board_ref: genie3_reduced_pair_attention_internals
+      - id: single_after_pair_attention
+        ref: value_sites.single_after_pair_attention
+        label: next-block singles
+        notation: 's_{i+1}'
+        prominence: secondary
+        treatment: compact
+        density: compact
+        col: 5
+        row: 2
+      - id: single_to_pair_update
+        ref: modules.single_to_pair_update
+        prominence: primary
+        treatment: compact
+        density: compact
+        col: 5
+        row: 4
+      - id: pair_after_single_update
+        ref: value_sites.pair_after_single_update
+        label: single-updated pairs
+        notation: z_prime
+        prominence: secondary
+        treatment: compact
+        density: compact
+        glyph: pair
+        col: 6
+        row: 4
+      - id: triangle_multiplication_stack
+        ref: modules.triangle_multiplication_stack
+        prominence: secondary
+        treatment: compact
+        density: compact
+        col: 7
+        row: 4
+      - id: pair_after_triangle_updates
+        ref: value_sites.pair_after_triangle_updates
+        label: triangle-updated pairs
+        notation: z_tri
+        prominence: context
+        treatment: compact
+        density: compact
+        glyph: pair
+        col: 8
+        row: 4
+      - id: pair_transition
+        ref: modules.pair_transition
+        prominence: secondary
+        treatment: compact
+        density: compact
+        col: 9
+        row: 4
+      - id: pair_after_transition
+        ref: value_sites.pair_after_transition
+        label: next-block pairs
+        notation: 'z_{i+1}'
+        prominence: secondary
+        treatment: compact
+        density: compact
+        glyph: pair
+        col: 10
+        row: 4
+      - id: refined_single_features
+        ref: value_sites.refined_single_features
+        label: mature singles
+        notation: s_out
+        prominence: context
+        treatment: compact
+        density: compact
+        col: 11
+        row: 2
+      - id: refined_pair_features
+        ref: value_sites.refined_pair_features
+        label: mature pairs
+        notation: z_out
+        prominence: context
+        treatment: compact
+        density: compact
+        glyph: pair
+        col: 11
+        row: 4
+    edge_overrides:
+      - match: { relation_ref: relations.pair_with_global_tokens_bias_attention }
+        label: pair bias + values
+        tone: conditioning
+        connection:
+          title: Pairs update singles
+          role: pair-to-single communication
+          inside: Pair features bias self-attention and also contribute projected values to the single residual stream.
+      - match: { relation_ref: relations.single_after_pair_attention_enters_single_to_pair_update }
+        label: outer product
+        connection:
+          title: Singles update pairs
+          role: single-to-pair communication
+          inside: Projected updated singles form an outer product that is added to the pair state.
+      - match:
+          relation_ref: relations.triangle_stack_produces_pair_state
+        label: outgoing + incoming
+        connection:
+          title: Triangular pair reasoning
+          role: pair refinement
+          inside: Outgoing and incoming triangular multiplication propagate information around three-token paths before the pair MLP.
+  - id: structure_decoder
+    title: Eight-Layer Equivariant Structure Decoder
+    summary: Full IPA uses mature single and pair features plus current frames. A transition updates the invariant state, then a rigid increment moves every valid token frame; the updated state repeats for eight layers.
+    parent: denoiser_forward
+    subject_ref: modules.structure_decoder
+    expansion_depth: 1
+    grid:
+      columns: 8
+      rows: 5
+      column_sizing: content
+      col_gap: 32
+    regions:
+      - id: structure_layer_iteration
+        kind: repeat
+        execution_ref: execution.loops.structure_refinement_stack
+        label: one structure layer
+        node_ids:
+          - decoder_single_state
+          - refined_pair_features
+          - decoder_frames
+          - invariant_point_attention
+          - single_after_ipa
+          - structure_transition
+          - single_after_transition
+          - frame_update
+          - updated_frames
+        iteration_relation_refs:
+          - relations.transition_state_reenters_decoder
+          - relations.updated_frames_reenter_decoder
+    nodes:
+      - id: feature_bundle
+        ref: value_sites.feature_bundle
+        label: valid-frame mask
+        notation: M
+        prominence: context
+        treatment: chip
+        density: micro
+        glyph: vector
+        col: 1
+        row: 1
+      - id: decoder_single_state
+        ref: value_sites.decoder_single_state
+        label: decoder single state
+        notation: s_l
+        prominence: secondary
+        treatment: compact
+        density: compact
+        col: 1
+        row: 2
+      - id: refined_pair_features
+        ref: value_sites.refined_pair_features
+        label: mature pair state
+        notation: z
+        prominence: secondary
+        treatment: compact
+        density: compact
+        glyph: pair
+        col: 1
+        row: 3
+      - id: decoder_frames
+        ref: value_sites.decoder_frames
+        label: current decoder frames
+        notation: T_l
+        prominence: secondary
+        treatment: compact
+        density: compact
+        col: 1
+        row: 4
+      - id: invariant_point_attention
+        ref: modules.invariant_point_attention
+        prominence: primary
+        treatment: block
+        col: 3
+        row: 3
+        board_ref: genie3_ipa_internals
+      - id: single_after_ipa
+        ref: value_sites.single_after_ipa
+        label: attention-updated singles
+        notation: s_attn
+        prominence: secondary
+        treatment: compact
+        density: compact
+        col: 4
+        row: 3
+      - id: structure_transition
+        ref: modules.structure_transition
+        prominence: secondary
+        treatment: compact
+        density: compact
+        col: 5
+        row: 3
+      - id: single_after_transition
+        ref: value_sites.single_after_transition
+        label: transitioned singles
+        notation: 's_{l+1}'
+        prominence: secondary
+        treatment: compact
+        density: compact
+        col: 6
+        row: 3
+      - id: frame_update
+        ref: modules.frame_update
+        prominence: primary
+        treatment: compact
+        density: compact
+        col: 6
+        row: 4
+      - id: updated_frames
+        ref: value_sites.updated_frames
+        label: updated token frames
+        notation: 'T_{l+1}'
+        prominence: secondary
+        treatment: compact
+        density: compact
+        col: 7
+        row: 4
+      - id: decoder_output_frames
+        ref: value_sites.decoder_output_frames
+        label: final decoder frames
+        notation: T_hat
+        prominence: context
+        treatment: compact
+        density: compact
+        col: 8
+        row: 4
+    exclude:
+      - ref: value_sites.current_frames
+        reason: The board uses the explicit per-layer decoder-frame state initialized from the denoiser's current frames.
+      - ref: value_sites.refined_single_features
+        reason: The explicit decoder single-state site represents the initialized and recurrent structure-layer state.
+    edge_overrides:
+      - match: { relation_ref: relations.refined_pair_features_bias_ipa }
+        label: pair bias
+        tone: conditioning
+        connection:
+          title: Pair-conditioned IPA
+          role: invariant relational context
+          inside: Mature pair features contribute an attention bias while frame-transformed query, key, and value points carry equivariant geometry.
+      - match: { relation_ref: relations.decoder_frames_condition_ipa }
+        label: frame points
+        tone: conditioning
+        connection:
+          title: Frame-aware point attention
+          role: equivariant geometric context
+          inside: Query, key, and value points are expressed in the current token frames so global rigid motions preserve the update.
+      - match: { relation_ref: relations.transition_state_enters_frame_update }
+        label: rigid increment
+        connection:
+          title: Learned frame motion
+          role: structure update
+          inside: The transitioned single state is projected to a six-parameter rigid increment for each valid token.
+      - match: { relation_ref: relations.updated_frames_become_decoder_output_frames }
+        label: after layer 8
+        connection:
+          title: Final decoder frames
+          role: decoder output
+          inside: The eighth layer's updated frame state leaves the repeated decoder as the final frame estimate; coordinate readout happens on the parent board.
+
+  - id: genie3_reduced_pair_attention_internals
+    kind: standard_block_instance
+    title: Genie 3 Reduced Pair Attention Internals
+    summary: This reduced variant keeps scalar attention, pair-logit bias, and pair-value aggregation, while omitting frame-aware point terms and applying the latent-block wrapper.
+    parent: latent_transformer
+    subject_ref: modules.pair_biased_attention_update
+    expansion_depth: 0
+    block_instance_ref: block_instances.latent_reduced_pair_attention
+
+  - id: genie3_ipa_internals
+    kind: standard_block_instance
+    title: Genie 3 Invariant Point Attention Internals
+    summary: Full IPA combines scalar, pair, and frame-aware point terms, then the structure-layer wrapper applies residual dropout and LayerNorm.
+    parent: structure_decoder
+    subject_ref: modules.invariant_point_attention
+    expansion_depth: 0
+    block_instance_ref: block_instances.structure_ipa

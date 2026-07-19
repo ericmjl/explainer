@@ -1,0 +1,925 @@
+schema_version: visualization-v0.4
+id: genie2_semantic_zoom
+title: Genie 2 Protein Backbone Diffusion
+entry:
+  architecture: architectures/genie2.yaml
+root_board: generation_overview
+boards:
+  - id: generation_overview
+    title: Genie 2 Backbone Generation
+    summary: A target length or motif specification becomes a reusable conditioning bundle; Genie 2 denoises random C-alpha coordinates, then exports the sequence-agnostic backbone as PDB records.
+    subject_ref: architecture
+    expansion_depth: 1
+    grid:
+      columns: 7
+      rows: 4
+      column_sizing: content
+      col_gap: 46
+    nodes:
+      - id: generation_request
+        ref: value_sites.generation_request
+        label: generation request
+        notation: length / motif PDB
+        prominence: context
+        treatment: compact
+        density: compact
+        glyph: vector
+        col: 1
+        row: 2
+      - id: feature_builder
+        ref: modules.feature_builder
+        prominence: primary
+        treatment: block
+        col: 2
+        row: 2
+      - id: feature_bundle
+        ref: value_sites.feature_bundle
+        label: residue + motif features
+        notation: F
+        prominence: secondary
+        treatment: compact
+        density: compact
+        glyph: pair
+        col: 3
+        row: 2
+      - id: reverse_diffusion_sampler
+        ref: modules.reverse_diffusion_sampler
+        prominence: primary
+        treatment: block
+        col: 4
+        row: 2
+        board_ref: sampling_loop
+      - id: final_coordinates
+        ref: value_sites.final_coordinates
+        label: generated C-alpha coordinates
+        notation: x_0
+        prominence: secondary
+        treatment: compact
+        density: compact
+        col: 5
+        row: 2
+      - id: pdb_exporter
+        ref: modules.pdb_exporter
+        prominence: primary
+        treatment: compact
+        density: compact
+        col: 6
+        row: 2
+      - id: generated_backbone_pdb
+        ref: value_sites.generated_backbone_pdb
+        label: backbone PDB
+        notation: .pdb
+        prominence: context
+        treatment: chip
+        density: micro
+        glyph: matrix
+        col: 7
+        row: 2
+    exclude:
+      - ref: modules.single_feature_net
+        reason: The task overview carries the feature bundle into the sampler once; its sequence-conditioning use is expanded on the denoiser and invariant-encoder boards.
+      - ref: modules.pair_feature_net
+        reason: The task overview suppresses the separate internal pair-geometry use so it does not become a duplicate feature-to-sampler wire.
+      - ref: modules.invariant_point_attention
+        reason: Residue-mask use inside IPA belongs to the structure-decoder detail rather than the task overview.
+      - ref: modules.frenet_frame_builder
+        reason: Frenet construction is expanded inside the sampling loop; the task overview keeps one feature-to-sampler connection.
+    edge_overrides:
+      - match: { relation_ref: relations.generation_request_enters_feature_builder }
+        label: mode + size
+        connection:
+          title: Generation request
+          role: task boundary input
+          inside: Unconditional generation supplies a target length; scaffolding supplies a motif PDB specification that also determines scaffold placement ranges.
+      - match: { relation_ref: relations.feature_builder_produces_feature_bundle }
+        label: masks + constraints
+        tone: conditioning
+        connection:
+          title: Prepared sampling features
+          role: cached conditioning
+          inside: The builder prepares residue and chain indices, masks, and optional motif sequence and intra-motif geometry constraints once for the full reverse chain.
+      - match: { relation_ref: relations.feature_bundle_sets_initial_coordinate_shape }
+        label: 1000 reverse steps
+        connection:
+          title: Features enter reverse diffusion
+          role: sampling context
+          inside: The feature bundle fixes the number of residues and remains read-only while the sampler repeatedly updates C-alpha coordinates.
+      - match: { relation_ref: relations.terminal_coordinates_become_final_coordinates }
+        label: x_0
+        connection:
+          title: Terminal coordinates
+          role: sampler output
+          inside: After the step-one posterior mean, the terminal C-alpha coordinate trace becomes the generated backbone.
+      - match: { relation_ref: relations.final_coordinates_enter_pdb_exporter }
+        label: C-alpha trace
+        connection:
+          title: Coordinates to exporter
+          role: output serialization
+          inside: The exporter receives geometry, not a newly designed amino-acid sequence.
+      - match: { relation_ref: relations.pdb_exporter_writes_backbone_pdb }
+        label: PDB records
+        connection:
+          title: Generated backbone PDB
+          role: task boundary output
+          inside: Scaffold residues use alanine placeholders; fixed motif identities can be retained from the conditioning input.
+
+  - id: sampling_loop
+    title: 1000-Step Reverse Diffusion
+    summary: Random C-alpha coordinates initialize x_T. Each step derives Frenet frames from x_t for the denoiser, then fixed DDPM math updates only the coordinates to x_(t-1).
+    parent: generation_overview
+    subject_ref: modules.reverse_diffusion_sampler
+    expansion_depth: 1
+    grid:
+      columns: 8
+      rows: 6
+      column_sizing: content
+      col_gap: 42
+    nodes:
+      - id: feature_bundle
+        ref: value_sites.feature_bundle
+        label: cached features
+        notation: F
+        prominence: secondary
+        treatment: compact
+        density: compact
+        glyph: pair
+        col: 1
+        row: 1
+      - id: coordinate_initializer
+        ref: modules.coordinate_initializer
+        label: Gaussian coordinate initializer
+        prominence: primary
+        treatment: compact
+        density: compact
+        col: 1
+        row: 3
+      - id: current_coordinates
+        ref: value_sites.current_coordinates
+        label: current noisy C-alpha coordinates
+        notation: x_t
+        prominence: secondary
+        treatment: compact
+        density: compact
+        col: 2
+        row: 3
+      - id: timestep_controller
+        ref: modules.timestep_controller
+        prominence: secondary
+        treatment: compact
+        density: compact
+        col: 2
+        row: 1
+      - id: timestep
+        ref: value_sites.timestep
+        label: timestep
+        notation: t
+        prominence: context
+        treatment: chip
+        density: micro
+        glyph: scalar
+        col: 3
+        row: 1
+      - id: frenet_frame_builder
+        ref: modules.frenet_frame_builder
+        label: derive Frenet frames
+        prominence: secondary
+        treatment: compact
+        density: compact
+        col: 3
+        row: 3
+      - id: denoiser
+        ref: modules.denoiser
+        prominence: primary
+        treatment: block
+        col: 4
+        row: 3
+        board_ref: denoiser_forward
+      - id: predicted_noise
+        ref: value_sites.predicted_noise
+        label: predicted coordinate noise
+        notation: z_theta
+        prominence: secondary
+        treatment: compact
+        density: compact
+        glyph: matrix
+        col: 5
+        row: 3
+      - id: step_noise_sampler
+        ref: modules.step_noise_sampler
+        prominence: secondary
+        treatment: compact
+        density: compact
+        col: 5
+        row: 1
+      - id: fresh_step_noise
+        ref: value_sites.fresh_step_noise
+        label: fresh step noise
+        notation: z
+        prominence: context
+        treatment: chip
+        density: micro
+        glyph: matrix
+        col: 6
+        row: 1
+      - id: reverse_diffusion_update
+        ref: modules.reverse_diffusion_update
+        prominence: primary
+        treatment: block
+        col: 6
+        row: 3
+      - id: next_coordinates
+        ref: value_sites.next_coordinates
+        label: next C-alpha coordinates
+        notation: 'x_{t-1}'
+        prominence: secondary
+        treatment: compact
+        density: compact
+        col: 7
+        row: 3
+      - id: final_coordinates
+        ref: value_sites.final_coordinates
+        label: final C-alpha coordinates
+        notation: x_0
+        prominence: context
+        treatment: compact
+        density: compact
+        col: 8
+        row: 3
+    elide:
+      - ref: value_sites.initial_coordinates
+      - ref: value_sites.current_frames
+    exclude:
+      - ref: modules.pair_feature_net
+        reason: The sampling-loop board represents all learned uses of x_t through one denoiser wire; noisy pair geometry is expanded on the invariant-encoder board.
+      - ref: modules.invariant_point_attention
+        reason: Frame-point conditioning and residue masking are internal to the structure decoder and are expanded on its child board.
+      - ref: modules.backbone_update
+        reason: Frame composition is internal to the structure decoder; suppressing it here keeps one derived-frames-to-denoiser wire.
+    edge_overrides:
+      - match: { relation_ref: relations.feature_bundle_sets_initial_coordinate_shape }
+        label: N residues
+        tone: conditioning
+        connection:
+          title: Requested shape
+          role: initialization context
+          inside: The residue mask fixes the coordinate tensor shape before standard-normal translations are sampled.
+      - match:
+          relation_path:
+            - relations.coordinate_initializer_produces_initial_coordinates
+            - relations.initial_coordinates_begin_sampling_state
+        label: Gaussian x_T
+        connection:
+          title: Initial random trace
+          role: reverse-chain initialization
+          inside: The sampler draws one standard-normal C-alpha coordinate for every residue; these coordinates are the initial diffusion state.
+      - match: { relation_ref: relations.current_coordinates_enter_frenet_frame_builder }
+        label: x_t
+        connection:
+          title: Current coordinate trace
+          role: derived-geometry input
+          inside: The current stochastic state is the B by N by 3 C-alpha trace, not a separately sampled set of rotations.
+      - match: { relation_ref: relations.feature_bundle_conditions_frenet_frame_builder }
+        label: chain + mask
+        tone: conditioning
+        connection:
+          title: Frame-construction context
+          role: chain-aware geometric derivation
+          inside: Chain indices and the residue mask determine which neighboring coordinates define each Frenet rotation.
+      - match:
+          relation_path:
+            - relations.frenet_frame_builder_produces_current_frames
+            - relations.current_frames_enter_noise_readout
+        label: derived T(x_t)
+        connection:
+          title: Derived frames to denoiser
+          role: geometric model input
+          inside: The denoiser receives x_t packaged with Frenet rotations computed deterministically from that same coordinate trace.
+      - match: { relation_ref: relations.timestep_controller_produces_timestep }
+        label: 1000 → 1
+        tone: conditioning
+        connection:
+          title: Reverse timestep
+          role: loop control
+          inside: The controller selects one schedule index for both the denoiser and posterior update.
+      - match: { relation_ref: relations.feature_bundle_conditions_single_feature_net }
+        label: cached features
+        tone: conditioning
+        connection:
+          title: Cached features to denoiser
+          role: read-only model context
+          inside: The denoiser receives the prepared residue layout and optional motif constraints at every reverse step.
+      - match: { relation_ref: relations.timestep_conditions_single_feature_net }
+        label: t
+        tone: conditioning
+        connection:
+          title: Timestep to denoiser
+          role: noise-level conditioning
+          inside: The denoiser embeds the current reverse index into its per-residue single state.
+      - match: { relation_ref: relations.current_coordinates_enter_reverse_update }
+        label: x_t
+        connection:
+          title: Current coordinates to DDPM update
+          role: reverse-process state
+          inside: The fixed posterior equation combines the current C-alpha coordinates with the denoiser prediction and schedule coefficients.
+      - match: { relation_ref: relations.noise_readout_produces_predicted_noise }
+        label: z_theta
+        connection:
+          title: Predicted coordinate noise
+          role: learned reverse-process parameter
+          inside: The model outputs one three-vector per residue; it does not directly perform the DDPM posterior update.
+      - match: { relation_ref: relations.fresh_noise_enters_reverse_update }
+        label: scale · sigma_t · z
+        connection:
+          title: Stochastic step term
+          role: reverse-step randomness
+          inside: Fresh Gaussian noise is added on steps above one; the last update uses only the posterior mean.
+      - match: { relation_ref: relations.reverse_update_produces_next_coordinates }
+        label: posterior update
+        connection:
+          title: Next reverse state
+          role: fixed sampler math
+          inside: Schedule coefficients and, above step one, fresh Gaussian noise produce the next C-alpha coordinate trace.
+      - match: { relation_ref: relations.next_coordinates_reenter_sampling_state }
+        label: next iteration
+        tone: skip
+        route_side: bottom
+        route_clearance: 52
+        connection:
+          title: Reverse-chain recurrence
+          role: loop state update
+          inside: The newly sampled C-alpha coordinates become x_t for the following, lower timestep; Frenet frames are then derived again.
+      - match: { relation_ref: relations.terminal_coordinates_become_final_coordinates }
+        label: when t = 1
+        connection:
+          title: Sampling termination
+          role: final state selection
+          inside: The step-one mean is exposed as the generated backbone coordinate trace.
+
+  - id: denoiser_forward
+    title: Genie 2 Denoiser Forward Pass
+    summary: The denoiser receives T(x_t), which packages noisy C-alpha translations with Frenet rotations derived from x_t. It encodes invariant geometry, updates frames equivariantly, and reads their translation displacement as predicted noise.
+    parent: sampling_loop
+    subject_ref: modules.denoiser
+    expansion_depth: 1
+    grid:
+      columns: 7
+      rows: 6
+      column_sizing: content
+      col_gap: 48
+    nodes:
+      - id: feature_bundle
+        ref: value_sites.feature_bundle
+        label: residue + motif features
+        notation: F
+        prominence: secondary
+        treatment: compact
+        density: compact
+        glyph: pair
+        col: 1
+        row: 1
+      - id: timestep
+        ref: value_sites.timestep
+        label: timestep
+        notation: t
+        prominence: context
+        treatment: chip
+        density: micro
+        glyph: scalar
+        col: 1
+        row: 2
+      - id: current_frames
+        ref: value_sites.current_frames
+        label: derived frames from x_t
+        notation: T_t
+        prominence: secondary
+        treatment: compact
+        density: compact
+        col: 1
+        row: 4
+      - id: invariant_feature_encoder
+        ref: modules.invariant_feature_encoder
+        prominence: primary
+        treatment: block
+        col: 3
+        row: 2
+        board_ref: invariant_feature_encoder
+      - id: equivariant_structure_decoder
+        ref: modules.equivariant_structure_decoder
+        prominence: primary
+        treatment: block
+        col: 4
+        row: 4
+        board_ref: structure_decoder
+      - id: updated_frames
+        ref: value_sites.updated_frames
+        label: updated frame estimate
+        notation: T_hat
+        prominence: secondary
+        treatment: compact
+        density: compact
+        col: 5
+        row: 4
+      - id: noise_readout
+        ref: modules.noise_readout
+        prominence: primary
+        treatment: compact
+        density: compact
+        col: 6
+        row: 4
+      - id: predicted_noise
+        ref: value_sites.predicted_noise
+        label: predicted coordinate noise
+        notation: z_theta = trans(T_t) - trans(T_hat)
+        prominence: context
+        treatment: compact
+        density: compact
+        glyph: matrix
+        col: 7
+        row: 4
+    exclude:
+      - ref: modules.frenet_frame_builder
+        reason: The parent sampling board owns the deterministic construction of the denoiser's T(x_t) input.
+    edge_overrides:
+      - match: { relation_ref: relations.feature_bundle_conditions_single_feature_net }
+        label: layout + motif sequence
+        tone: conditioning
+        connection:
+          title: Feature bundle to invariant encoder
+          role: sequence-side conditioning
+          inside: Residue and chain indices, timestep-independent masks, and fixed motif identities are projected into the per-residue state.
+      - match: { relation_ref: relations.feature_bundle_conditions_pair_feature_net }
+        label: motif geometry
+        tone: conditioning
+        route_side: top
+        route_clearance: 28
+        connection:
+          title: Motif geometry to pair encoder
+          role: pair-side conditioning
+          inside: Fixed intra-motif C-alpha distances are injected into pair features while unspecified scaffold and inter-motif geometry remains free.
+      - match: { relation_ref: relations.timestep_conditions_single_feature_net }
+        label: time encoding
+        tone: conditioning
+        connection:
+          title: Diffusion time
+          role: noise-level conditioning
+          inside: A sinusoidal timestep code is repeated over residues and concatenated into the single-feature input.
+      - match: { relation_ref: relations.current_frames_enter_pair_feature_net }
+        label: distances + orientations
+        connection:
+          title: Noisy geometry into invariant encoding
+          role: current-structure observation
+          inside: Pairwise distances and relative frame orientations describe x_t without fixing a global pose.
+      - match: { relation_ref: relations.single_features_enter_ipa }
+        label: single state
+        connection:
+          title: Single state to structure decoder
+          role: mutable residue state
+          inside: The invariant per-residue state supplies IPA queries and the features used to regress each rigid update.
+      - match: { relation_ref: relations.refined_pair_features_bias_ipa }
+        label: refined pair state
+        tone: conditioning
+        route_side: top
+        route_clearance: 42
+        connection:
+          title: Pair state to structure decoder
+          role: attention context
+          inside: Refined residue-pair features condition IPA while remaining fixed across the eight structure layers.
+      - match: { relation_ref: relations.backbone_update_produces_updated_frames }
+        label: 8 equivariant updates
+        connection:
+          title: Updated residue frames
+          role: decoder estimate
+          inside: Each structure layer composes a learned rigid increment; the eighth layer returns the final frame estimate for this denoiser call.
+      - match: { relation_ref: relations.current_frames_enter_noise_readout }
+        label: noisy translations
+        route_side: bottom
+        route_clearance: 34
+        connection:
+          title: Input side of displacement
+          role: noise readout minuend
+          inside: The original x_t translations are retained so the decoder displacement can be converted to the noise convention used by the DDPM loss.
+      - match: { relation_ref: relations.updated_frames_enter_noise_readout }
+        label: estimated clean direction
+        connection:
+          title: Updated side of displacement
+          role: noise readout subtrahend
+          inside: Updated frame translations are subtracted from the original noisy translations.
+      - match: { relation_ref: relations.noise_readout_produces_predicted_noise }
+        label: coordinate difference
+        connection:
+          title: Denoiser output
+          role: predicted diffusion noise
+          inside: The resulting B by N by 3 field is consumed by the fixed reverse-diffusion equation on the parent board.
+
+  - id: invariant_feature_encoder
+    title: SE(3)-Invariant Feature Encoder
+    summary: The encoder first forms a residue state, expands it into a pair state enriched with current and motif geometry, then applies five active Evoformer-style pair-refinement layers.
+    parent: denoiser_forward
+    subject_ref: modules.invariant_feature_encoder
+    expansion_depth: 1
+    grid:
+      columns: 7
+      rows: 6
+      column_sizing: content
+      col_gap: 46
+    nodes:
+      - id: feature_bundle
+        ref: value_sites.feature_bundle
+        label: residue + motif features
+        notation: F
+        prominence: secondary
+        treatment: compact
+        density: compact
+        glyph: pair
+        col: 1
+        row: 1
+      - id: timestep
+        ref: value_sites.timestep
+        label: timestep
+        notation: t
+        prominence: context
+        treatment: chip
+        density: micro
+        glyph: scalar
+        col: 1
+        row: 3
+      - id: current_frames
+        ref: value_sites.current_frames
+        label: derived frames from x_t
+        notation: T_t
+        prominence: secondary
+        treatment: compact
+        density: compact
+        col: 1
+        row: 5
+      - id: single_feature_net
+        ref: modules.single_feature_net
+        prominence: primary
+        treatment: block
+        col: 3
+        row: 2
+      - id: single_features
+        ref: value_sites.single_features
+        label: single features
+        notation: s
+        prominence: secondary
+        treatment: compact
+        density: compact
+        col: 4
+        row: 2
+      - id: pair_feature_net
+        ref: modules.pair_feature_net
+        prominence: primary
+        treatment: block
+        col: 4
+        row: 4
+      - id: initial_pair_features
+        ref: value_sites.initial_pair_features
+        label: initial pair features
+        notation: p
+        prominence: secondary
+        treatment: compact
+        density: compact
+        glyph: pair
+        col: 5
+        row: 4
+      - id: pair_transform_stack
+        ref: modules.pair_transform_stack
+        prominence: primary
+        treatment: block
+        col: 6
+        row: 4
+        board_ref: pair_transform_stack
+      - id: refined_pair_features
+        ref: value_sites.refined_pair_features
+        label: refined pair features
+        notation: p_refined
+        prominence: secondary
+        treatment: compact
+        density: compact
+        glyph: pair
+        col: 7
+        row: 4
+    exclude:
+      - ref: modules.frenet_frame_builder
+        reason: Frenet frames enter this child board as an already-derived denoiser input from the sampling board.
+      - ref: modules.invariant_point_attention
+        reason: The invariant encoder board stops at the single and refined-pair outputs; IPA is expanded on the sibling structure-decoder board.
+    edge_overrides:
+      - match: { relation_ref: relations.feature_bundle_conditions_single_feature_net }
+        label: residue/chain + motif AA
+        tone: conditioning
+        connection:
+          title: Single-feature ingredients
+          role: per-residue conditioning
+          inside: Residue index, chain index, masked motif identities, and masks are concatenated with the repeated timestep code.
+      - match: { relation_ref: relations.timestep_conditions_single_feature_net }
+        label: sinusoidal t
+        tone: conditioning
+        connection:
+          title: Timestep embedding
+          role: per-residue noise level
+          inside: One diffusion index is sinusoidally encoded and repeated across all residues.
+      - match: { relation_ref: relations.single_feature_net_produces_single_features }
+        label: B × N × 384
+        connection:
+          title: Single representation
+          role: invariant residue state
+          inside: A single linear projection produces the 384-channel state used by both pair construction and the structure decoder.
+      - match: { relation_ref: relations.single_features_feed_pair_feature_net }
+        label: outer sum s_i + s_j
+        connection:
+          title: Residue-to-pair expansion
+          role: initialize pair channels
+          inside: Separate linear projections of residue i and residue j are added across every ordered residue pair.
+      - match: { relation_ref: relations.current_frames_enter_pair_feature_net }
+        label: noisy d_ij + q_ij
+        connection:
+          title: Current geometry
+          role: invariant frame template
+          inside: Binned C-alpha distances and relative orientation quaternions encode the noisy structure without a global-coordinate dependence.
+      - match: { relation_ref: relations.feature_bundle_conditions_pair_feature_net }
+        label: relpos + motif d_ij
+        tone: conditioning
+        connection:
+          title: Layout and motif geometry
+          role: pair conditioning
+          inside: Relative sequence offsets and same-chain flags are always present; motif distances are included only where fixed_structure_mask is true.
+      - match: { relation_ref: relations.pair_feature_net_produces_initial_pair_features }
+        label: B × N × N × 128
+        connection:
+          title: Initial pair state
+          role: pair-refinement input
+          inside: Projected outer-sum, layout, current-frame, and motif-template terms are summed and masked.
+      - match: { relation_ref: relations.initial_pair_features_enter_outgoing_update }
+        label: ×5 layers
+        connection:
+          title: Pair refinement
+          role: active base-checkpoint stack
+          inside: Each layer applies outgoing multiplication, incoming multiplication, and a pair transition; triangular attention is disabled in the released base configuration.
+      - match: { relation_ref: relations.pair_transition_produces_refined_pair_features }
+        label: refined p
+        connection:
+          title: Refined pair state
+          role: structure-decoder context
+          inside: The final pair state is held fixed while eight equivariant structure layers update residue frames.
+
+  - id: pair_transform_stack
+    title: One Pair Transform Layer (Repeated ×5)
+    summary: Each active base-model layer applies outgoing and incoming triangular multiplicative residual updates, then a pair-wise transition MLP. Triangular attention exists in code but is disabled by configuration.
+    parent: invariant_feature_encoder
+    subject_ref: modules.pair_transform_stack
+    expansion_depth: 1
+    grid:
+      columns: 7
+      rows: 4
+      column_sizing: content
+      col_gap: 44
+    nodes:
+      - id: initial_pair_features
+        ref: value_sites.initial_pair_features
+        label: pair state in
+        notation: p
+        prominence: secondary
+        treatment: compact
+        density: compact
+        glyph: pair
+        col: 1
+        row: 2
+      - id: triangle_multiplication_outgoing
+        ref: modules.triangle_multiplication_outgoing
+        prominence: primary
+        treatment: block
+        col: 2
+        row: 2
+      - id: pair_after_outgoing
+        ref: value_sites.pair_after_outgoing
+        label: after outgoing update
+        notation: p + Delta_out
+        prominence: secondary
+        treatment: compact
+        density: compact
+        glyph: pair
+        col: 3
+        row: 2
+      - id: triangle_multiplication_incoming
+        ref: modules.triangle_multiplication_incoming
+        prominence: primary
+        treatment: block
+        col: 4
+        row: 2
+      - id: pair_after_incoming
+        ref: value_sites.pair_after_incoming
+        label: after incoming update
+        notation: p + Delta_in
+        prominence: secondary
+        treatment: compact
+        density: compact
+        glyph: pair
+        col: 5
+        row: 2
+      - id: pair_transition
+        ref: modules.pair_transition
+        prominence: primary
+        treatment: block
+        col: 6
+        row: 2
+      - id: refined_pair_features
+        ref: value_sites.refined_pair_features
+        label: pair state out
+        notation: p'
+        prominence: secondary
+        treatment: compact
+        density: compact
+        glyph: pair
+        col: 7
+        row: 2
+    edge_overrides:
+      - match: { relation_ref: relations.initial_pair_features_enter_outgoing_update }
+        label: p
+        connection:
+          title: Pair layer input
+          role: edge state
+          inside: The layer begins from the current N by N pair representation and pair mask.
+      - match: { relation_ref: relations.outgoing_update_produces_pair_state }
+        label: residual + row dropout
+        connection:
+          title: Outgoing triangle update
+          role: two-edge path aggregation
+          inside: Information from outgoing triangular paths is added residually after row-wise dropout.
+      - match: { relation_ref: relations.incoming_update_produces_pair_state }
+        label: residual + row dropout
+        connection:
+          title: Incoming triangle update
+          role: complementary path aggregation
+          inside: Incoming triangular paths provide the second multiplicative pair update.
+      - match: { relation_ref: relations.pair_transition_produces_refined_pair_features }
+        label: residual MLP
+        connection:
+          title: Pair transition output
+          role: channel mixing
+          inside: A pair-wise transition MLP is added residually and the pair mask is reapplied before the next of five layers.
+
+  - id: structure_decoder
+    title: One Equivariant Structure Layer (Repeated ×8)
+    summary: IPA combines single, pair, and current-frame information; a residue-wise transition updates the latent state; a learned six-parameter rigid increment is composed into every residue frame.
+    parent: denoiser_forward
+    subject_ref: modules.equivariant_structure_decoder
+    expansion_depth: 1
+    grid:
+      columns: 7
+      rows: 6
+      column_sizing: content
+      col_gap: 46
+    nodes:
+      - id: single_features
+        ref: value_sites.single_features
+        label: single features
+        notation: s
+        prominence: secondary
+        treatment: compact
+        density: compact
+        col: 1
+        row: 2
+      - id: refined_pair_features
+        ref: value_sites.refined_pair_features
+        label: refined pair features
+        notation: p
+        prominence: secondary
+        treatment: compact
+        density: compact
+        glyph: pair
+        col: 1
+        row: 1
+      - id: current_frames
+        ref: value_sites.current_frames
+        label: derived frames from x_t
+        notation: T
+        prominence: secondary
+        treatment: compact
+        density: compact
+        col: 1
+        row: 4
+      - id: feature_bundle
+        ref: value_sites.feature_bundle
+        label: residue mask
+        notation: m
+        prominence: context
+        treatment: chip
+        density: micro
+        glyph: vector
+        col: 2
+        row: 1
+      - id: invariant_point_attention
+        ref: modules.invariant_point_attention
+        prominence: primary
+        treatment: block
+        col: 3
+        row: 3
+        board_ref: genie2_ipa_internals
+      - id: single_after_ipa
+        ref: value_sites.single_after_ipa
+        label: attention-updated single state
+        notation: s_ipa
+        prominence: secondary
+        treatment: compact
+        density: compact
+        col: 4
+        row: 3
+      - id: structure_transition
+        ref: modules.structure_transition
+        prominence: primary
+        treatment: compact
+        density: compact
+        col: 5
+        row: 3
+      - id: single_after_transition
+        ref: value_sites.single_after_transition
+        label: transitioned single state
+        notation: s'
+        prominence: secondary
+        treatment: compact
+        density: compact
+        col: 6
+        row: 3
+      - id: backbone_update
+        ref: modules.backbone_update
+        prominence: primary
+        treatment: block
+        col: 6
+        row: 5
+      - id: updated_frames
+        ref: value_sites.updated_frames
+        label: updated residue frames
+        notation: T ∘ Delta T
+        prominence: secondary
+        treatment: compact
+        density: compact
+        col: 7
+        row: 5
+    exclude:
+      - ref: modules.frenet_frame_builder
+        reason: Frenet frames enter this child board as an already-derived denoiser input from the sampling board.
+    edge_overrides:
+      - match: { relation_ref: relations.single_features_enter_ipa }
+        label: residue state
+        connection:
+          title: Single state into IPA
+          role: attention queries and values
+          inside: The per-residue latent state is updated while retaining one position per backbone residue.
+      - match: { relation_ref: relations.refined_pair_features_bias_ipa }
+        label: pair context
+        tone: conditioning
+        connection:
+          title: Pair-conditioned IPA
+          role: residue-pair context
+          inside: The refined pair tensor biases communication between residue positions and is not changed by the structure stack.
+      - match: { relation_ref: relations.current_frames_condition_ipa }
+        label: frame points
+        tone: conditioning
+        connection:
+          title: Equivariant geometric context
+          role: spatial attention
+          inside: Query, key, and value points are transformed through current residue frames so attention responds equivariantly to global rigid motions.
+      - match: { relation_ref: relations.ipa_produces_updated_single_state }
+        label: residual + norm
+        connection:
+          title: IPA-updated state
+          role: geometric attention output
+          inside: IPA is added to the incoming single state, followed by dropout and layer normalization.
+      - match: { relation_ref: relations.structure_transition_produces_single_state }
+        label: residue-wise MLP
+        connection:
+          title: Structure transition
+          role: latent channel update
+          inside: A transition network mixes channels independently at each residue before frame regression.
+      - match: { relation_ref: relations.single_state_enters_backbone_update }
+        label: regress 6 parameters
+        connection:
+          title: Rigid increment regression
+          role: frame-update parameters
+          inside: Each residue state is linearly projected to rotation and translation update parameters.
+      - match: { relation_ref: relations.current_frames_enter_backbone_update }
+        label: compose with T
+        tone: skip
+        route_side: bottom
+        route_clearance: 42
+        connection:
+          title: Frame composition
+          role: equivariant state update
+          inside: The learned local rigid increment is composed into the current frame rather than replacing it in a global coordinate system.
+      - match: { relation_ref: relations.backbone_update_produces_updated_frames }
+        label: next layer / denoiser output
+        connection:
+          title: Updated frames
+          role: repeated structure state
+          inside: The updated frames feed the next structure layer; after eight layers they return to the denoiser noise readout.
+
+  - id: genie2_ipa_internals
+    kind: standard_block_instance
+    title: Genie 2 Invariant Point Attention Internals
+    summary: Full IPA combines scalar, pair, and frame-aware point terms, then the structure-layer wrapper applies residual dropout and LayerNorm.
+    parent: structure_decoder
+    subject_ref: modules.invariant_point_attention
+    expansion_depth: 0
+    block_instance_ref: block_instances.structure_ipa

@@ -1,0 +1,186 @@
+schema_version: pseudocode-v0.1
+id: genie2
+title: Genie 2 Sampling and Denoiser Trace
+sources:
+  - id: sampler_code
+    source_ref: genie2_sampler_code
+  - id: model_code
+    source_ref: genie2_model_code
+  - id: single_code
+    source_ref: genie2_single_feature_code
+  - id: pair_code
+    source_ref: genie2_pair_feature_code
+  - id: pair_transform_code
+    source_ref: genie2_pair_transform_code
+  - id: structure_code
+    source_ref: genie2_structure_code
+symbols:
+  - id: feature_bundle
+    name: features
+    type: input
+    shape: "B x N fields + B x N x N masks"
+    architecture_ref: representations.feature_bundle
+  - id: current_coordinates
+    name: x_t
+    tex: 'x_t'
+    type: state
+    shape: "B x N x 3"
+    architecture_ref: representations.ca_coordinates
+  - id: current_frames
+    name: T_t
+    tex: 'T_t'
+    type: representation
+    shape: "B x N frames"
+    architecture_ref: representations.residue_frames
+  - id: timestep
+    name: t
+    type: input
+    shape: "B"
+    architecture_ref: representations.timestep
+  - id: single_features
+    name: s
+    type: representation
+    shape: "B x N x 384"
+    architecture_ref: representations.single_features
+  - id: pair_features
+    name: p
+    type: representation
+    shape: "B x N x N x 128"
+    architecture_ref: representations.pair_features
+  - id: updated_frames
+    name: T_hat
+    tex: '\hat{T}'
+    type: representation
+    shape: "B x N frames"
+    architecture_ref: representations.residue_frames
+  - id: predicted_noise
+    name: z_theta
+    tex: 'z_\theta'
+    type: output
+    shape: "B x N x 3"
+    architecture_ref: representations.coordinate_noise
+  - id: step_noise
+    name: z
+    type: input
+    shape: "B x N x 3"
+    architecture_ref: representations.coordinate_noise
+  - id: next_coordinates
+    name: x_(t-1)
+    tex: 'x_{t-1}'
+    type: state
+    shape: "B x N x 3"
+    architecture_ref: representations.ca_coordinates
+  - id: final_coordinates
+    name: x_0
+    tex: 'x_0'
+    type: output
+    shape: "B x N x 3"
+    architecture_ref: representations.ca_coordinates
+lines:
+  - id: initialize_coordinates
+    text: "x_t = randn_like(features.atom_positions)"
+    operation: gaussian_coordinate_initialization
+    inputs: [feature_bundle]
+    outputs: [current_coordinates]
+    architecture_refs:
+      - modules.coordinate_initializer
+    source_refs:
+      - source: sampler_code
+        locator: BaseSampler._sample
+  - id: derive_current_frames
+    text: "T_t = Frames(rotation=Frenet(x_t, chain_index, mask), translation=x_t)"
+    operation: derive_frenet_frames
+    inputs: [current_coordinates, feature_bundle]
+    outputs: [current_frames]
+    architecture_refs:
+      - modules.frenet_frame_builder
+    source_refs:
+      - source: sampler_code
+        locator: BaseSampler._sample
+  - id: encode_single_state
+    text: "s = Linear(concat(residue_pos, chain_pos, time(t), masked_motif_aatype, masks))"
+    operation: single_feature_encoding
+    inputs: [feature_bundle, timestep]
+    outputs: [single_features]
+    architecture_refs:
+      - modules.single_feature_net
+    source_refs:
+      - source: single_code
+        locator: SingleFeatureNet.forward
+  - id: encode_pair_state
+    text: "p = OuterSum(s) + RelPos(features) + NoisyFrameTemplate(T_t) + MaskedMotifDistances(features)"
+    operation: pair_feature_encoding
+    inputs: [single_features, current_frames, feature_bundle]
+    outputs: [pair_features]
+    architecture_refs:
+      - modules.pair_feature_net
+      - claims.motif_geometry_is_intra_group
+    source_refs:
+      - source: pair_code
+        locator: PairFeatureNet.forward
+  - id: refine_pair_state
+    text: "repeat 5: p += TriMulOutgoing(p); p += TriMulIncoming(p); p += PairTransition(p)"
+    operation: pair_refinement
+    inputs: [pair_features]
+    outputs: [pair_features]
+    architecture_refs:
+      - modules.pair_transform_stack
+      - claims.base_model_omits_triangle_attention
+    source_refs:
+      - source: pair_transform_code
+        locator: PairTransformLayer.forward
+  - id: update_structure
+    text: "repeat 8: s = Transition(LayerNorm(s + IPA(s, p, T_t))); T_t = T_t.compose(BackboneUpdate(s))"
+    operation: equivariant_structure_refinement
+    inputs: [single_features, pair_features, current_frames]
+    outputs: [updated_frames]
+    architecture_refs:
+      - modules.equivariant_structure_decoder
+    source_refs:
+      - source: structure_code
+        locator: StructureLayer.forward and StructureNet.forward
+  - id: read_noise
+    text: "z_theta = input_frames.trans - updated_frames.trans"
+    operation: translation_displacement
+    inputs: [current_frames, updated_frames]
+    outputs: [predicted_noise]
+    architecture_refs:
+      - modules.noise_readout
+    source_refs:
+      - source: model_code
+        locator: Denoiser.forward
+  - id: reverse_step
+    text: "mean = (x_t - ((1 - alpha_t) / sqrt(1 - alpha_bar_t)) * z_theta) / sqrt(alpha_t); x_(t-1) = mean if t == 1 else mean + scale * sqrt(beta_t) * z"
+    operation: stochastic_ddpm_coordinate_update
+    inputs: [current_coordinates, timestep, predicted_noise, step_noise]
+    outputs: [next_coordinates]
+    architecture_refs:
+      - modules.step_noise_sampler
+      - modules.reverse_diffusion_update
+    source_refs:
+      - source: sampler_code
+        locator: BaseSampler._sample
+  - id: emit_backbone
+    text: "final_coordinates = x_(t-1)  # at t = 1; serialized as C-alpha PDB records"
+    operation: emit_generated_backbone
+    inputs: [next_coordinates]
+    outputs: [final_coordinates]
+    architecture_refs:
+      - modules.pdb_exporter
+      - claims.model_is_sequence_agnostic
+    source_refs:
+      - source: sampler_code
+        locator: BaseSampler._sample
+claims:
+  - id: denoiser_and_sampler_are_separate
+    statement: The learned denoiser predicts coordinate noise; the posterior mean, stochastic noise term, and frame reconstruction are fixed sampler operations outside the model.
+    line_refs: [derive_current_frames, read_noise, reverse_step]
+    evidence:
+      status: confirmed_from_code
+      refs:
+        - source_ref: genie2_model_code
+          role: implementation_evidence
+          locator: Denoiser.forward
+        - source_ref: genie2_sampler_code
+          role: implementation_evidence
+          locator: BaseSampler._sample

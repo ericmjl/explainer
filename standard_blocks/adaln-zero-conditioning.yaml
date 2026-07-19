@@ -1,0 +1,56 @@
+schema_version: standard-block-v0.1
+id: adaln_zero_conditioning
+name: AdaLN-Zero Conditioning
+kind: conditioning
+status: draft
+description: Regress per-sample shift, scale-offset, and residual-gate parameters from a global conditioning vector; the entire six-output modulation linear is zero-initialized, so each residual update starts at zero and the enclosing block starts as the identity.
+canonical_operation: adaln_zero
+input_slots:
+  - id: token_state
+    label: x
+    scale: token
+    kind: representation
+    required: true
+  - id: cond_vector
+    label: c
+    scale: sample
+    kind: conditioning
+    required: true
+output_slots:
+  - id: modulated_token_state
+    label: modulated token state
+    scale: token
+    kind: representation
+math:
+  - id: regress_modulation
+    text: "shift1, scale1, gate1, shift2, scale2, gate2 = Linear(SiLU(c))"
+    tex: '\beta_1, \gamma_1, \alpha_1, \beta_2, \gamma_2, \alpha_2 = \operatorname{Linear}(\operatorname{SiLU}(c))'
+    operation: conditioning_projection
+    inputs: [cond_vector]
+    outputs: [modulated_token_state]
+  - id: modulate_attention_branch
+    text: "h = x + gate1 * Attn((1 + scale1) * LN(x) + shift1)"
+    tex: 'h = x + \alpha_1 \odot \operatorname{Attn}((1 + \gamma_1) \odot \operatorname{LN}(x) + \beta_1)'
+    operation: gated_residual_attention
+    inputs: [token_state, cond_vector]
+    outputs: [modulated_token_state]
+  - id: modulate_mlp_branch
+    text: "y = h + gate2 * MLP((1 + scale2) * LN(h) + shift2)"
+    tex: 'y = h + \alpha_2 \odot \operatorname{MLP}((1 + \gamma_2) \odot \operatorname{LN}(h) + \beta_2)'
+    operation: gated_residual_mlp
+    inputs: [token_state, cond_vector]
+    outputs: [modulated_token_state]
+  - id: identity_initialization
+    text: "the six-output modulation linear's weights and bias are initialized to zero; zero residual gates make the block an identity"
+    operation: initialization_policy
+    inputs: [cond_vector]
+    outputs: [modulated_token_state]
+visual_template:
+  type: conditioning_overlay
+  lanes: [token_state, cond_vector]
+renderer_contract:
+  shows:
+    - per-sample (global) conditioning shared by all tokens, unlike per-item AdaLN
+    - zero initialization of the entire shift/scale/gate projection, with zero gates making both residual updates zero and the enclosing block an identity
+evidence_policy:
+  require_usage_evidence: true

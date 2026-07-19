@@ -1,0 +1,382 @@
+schema_version: visualization-v0.4
+id: generic_semantic_zoom_board
+title: Generic Semantic Zoom Board
+entry:
+  architecture: architectures/generic-feature-refinement.yaml
+root_board: refinement_pipeline
+boards:
+  - id: refinement_pipeline
+    title: Feature Refinement Pipeline
+    summary: The pipeline embeds records, updates item states, compresses them to group states, refines groups with pair/context bias, then broadcasts back to item outputs.
+    subject_ref: architecture
+    expansion_depth: 1
+    grid:
+      columns: 7
+      rows: 5
+    nodes:
+      - id: raw_records
+        ref: value_sites.raw_records_input
+        prominence: context
+        treatment: chip
+        density: micro
+        col: 1
+        row: 3
+      - id: input_adapter
+        ref: modules.input_adapter
+        prominence: primary
+        treatment: block
+        col: 2
+        row: 3
+      - id: conditioning_signal
+        ref: value_sites.conditioning_signal
+        prominence: secondary
+        treatment: compact
+        density: compact
+        col: 3
+        row: 1
+      - id: item_state
+        ref: value_sites.item_state_before_encoder
+        label: item state
+        prominence: secondary
+        treatment: compact
+        density: compact
+        col: 3
+        row: 3
+      - id: context_builder
+        ref: modules.context_builder
+        prominence: secondary
+        treatment: compact
+        density: compact
+        col: 3
+        row: 2
+      - id: pair_context
+        ref: value_sites.pair_context
+        prominence: secondary
+        treatment: compact
+        density: compact
+        col: 4
+        row: 1
+      - id: item_encoder
+        ref: modules.item_encoder
+        prominence: primary
+        treatment: block
+        col: 4
+        row: 3
+        board_ref: item_encoder
+      - id: item_to_group_pool
+        ref: modules.item_to_group_pool
+        prominence: primary
+        treatment: compact
+        density: compact
+        col: 5
+        row: 3
+      - id: group_state
+        ref: value_sites.group_state_before_refiner
+        label: group state
+        prominence: secondary
+        treatment: compact
+        density: compact
+        col: 5
+        row: 2
+      - id: group_refiner
+        ref: modules.group_refiner
+        prominence: primary
+        treatment: block
+        col: 6
+        row: 2
+        board_ref: group_refiner
+      - id: output_decoder
+        ref: modules.output_decoder
+        prominence: primary
+        treatment: block
+        col: 6
+        row: 4
+      - id: item_output_state
+        ref: value_sites.item_output_state
+        prominence: secondary
+        treatment: compact
+        density: compact
+        col: 7
+        row: 4
+      - id: output_heads
+        ref: modules.output_heads
+        prominence: primary
+        treatment: compact
+        density: compact
+        col: 7
+        row: 3
+      - id: predictions
+        ref: value_sites.predictions_output
+        prominence: context
+        treatment: chip
+        density: micro
+        col: 7
+        row: 2
+    elide:
+      - ref: value_sites.item_to_group_index
+    edge_overrides:
+      - match: { relation_ref: relations.raw_records_enter_input_adapter }
+        label: fields
+        connection:
+          title: Raw records to adapter
+          role: input embedding
+          inside: The adapter turns raw fields into latent item state, conditioning, masks, and grouping indices.
+      - match: { relation_ref: relations.input_adapter_initializes_item_state }
+        label: item state
+        connection:
+          title: Adapter initializes item state
+          role: mutable fine-scale state
+          inside: The item stream is the fine-resolution state updated by the item encoder.
+      - match: { relation_ref: relations.input_adapter_initializes_conditioning_signal }
+        label: cond
+        tone: conditioning
+        connection:
+          title: Adapter builds conditioning
+          role: adaptive modulation source
+          inside: The conditioning signal is carried separately so item updates can be modulated without replacing item state.
+      - match: { relation_ref: relations.item_state_feeds_context_builder }
+        label: context feats
+        connection:
+          title: Item features to context builder
+          role: pair/context construction
+          inside: The context builder summarizes relationships that later bias group attention.
+      - match:
+          relation_path:
+            - relations.input_adapter_produces_item_to_group_index
+            - relations.item_to_group_index_guides_context_builder
+        label: grouping index
+        route_side: top
+        route_clearance: 24
+        connection:
+          title: Group ownership to context builder
+          role: indexed context construction
+          inside: The context builder uses the ownership map to organize item relationships at group resolution.
+      - match: { relation_ref: relations.context_builder_produces_pair_context }
+        label: C_ij
+        tone: conditioning
+        connection:
+          title: Pair/context state
+          role: attention bias source
+          inside: Pair/context features are retained as read-only conditioning for the group refiner in this demo.
+      - match: { relation_ref: relations.item_state_enters_item_adaln }
+        label: x_i
+        connection:
+          title: Item state into encoder
+          role: local mutable state
+          inside: The item encoder applies local attention and feedforward updates to the item stream.
+      - match: { relation_ref: relations.conditioning_signal_modulates_item_adaln }
+        label: cond
+        tone: conditioning
+        connection:
+          title: Per-item adaptive modulation
+          role: conditioning inside item blocks
+          inside: Each item receives conditioning-derived shift, scale, and gate terms before the update.
+      - match: { relation_ref: relations.encoded_item_state_enters_group_pool }
+        label: updated items
+        connection:
+          title: Item encoder to compression
+          role: prepare coarse state
+          inside: Updated item states are grouped by an ownership index and projected before pooling.
+      - match:
+          relation_path:
+            - relations.input_adapter_produces_item_to_group_index
+            - relations.item_to_group_index_guides_pooling
+        label: grouping index
+        route_side: bottom
+        route_clearance: 24
+        connection:
+          title: Ownership index to compression
+          role: scatter assignment
+          inside: The pool uses the ownership index to assign each fine item to its coarse group before aggregation.
+      - match: { relation_ref: relations.item_to_group_pool_produces_group_state }
+        label: pool
+        connection:
+          title: Item-to-group compression
+          role: pooling transition
+          inside: Multiple item states can contribute to one group state, so this is a compression rather than a reshape.
+      - match: { relation_ref: relations.group_state_enters_pair_attention }
+        label: g_a
+        connection:
+          title: Group state into refiner
+          role: coarse mutable state
+          inside: The refiner updates compressed group states with full attention.
+      - match: { relation_ref: relations.pair_context_biases_pair_attention }
+        label: bias
+        tone: conditioning
+        connection:
+          title: Pair/context bias
+          role: attention-logit conditioning
+          inside: Pair/context features are projected to per-head logits and added to group attention scores.
+      - match: { relation_ref: relations.refined_group_state_enters_output_decoder }
+        label: refined groups
+        connection:
+          title: Refined groups to decoder
+          role: coarse-to-fine decoding
+          inside: The decoder broadcasts refined group state back to item resolution using the same ownership index.
+      - match: { relation_ref: relations.encoded_item_state_skips_to_output_decoder }
+        label: item skip
+        tone: skip
+        route_side: bottom
+        route_clearance: 40
+        connection:
+          title: Fine item skip into decoder
+          role: fine-resolution fusion
+          inside: The decoder fuses the encoded item stream with gathered group context so fine detail is not reconstructed from groups alone.
+      - match:
+          relation_path:
+            - relations.input_adapter_produces_item_to_group_index
+            - relations.item_to_group_index_guides_output_decoder
+        label: gather index
+        route_side: bottom
+        route_clearance: 72
+        connection:
+          title: Ownership index to decoder
+          role: group-to-item gather
+          inside: The decoder uses the same ownership map to gather each refined group state back to its member items.
+      - match: { relation_ref: relations.output_decoder_produces_item_output_state }
+        label: broadcast
+        connection:
+          title: Group-to-item broadcast
+          role: gather transition
+          inside: Each item receives the state of its owning group; this copies/broadcasts rather than pools.
+      - match: { relation_ref: relations.item_output_state_feeds_output_heads }
+        label: decoded items
+        connection:
+          title: Decoded state into heads
+          role: output projection
+          inside: Output heads map item-scale decoded state to task-specific predictions.
+      - match: { relation_ref: relations.output_heads_produce_predictions }
+        label: y
+        connection:
+          title: Predictions
+          role: final outputs
+          inside: The output representation is intentionally generic and can be specialized by a concrete architecture.
+
+  - id: item_encoder
+    title: Item Encoder
+    summary: The item encoder is a local fine-scale stack conditioned by a per-item modulation stream.
+    parent: refinement_pipeline
+    subject_ref: modules.item_encoder
+    expansion_depth: 1
+    grid:
+      columns: 5
+      rows: 4
+    nodes:
+      - id: item_state_in
+        ref: value_sites.item_state_before_encoder
+        label: item state in
+        col: 1
+        row: 2
+      - id: conditioning_signal
+        ref: value_sites.conditioning_signal
+        col: 2
+        row: 1
+      - id: adaln
+        ref: modules.item_adaln
+        label: per-item AdaLN
+        col: 2
+        row: 2
+      - id: local_attention
+        ref: modules.local_attention_stack
+        label: local attention stack
+        col: 3
+        row: 2
+      - id: item_state_out
+        ref: value_sites.item_state_after_encoder
+        label: item state out
+        col: 4
+        row: 2
+    exclude:
+      - ref: modules.item_to_group_pool
+        reason: This child board stops at the encoder output before group compression.
+      - ref: modules.output_decoder
+        reason: The decoder consumes the item skip on the parent pipeline board.
+    edge_overrides:
+      - match: { relation_ref: relations.item_state_enters_item_adaln }
+        label: x_i
+        connection:
+          title: Normalize item state
+          role: block input
+          inside: Item state is normalized before receiving conditioning-derived modulation.
+      - match: { relation_ref: relations.conditioning_signal_modulates_item_adaln }
+        label: shift/scale/gate
+        tone: conditioning
+        connection:
+          title: Per-item modulation
+          role: adaptive conditioning
+          inside: The conditioning stream is projected independently at each item position.
+      - match: { relation_ref: relations.item_adaln_feeds_local_attention }
+        label: modulated x
+        connection:
+          title: Modulated item state
+          role: attention input
+          inside: The modulated stream is fed into the local attention and feedforward update.
+      - match: { relation_ref: relations.local_attention_updates_item_state }
+        label: x'_i
+        connection:
+          title: Updated item state
+          role: mutable output
+          inside: The stack returns an item-scale state with the same ownership layout.
+
+  - id: group_refiner
+    title: Group Refiner
+    summary: The group refiner updates compressed group states with pair/context-biased full attention.
+    parent: refinement_pipeline
+    subject_ref: modules.group_refiner
+    expansion_depth: 1
+    grid:
+      columns: 5
+      rows: 4
+    nodes:
+      - id: group_state_in
+        ref: value_sites.group_state_before_refiner
+        label: group state in
+        col: 1
+        row: 2
+      - id: pair_context
+        ref: value_sites.pair_context
+        col: 2
+        row: 1
+      - id: pair_biased_attention
+        ref: modules.pair_biased_attention
+        label: pair-biased attention
+        col: 3
+        row: 2
+        board_ref: generic_group_pair_attention_internals
+      - id: group_state_out
+        ref: value_sites.group_state_after_refiner
+        label: group state out
+        col: 4
+        row: 2
+    exclude:
+      - ref: modules.output_decoder
+        reason: This child board stops at the refiner output before coarse-to-fine decoding.
+    edge_overrides:
+      - match: { relation_ref: relations.group_state_enters_pair_attention }
+        label: Q/K/V
+        connection:
+          title: Group state as attention stream
+          role: mutable state
+          inside: Group state supplies query, key, and value projections.
+      - match: { relation_ref: relations.pair_context_biases_pair_attention }
+        label: bias
+        tone: conditioning
+        connection:
+          title: Pair/context to logits
+          role: attention-logit bias
+          inside: Pair/context features are projected to bias terms and added before softmax.
+      - match: { relation_ref: relations.pair_attention_updates_group_state }
+        label: update
+        connection:
+          title: Refined group state
+          role: mutable output
+          inside: The attention output updates group state while pair/context remains read-only in this demo.
+
+  - id: generic_group_pair_attention_internals
+    kind: standard_block_instance
+    title: Pair-Biased Attention Internals
+    summary: The reusable logit-bias-only variant projects pair context into the attention logits, then aggregates scalar values into the updated group state.
+    parent: group_refiner
+    subject_ref: modules.pair_biased_attention
+    expansion_depth: 0
+    block_instance_ref: block_instances.generic_group_pair_attention

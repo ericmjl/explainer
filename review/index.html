@@ -1,0 +1,80 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Architecture Review Workspace</title>
+    <link rel="stylesheet" href="../styles.css" />
+    <link rel="stylesheet" href="./review.css" />
+  </head>
+  <body class="review-page">
+    <main class="review-shell">
+      <header class="review-header">
+        <div class="review-title-group">
+          <a href="../" class="review-library-link">← Explainer library</a>
+          <div>
+            <p class="eyebrow">Local authoring</p>
+            <h1>Architecture review</h1>
+            <p>Correct explanations and simplify boards through validated source edits.</p>
+          </div>
+          <span class="local-badge">Loopback only</span>
+        </div>
+        <div class="review-header-actions">
+          <label for="sourceSetSelect">
+            <span>Architecture</span>
+            <select id="sourceSetSelect"></select>
+          </label>
+          <a id="audienceLink" href="../renderer/architecture/" target="_blank" rel="noreferrer">Open audience view</a>
+        </div>
+      </header>
+
+      <section class="review-workspace">
+        <section class="review-canvas-panel" aria-labelledby="audienceViewTitle">
+          <div class="review-pane-heading">
+            <div>
+              <p class="eyebrow">Exact published experience</p>
+              <h2 id="audienceViewTitle">Select a block or arrow</h2>
+            </div>
+            <p>Selection is shared with the review inspector. Navigation remains unchanged.</p>
+          </div>
+          <iframe id="audienceFrame" title="Audience architecture renderer"></iframe>
+        </section>
+
+        <aside class="review-inspector" aria-label="Review inspector">
+          <div id="selectionPanel" class="review-selection-panel">
+            <div class="review-empty-state">
+              <span aria-hidden="true">↖</span>
+              <h2>Choose something in the diagram</h2>
+              <p>Select a component to clarify its explanation, or an arrow to edit how the connection is described.</p>
+            </div>
+          </div>
+
+          <section class="pending-panel" aria-labelledby="pendingTitle">
+            <div class="pending-heading">
+              <div>
+                <p class="eyebrow">Review transaction</p>
+                <h2 id="pendingTitle">Pending changes <span id="pendingCount">0</span></h2>
+              </div>
+              <button id="clearPending" type="button" hidden>Clear all</button>
+            </div>
+            <label class="intent-field" for="intentInput">
+              <span>Why this change?</span>
+              <input id="intentInput" value="Clarify the architecture explanation after human review." />
+            </label>
+            <ol id="pendingList" class="pending-list"></ol>
+            <div class="review-commit-actions">
+              <button id="previewChanges" class="primary-action" type="button" disabled>Preview &amp; validate</button>
+              <button id="applyChanges" type="button" disabled>Apply to sources</button>
+            </div>
+            <p id="reviewStatus" class="review-status" role="status" aria-live="polite"></p>
+            <details id="previewDetails" class="preview-details" hidden>
+              <summary>Validated semantic diff</summary>
+              <pre id="previewReport"></pre>
+            </details>
+          </section>
+        </aside>
+      </section>
+    </main>
+    <script type="module" src="./review.js"></script>
+  </body>
+</html>
