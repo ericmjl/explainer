@@ -27,14 +27,35 @@ Current source sets compile as:
 
 ```text
 architecture-v0.4 + visualization-v0.4
+  + pseudocode-v0.1/v0.2 + standard-block-v0.1/v0.2
   -> strict YAML + shared executable schemas
-  -> Ruby evidence/ownership/coverage/projection pipeline
+  -> Ruby evidence/ownership/coverage/projection/pseudocode pipeline
   -> architecture-manifest-v0.4
+  + optional architecture-comparison-v0.1 compiled alignment metadata
   -> canonical browser audience view
+  -> scripts/build_pages.rb allowlist
+  -> audience-only dist/
 ```
 
 Generated manifests are deterministic internal compiler output with input
 digests. YAML and Markdown remain the durable sources.
+
+`dist/` is a deployment artifact, not another source layer. It contains only
+the landing page, renderer, styles/themes, compiled manifest JavaScript, and
+static security headers. Never deploy or serve the repository root as the
+audience site.
+
+Every staged local browser dependency receives the same content-derived build
+query. Combined with revalidation headers, that keeps the ES-module graph
+deployment-consistent in browsers with persistent module caches, especially
+Safari.
+
+`scripts/build_pages.rb --source-set <id>` makes the production source-set
+allowlist explicit. Repeating the option includes multiple architectures. The
+staged manifest registry contains exactly that ordered registry subset, and a
+compiled comparison remains only when all of its subject source sets are
+present. This deployment filter does not alter canonical YAML or claim that
+excluded drafts passed verification.
 
 Architecture edit plans are optional transactional authoring instructions.
 They resolve one registered source set, show a semantic diff, and write

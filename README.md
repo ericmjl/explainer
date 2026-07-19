@@ -1,11 +1,14 @@
 # Architecture Explainer
 
-This is a static, source-first prototype for explaining system architectures
-as semantic-zoom boards and short source-backed stories.
+This is a static, source-first system for explaining model architectures as
+semantic-zoom boards, synchronized pseudocode, and source-backed stories.
 
-The branch is intentionally domain-neutral. Architecture facts live in YAML
-and Markdown sources; browser pages render those sources into diagrams,
-focus panels, evidence summaries, and reusable standard-block views.
+The language and renderer are intentionally domain-neutral; the registered
+examples include both a neutral reference pipeline and real ML/protein models.
+Architecture facts live in YAML and Markdown sources. A deterministic Ruby
+compiler projects them into browser manifests, and the browser renders those
+manifests into diagrams, inspectors, comparisons, evidence summaries, and
+reusable standard-block views.
 
 ## Architecture Language
 
@@ -43,15 +46,35 @@ Source layers:
 - `protocol/renderer-architecture.md`: renderer stack and interaction model.
 - `architectures/`: machine-readable architecture slices.
 - `comparisons/`: curated, source-backed alignments between architecture slices.
-- `pseudocode/`: machine-readable algorithm or code traces.
+- `pseudocode/`: scoped semantic algorithm or code traces bound to canonical
+  architecture facts.
 - `standard_blocks/`: reusable block specs.
 - `views/`: source specs for generated architecture views.
-- `renderer/architecture/`: generated architecture renderer prototype.
+- `renderer/architecture/`: the audience renderer and generated manifests.
 - `schemas/`: implementation-independent JSON Schemas consumed by the Ruby
   compiler and future authoring frontends.
 
 Stories should increasingly be rendered from these source files instead of
 hardcoding every module diagram in HTML or JavaScript.
+
+## Current Contract Versions
+
+| Layer | Current authoring contract | Compatibility |
+| --- | --- | --- |
+| Architecture facts | `architecture-v0.4` | All registered source sets use v0.4. |
+| Semantic-zoom boards | `visualization-v0.4` | All registered views use v0.4. |
+| Semantic pseudocode | `pseudocode-v0.2` | New traces use v0.2; registered v0.1 traces remain readable. |
+| Reusable algorithms | `standard-block-v0.2` | New blocks use v0.2; registered v0.1 blocks remain supported. |
+| Curated comparisons | `architecture-comparison-v0.1` | Registered through `comparison-registry-v0.1`. |
+| Typed edit plans | `architecture-edit-v0.2` | v0.1 plans remain accepted. |
+| Browser manifest | `architecture-manifest-v0.4` | Deterministic compiler output, not an authoring format. |
+| Semantic layout | `semantic_flow_v1` | Produces reviewable `col`/`row` values in view YAML. |
+
+Compiler implementation versions are recorded in generated manifests. The
+current builder is `architecture-manifest-builder-v0.4.6`; semantic pseudocode
+and comparisons are independently versioned as
+`semantic-pseudocode-compiler-v0.3` and
+`architecture-comparison-compiler-v0.1`.
 
 The current architecture-v0.4 / visualization-v0.4 contracts enforce the
 one-fact/one-owner rule. Architecture sources own a strict module hierarchy,
@@ -133,7 +156,13 @@ cards in `index.html`. Register the source set in `architectures/index.yaml`
 and set `directory_role` to `architecture` or `reference`; the generated
 directory will update with the manifests.
 
-## Current Demo
+The public directory intentionally separates real **Model architectures**
+from the **Language reference**. The Generic Feature Refinement card is not a
+published model; it is a neutral example for learning the diagram grammar.
+Authoring protocols are contributor/agent documentation and are deliberately
+absent from the audience homepage and production artifact.
+
+## Audience Renderer
 
 Path: `renderer/architecture/`
 
@@ -162,9 +191,11 @@ There is one renderer interface: the audience view. Node hover or keyboard
 focus traces nearby connectivity without duplicating the detail panel; edge
 hover or focus provides a transient connection explanation. Selecting either
 pins its full details in the right inspector. Dragging pans the canvas, while
-a two-finger scroll or mouse wheel zooms around the pointer. Navigation and
-location belong to that same experience. The former legacy, edit, and tuning
-UI variants are retired. Shareable static-site links use stable source, board,
+direct touch supports two-finger pinch zoom plus simultaneous two-finger pan.
+A two-finger trackpad scroll or mouse wheel also zooms around the pointer.
+Pinch can begin over a card without activating it. Navigation and location
+belong to that same experience. The former legacy, edit, and tuning UI
+variants are retired. Shareable static-site links use stable source, board,
 and optional board-local node IDs, for example
 `?arch=genie3&board=latent_transformer&node=pair_biased_attention_update`.
 The board breadcrumb's **Copy link** button copies the current canonical URL;
@@ -244,9 +275,41 @@ artifact contains only HTML, CSS, browser JavaScript, compiled manifest
 JavaScript, and Cloudflare's `_headers` control file; its ownership marker is
 kept beside `dist/`, outside the deployed directory.
 
+During staging, the builder gives every local HTML/CSS/JavaScript dependency
+one shared content fingerprint and emits `Cache-Control: no-cache,
+must-revalidate`. This prevents Safari from combining cached modules from an
+older deployment with a newer renderer or manifest.
+
+By default the Pages build publishes every registered source set. To publish
+only reviewed architectures, repeat `--source-set` for the exact allowlist:
+
+```bash
+ruby scripts/build_pages.rb --source-set genie3
+ruby scripts/build_pages.rb --source-set dit --source-set genie3
+```
+
+A filtered build compiles and verifies only those selected source sets, emits
+only their manifest files, and writes a correspondingly filtered browser
+registry. A comparison is retained only when every one of its subjects is in
+the publish allowlist. Excluded drafts are neither deployed nor certified by
+that filtered build.
+
 For Cloudflare Pages Git integration, use no framework preset, use
 **ruby scripts/build_pages.rb** as the build command, and set the build output
-directory to `dist`. The generated directory is intentionally ignored by Git.
+directory to `dist`. For a Genie-3-only site, use
+**ruby scripts/build_pages.rb --source-set genie3** instead. The generated
+directory is intentionally ignored by Git.
+
+To preview the same safe artifact locally:
+
+```bash
+ruby scripts/build_pages.rb
+python3 -m http.server 8096 --directory dist
+```
+
+Never serve the repository root as the public site: it contains the YAML,
+schemas, evidence metadata, tests, and local authoring tools that the Pages
+allowlist intentionally excludes.
 
 To exercise the exact published artifact in Firefox before deployment, run:
 
@@ -257,35 +320,26 @@ STATIC_SITE_ROOT=dist RUN_BROWSER_ACCEPTANCE=1 \
 
 ## Workflow
 
-After changing YAML/view sources:
+After changing architecture, view, pseudocode, reusable-block, comparison, or
+bibliography sources, regenerate the manifests and run the source-set gate:
 
 ```bash
 ruby renderer/architecture/build-manifest.rb   # regenerates manifest-<id>.js per registry entry
 ruby scripts/verify_architecture.rb --source-set <id>
 ruby renderer/architecture/build-manifest.rb --check
-ruby -Ilib:test test/architecture_projection_test.rb
-ruby -Ilib:test test/architecture_ownership_test.rb
-ruby -Ilib:test test/architecture_coverage_test.rb
-ruby -Ilib:test test/source_projection_integration_test.rb
-ruby -Ilib:test test/bibliography_test.rb
-ruby -Ilib:test test/strict_yaml_test.rb
-ruby -Ilib:test test/source_contract_test.rb
-ruby -Ilib:test test/evidence_contract_test.rb
-ruby -Ilib:test test/architecture_edit_contract_test.rb
-ruby -Ilib:test test/yaml_source_patch_test.rb
-ruby -Ilib:test test/architecture_view_scaffold_test.rb
-ruby -Ilib:test test/architecture_edit_test.rb
-ruby -Ilib:test test/architecture_edit_scaffold_test.rb
-ruby -Ilib:test test/architecture_edit_apply_test.rb
-ruby -Ilib:test test/architecture_edit_cli_test.rb
-ruby -Ilib:test test/architecture_verifier_test.rb
-ruby -Ilib:test test/architecture_verifier_cli_test.rb
-ruby -Ilib:test test/renderer_content_grid_test.rb
-ruby -Ilib:test test/renderer_question_context_test.rb
-ruby -Ilib:test test/manifest_reproducibility_test.rb
 ruby -Ilib:test test/documentation_test.rb
 ruby scripts/lint_sources.rb
 ruby -c renderer/architecture/build-manifest.rb
+```
+
+When compiler, projection, renderer, comparison, review, or build
+infrastructure changes, run the relevant repository-wide suites listed in
+`AGENTS.md`. Production-bound changes should also run:
+
+```bash
+ruby -Ilib:test test/pages_build_test.rb
+STATIC_SITE_ROOT=dist RUN_BROWSER_ACCEPTANCE=1 \
+  ruby -Ilib:test test/renderer_semantic_pseudocode_browser_test.rb
 ```
 
 An architecture edit plan uses an explicit review cycle before the same
@@ -332,9 +386,3 @@ Manifest generation now runs the full source linter first. Current architecture,
 view, and bibliography sources must also satisfy the JSON Schemas under
 `schemas/`; duplicate YAML keys, unknown fields, evidence-status typos,
 unpinned code citations, and stale generated manifests fail closed.
-
-Serve locally with any static file server, for example:
-
-```bash
-python3 -m http.server 8096
-```

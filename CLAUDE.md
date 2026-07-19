@@ -14,8 +14,9 @@ last:
 2. `views/*.view.yaml` — semantic-zoom boards and layout.
 3. `pseudocode/*.yaml` — code/algorithm traces.
 4. `standard_blocks/*.yaml` — reusable motifs (attention, conditioning).
-5. `stories/*/story.md` — distilled human-readable notes.
-6. Renderer code (`renderer/architecture/`) only when the DSL can't express
+5. `comparisons/*.yaml` — curated alignments over existing canonical facts.
+6. `stories/*/story.md` — distilled human-readable notes.
+7. Renderer code (`renderer/architecture/`) only when the DSL can't express
    the behavior.
 
 ## Hard rules
@@ -55,6 +56,12 @@ last:
   Select typed module/value-site occurrences, then use `edge_overrides` matched
   by one canonical `relation_ref` or ordered `relation_path` for labels, tone,
   routing hints, and `connection` prose. The projector derives all endpoints.
+- New semantic traces use pseudocode-v0.2 scopes, canonical `statement_ref`
+  links, and `code_bindings` to value sites. Do not copy tensor facts or a
+  separate hover map into pseudocode YAML.
+- Reuse algorithm anatomy through standard-block-v0.2 instances. Bind ports to
+  canonical relations and state whether reuse is `exact`, `wrapped`, or
+  `reduced`; non-exact reuse requires a concrete difference summary.
 
 ## After any YAML/view change
 
@@ -62,19 +69,17 @@ Regenerate manifests, then validate:
 
 ```bash
 ruby renderer/architecture/build-manifest.rb   # emits manifest-<id>.js per registry entry
+ruby scripts/verify_architecture.rb --source-set <id>
 ruby renderer/architecture/build-manifest.rb --check
-ruby -Ilib:test test/architecture_projection_test.rb
-ruby -Ilib:test test/architecture_ownership_test.rb
-ruby -Ilib:test test/architecture_coverage_test.rb
-ruby -Ilib:test test/source_projection_integration_test.rb
-ruby -Ilib:test test/bibliography_test.rb
-ruby -Ilib:test test/strict_yaml_test.rb
-ruby -Ilib:test test/source_contract_test.rb
-ruby -Ilib:test test/evidence_contract_test.rb
-ruby -Ilib:test test/manifest_reproducibility_test.rb
 ruby -Ilib:test test/documentation_test.rb
 ruby scripts/lint_sources.rb
 ```
+
+Run the infrastructure-specific regression suites listed in `AGENTS.md` when
+changing schemas, compilers, projection, comparisons, renderer behavior, or
+publication code. A Pages-bound change also runs the build test at
+`test/pages_build_test.rb` and the browser acceptance test against
+`STATIC_SITE_ROOT=dist`.
 
 `node` is often unavailable in this environment; if you have a JS runtime,
 also syntax-check `renderer/architecture/*.js` as ES modules (they use
@@ -90,6 +95,15 @@ it; register new architectures there, never in the scripts. Sets:
 - `dit`: Diffusion Transformer (arXiv:2212.09748), evidence-graded; its view
   demonstrates `elide: true` edge contraction and derived conditioning
   badges.
+- `genie2`: Genie 2 protein-backbone diffusion, including motif conditioning,
+  invariant single/pair features, equivariant updates, and fixed DDPM
+  sampling.
+- `genie3`: Genie 3 atom-aware diffusion, including partial atomization,
+  directional DDIM sampling, bidirectional latent reasoning, reusable reduced
+  attention, and equivariant structure decoding.
+
+`comparisons/index.yaml` separately registers curated comparison lenses; it is
+not another owner of either architecture.
 
 Compiler/projector: Ruby (`renderer/architecture/build-manifest.rb` and
 `lib/*.rb`). Renderer: `renderer/architecture/renderer.js`, architecture
@@ -100,6 +114,11 @@ architecture `relations`; conditioning badges derive from linked
 The manifest builder runs the full source linter before compilation and emits
 deterministic input digests. `--check` validates without writing and rejects
 stale committed manifests.
+
+For publication, run the builder at `scripts/build_pages.rb` and serve or
+deploy only `dist/`. Never publish the repository root: the production
+allowlist excludes YAML, schemas, tests, local review tools, and authoring
+protocols.
 
 ## Writing style
 

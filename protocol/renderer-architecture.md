@@ -42,7 +42,8 @@ reusable presentation rules.
    `scripts/lint_sources.rb`.
 9. **Browser renderer**: `renderer/architecture/renderer.js` renders boards,
    semantic navigation, audience explanation panels, MathJax equations,
-   pan/zoom controls, source links, and an optional second comparison board.
+   pan/zoom controls, evidence citations, and an optional second comparison
+   board.
 
 The builder compiles current architecture-v0.4 / visualization-v0.4 sources
 into architecture-manifest-v0.4 projected boards. A narrow legacy path still
@@ -166,12 +167,12 @@ The DOM-free recurrence classification and rail allocation live in
 kind/provenance and measured boxes; they do not alter the persisted layout or
 canonical relation graph.
 
-## Current Prototype
+## Current Audience Implementation
 
-The current prototype is `renderer/architecture/`. It reads every source set
-registered in `architectures/index.yaml`.
+The current implementation is `renderer/architecture/`. It reads every source
+set registered in `architectures/index.yaml`.
 
-The prototype supports:
+The audience renderer supports:
 
 - one canonical audience workspace with a compact app bar, one board
   breadcrumb, a canvas-first main area, and a stable inspector;
@@ -182,9 +183,9 @@ The prototype supports:
 - a source-backed compare action on boards named by a registered comparison,
   opening the second board below the first without replacing the primary
   semantic location;
-- independent pan, wheel/two-finger-scroll zoom, reset, and fit controls for
-  the two board surfaces, plus fit-both, swap, close, and a compact-screen A/B
-  switch;
+- independent one-finger/background pan, direct-touch two-finger pinch/pan,
+  wheel/two-finger-trackpad-scroll zoom, reset, and fit controls for the two
+  board surfaces, plus fit-both, swap, close, and a compact-screen A/B switch;
 - numbered alignment badges on both surfaces, colored by relationship kind,
   while single/pair/coordinate/frame colors retain their existing payload
   meaning and no cross-canvas relation wires are invented;
@@ -208,9 +209,11 @@ The prototype supports:
 - uniform authoring grids plus opt-in content-measured column tracks and
   annotation-aware row boundaries;
 - orthogonal automatic wiring with reusable explicit outer lanes;
-- pointer-anchored zoom from vertical two-finger scroll or mouse-wheel input,
-  drag-to-pan, and explicit zoom controls, with raw gesture updates coalesced
-  to one viewport write per animation frame;
+- pointer-anchored zoom from trackpad or mouse-wheel input, midpoint-anchored
+  direct-touch pinch that can begin over a card without activating it,
+  two-finger translation during a pinch, drag-to-pan, and explicit zoom
+  controls, with raw gesture updates coalesced to one viewport write per
+  animation frame;
 - hoverable edge ports;
 - keyboard-operable tensor nodes and edge inspectors, with wire roles
   distinguished by dash pattern as well as color;

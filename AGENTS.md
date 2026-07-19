@@ -260,7 +260,8 @@ Shared infrastructure:
   primary location, preserves unrelated parameters, and permits only one
   selected side.
 - Reusable browser board surfaces: `renderer/architecture/board-surface.mjs`
-  owns surface-scoped pan, zoom, fit, gestures, and SVG resource IDs;
+  owns surface-scoped pan, wheel/trackpad zoom, direct-touch pinch/pan, fit,
+  gesture click suppression, and SVG resource IDs;
   `renderer/architecture/comparison-board-renderer.mjs` uses it for the lower
   comparison board and applies compiled alignment badges.
 - Orthogonal route geometry: `renderer/architecture/orthogonal-routing.mjs`
@@ -291,8 +292,13 @@ Shared infrastructure:
   (emits one `manifest-<id>.js` per registry entry plus `manifest-index.js`).
 - Pages production builder: `scripts/build_pages.rb` regenerates and verifies
   manifests, then emits an explicit allowlist of audience assets to ignored
-  `dist/`. Never publish the repository root; YAML, schemas, tests, and local
-  review tooling must remain outside the deployed artifact.
+  `dist/`. Repeated `--source-set <id>` options restrict publication to an
+  explicit reviewed subset; the compiled browser registry and comparisons are
+  filtered accordingly. It fingerprints the local browser dependency graph
+  with one content-derived build ID and emits revalidation headers so Safari
+  cannot combine stale and current ES modules. Never publish the repository
+  root; YAML, schemas, tests, and local review tooling must remain outside the
+  deployed artifact.
 - Landing directory: `index.html` plus `landing.js` (derives architecture
   cards from the generated manifests; `directory_role` in
   `architectures/index.yaml` separates model architectures from language
@@ -476,6 +482,7 @@ ruby -Ilib:test test/review_frontend_performance_test.rb
 ruby -Ilib:test test/review_model_test.rb
 ruby -Ilib:test test/manifest_reproducibility_test.rb
 ruby -Ilib:test test/documentation_test.rb
+ruby -Ilib:test test/pages_build_test.rb
 ruby scripts/lint_sources.rb
 ruby scripts/verify_architecture.rb --source-set <id>
 ruby -c renderer/architecture/build-manifest.rb
