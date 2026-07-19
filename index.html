@@ -4,6 +4,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Architecture Directory</title>
+    <script src="./theme-init.js"></script>
     <link rel="stylesheet" href="./styles.css" />
   </head>
   <body class="landing-page directory-page">
@@ -18,20 +19,26 @@
             sampling loops, model blocks, conditioning, and update equations.
           </p>
         </div>
-        <dl class="directory-summary" aria-label="Directory summary">
-          <div>
-            <dt id="architectureCount">—</dt>
-            <dd>architectures</dd>
-          </div>
-          <div>
-            <dt id="familyCount">—</dt>
-            <dd>model families</dd>
-          </div>
-          <div>
-            <dt>YAML</dt>
-            <dd>source of truth</dd>
-          </div>
-        </dl>
+        <div class="directory-hero-aside">
+          <label class="theme-switcher-label" for="directoryThemeSwitcher">
+            <span>Appearance</span>
+            <select id="directoryThemeSwitcher" class="theme-switcher"></select>
+          </label>
+          <dl class="directory-summary" aria-label="Directory summary">
+            <div>
+              <dt id="architectureCount">—</dt>
+              <dd>architectures</dd>
+            </div>
+            <div>
+              <dt id="familyCount">—</dt>
+              <dd>model families</dd>
+            </div>
+            <div>
+              <dt>YAML</dt>
+              <dd>source of truth</dd>
+            </div>
+          </dl>
+        </div>
       </header>
 
       <section class="directory-section" aria-labelledby="modelDirectoryTitle">
@@ -88,10 +95,6 @@
         <a href="./protocol/architecture-projection-model.md">
           <span>Projection model</span>
           <small>How curated boards derive canonical connections</small>
-        </a>
-        <a href="./architectures/index.yaml">
-          <span>Source registry</span>
-          <small>The directory’s declarative source of truth</small>
         </a>
       </nav>
 

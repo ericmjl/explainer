@@ -9,6 +9,7 @@ import {
   shapeDimsLabel,
   tensorGlyphSvg,
 } from "./representation-glyphs.mjs";
+import { notationMarkup } from "./math-notation.mjs";
 import {
   edgeFlowProfile,
   nodeFlowProfiles,
@@ -57,12 +58,7 @@ function applyFlowFamily(element, family, families = []) {
 
 function symbolMarkup(node) {
   const notation = String(node.notation || node.label || node.id || "");
-  if (/^[A-Za-zͰ-Ͽ]$/.test(notation)) return `\\(${escapeHtml(notation)}\\)`;
-  const subscripted = notation.match(/^([A-Za-zͰ-Ͽ])_([A-Za-z0-9]+)$/);
-  if (subscripted) {
-    return `\\(${subscripted[1]}_{\\mathrm{${subscripted[2]}}}\\)`;
-  }
-  return escapeHtml(notation);
+  return notationMarkup(notation);
 }
 
 function placeNode(element, node) {

@@ -28,6 +28,7 @@ class RendererRepresentationGlyphTest < Minitest::Test
     assert_includes renderer, 'entry.glyph === "frames"'
     assert_includes renderer, "const symbol = node.notation"
     assert_includes renderer, "symbolMarkup(null, node.notation)"
+    assert_includes renderer, 'from "./math-notation.mjs"'
     assert_includes styles, ".arch-rep.tensor-coordinates"
     assert_includes styles, ".arch-rep.tensor-frames"
     assert_includes styles, ".model-map-node.is-coordinates"

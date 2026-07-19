@@ -14,6 +14,24 @@ class RendererWorkspaceTest < Minitest::Test
     refute_includes html, "focusPreview"
   end
 
+  def test_audience_surfaces_do_not_offer_yaml_downloads
+    landing = read("index.html")
+    html = read("renderer/architecture/index.html")
+    renderer = read("renderer/architecture/renderer.js")
+    css = read("styles.css")
+
+    refute_match(/href=["'][^"']+\.ya?ml(?:[?#][^"']*)?["']/i, landing)
+    refute_includes landing, "Source registry"
+    refute_includes html, "archSourceLink"
+    refute_includes html, "View source"
+    assert_includes renderer, "function audienceHref(value)"
+    assert_includes renderer, '/\.ya?ml$/i.test(path) ? null : href'
+    assert_includes renderer, "const href = audienceHref(source?.href || source?.url || ref.path)"
+    assert_includes renderer, "const href = audienceHref(rawHref)"
+    refute_includes renderer, "Open pseudocode YAML"
+    refute_includes css, ".renderer-source-link"
+  end
+
   def test_renderer_uses_one_canonical_selection_and_no_retired_parallel_states
     renderer = read("renderer/architecture/renderer.js")
 
@@ -66,6 +84,21 @@ class RendererWorkspaceTest < Minitest::Test
       refute_match(/show(?:Node|Rep)Peek|showCanvasTooltip|showHoverPanel/, source)
     end
     refute_match(/function (?:showNodePeek|showRepPeek|repTooltipHtml|showHoverPanel|hideHoverPanel)\b/, renderer)
+  end
+
+  def test_drilldown_uses_a_compact_accessible_magnifying_button
+    renderer = read("renderer/architecture/renderer.js")
+    css = read("styles.css")
+    block = function_source(renderer, "renderBlockNode", "placeNode")
+
+    assert_includes renderer, "function magnifyIconMarkup()"
+    assert_includes renderer, 'class="arch-drill-icon"'
+    assert_includes block, 'setAttribute("aria-label", `Zoom into ${targetBoard.title}`)'
+    assert_includes block, 'drillButton.title = `Zoom into ${targetBoard.title}`'
+    assert_includes block, "drillButton.innerHTML = magnifyIconMarkup()"
+    refute_includes renderer, "Open detail"
+    assert_includes css, ".arch-drill-icon"
+    assert_match(/\.arch-drill-cue\s*\{[^}]*width:\s*30px[^}]*height:\s*30px/m, css)
   end
 
   def test_edges_keep_transient_previews_and_pin_details_on_activation

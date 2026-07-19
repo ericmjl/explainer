@@ -68,6 +68,35 @@ When updating an architecture, prefer editing the declarative sources first:
   concrete `difference_summary`; never imply that a reduced or wrapped method
   is the full standard block.
 
+## Semantic Pseudocode
+
+- Use `pseudocode-v0.2` for new method traces. Treat pseudocode and boards as
+  two projections of the same canonical facts, never as independently authored
+  architecture descriptions.
+- Model useful execution levels with `scopes`: a root program may call a stage
+  or loop, which may call a module, which may call a reusable block. Every
+  non-root scope must be reached through one or more `callee_scope_ref` links;
+  do not flatten all levels into one trace.
+- Give every line one canonical `statement_ref`. Use `modules.*` for a compute
+  call, `relations.*` for an explicit transfer or state transition, and
+  `block_instances.*` when the concrete reusable occurrence owns the step.
+- Bind symbols to concrete `value_sites.*` whenever the occurrence is known.
+  Pseudocode owns the lexical name and scope, while architecture
+  representations own shape, scale, glyph, and meaning; do not copy those
+  tensor facts into a v0.2 symbol.
+- Bind readable data variables and call names through `code_bindings`. Every
+  declared input/output needs a matching read/write binding. Use distinct
+  symbols and value sites for before/after state so a trace never disguises a
+  state transition as an ambiguous self-update.
+- Reusable internals remain owned by `standard-block-v0.2` steps. Add semantic
+  `code_bindings` there and let the compiler scope them to each block instance;
+  method pseudocode should call the instance or surrounding module rather than
+  copying the internal algorithm.
+- Hover/focus is transient and fact-driven; click pins the existing board node
+  or relation selection. Never author board node IDs, character offsets, or a
+  separate hover map in YAML—the compiler derives offsets and visible-node
+  resolution from stable refs.
+
 ## Comparison Authoring Rules
 
 - Treat an `architecture-comparison-v0.1` source as a curated lens over two
@@ -223,6 +252,9 @@ Shared infrastructure:
 - Static deep-link state: `renderer/architecture/deep-link-state.mjs`
   reconstructs board breadcrumbs and local node selection from stable URL
   parameters without persisting transient pan, zoom, or hover state.
+- Shared audience themes: `theme-init.js` and `theme-state.mjs` apply the
+  persistent Atlas, Ramith paper, or Dark palette to both the directory and
+  renderer. Theme preference is local presentation state, never URL state.
 - Comparison URL state: `renderer/architecture/comparison-state.mjs` resolves
   `compare_arch`, `compare_board`, and `compare_node` independently from the
   primary location, preserves unrelated parameters, and permits only one
@@ -429,6 +461,9 @@ ruby -Ilib:test test/renderer_snappiness_test.rb
 ruby -Ilib:test test/renderer_stacking_test.rb
 ruby -Ilib:test test/renderer_semantic_routing_test.rb
 ruby -Ilib:test test/renderer_repeat_region_test.rb
+ruby -Ilib:test test/renderer_semantic_pseudocode_test.rb
+RUN_BROWSER_ACCEPTANCE=1 ruby -Ilib:test test/renderer_semantic_pseudocode_browser_test.rb
+ruby -Ilib:test test/renderer_theme_test.rb
 ruby -Ilib:test test/renderer_workspace_selection_test.rb
 ruby -Ilib:test test/renderer_workspace_test.rb
 ruby -Ilib:test test/review_audience_location_test.rb

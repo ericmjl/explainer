@@ -24,6 +24,9 @@ class RendererContentGridTest < Minitest::Test
     assert_includes renderer, 'from "./content-grid.mjs"'
     assert_includes renderer, "const preliminaryRoutes = buildOrthoRoutes"
     assert_includes renderer, "availableSpan: segment.length"
+    assert_includes renderer, "function edgeLabelLines(label)"
+    assert_includes renderer, "edgeLabelWrapWidth: 112"
+    assert_includes renderer, "edgeAnnotationSegmentPadding: 4"
     assert_includes renderer, "edgeBadgeWrapWidth: 160"
     refute_includes renderer, "edgeLabelMinSpan"
   end

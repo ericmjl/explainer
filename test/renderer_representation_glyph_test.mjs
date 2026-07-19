@@ -8,6 +8,18 @@ import {
   shapeDimsLabel,
   tensorGlyphSvg,
 } from "../renderer/architecture/representation-glyphs.mjs";
+import {
+  notationMarkup,
+  texMarkup,
+} from "../renderer/architecture/math-notation.mjs";
+
+test("board notation sends grouped TeX subscripts to MathJax", () => {
+  assert.equal(notationMarkup("x_{t-10}"), "\\(x_{t-10}\\)");
+  assert.equal(notationMarkup("s_{i+1}"), "\\(s_{i+1}\\)");
+  assert.equal(notationMarkup("x_t"), "\\(x_{\\mathrm{t}}\\)");
+  assert.equal(notationMarkup(".pdb"), ".pdb");
+  assert.equal(texMarkup("\\hat{x}_0"), "\\(\\hat{x}_0\\)");
+});
 
 test("shape inference remains generic when semantic geometry is unknown", () => {
   assert.equal(glyphKindForShape("B x N x 3"), "matrix");

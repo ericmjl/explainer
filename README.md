@@ -180,6 +180,28 @@ detail header. `Copy reference` produces a short typed locator;
 surrounding arrows, canonical relation paths, and evidence for pasting into a
 conversation. This is a local clipboard handoff, not an embedded chat backend.
 
+The inspector presents **Details** followed by **Pseudocode** in one continuous
+scrolling view. Its bounded-width desktop rail leaves enough room for code
+without crowding the board. Pseudocode is synchronized with the current semantic
+board, and transient trace guidance stays below the code so hover feedback
+cannot move the line under the pointer. High-level method traces use nested program, loop, and module scopes;
+reusable detail boards use the selected standard-block variant's own step DAG.
+Hovering or keyboard-focusing a bound variable/call highlights its visible
+producer, consumer, and connecting arrows while fading unrelated components;
+hovering a board node marks the corresponding code tokens without changing the
+normal board browsing treatment. Clicking a token pins the existing board
+selection, so the normal component deep link and question-context workflow
+continue to apply. Read, write, and call bindings are compiled from canonical
+fact references rather than inferred from raw code text in the browser.
+
+The directory and renderer share three presentation themes: the original
+**Atlas** palette, **Ramith paper**, and **Dark**. Ramith paper is derived from
+the personal site's warm Tufte background and ink, green interaction color,
+yellow annotations, and scholarly blue. It follows the operating system's dark
+preference, is stored under `explainer.theme`, and never enters a shareable
+architecture URL. A host page can select it before loading the stylesheet with
+`document.documentElement.dataset.theme = "ramith"`.
+
 Conditioning badges on edges (adaLN-Zero, pair bias, per-item AdaLN) are
 derived from the architecture `conditioning` section, never hand-authored in
 views.

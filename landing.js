@@ -1,4 +1,5 @@
 import { manifestIndex } from "./renderer/architecture/manifest-index.js";
+import { installThemeSwitcher } from "./theme-state.mjs";
 
 const SVG_NS = "http://www.w3.org/2000/svg";
 const architectureGrid = document.querySelector("#architectureGrid");
@@ -7,6 +8,7 @@ const searchInput = document.querySelector("#directorySearch");
 const familyFilters = document.querySelector("#familyFilters");
 const resultCount = document.querySelector("#directoryResultCount");
 const emptyState = document.querySelector("#directoryEmpty");
+const themeSwitcher = document.querySelector("#directoryThemeSwitcher");
 
 const state = {
   entries: [],
@@ -267,4 +269,5 @@ searchInput.addEventListener("input", () => {
   renderArchitectureGrid();
 });
 
+installThemeSwitcher(themeSwitcher);
 loadDirectory();

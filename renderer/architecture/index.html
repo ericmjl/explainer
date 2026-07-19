@@ -4,6 +4,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Architecture Renderer</title>
+    <script src="../../theme-init.js"></script>
     <link rel="stylesheet" href="../../styles.css" />
   </head>
   <body class="renderer-page">
@@ -23,7 +24,10 @@
             <span>Architecture</span>
             <select id="archSwitcher" class="arch-switcher"></select>
           </label>
-          <a class="renderer-source-link" id="archSourceLink" href="#">View source</a>
+          <label class="theme-switcher-label" for="rendererThemeSwitcher">
+            <span>Appearance</span>
+            <select id="rendererThemeSwitcher" class="theme-switcher"></select>
+          </label>
         </nav>
       </header>
 
@@ -155,7 +159,21 @@
               <button id="focusReset" class="focus-reset" type="button" hidden>Clear</button>
             </div>
           </div>
-          <div id="focusBody" class="focus-body"></div>
+          <div class="focus-panel-pages">
+            <section class="focus-page-section focus-detail-section" aria-labelledby="focusDetailHeading">
+              <div class="focus-page-heading">
+                <h3 id="focusDetailHeading">Details</h3>
+              </div>
+              <div id="focusBody" class="focus-body"></div>
+            </section>
+            <section class="focus-page-section focus-trace-section" aria-labelledby="focusTraceHeading">
+              <div class="focus-page-heading">
+                <h3 id="focusTraceHeading">Pseudocode</h3>
+                <span id="semanticTraceCount" aria-label="Pseudocode statement count"></span>
+              </div>
+              <div id="semanticTraceBody" class="semantic-trace-body"></div>
+            </section>
+          </div>
         </aside>
       </section>
     </main>

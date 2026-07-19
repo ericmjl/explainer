@@ -18,6 +18,7 @@ import {
   shapeDimsLabel,
   tensorGlyphSvg,
 } from "./representation-glyphs.mjs";
+import { notationMarkup, texMarkup } from "./math-notation.mjs";
 import {
   PAYLOAD_FLOW_FAMILIES,
   edgeFlowProfile,
@@ -75,6 +76,19 @@ import {
   createComparisonBoardRenderer,
   decorateAlignmentElement,
 } from "./comparison-board-renderer.mjs";
+import {
+  createSemanticBoardResolver,
+  semanticCodeSegments,
+  semanticEdgeForRefs,
+  semanticRefsForBinding,
+  semanticRefsForStatement,
+  semanticScopeForBoard,
+  semanticStatementBindings,
+  semanticStatementTextParts,
+  semanticTexFallbackParts,
+  semanticTexForBinding,
+} from "./semantic-pseudocode.mjs";
+import { installThemeSwitcher } from "../../theme-state.mjs";
 
 const pageParams = new URLSearchParams(window.location.search);
 const archParam = pageParams.get("arch");
@@ -150,6 +164,8 @@ const elements = {
   focusQuestion: document.getElementById("focusQuestion"),
   focusReset: document.getElementById("focusReset"),
   focusBody: document.getElementById("focusBody"),
+  semanticTraceBody: document.getElementById("semanticTraceBody"),
+  semanticTraceCount: document.getElementById("semanticTraceCount"),
   boardNavigation: document.getElementById("boardNavigation"),
   boardBack: document.getElementById("boardBack"),
   boardBackLabel: document.querySelector(".board-back-label"),
@@ -195,6 +211,9 @@ let questionCopyFallbackText = null;
 let questionCopyFallbackInvoker = null;
 const connectivityHighlights = new Map();
 let connectivityHighlightSequence = 0;
+let semanticTraceInteractions = new Map();
+let semanticTraceResolver = null;
+const SEMANTIC_TRACE_DEFAULT_STATUS = "Hover or focus a line to follow it on the board.";
 let activeTooltipKey = null;
 let viewportFrame = null;
 let renderedViewportTransform = null;
@@ -242,6 +261,7 @@ const viewport = {
 };
 
 function render() {
+  installThemeSwitcher(document.getElementById("rendererThemeSwitcher"));
   renderPageChrome();
   ensureBoardChrome();
   ensureQuestionMenu();
@@ -273,8 +293,6 @@ function renderPageChrome() {
   }
   const focusEyebrow = document.getElementById("focusEyebrow");
   if (focusEyebrow) focusEyebrow.textContent = "Board overview";
-  const sourceLink = document.getElementById("archSourceLink");
-  if (sourceLink) sourceLink.href = manifest.architecture.sourceYaml;
   const switcher = document.getElementById("archSwitcher");
   if (switcher && !switcher.dataset.ready) {
     switcher.dataset.ready = "true";
@@ -682,6 +700,7 @@ function onComparisonWorkspaceClick(event) {
 
 window.addEventListener("mathjax-ready", () => {
   typesetMath();
+  typesetSemanticTraceMath();
   refreshBoardAfterMath();
 });
 
@@ -710,6 +729,462 @@ function setFocusBody(html, { selected = false } = {}) {
   elements.focusBody.innerHTML = html;
   state.focusHasMath = html.includes("math-step");
   typesetMath();
+  renderSemanticTracePane();
+}
+
+function semanticBlockInstanceRef() {
+  const board = currentBoard();
+  const selectedNode = state.selection?.kind === "node" ? state.selection.node : null;
+  const direct = selectedNode?.block_instance_ref
+    || selectedNode?.blockInstanceRef
+    || board.blockInstanceRef
+    || board.block_instance_ref;
+  if (direct) return untypedRef(direct, "block_instances");
+  const subjectRef = selectedNode ? canonicalNodeRef(selectedNode) : null;
+  if (subjectRef) return (blockInstancesBySubject.get(subjectRef) || [])[0]?.id || null;
+  return null;
+}
+
+function semanticProgramContexts() {
+  return Object.values(manifest.pseudocode || {}).map((program) => ({
+    program,
+    symbolsById: new Map((program.symbols || []).map((symbol) => [symbol.id, symbol])),
+  }));
+}
+
+function semanticScopeSubtitle(scope) {
+  if (!scope) return null;
+  const kind = readableReuse(scope.kind || "scope");
+  const executionRef = scope.executionRef || scope.execution_ref;
+  if (scope.kind !== "loop" || !executionRef?.startsWith("execution.loops.")) return kind;
+  const loopId = untypedRef(executionRef, "execution").replace(/^loops\./, "");
+  const loop = (manifest.architecture.execution?.loops || []).find(
+    (candidate) => candidate.id === loopId,
+  );
+  return loop?.repeats ? `${kind} · repeat ×${loop.repeats}` : kind;
+}
+
+function semanticTraceForCurrentContext() {
+  if (
+    state.comparisonState?.comparison
+    && state.comparisonState.selectionSide === "comparison"
+  ) {
+    semanticTraceResolver = null;
+    return {
+      title: "Comparison pseudocode",
+      subtitle: "Pseudocode synchronization is currently scoped to A · Current. Select the primary board to trace it.",
+      statements: [],
+    };
+  }
+  semanticTraceResolver = createSemanticBoardResolver({ manifest, board: currentBoard() });
+  const instanceId = semanticBlockInstanceRef();
+  const instance = instanceId ? blockInstancesById.get(instanceId) : null;
+  if (instance?.pseudocode?.length) {
+    const block = standardBlocksById.get(instance.standardBlockId);
+    const selectedNode = state.selection?.kind === "node" ? state.selection.node : null;
+    const detailBoard = selectedNode ? targetBoardForNode(selectedNode) : null;
+    const segments = currentBoard().segments?.length
+      ? currentBoard().segments
+      : detailBoard?.segments || [];
+    return {
+      title: block?.name || instance.standardBlockName || instance.standardBlockId,
+      subtitle: `${instance.variantLabel || readableReuse(instance.variant)} · reusable ${readableReuse(instance.conformance)}`,
+      statements: instance.pseudocode.map((statement) => ({
+        statement,
+        symbolsById: new Map(),
+        boundaryRefs: [instance.subjectRef || instance.subject_ref].filter(Boolean),
+        phase: segments.find((segment) =>
+          (segment.node_ids || segment.nodeIds || []).includes(statement.id),
+        ) || null,
+      })),
+    };
+  }
+
+  const selectedId = state.selection?.kind === "node" ? state.selection.occurrenceId : null;
+  const contexts = semanticProgramContexts();
+  const candidates = contexts.flatMap(({ program, symbolsById }) => {
+    const activeScope = semanticScopeForBoard({
+      program,
+      board: currentBoard(),
+      rootBoardId: manifest.boards.rootBoard,
+    });
+    return (program.lines || []).map((statement) => ({
+      statement,
+      symbolsById,
+      program,
+      activeScope,
+    }));
+  });
+  const scopedCandidates = candidates.filter(({ statement, activeScope }) => {
+    if (!activeScope) return true;
+    const activeRef = activeScope.ref || `scopes.${activeScope.id}`;
+    return (statement.scopeRef || statement.scope_ref) === activeRef;
+  });
+  const statementMatches = selectedId ? scopedCandidates.filter(({ statement }) => {
+    const resolved = semanticTraceResolver.resolve(semanticRefsForStatement(statement));
+    return resolved.nodeIds.includes(selectedId);
+  }) : [];
+  const bindingMatches = selectedId && !statementMatches.length
+    ? scopedCandidates.filter(({ statement, symbolsById }) => {
+      const refs = semanticStatementBindings(statement).flatMap((binding) => (
+        semanticRefsForBinding(binding, symbolsById)
+      ));
+      return semanticTraceResolver.resolve(refs).nodeIds.includes(selectedId);
+    })
+    : [];
+  const activeScopes = scopedCandidates.map(({ activeScope }) => activeScope).filter(Boolean);
+  const scoped = !selectedId && activeScopes.length ? scopedCandidates : [];
+  const boardRefs = new Set([
+    currentBoard().subject_ref || currentBoard().subjectRef,
+    ...visibleNodes(currentBoard()).map(canonicalNodeRef),
+  ].filter(Boolean));
+  const unscopedCandidates = candidates.filter(({ activeScope }) => !activeScope);
+  const boardFactMatches = !selectedId && !scoped.length
+    ? unscopedCandidates.filter(({ statement }) =>
+      semanticRefsForStatement(statement).some((ref) => boardRefs.has(ref)),
+    )
+    : [];
+  const projectedMatches = !selectedId && !scoped.length && !boardFactMatches.length
+    ? unscopedCandidates.filter(({ statement, symbolsById }) => {
+      const refs = [
+        ...semanticRefsForStatement(statement),
+        ...semanticStatementBindings(statement).flatMap((binding) => (
+          semanticRefsForBinding(binding, symbolsById)
+        )),
+      ];
+      const resolved = semanticTraceResolver.resolve(refs);
+      return resolved.nodeIds.length > 0;
+    })
+    : [];
+  const fallback = !selectedId && currentBoard().id === manifest.boards.rootBoard
+    ? candidates
+    : [];
+  const statements = statementMatches.length
+    ? statementMatches
+    : bindingMatches.length
+      ? bindingMatches
+      : scoped.length
+        ? scoped
+        : boardFactMatches.length
+          ? boardFactMatches
+          : projectedMatches.length
+            ? projectedMatches
+            : fallback;
+  const scope = statements[0]?.activeScope || activeScopes[0] || null;
+  return {
+    title: scope?.label || statements[0]?.program?.title || "Architecture trace",
+    subtitle: selectedId
+      ? [semanticScopeSubtitle(scope), "statements associated with the selected component"]
+        .filter(Boolean).join(" · ")
+      : semanticScopeSubtitle(scope) || "Statements visible at this board level",
+    statements,
+  };
+}
+
+function resolveSemanticInteraction(refs, boundaryRefs = []) {
+  const exact = semanticTraceResolver.resolve(refs);
+  if (exact.nodeIds.length) return exact;
+  const edge = semanticEdgeForRefs(state.displayEdges || [], refs);
+  if (edge) {
+    return {
+      nodeIds: [edge.from, edge.to].filter(Boolean),
+      requestedRefs: exact.requestedRefs,
+      resolution: "relation",
+      edge,
+      message: "This statement is a state transition, so its visible connection and endpoints are highlighted.",
+    };
+  }
+  if (!boundaryRefs.length) return exact;
+  const boundary = semanticTraceResolver.resolve(boundaryRefs);
+  if (!boundary.nodeIds.length) return exact;
+  return {
+    ...boundary,
+    resolution: "boundary",
+    requestedRefs: exact.requestedRefs,
+    message: "This internal fact is not expanded here, so the owning block is highlighted as its visible boundary.",
+  };
+}
+
+function semanticInteractionMarkup({
+  refs,
+  resolution,
+  kind,
+  access = null,
+  text,
+  tex = null,
+  label = null,
+}) {
+  const id = `semantic-trace-${semanticTraceInteractions.size + 1}`;
+  semanticTraceInteractions.set(id, { refs, resolution, kind, access, label });
+  const classes = [kind === "token" ? "semantic-token" : ""];
+  if (resolution.resolution === "boundary" || resolution.resolution === "representation") {
+    classes.push("is-semantic-boundary");
+  }
+  if (!resolution.nodeIds.length) classes.push("is-semantic-unavailable");
+  const title = resolution.message || `${access || "statement"}: ${label || text}`;
+  if (kind === "token") {
+    const accessibleLabel = `${access || "read"}: ${label || text}`;
+    const fallback = semanticTexFallbackParts(tex);
+    const fallbackMarkup = fallback
+      ? `<span class="semantic-token-math-fallback"><i>${escapeHtml(fallback.base)}</i>${fallback.subscript ? `<sub>${escapeHtml(fallback.subscript)}</sub>` : ""}</span>`
+      : `<span class="semantic-token-math-fallback">${escapeHtml(text)}</span>`;
+    const tokenMarkup = tex
+      ? `<span class="semantic-token-math" aria-hidden="true">${fallbackMarkup}<span class="semantic-token-math-source">\\(${escapeHtml(tex)}\\)</span></span><span class="sr-only">${escapeHtml(text)}</span>`
+      : escapeHtml(text);
+    return `<button type="button" class="${classes.join(" ")}" data-semantic-interaction="${id}" data-access="${escapeHtml(access || "read")}" aria-label="${escapeHtml(accessibleLabel)}" title="${escapeHtml(title)}">${tokenMarkup}</button>`;
+  }
+  return { id, title };
+}
+
+function semanticPlainCodeMarkup(value) {
+  return escapeHtml(value)
+    .replaceAll("; ", ';<br class="semantic-code-hard-break">')
+    .replaceAll(" = ", " =<wbr> ")
+    .replaceAll(", ", ",<wbr> ")
+    .replaceAll(" + ", " <wbr>+&nbsp;")
+    .replaceAll(" - ", " <wbr>-&nbsp;")
+    .replaceAll(" * ", " <wbr>*&nbsp;")
+    .replaceAll(" / ", " <wbr>/&nbsp;")
+    .replaceAll("(", "(<wbr>");
+}
+
+function semanticCodeAtomSuffix(value) {
+  const text = String(value || "");
+  const accessor = text.match(/^(?:\.[A-Za-z_][A-Za-z0-9_]*)+(?:[)\]}]+)?(?:,)?/);
+  if (accessor) return accessor[0];
+  return text.match(/^[)\]}]+(?:,)?|^,/)?.[0] || "";
+}
+
+function semanticOperationLabel(operation) {
+  const replacements = new Map([
+    ["ddim", "DDIM"],
+    ["ipa", "IPA"],
+    ["pdb", "PDB"],
+    ["qkv", "QKV"],
+    ["frenet", "Frenet"],
+  ]);
+  return humanizeRef(operation).split(" ").map((word, index) => {
+    const known = replacements.get(word.toLowerCase());
+    if (known) return known;
+    return index === 0 ? `${word.charAt(0).toUpperCase()}${word.slice(1)}` : word;
+  }).join(" ");
+}
+
+function semanticCommentMarkup(comment) {
+  const words = String(comment || "").trim().split(/\s+/).filter(Boolean);
+  if (!words.length) return "";
+  return `<span class="semantic-code-comment"><span class="semantic-code-comment-prefix" aria-hidden="true">#</span> ${words
+    .map((word) => `<span class="semantic-code-comment-word">${escapeHtml(word)}</span>`)
+    .join(" ")}</span>`;
+}
+
+function semanticStatementMarkup(item) {
+  const { statement, symbolsById, boundaryRefs = [] } = item;
+  const { code, comment } = semanticStatementTextParts(statement);
+  const bindings = semanticStatementBindings(statement);
+  const statementRefs = semanticRefsForStatement(statement);
+  const statementResolution = resolveSemanticInteraction(statementRefs, boundaryRefs);
+  const statementInteraction = semanticInteractionMarkup({
+    refs: statementRefs,
+    resolution: statementResolution,
+    kind: "statement",
+    text: code,
+    label: statement.label || statement.id,
+  });
+  const codeSegments = semanticCodeSegments(code, bindings).map((segment) => ({ ...segment }));
+  const segments = codeSegments.map((segment, index) => {
+    if (!segment.binding) return semanticPlainCodeMarkup(segment.text);
+    const refs = semanticRefsForBinding(segment.binding, symbolsById);
+    const resolution = resolveSemanticInteraction(refs, boundaryRefs);
+    const token = semanticInteractionMarkup({
+      refs,
+      resolution,
+      kind: "token",
+      access: segment.binding.access,
+      text: segment.text,
+      tex: semanticTexForBinding(segment.binding, symbolsById),
+      label: segment.binding.lexeme,
+    });
+    const following = codeSegments[index + 1];
+    const suffix = following && !following.binding ? semanticCodeAtomSuffix(following.text) : "";
+    if (suffix) following.text = following.text.slice(suffix.length);
+    return `<span class="semantic-code-atom">${token}${semanticPlainCodeMarkup(suffix)}</span>`;
+  }).join("");
+  const codeMarkup = `<span class="semantic-code-expression">${segments}</span>${semanticCommentMarkup(comment)}`;
+  const label = statement.label || (statement.operation ? semanticOperationLabel(statement.operation) : null);
+  const callee = semanticCalleeForStatement(item);
+  return `
+    <li
+      class="semantic-trace-line${statementResolution.nodeIds.length ? "" : " is-semantic-unavailable"}"
+      tabindex="0"
+      data-semantic-interaction="${statementInteraction.id}"
+      title="${escapeHtml(statementInteraction.title)}"
+    >
+      <code class="semantic-trace-code">${codeMarkup}</code>
+      ${label || callee ? `<span class="semantic-trace-label">
+        ${label ? `<span>${escapeHtml(label)}</span>` : ""}
+        ${callee ? `<button type="button" class="semantic-trace-drill" data-semantic-callee-board="${escapeHtml(callee.boardId)}" aria-label="Zoom into ${escapeHtml(callee.label)}" title="Zoom into ${escapeHtml(callee.label)}">${magnifyIconMarkup()}</button>` : ""}
+      </span>` : ""}
+    </li>
+  `;
+}
+
+function semanticCalleeForStatement({ statement, program }) {
+  const calleeScopeRef = statement.calleeScopeRef || statement.callee_scope_ref;
+  let subjectRef = null;
+  let label = null;
+  if (calleeScopeRef && program) {
+    const scope = (program.scopes || []).find(
+      (candidate) => (candidate.ref || `scopes.${candidate.id}`) === calleeScopeRef,
+    );
+    subjectRef = scope?.subjectRef || scope?.subject_ref;
+    label = scope?.label;
+  }
+  const blockInstanceRef = statement.blockInstanceRef || statement.block_instance_ref;
+  if (!subjectRef && blockInstanceRef) {
+    const instance = blockInstancesById.get(untypedRef(blockInstanceRef, "block_instances"));
+    subjectRef = instance?.subjectRef || instance?.subject_ref;
+    label = instance?.standardBlockName;
+  }
+  if (!subjectRef) {
+    const statementRef = statement.statementRef || statement.statement_ref;
+    if (statementRef?.startsWith("modules.")) {
+      subjectRef = statementRef;
+      label = statement.label || humanizeRef(statementRef);
+    }
+  }
+  if (!subjectRef) return null;
+  const node = visibleNodes(currentBoard()).find(
+    (candidate) => canonicalNodeRef(candidate) === subjectRef,
+  );
+  const board = node ? targetBoardForNode(node) : null;
+  return board ? { boardId: board.id, label: label || board.title } : null;
+}
+
+function semanticStatementsMarkup(statements) {
+  let currentPhase = null;
+  return statements.map((item) => {
+    const phaseId = item.phase?.id || null;
+    const heading = phaseId && phaseId !== currentPhase
+      ? `<li class="semantic-trace-phase">
+          <strong>${item.phase.order ? `Phase ${escapeHtml(item.phase.order)} · ` : ""}${escapeHtml(item.phase.label || humanizeRef(phaseId))}</strong>
+          ${item.phase.description ? `<span>${escapeHtml(item.phase.description)}</span>` : ""}
+        </li>`
+      : "";
+    currentPhase = phaseId;
+    return `${heading}${semanticStatementMarkup(item)}`;
+  }).join("");
+}
+
+function renderSemanticTracePane() {
+  if (!elements.semanticTraceBody) return;
+  window.MathJax?.typesetClear?.([elements.semanticTraceBody]);
+  elements.semanticTraceBody.classList.remove("has-mathjax");
+  semanticTraceInteractions = new Map();
+  const trace = semanticTraceForCurrentContext();
+  elements.semanticTraceCount.textContent = trace.statements.length
+    ? String(trace.statements.length)
+    : "";
+  elements.semanticTraceBody.innerHTML = `
+    <div class="semantic-trace-heading">
+      <strong>${escapeHtml(trace.title)}</strong>
+      <span>${escapeHtml(trace.subtitle)}</span>
+    </div>
+    <div class="semantic-trace-scroll">
+      ${trace.statements.length
+        ? `<ol class="semantic-trace-list">${semanticStatementsMarkup(trace.statements)}</ol>`
+        : '<p class="semantic-trace-empty">No semantic statements are mapped to this board yet.</p>'}
+    </div>
+    <p class="semantic-trace-status" role="status" aria-live="polite">${SEMANTIC_TRACE_DEFAULT_STATUS}</p>
+  `;
+  elements.semanticTraceBody.querySelectorAll("[data-semantic-interaction]").forEach((element) => {
+    attachSemanticTraceInteraction(element);
+  });
+  elements.semanticTraceBody.querySelectorAll("[data-semantic-callee-board]").forEach((button) => {
+    button.addEventListener("click", (event) => {
+      event.stopPropagation();
+      const boardId = button.dataset.semanticCalleeBoard;
+      const origin = visibleNodes(currentBoard()).find(
+        (node) => targetBoardForNode(node)?.id === boardId,
+      );
+      pushBoard(boardId, origin?.id || null);
+    });
+  });
+  applySemanticTraceSelection();
+  renderLatestConnectivityHighlight();
+  typesetSemanticTraceMath();
+}
+
+function semanticTraceStatus(message = SEMANTIC_TRACE_DEFAULT_STATUS) {
+  const status = elements.semanticTraceBody?.querySelector(".semantic-trace-status");
+  if (status) status.textContent = message;
+}
+
+function attachSemanticTraceInteraction(element) {
+  const id = element.dataset.semanticInteraction;
+  const interaction = semanticTraceInteractions.get(id);
+  if (!interaction) return;
+  const source = `semantic:${id}`;
+  const begin = () => {
+    semanticTraceStatus(interaction.resolution.message || SEMANTIC_TRACE_DEFAULT_STATUS);
+    if (interaction.resolution.nodeIds.length) {
+      beginConnectivityHighlight(source, interaction.resolution.nodeIds, { dimUnrelated: true });
+    }
+  };
+  const end = () => {
+    endConnectivityHighlight(source);
+    semanticTraceStatus();
+  };
+  element.addEventListener("pointerenter", begin);
+  element.addEventListener("pointerleave", end);
+  element.addEventListener("focus", begin);
+  element.addEventListener("blur", end);
+  element.addEventListener("click", (event) => {
+    event.stopPropagation();
+    endConnectivityHighlight(source);
+    activateSemanticInteraction(interaction);
+  });
+}
+
+function activateSemanticInteraction(interaction) {
+  const edge = interaction.resolution.edge
+    || semanticEdgeForRefs(state.displayEdges || [], interaction.refs);
+  if (edge) {
+    focusConnection(edge);
+    return;
+  }
+  const nodeId = interaction.resolution.nodeIds[0];
+  if (nodeId && focusNodeOccurrence(nodeId)) return;
+  semanticTraceStatus(interaction.resolution.message);
+}
+
+function clearSemanticTraceTransientHighlight() {
+  elements.semanticTraceBody
+    ?.querySelectorAll(".is-trace-transient")
+    .forEach((element) => element.classList.remove("is-trace-transient"));
+}
+
+function applySemanticTraceTransientHighlight(nodeIds) {
+  const highlighted = new Set(connectivityNodeIds(nodeIds));
+  elements.semanticTraceBody?.querySelectorAll("[data-semantic-interaction]").forEach((element) => {
+    const interaction = semanticTraceInteractions.get(element.dataset.semanticInteraction);
+    const matches = interaction?.resolution.nodeIds.some((nodeId) => highlighted.has(nodeId));
+    element.classList.toggle("is-trace-transient", Boolean(matches));
+  });
+}
+
+function applySemanticTraceSelection() {
+  const selectedId = state.selection?.kind === "node"
+    && state.selection.boardId === currentBoard().id
+    ? state.selection.occurrenceId
+    : null;
+  elements.semanticTraceBody?.querySelectorAll("[data-semantic-interaction]").forEach((element) => {
+    const interaction = semanticTraceInteractions.get(element.dataset.semanticInteraction);
+    element.classList.toggle(
+      "is-trace-selected",
+      Boolean(selectedId && interaction?.resolution.nodeIds.includes(selectedId)),
+    );
+  });
 }
 
 function showCanvasTooltip(sourceKey, { title, html, anchor }) {
@@ -765,10 +1240,15 @@ function typesetCanvasTooltip(html) {
   });
 }
 
-function beginConnectivityHighlight(sourceKey, nodeId) {
+function connectivityNodeIds(nodeIds) {
+  return [...new Set((Array.isArray(nodeIds) ? nodeIds : [nodeIds]).filter(Boolean))];
+}
+
+function beginConnectivityHighlight(sourceKey, nodeIds, { dimUnrelated = false } = {}) {
   const key = sourceKey || "transient-connectivity";
   connectivityHighlights.set(key, {
-    nodeId,
+    nodeIds: connectivityNodeIds(nodeIds),
+    dimUnrelated,
     sequence: ++connectivityHighlightSequence,
   });
   renderLatestConnectivityHighlight();
@@ -799,14 +1279,16 @@ function clearConnectivityHighlightSurface() {
       );
     });
   elements.moduleLayer
-    .querySelectorAll(".is-connectivity-focus, .is-connectivity-source, .is-connectivity-target")
+    .querySelectorAll(".is-connectivity-focus, .is-connectivity-source, .is-connectivity-target, .is-connectivity-muted")
     .forEach((element) => {
       element.classList.remove(
         "is-connectivity-focus",
         "is-connectivity-source",
         "is-connectivity-target",
+        "is-connectivity-muted",
       );
     });
+  clearSemanticTraceTransientHighlight();
 }
 
 function renderLatestConnectivityHighlight() {
@@ -820,26 +1302,27 @@ function renderLatestConnectivityHighlight() {
     clearConnectivityHighlightSurface();
     return;
   }
-  applyConnectivityHighlight(latest.nodeId);
+  applyConnectivityHighlight(latest.nodeIds, { dimUnrelated: latest.dimUnrelated });
 }
 
-function applyConnectivityHighlight(nodeId) {
+function applyConnectivityHighlight(nodeIds, { dimUnrelated = false } = {}) {
   clearConnectivityHighlightSurface();
+  const focusIds = new Set(connectivityNodeIds(nodeIds));
+  if (!focusIds.size) return;
   const edges = state.displayEdges || [];
   const directionByEdge = new Map();
   const sourceIds = new Set();
   const targetIds = new Set();
 
   edges.forEach((edge, index) => {
-    const isInput = edge.to === nodeId;
-    const isOutput = edge.from === nodeId;
-    if (!isInput && !isOutput) return;
-    directionByEdge.set(index, isInput && isOutput ? "both" : isInput ? "input" : "output");
+    const isInput = focusIds.has(edge.to) && !focusIds.has(edge.from);
+    const isOutput = focusIds.has(edge.from) && !focusIds.has(edge.to);
+    const isInternal = focusIds.has(edge.from) && focusIds.has(edge.to);
+    if (!isInput && !isOutput && !isInternal) return;
+    directionByEdge.set(index, isInternal ? "both" : isInput ? "input" : "output");
     if (isInput) sourceIds.add(edge.from);
     if (isOutput) targetIds.add(edge.to);
   });
-
-  if (!directionByEdge.size) return;
 
   elements.edgeLayer.querySelectorAll("[data-edge-index]").forEach((element) => {
     const direction = directionByEdge.get(Number(element.dataset.edgeIndex));
@@ -850,10 +1333,15 @@ function applyConnectivityHighlight(nodeId) {
 
   elements.moduleLayer.querySelectorAll("[data-node-id]").forEach((element) => {
     const candidateId = element.dataset.nodeId;
-    element.classList.toggle("is-connectivity-focus", candidateId === nodeId);
-    element.classList.toggle("is-connectivity-source", sourceIds.has(candidateId));
-    element.classList.toggle("is-connectivity-target", targetIds.has(candidateId));
+    const focused = focusIds.has(candidateId);
+    const source = sourceIds.has(candidateId);
+    const target = targetIds.has(candidateId);
+    element.classList.toggle("is-connectivity-focus", focused);
+    element.classList.toggle("is-connectivity-source", source);
+    element.classList.toggle("is-connectivity-target", target);
+    element.classList.toggle("is-connectivity-muted", dimUnrelated && !focused && !source && !target);
   });
+  applySemanticTraceTransientHighlight([...focusIds]);
 }
 
 function typesetMath() {
@@ -866,6 +1354,22 @@ function typesetMath() {
   });
 }
 
+function typesetSemanticTraceMath() {
+  if (!elements.semanticTraceBody?.querySelector(".semantic-token-math")) return;
+  const mathJax = window.MathJax;
+  if (!mathJax?.typesetPromise) return;
+  mathJax.typesetClear?.([elements.semanticTraceBody]);
+  mathJax.typesetPromise([elements.semanticTraceBody])
+    .then(() => {
+      if (elements.semanticTraceBody.querySelector(".semantic-token-math-source mjx-container")) {
+        elements.semanticTraceBody.classList.add("has-mathjax");
+      }
+    })
+    .catch((error) => {
+      console.warn("MathJax pseudocode typesetting failed", error);
+    });
+}
+
 function escapeHtml(value = "") {
   return String(value)
     .replaceAll("&", "&amp;")
@@ -875,10 +1379,26 @@ function escapeHtml(value = "") {
     .replaceAll("'", "&#39;");
 }
 
+function magnifyIconMarkup() {
+  return `
+    <svg class="arch-drill-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+      <circle cx="10.5" cy="10.5" r="5.75"></circle>
+      <path d="m15 15 4.25 4.25"></path>
+    </svg>
+  `;
+}
+
 function safeHref(value) {
   const href = String(value || "").trim();
   if (!href || /^(?:data|javascript|vbscript):/i.test(href)) return null;
   return href;
+}
+
+function audienceHref(value) {
+  const href = safeHref(value);
+  if (!href) return null;
+  const path = href.split(/[?#]/, 1)[0];
+  return /\.ya?ml$/i.test(path) ? null : href;
 }
 
 function renderMathStep(step) {
@@ -1257,6 +1777,7 @@ function setSelection(target) {
   }
   updateDeepLinkControl();
   syncDeepLinkHistory();
+  applySemanticTraceSelection();
   announceSelection();
 }
 
@@ -1525,12 +2046,21 @@ function conditioningBadgeLines(conditioning) {
   });
 }
 
+function edgeLabelLines(label) {
+  return balancedTextLines(label, {
+    measure: (line) => measureEdgeText(line, "label"),
+    maxWidth: RULES.layout.edgeLabelWrapWidth,
+  });
+}
+
 function reservedEdgeTextWidth(board, edge) {
   const conditioning = derivedConditioning(board, edge);
   const contracted = (edge.segments || []).length > 1;
   if (!contracted && edge.tone !== "conditioning" && !conditioning.length) return 0;
   const widths = [];
-  if (edge.label) widths.push(measureEdgeText(edge.label, "label"));
+  if (edge.label) {
+    widths.push(...edgeLabelLines(edge.label).map((line) => measureEdgeText(line, "label")));
+  }
   if (conditioning.length) {
     widths.push(...conditioningBadgeLines(conditioning)
       .map((line) => measureEdgeText(line, "badge")));
@@ -1542,7 +2072,9 @@ function reservedEdgeTextHeight(board, edge) {
   const conditioning = derivedConditioning(board, edge);
   const contracted = (edge.segments || []).length > 1;
   if (!contracted && edge.tone !== "conditioning" && !conditioning.length) return 0;
-  const labelHeight = edge.label ? EDGE_TEXT_STYLES.label.fontSize + 4 : 0;
+  const labelHeight = edge.label
+    ? edgeLabelLines(edge.label).length * EDGE_ANNOTATION_METRICS.labelHeight
+    : 0;
   const badgeLines = conditioningBadgeLines(conditioning).length;
   const badgeHeight = badgeLines * 12;
   const labelBadgeGap = labelHeight && badgeHeight ? 8 : 0;
@@ -2714,12 +3246,9 @@ for (const program of Object.values(manifest.pseudocode || {})) {
 }
 
 function symbolMarkup(symbol, fallback) {
-  if (symbol?.tex) return `\\(${escapeHtml(symbol.tex)}\\)`;
+  if (symbol?.tex) return texMarkup(symbol.tex);
   const name = symbol?.name || fallback;
-  if (/^[A-Za-zͰ-Ͽ]$/.test(name)) return `\\(${name}\\)`;
-  const subscripted = name.match(/^([A-Za-zͰ-Ͽ])_([A-Za-z0-9]+)$/);
-  if (subscripted) return `\\(${subscripted[1]}_{\\mathrm{${subscripted[2]}}}\\)`;
-  return escapeHtml(name);
+  return notationMarkup(name);
 }
 
 function renderRepresentationNode(node) {
@@ -2734,7 +3263,7 @@ function renderRepresentationNode(node) {
     || repSymbolById.get(rep?.id);
   // A view occurrence can name a temporal/state-specific value more precisely
   // than a representation-wide pseudocode symbol. Keep that authored local
-  // notation authoritative (for example x_t versus x_(t-10)).
+  // notation authoritative (for example x_t versus x_{t-10}).
   const symbol = node.notation
     ? symbolMarkup(null, node.notation)
     : symbolMarkup(symbolDefinition, fullLabel);
@@ -2886,7 +3415,7 @@ function renderBlockNode(node) {
       <span class="op-circle">${escapeHtml(operator)}</span>
       <span class="op-label">${escapeHtml(node.label || module?.label || node.id)}</span>
     `
-    : blockCardHtml(node, module, false);
+    : blockCardHtml(node, module);
   const label = node.label || module?.label || node.id;
   selectButton.setAttribute("aria-label", `Inspect ${label}`);
   attachQuestionMenuHandlers(selectButton, { kind: "node", node });
@@ -2895,8 +3424,9 @@ function renderBlockNode(node) {
     const drillButton = document.createElement("button");
     drillButton.type = "button";
     drillButton.className = "arch-drill-cue arch-node-drill";
-    drillButton.setAttribute("aria-label", `Open detail: ${targetBoard.title}`);
-    drillButton.innerHTML = '<span>Open detail</span><b aria-hidden="true">›</b>';
+    drillButton.setAttribute("aria-label", `Zoom into ${targetBoard.title}`);
+    drillButton.title = `Zoom into ${targetBoard.title}`;
+    drillButton.innerHTML = magnifyIconMarkup();
     drillButton.addEventListener("click", (event) => {
       event.stopPropagation();
       hideCanvasTooltip();
@@ -2937,22 +3467,17 @@ function placeNode(element, node) {
   element.style.gridRow = String(node.row || 1);
 }
 
-function blockCardHtml(node, module, expandable) {
+function blockCardHtml(node, module) {
   const kind = node.kind === "operation" ? "operation" : module?.kind || node.kind;
   const label = node.label || module?.label || node.id;
   const role = node.role || module?.role || "";
   const detail = node.detail || moduleDetail(module) || kind;
   const repeat = module?.repeats ? `<span class="arch-repeat">x${escapeHtml(module.repeats)}</span>` : "";
   const badges = blockBadges(node, module);
-  const drillCue = expandable
-    ? '<span class="arch-drill-cue" aria-hidden="true">Open detail <b>›</b></span>'
-    : "";
-
   if (node.treatment === "chip" || node.density === "micro") {
     return `
       <strong>${escapeHtml(label)}</strong>
       <span class="arch-chip-meta">${escapeHtml(node.scale || module?.scale || kind)}</span>
-      ${drillCue}
     `;
   }
 
@@ -2966,7 +3491,6 @@ function blockCardHtml(node, module, expandable) {
       <span class="arch-badges">
         ${badges.map((badge) => `<i>${escapeHtml(badge)}</i>`).join("")}
       </span>
-      ${drillCue}
     `;
   }
 
@@ -2981,7 +3505,6 @@ function blockCardHtml(node, module, expandable) {
     <span class="arch-badges">
       ${badges.map((badge) => `<i>${escapeHtml(badge)}</i>`).join("")}
     </span>
-    ${drillCue}
   `;
 }
 
@@ -3018,8 +3541,9 @@ const RULES = {
     contentRowGap: 18,
     edgeTextPadding: 16,
     edgeTextVerticalPadding: 24,
+    edgeLabelWrapWidth: 112,
     edgeBadgeWrapWidth: 160,
-    edgeAnnotationSegmentPadding: 8,
+    edgeAnnotationSegmentPadding: 4,
     edgeAnnotationCrossAxisGap: 8,
     edgeAnnotationNodeClearance: 10,
     edgeAnnotationClearance: 6,
@@ -3346,18 +3870,24 @@ function renderEdges() {
     applyEdgeTone(path, edge);
     pathLayer.appendChild(path);
 
-    const labelWidth = edge.label ? measureEdgeText(edge.label, "label") : 0;
+    const labelLines = edge.label ? edgeLabelLines(edge.label) : [];
+    const labelWidth = Math.max(
+      0,
+      ...labelLines.map((line) => measureEdgeText(line, "label")),
+    );
     const showLabel = edge.label && edgeLabelFits({
       span: labelSegment?.length || edgeSpan,
       textWidth: labelWidth,
       padding: RULES.layout.edgeTextPadding,
       force: contracted || edge.tone === "conditioning",
     });
+    const visibleLabelLines = showLabel ? labelLines : [];
     const badgeLines = conditioning.length ? conditioningBadgeLines(conditioning) : [];
     const annotationSize = measureEdgeAnnotation({
-      labelWidth: showLabel ? labelWidth : 0,
-      badgeLineWidths: badgeLines.map((line) => measureEdgeText(line, "badge")),
       ...EDGE_ANNOTATION_METRICS,
+      labelWidth: showLabel ? labelWidth : 0,
+      labelHeight: visibleLabelLines.length * EDGE_ANNOTATION_METRICS.labelHeight,
+      badgeLineWidths: badgeLines.map((line) => measureEdgeText(line, "badge")),
     });
     const annotationPlacement = placeEdgeAnnotation({
       route: routePoints,
@@ -3382,10 +3912,21 @@ function renderEdges() {
       label.setAttribute("aria-hidden", "true");
       label.dataset.edgeIndex = String(index);
       label.dataset.annotationSide = annotationPlacement.side;
+      label.dataset.label = edge.label;
       applyEdgeTone(label, edge);
-      label.textContent = edge.label;
+      visibleLabelLines.forEach((line, lineIndex) => {
+        const span = document.createElementNS("http://www.w3.org/2000/svg", "tspan");
+        span.setAttribute("x", String(annotationX));
+        span.setAttribute(
+          "y",
+          String(annotationY + EDGE_TEXT_STYLES.label.fontSize
+            + lineIndex * EDGE_ANNOTATION_METRICS.labelHeight),
+        );
+        span.textContent = line;
+        label.appendChild(span);
+      });
       annotationLayer.appendChild(label);
-      annotationY += EDGE_ANNOTATION_METRICS.labelHeight;
+      annotationY += visibleLabelLines.length * EDGE_ANNOTATION_METRICS.labelHeight;
       if (badgeLines.length) annotationY += EDGE_ANNOTATION_METRICS.groupGap;
     }
 
@@ -4209,7 +4750,7 @@ function focusOverview() {
       ${notes.length
         ? `<ul>${notes.map((note) => `<li>${escapeHtml(note)}</li>`).join("")}</ul>`
         : ""}
-      <p class="focus-guidance">Select a block or connection to inspect it. Open a detail block to move deeper.</p>
+      <p class="focus-guidance">Select a block or connection to inspect it. Use a block's magnifying-glass button to move deeper.</p>
     </div>
   `);
 }
@@ -4248,8 +4789,6 @@ function focusModule(module, node) {
   elements.focusTitle.textContent = module.label;
 
   const blockHtml = renderStandardBlocks(module);
-  const pseudocodeHtml = module.pseudocode_ref ? renderPseudocode(module) : "";
-
   setFocusBody(`
     <div class="focus-section">
       <p>${escapeHtml(module.role)}</p>
@@ -4257,7 +4796,6 @@ function focusModule(module, node) {
       ${module.accepts_but_does_not_use ? renderUnusedInputs(module.accepts_but_does_not_use) : ""}
       ${renderContains(module.contains || [])}
       ${blockHtml}
-      ${pseudocodeHtml}
       ${renderReferences(module)}
       ${renderFocusLinks(module)}
     </div>
@@ -4373,7 +4911,6 @@ function readableReuse(value) {
 
 function renderBlockInstance(instance) {
   const block = standardBlocksById.get(instance.standardBlockId);
-  const steps = instance.pseudocode || [];
   return `
     <section class="standard-block-instance">
       <h3>${escapeHtml(block?.name || instance.standardBlockName || instance.standardBlockId)}</h3>
@@ -4386,31 +4923,8 @@ function renderBlockInstance(instance) {
       ${instance.differenceSummary
         ? `<div class="warning-note"><strong>Architecture-specific difference</strong><span>${escapeHtml(instance.differenceSummary)}</span></div>`
         : ""}
-      ${steps.length
-        ? `<h3>Reusable pseudocode</h3><ol class="pseudo-lines">${steps.map((step) => `
-          <li><code>${escapeHtml(step.code)}</code><span>${escapeHtml(step.label)}</span></li>
-        `).join("")}</ol>`
-        : ""}
       ${renderReferences(instance)}
     </section>
-  `;
-}
-
-function renderPseudocode(module) {
-  const program = Object.values(manifest.pseudocode)[0];
-  if (!program) return "";
-  const relevant = program.lines.filter((line) =>
-    (line.architectureRefs || []).includes(`modules.${module.id}`),
-  );
-  const lines = relevant;
-  if (!lines.length) return "";
-  return `
-    <h3>Pseudocode trace</h3>
-    <ol class="pseudo-lines">
-      ${lines
-        .map((line) => `<li><code>${escapeHtml(line.text)}</code><span>${escapeHtml(line.refs)}</span></li>`)
-        .join("")}
-    </ol>
   `;
 }
 
@@ -4427,7 +4941,7 @@ function citationByline(source) {
 function renderCitation(ref) {
   const source = bibliographySource(ref.source_ref);
   const title = source?.title || ref.path || ref.source_ref || "Unresolved source";
-  const href = safeHref(source?.href || source?.url || ref.path);
+  const href = audienceHref(source?.href || source?.url || ref.path);
   const byline = citationByline(source);
   const locator = ref.locator || ref.lines;
   const role = String(ref.role || "supporting_evidence").replaceAll("_", " ");
@@ -4461,10 +4975,10 @@ function renderReferences(entity) {
 function renderFocusLinks(module) {
   const links = [
     [module.story_ref, "Open curated story"],
-    [module.pseudocode_ref, "Open pseudocode YAML"],
-    [module.attention?.standard_block_ref, "Open standard block"],
+    [module.pseudocode_ref, "Open pseudocode"],
+    [module.attention?.standard_block_ref, "Open standard block reference"],
   ].map(([rawHref, label]) => {
-    const href = safeHref(rawHref);
+    const href = audienceHref(rawHref);
     return href ? `<a href="${escapeHtml(href)}">${label}</a>` : "";
   }).filter(Boolean);
   if (!links.length) return "";
