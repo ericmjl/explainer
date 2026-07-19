@@ -332,8 +332,10 @@ class RendererSemanticPseudocodeBrowserTest < Minitest::Test
     browser.set_window(width: 1440, height: 1000)
     verify_ipa_token_to_graph_and_back(browser, base)
     verify_high_level_call_drilldown(browser, base)
+    verify_published_reference_panel(browser, base)
     verify_grouped_inspector_and_stable_status(browser, base)
     verify_math_symbols_and_theme(browser, base)
+    verify_touch_pinch_zoom(browser, base)
     verify_mobile_board_trace(browser, base)
   end
 
@@ -485,6 +487,50 @@ class RendererSemanticPseudocodeBrowserTest < Minitest::Test
     assert drilldown["hasReverseStep"]
     assert_equal "Directional DDIM sampling", drilldown["heading"]
     assert_includes drilldown["subtitle"], "repeat ×100"
+  end
+
+  def verify_published_reference_panel(browser, base)
+    browser.navigate("#{base}?arch=genie3&board=motif_task_featurization")
+    panel = wait_for(browser, "the cited Genie 3 partial-atomization figure") do
+      browser.execute(<<~JS)
+        const layer = document.querySelector('#referencePanelLayer');
+        const figure = layer?.querySelector('[data-reference-panel-id="authors_partial_atomization"]');
+        const image = figure?.querySelector('img');
+        const canvas = document.querySelector('#architectureCanvas');
+        const modules = document.querySelector('#moduleLayer');
+        const zoom = document.querySelector('.canvas-zoom-value')?.textContent || '';
+        if (!figure || !image?.complete || image.naturalWidth <= 0 || zoom === '100%') return null;
+        const layerRect = layer.getBoundingClientRect();
+        const canvasRect = canvas.getBoundingClientRect();
+        const nodeRects = [...modules.querySelectorAll('[data-node-id]')]
+          .map((node) => node.getBoundingClientRect());
+        return {
+          panelCount: layer.querySelectorAll('.reference-panel').length,
+          imageWidth: image.naturalWidth,
+          imageHeight: image.naturalHeight,
+          alt: image.alt,
+          sourceLinked: Boolean(figure.querySelector('.reference-panel-citation[href]')),
+          license: figure.querySelector('.reference-panel-license')?.textContent || '',
+          position: getComputedStyle(layer).position,
+          transform: getComputedStyle(layer).transform,
+          canvasHasRail: canvas.classList.contains('has-reference-panels'),
+          separatedFromGraph: Math.max(...nodeRects.map((rect) => rect.right)) <= layerRect.left + 1,
+          graphInsideCanvas: Math.min(...nodeRects.map((rect) => rect.left)) >= canvasRect.left - 1,
+        };
+      JS
+    end
+
+    assert_equal 1, panel["panelCount"]
+    assert_operator panel["imageWidth"], :>, 0
+    assert_operator panel["imageHeight"], :>, 0
+    assert_includes panel["alt"], "Partial Atomization"
+    assert panel["sourceLinked"]
+    assert_includes panel["license"], "CC BY 4.0"
+    assert_equal "absolute", panel["position"]
+    assert_equal "none", panel["transform"]
+    assert panel["canvasHasRail"]
+    assert panel["separatedFromGraph"], "the cited figure should not cover the architecture grid"
+    assert panel["graphInsideCanvas"], "fitting the cited board should keep every node inside the canvas"
   end
 
   def verify_mobile_board_trace(browser, base)
@@ -641,6 +687,61 @@ class RendererSemanticPseudocodeBrowserTest < Minitest::Test
       switcher.dispatchEvent(new Event('change', { bubbles: true }));
       return true;
     JS
+  end
+
+  def verify_touch_pinch_zoom(browser, base)
+    browser.set_window(width: 1440, height: 1000)
+    browser.navigate("#{base}?arch=genie3")
+    initial = wait_for(browser, "the touchscreen pinch gesture target") do
+      browser.execute(<<~JS)
+        const canvas = document.querySelector('#architectureCanvas');
+        const node = document.querySelector('[data-node-id="diffusion_sampler"]');
+        const label = document.querySelector('#canvasControls .canvas-zoom-value');
+        if (!canvas || !node || !label) return null;
+        const rect = node.getBoundingClientRect();
+        const y = rect.top + rect.height / 2;
+        const firstX = rect.left + rect.width * 0.35;
+        const secondX = rect.left + rect.width * 0.65;
+        const dispatch = (target, type, pointerId, clientX) => target.dispatchEvent(
+          new PointerEvent(type, {
+            bubbles: true,
+            cancelable: true,
+            pointerId,
+            pointerType: 'touch',
+            isPrimary: pointerId === 41,
+            button: 0,
+            buttons: type === 'pointerup' ? 0 : 1,
+            clientX,
+            clientY: y,
+          }),
+        );
+        const before = Number.parseInt(label.textContent, 10);
+        dispatch(node, 'pointerdown', 41, firstX);
+        dispatch(node, 'pointerdown', 42, secondX);
+        dispatch(canvas, 'pointermove', 42, secondX + 80);
+        dispatch(canvas, 'pointerup', 41, firstX);
+        dispatch(canvas, 'pointerup', 42, secondX + 80);
+        node.click();
+        return { before };
+      JS
+    end
+    result = wait_for(browser, "the touchscreen pinch zoom update") do
+      browser.execute(<<~JS)
+        const canvas = document.querySelector('#architectureCanvas');
+        const label = document.querySelector('#canvasControls .canvas-zoom-value');
+        const after = Number.parseInt(label?.textContent || '', 10);
+        if (!(after > #{Integer(initial["before"])})) return null;
+        return {
+          after,
+          panning: canvas.classList.contains('is-panning'),
+          selected: new URLSearchParams(window.location.search).has('node'),
+        };
+      JS
+    end
+    assert_operator result["after"], :>, initial["before"],
+      "spreading two touches should zoom the main architecture board in"
+    refute result["panning"], "lifting both touches should end the gesture"
+    refute result["selected"], "a pinch beginning on a node must not activate it"
   end
 
   def wait_for(browser, description, timeout: 15)

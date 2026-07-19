@@ -4,6 +4,7 @@ import { installThemeSwitcher } from "./theme-state.mjs";
 const SVG_NS = "http://www.w3.org/2000/svg";
 const architectureGrid = document.querySelector("#architectureGrid");
 const referenceGrid = document.querySelector("#referenceGrid");
+const referenceSection = document.querySelector("#referenceSection");
 const searchInput = document.querySelector("#directorySearch");
 const familyFilters = document.querySelector("#familyFilters");
 const resultCount = document.querySelector("#directoryResultCount");
@@ -256,6 +257,7 @@ async function loadDirectory() {
     renderFamilyFilters(architectures);
     renderArchitectureGrid();
     referenceGrid.replaceChildren(...references.map((entry) => renderDirectoryCard(entry, true)));
+    referenceSection.hidden = references.length === 0;
   } catch (error) {
     architectureGrid.replaceChildren();
     const message = element("p", "directory-error", "The architecture directory could not be loaded from the generated manifests.");

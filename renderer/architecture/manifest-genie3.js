@@ -1,11 +1,11 @@
 export const manifest = {
   "schemaVersion": "architecture-manifest-v0.4",
   "build": {
-    "generator": "architecture-manifest-builder-v0.4.5",
+    "generator": "architecture-manifest-builder-v0.4.6",
     "inputDigests": {
-      "references/bibliography.yaml": "8ddccafa8ac6452643f652d69730c06644298c00bde10cbcca4a9f557a8f95c7",
-      "architectures/genie3.yaml": "fbdf1ce7f0d0683abbb37d5ce86e1be9d3c1cbac69df71105fbf6a37308b830a",
-      "views/genie3-semantic-zoom.view.yaml": "0234d7ffa56d5ddc8225626c86d00f477710396adf270305a301ad9b8996a473",
+      "references/bibliography.yaml": "d7246b55d54f7c3816e2a9b0a3c53b2a30f9ae755edc4f934bb82c496f0d081b",
+      "architectures/genie3.yaml": "a7706d0d536a0c7a2d2fea654b53726725450196bd0409b519ed07265c2a70a6",
+      "views/genie3-semantic-zoom.view.yaml": "b59de924d5f50b63352cee0f0088f751bf7f9097602a17a341a3fee1ac686ac2",
       "pseudocode/genie3.yaml": "f6980f6073739ce70e5ef72d6f4530987b0887cd67723788195569b161f5cc87",
       "standard_blocks/pair-biased-attention.yaml": "88379fcd3ad641e38da23ce3b5a9ccef84344149d9c8fac51792ad63cb9da7dc",
       "standard_blocks/invariant-point-attention.yaml": "a88d3bd473e6bbfeb6846085f7d5091e6e8b0e33fbbd8292af4d578df22b2c27"
@@ -97,11 +97,15 @@ export const manifest = {
           ]
         },
         "modules.feature_builder": {
-          "status": "leaf",
+          "status": "complete",
           "depth": 1,
-          "immediateModuleCount": 0,
+          "immediateModuleCount": 5,
           "immediateModuleRefs": [
-
+            "modules.task_source_router",
+            "modules.unconditional_featurizer",
+            "modules.motif_featurizer",
+            "modules.target_featurizer",
+            "modules.feature_batch_assembler"
           ]
         },
         "modules.diffusion_sampler": {
@@ -311,14 +315,150 @@ export const manifest = {
           "immediateModuleRefs": [
 
           ]
+        },
+        "modules.task_source_router": {
+          "status": "leaf",
+          "depth": 2,
+          "immediateModuleCount": 0,
+          "immediateModuleRefs": [
+
+          ]
+        },
+        "modules.unconditional_featurizer": {
+          "status": "complete",
+          "depth": 2,
+          "immediateModuleCount": 3,
+          "immediateModuleRefs": [
+            "modules.unconditional_token_layout",
+            "modules.unconditional_placeholder_initializer",
+            "modules.unconditional_frame_indices"
+          ]
+        },
+        "modules.motif_featurizer": {
+          "status": "complete",
+          "depth": 2,
+          "immediateModuleCount": 4,
+          "immediateModuleRefs": [
+            "modules.motif_problem_parser",
+            "modules.motif_scaffold_tokens",
+            "modules.motif_conditioned_tokens",
+            "modules.motif_feature_assembler"
+          ]
+        },
+        "modules.target_featurizer": {
+          "status": "complete",
+          "depth": 2,
+          "immediateModuleCount": 4,
+          "immediateModuleRefs": [
+            "modules.target_problem_parser",
+            "modules.binder_tokens",
+            "modules.target_conditioned_tokens",
+            "modules.binder_target_feature_assembler"
+          ]
+        },
+        "modules.feature_batch_assembler": {
+          "status": "leaf",
+          "depth": 2,
+          "immediateModuleCount": 0,
+          "immediateModuleRefs": [
+
+          ]
+        },
+        "modules.unconditional_token_layout": {
+          "status": "leaf",
+          "depth": 3,
+          "immediateModuleCount": 0,
+          "immediateModuleRefs": [
+
+          ]
+        },
+        "modules.unconditional_placeholder_initializer": {
+          "status": "leaf",
+          "depth": 3,
+          "immediateModuleCount": 0,
+          "immediateModuleRefs": [
+
+          ]
+        },
+        "modules.unconditional_frame_indices": {
+          "status": "leaf",
+          "depth": 3,
+          "immediateModuleCount": 0,
+          "immediateModuleRefs": [
+
+          ]
+        },
+        "modules.motif_problem_parser": {
+          "status": "leaf",
+          "depth": 3,
+          "immediateModuleCount": 0,
+          "immediateModuleRefs": [
+
+          ]
+        },
+        "modules.motif_scaffold_tokens": {
+          "status": "leaf",
+          "depth": 3,
+          "immediateModuleCount": 0,
+          "immediateModuleRefs": [
+
+          ]
+        },
+        "modules.motif_conditioned_tokens": {
+          "status": "leaf",
+          "depth": 3,
+          "immediateModuleCount": 0,
+          "immediateModuleRefs": [
+
+          ]
+        },
+        "modules.motif_feature_assembler": {
+          "status": "leaf",
+          "depth": 3,
+          "immediateModuleCount": 0,
+          "immediateModuleRefs": [
+
+          ]
+        },
+        "modules.target_problem_parser": {
+          "status": "leaf",
+          "depth": 3,
+          "immediateModuleCount": 0,
+          "immediateModuleRefs": [
+
+          ]
+        },
+        "modules.binder_tokens": {
+          "status": "leaf",
+          "depth": 3,
+          "immediateModuleCount": 0,
+          "immediateModuleRefs": [
+
+          ]
+        },
+        "modules.target_conditioned_tokens": {
+          "status": "leaf",
+          "depth": 3,
+          "immediateModuleCount": 0,
+          "immediateModuleRefs": [
+
+          ]
+        },
+        "modules.binder_target_feature_assembler": {
+          "status": "leaf",
+          "depth": 3,
+          "immediateModuleCount": 0,
+          "immediateModuleRefs": [
+
+          ]
         }
       },
       "summary": {
-        "scopeCount": 26,
-        "expandedScopeCount": 7,
-        "completeExpandedScopeCount": 7,
+        "scopeCount": 42,
+        "expandedScopeCount": 11,
+        "completeExpandedScopeCount": 11,
         "partialScopeCount": 0,
-        "leafFrontierCount": 19,
+        "leafFrontierCount": 31,
         "opaqueFrontierCount": 0,
         "partialFrontierCount": 0,
         "maximumAuthoredDepth": 5
@@ -335,22 +475,27 @@ export const manifest = {
         "id": "feature_builder",
         "parent_ref": "architecture",
         "decomposition": {
-          "status": "leaf"
+          "status": "complete"
         },
         "label": "Task Feature Builder",
         "kind": "adapter",
         "mechanisms": [
           "task_featurization"
         ],
-        "role": "translate an unconditional, motif, or binder request into tokenization and conditioning features",
+        "role": "select the request-specific feature path, construct token and atom metadata with conditioning masks, and assemble a padded model batch",
         "scale": "mixed",
         "evidence": {
           "status": "confirmed_from_code",
           "refs": [
             {
+              "source_ref": "genie3_sample_dataset_registry_code",
+              "role": "implementation_evidence",
+              "locator": "get_sample_dataset"
+            },
+            {
               "source_ref": "genie3_feature_code",
               "role": "implementation_evidence",
-              "locator": "create_np_features_from_chain"
+              "locator": "create_np_features_from_length, create_np_features_from_motif_config, create_np_features_from_target_config, batchify_np_features, and prepare_tensor_features"
             }
           ]
         }
@@ -983,6 +1128,402 @@ export const manifest = {
               "source_ref": "genie3_structure_code",
               "role": "implementation_evidence",
               "locator": "StructureNet.forward and StructureLayer.forward"
+            }
+          ]
+        }
+      },
+      {
+        "id": "task_source_router",
+        "parent_ref": "modules.feature_builder",
+        "decomposition": {
+          "status": "leaf"
+        },
+        "label": "Task Source Router",
+        "kind": "controller",
+        "mechanisms": [
+          "source_dispatch"
+        ],
+        "role": "select one generation feature path from the configured unconditional, motif, or target source",
+        "scale": "sample",
+        "evidence": {
+          "status": "confirmed_from_code",
+          "refs": [
+            {
+              "source_ref": "genie3_sample_dataset_registry_code",
+              "role": "implementation_evidence",
+              "locator": "get_sample_dataset"
+            }
+          ]
+        }
+      },
+      {
+        "id": "unconditional_featurizer",
+        "parent_ref": "modules.feature_builder",
+        "decomposition": {
+          "status": "complete"
+        },
+        "label": "Unconditional Generation Task Featurizer",
+        "kind": "adapter",
+        "mechanisms": [
+          "length_tokenization"
+        ],
+        "role": "turn a requested length into unknown C-alpha tokens with sequence, structure, and interface conditioning disabled",
+        "scale": "token",
+        "evidence": {
+          "status": "confirmed_from_code",
+          "refs": [
+            {
+              "source_ref": "genie3_feature_code",
+              "role": "implementation_evidence",
+              "locator": "create_np_features_from_length"
+            }
+          ]
+        }
+      },
+      {
+        "id": "motif_featurizer",
+        "parent_ref": "modules.feature_builder",
+        "decomposition": {
+          "status": "complete"
+        },
+        "label": "Motif Scaffolding Task Featurizer",
+        "kind": "adapter",
+        "mechanisms": [
+          "motif_tokenization",
+          "partial_atomization"
+        ],
+        "role": "combine unknown scaffold C-alpha tokens with known motif sequence and coordinates, atomizing known motif residues when requested",
+        "scale": "token",
+        "evidence": {
+          "status": "confirmed_from_code",
+          "refs": [
+            {
+              "source_ref": "genie3_feature_code",
+              "role": "implementation_evidence",
+              "locator": "create_np_features_from_motif_config"
+            }
+          ]
+        }
+      },
+      {
+        "id": "target_featurizer",
+        "parent_ref": "modules.feature_builder",
+        "decomposition": {
+          "status": "complete"
+        },
+        "label": "Binder Design Task Featurizer",
+        "kind": "adapter",
+        "mechanisms": [
+          "binder_target_tokenization",
+          "interface_conditioning",
+          "partial_atomization"
+        ],
+        "role": "combine unknown binder tokens with conditioned target chains and selected target-interface annotations",
+        "scale": "token",
+        "evidence": {
+          "status": "confirmed_from_code",
+          "refs": [
+            {
+              "source_ref": "genie3_feature_code",
+              "role": "implementation_evidence",
+              "locator": "create_np_features_from_target_config"
+            }
+          ]
+        }
+      },
+      {
+        "id": "feature_batch_assembler",
+        "parent_ref": "modules.feature_builder",
+        "decomposition": {
+          "status": "leaf"
+        },
+        "label": "Feature Batch Assembler",
+        "kind": "adapter",
+        "mechanisms": [
+          "feature_padding",
+          "batch_stacking",
+          "tensor_preparation"
+        ],
+        "role": "pad source-specific feature dictionaries to common token and atom lengths, stack the batch, and prepare typed tensors",
+        "scale": "mixed",
+        "evidence": {
+          "status": "confirmed_from_code",
+          "refs": [
+            {
+              "source_ref": "genie3_feature_code",
+              "role": "implementation_evidence",
+              "locator": "batchify_np_features and prepare_tensor_features"
+            }
+          ]
+        }
+      },
+      {
+        "id": "unconditional_token_layout",
+        "parent_ref": "modules.unconditional_featurizer",
+        "decomposition": {
+          "status": "leaf"
+        },
+        "label": "C-alpha Token Layout",
+        "kind": "adapter",
+        "mechanisms": [
+          "length_tokenization"
+        ],
+        "role": "create one active C-alpha token with token, residue, and chain indices for every requested residue",
+        "scale": "token",
+        "evidence": {
+          "status": "confirmed_from_code",
+          "refs": [
+            {
+              "source_ref": "genie3_feature_code",
+              "role": "implementation_evidence",
+              "locator": "create_np_features_from_length"
+            }
+          ]
+        }
+      },
+      {
+        "id": "unconditional_placeholder_initializer",
+        "parent_ref": "modules.unconditional_featurizer",
+        "decomposition": {
+          "status": "leaf"
+        },
+        "label": "Unknown Feature Initializer",
+        "kind": "adapter",
+        "mechanisms": [
+          "placeholder_initialization",
+          "conditioning_mask_initialization"
+        ],
+        "role": "mark residue identities and conditioning coordinates as unknown placeholders and disable all task-conditioning masks",
+        "scale": "token",
+        "evidence": {
+          "status": "confirmed_from_code",
+          "refs": [
+            {
+              "source_ref": "genie3_feature_code",
+              "role": "implementation_evidence",
+              "locator": "create_np_features_from_length"
+            }
+          ]
+        }
+      },
+      {
+        "id": "unconditional_frame_indices",
+        "parent_ref": "modules.unconditional_featurizer",
+        "decomposition": {
+          "status": "leaf"
+        },
+        "label": "Frame Index Features",
+        "kind": "adapter",
+        "mechanisms": [
+          "frame_index_derivation"
+        ],
+        "role": "derive neighboring token indices and validity masks used to construct local frames later",
+        "scale": "token",
+        "evidence": {
+          "status": "confirmed_from_code",
+          "refs": [
+            {
+              "source_ref": "genie3_feature_code",
+              "role": "implementation_evidence",
+              "locator": "create_np_features_from_length, _update_np_features_on_token_frame_index, and _update_np_features_on_token_struct_frame_mask"
+            }
+          ]
+        }
+      },
+      {
+        "id": "motif_problem_parser",
+        "parent_ref": "modules.motif_featurizer",
+        "decomposition": {
+          "status": "leaf"
+        },
+        "label": "Motif Problem Parser",
+        "kind": "controller",
+        "mechanisms": [
+          "motif_config_sampling"
+        ],
+        "role": "load motif structures and resolve the ordered scaffold-length and motif-segment layout for this sample",
+        "scale": "sample",
+        "evidence": {
+          "status": "confirmed_from_code",
+          "refs": [
+            {
+              "source_ref": "genie3_feature_code",
+              "role": "implementation_evidence",
+              "locator": "create_np_features_from_motif_config and _sample_motif_config"
+            }
+          ]
+        }
+      },
+      {
+        "id": "motif_scaffold_tokens",
+        "parent_ref": "modules.motif_featurizer",
+        "decomposition": {
+          "status": "leaf"
+        },
+        "label": "Scaffold Token Builder",
+        "kind": "adapter",
+        "mechanisms": [
+          "length_tokenization"
+        ],
+        "role": "turn every numeric scaffold segment into unknown C-alpha tokens with conditioning masks disabled",
+        "scale": "token",
+        "evidence": {
+          "status": "confirmed_from_code",
+          "refs": [
+            {
+              "source_ref": "genie3_feature_code",
+              "role": "implementation_evidence",
+              "locator": "create_np_features_from_motif_config scaffold branch"
+            }
+          ]
+        }
+      },
+      {
+        "id": "motif_conditioned_tokens",
+        "parent_ref": "modules.motif_featurizer",
+        "decomposition": {
+          "status": "leaf"
+        },
+        "label": "Conditioned Motif Token Builder",
+        "kind": "adapter",
+        "mechanisms": [
+          "motif_tokenization",
+          "partial_atomization"
+        ],
+        "role": "encode known motif identities and coordinates, expanding motif residues into C-alpha plus side-chain heavy-atom tokens in Atom14 mode",
+        "scale": "token",
+        "evidence": {
+          "status": "confirmed_from_code",
+          "refs": [
+            {
+              "source_ref": "genie3_feature_code",
+              "role": "implementation_evidence",
+              "locator": "create_np_features_from_motif_config motif branch"
+            }
+          ]
+        }
+      },
+      {
+        "id": "motif_feature_assembler",
+        "parent_ref": "modules.motif_featurizer",
+        "decomposition": {
+          "status": "leaf"
+        },
+        "label": "Motif Feature Assembler",
+        "kind": "adapter",
+        "mechanisms": [
+          "segment_concatenation",
+          "frame_index_derivation"
+        ],
+        "role": "restore scaffold and motif segments to their requested order and derive frame and conditioning-frame masks",
+        "scale": "mixed",
+        "evidence": {
+          "status": "confirmed_from_code",
+          "refs": [
+            {
+              "source_ref": "genie3_feature_code",
+              "role": "implementation_evidence",
+              "locator": "create_np_features_from_motif_config"
+            }
+          ]
+        }
+      },
+      {
+        "id": "target_problem_parser",
+        "parent_ref": "modules.target_featurizer",
+        "decomposition": {
+          "status": "leaf"
+        },
+        "label": "Binder Design Problem Parser",
+        "kind": "controller",
+        "mechanisms": [
+          "target_config_parsing",
+          "interface_selection"
+        ],
+        "role": "read the binder specification, target PDB, and selected target-interface residue list",
+        "scale": "sample",
+        "evidence": {
+          "status": "confirmed_from_code",
+          "refs": [
+            {
+              "source_ref": "genie3_feature_code",
+              "role": "implementation_evidence",
+              "locator": "create_np_features_from_target_config and _sample_interface_residues"
+            }
+          ]
+        }
+      },
+      {
+        "id": "binder_tokens",
+        "parent_ref": "modules.target_featurizer",
+        "decomposition": {
+          "status": "leaf"
+        },
+        "label": "Binder Token Builder",
+        "kind": "adapter",
+        "mechanisms": [
+          "length_tokenization"
+        ],
+        "role": "create the unknown binder region from a requested length or conditioned binder framework",
+        "scale": "token",
+        "evidence": {
+          "status": "confirmed_from_code",
+          "refs": [
+            {
+              "source_ref": "genie3_feature_code",
+              "role": "implementation_evidence",
+              "locator": "create_np_features_from_target_config binder features"
+            }
+          ]
+        }
+      },
+      {
+        "id": "target_conditioned_tokens",
+        "parent_ref": "modules.target_featurizer",
+        "decomposition": {
+          "status": "leaf"
+        },
+        "label": "Conditioned Target Token Builder",
+        "kind": "adapter",
+        "mechanisms": [
+          "target_tokenization",
+          "interface_conditioning",
+          "partial_atomization"
+        ],
+        "role": "encode conditioned target C-alpha structure and selectively atomize marked interface residues in Atom14 mode",
+        "scale": "token",
+        "evidence": {
+          "status": "confirmed_from_code",
+          "refs": [
+            {
+              "source_ref": "genie3_feature_code",
+              "role": "implementation_evidence",
+              "locator": "create_np_features_from_target_config target features and create_np_features_from_chain"
+            }
+          ]
+        }
+      },
+      {
+        "id": "binder_target_feature_assembler",
+        "parent_ref": "modules.target_featurizer",
+        "decomposition": {
+          "status": "leaf"
+        },
+        "label": "Binder + Target Assembler",
+        "kind": "adapter",
+        "mechanisms": [
+          "chain_concatenation",
+          "target_centering"
+        ],
+        "role": "concatenate binder and target feature dictionaries with distinct chain identities and center coordinates on the target",
+        "scale": "mixed",
+        "evidence": {
+          "status": "confirmed_from_code",
+          "refs": [
+            {
+              "source_ref": "genie3_feature_code",
+              "role": "implementation_evidence",
+              "locator": "create_np_features_from_target_config, concatenate_np_features, and update_np_features_with_ca_centering"
             }
           ]
         }
@@ -2274,12 +2815,12 @@ export const manifest = {
       {
         "id": "feature_bundle",
         "scale": "mixed",
-        "semantic_role": "token layout and task-dependent sequence, structure, atomization, and interface conditioning",
-        "shape": "B x N token metadata + B x N x N pairwise masks",
+        "semantic_role": "model-ready dictionary of token- and atom-indexed metadata, known values, and task-dependent conditioning masks",
+        "shape": "B x N token fields + B x A atom fields",
         "carries": [
           "token, residue, chain, entity, and atom identities",
-          "atomization and valid-frame masks",
-          "optional sequence, coordinate, motif-group, and interface masks"
+          "known residue types and coordinates plus atomization and validity masks",
+          "conditioning group, sequence, structure, frame, and interface masks"
         ],
         "evidence": {
           "status": "confirmed_from_code",
@@ -2290,7 +2831,8 @@ export const manifest = {
               "locator": "create_np_features_from_chain"
             }
           ]
-        }
+        },
+        "glyph": "single"
       },
       {
         "id": "token_coordinates",
@@ -2485,6 +3027,28 @@ export const manifest = {
               "source_ref": "genie3_export_code",
               "role": "implementation_evidence",
               "locator": "PostProcessor.save"
+            }
+          ]
+        }
+      },
+      {
+        "id": "sample_feature_dictionary",
+        "scale": "mixed",
+        "semantic_role": "one source-specific unbatched dictionary of token- and atom-indexed features",
+        "shape": "N token fields + A atom fields",
+        "glyph": "single",
+        "carries": [
+          "task-specific token and atom layout",
+          "known sequence and coordinate values",
+          "sequence, structure, frame, motif-group, and interface conditioning masks"
+        ],
+        "evidence": {
+          "status": "confirmed_from_code",
+          "refs": [
+            {
+              "source_ref": "genie3_feature_code",
+              "role": "implementation_evidence",
+              "locator": "create_np_features_from_length, create_np_features_from_motif_config, and create_np_features_from_target_config"
             }
           ]
         }
@@ -3068,7 +3632,7 @@ export const manifest = {
 
         ],
         "consumerRefs": [
-          "modules.feature_builder"
+          "modules.task_source_router"
         ]
       },
       "feature_bundle": {
@@ -3084,7 +3648,7 @@ export const manifest = {
           "relations.feature_bundle_conditions_sequence_sampler"
         ],
         "producerRefs": [
-          "modules.feature_builder"
+          "modules.feature_batch_assembler"
         ],
         "consumerRefs": [
           "modules.coordinate_initializer",
@@ -4516,39 +5080,39 @@ export const manifest = {
       {
         "id": "design_request_enters_feature_builder",
         "from": "value_sites.design_request",
-        "to": "modules.feature_builder",
+        "to": "modules.task_source_router",
         "kind": "data_flow",
         "carries": [
           "representations.design_request"
         ],
-        "operation": "parse_design_request",
+        "operation": "route_task_source",
         "evidence": {
           "status": "confirmed_from_code",
           "refs": [
             {
-              "source_ref": "genie3_feature_code",
+              "source_ref": "genie3_sample_dataset_registry_code",
               "role": "implementation_evidence",
-              "locator": "create_np_features_from_length, create_np_features_from_motif_config, and create_np_features_from_target_config"
+              "locator": "get_sample_dataset"
             }
           ]
         }
       },
       {
         "id": "feature_builder_produces_feature_bundle",
-        "from": "modules.feature_builder",
+        "from": "modules.feature_batch_assembler",
         "to": "value_sites.feature_bundle",
         "kind": "data_flow",
         "carries": [
           "representations.feature_bundle"
         ],
-        "operation": "build_token_and_conditioning_features",
+        "operation": "pad_stack_and_prepare_feature_batch",
         "evidence": {
           "status": "confirmed_from_code",
           "refs": [
             {
               "source_ref": "genie3_feature_code",
               "role": "implementation_evidence",
-              "locator": "create_np_features_from_length, create_np_features_from_motif_config, and create_np_features_from_target_config"
+              "locator": "batchify_np_features and prepare_tensor_features"
             }
           ]
         }
@@ -6042,6 +6606,326 @@ export const manifest = {
             }
           ]
         }
+      },
+      {
+        "id": "task_router_dispatches_unconditional_request",
+        "from": "modules.task_source_router",
+        "to": "modules.unconditional_featurizer",
+        "kind": "data_flow",
+        "carries": [
+          "representations.design_request"
+        ],
+        "operation": "dispatch_when_source_is_unconditional",
+        "evidence": {
+          "status": "confirmed_from_code",
+          "refs": [
+            {
+              "source_ref": "genie3_sample_dataset_registry_code",
+              "role": "implementation_evidence",
+              "locator": "get_sample_dataset"
+            }
+          ]
+        }
+      },
+      {
+        "id": "task_router_dispatches_motif_request",
+        "from": "modules.task_source_router",
+        "to": "modules.motif_featurizer",
+        "kind": "data_flow",
+        "carries": [
+          "representations.design_request"
+        ],
+        "operation": "dispatch_when_source_is_motif",
+        "evidence": {
+          "status": "confirmed_from_code",
+          "refs": [
+            {
+              "source_ref": "genie3_sample_dataset_registry_code",
+              "role": "implementation_evidence",
+              "locator": "get_sample_dataset"
+            }
+          ]
+        }
+      },
+      {
+        "id": "task_router_dispatches_target_request",
+        "from": "modules.task_source_router",
+        "to": "modules.target_featurizer",
+        "kind": "data_flow",
+        "carries": [
+          "representations.design_request"
+        ],
+        "operation": "dispatch_when_source_is_target",
+        "evidence": {
+          "status": "confirmed_from_code",
+          "refs": [
+            {
+              "source_ref": "genie3_sample_dataset_registry_code",
+              "role": "implementation_evidence",
+              "locator": "get_sample_dataset"
+            }
+          ]
+        }
+      },
+      {
+        "id": "unconditional_featurizer_produces_sample_features",
+        "from": "modules.unconditional_featurizer",
+        "to": "modules.feature_batch_assembler",
+        "kind": "data_flow",
+        "carries": [
+          "representations.sample_feature_dictionary"
+        ],
+        "operation": "create_length_conditioned_feature_dictionary",
+        "evidence": {
+          "status": "confirmed_from_code",
+          "refs": [
+            {
+              "source_ref": "genie3_feature_code",
+              "role": "implementation_evidence",
+              "locator": "create_np_features_from_length"
+            }
+          ]
+        }
+      },
+      {
+        "id": "motif_featurizer_produces_sample_features",
+        "from": "modules.motif_featurizer",
+        "to": "modules.feature_batch_assembler",
+        "kind": "data_flow",
+        "carries": [
+          "representations.sample_feature_dictionary"
+        ],
+        "operation": "create_motif_conditioned_feature_dictionary",
+        "evidence": {
+          "status": "confirmed_from_code",
+          "refs": [
+            {
+              "source_ref": "genie3_feature_code",
+              "role": "implementation_evidence",
+              "locator": "create_np_features_from_motif_config"
+            }
+          ]
+        }
+      },
+      {
+        "id": "target_featurizer_produces_sample_features",
+        "from": "modules.target_featurizer",
+        "to": "modules.feature_batch_assembler",
+        "kind": "data_flow",
+        "carries": [
+          "representations.sample_feature_dictionary"
+        ],
+        "operation": "create_target_conditioned_feature_dictionary",
+        "evidence": {
+          "status": "confirmed_from_code",
+          "refs": [
+            {
+              "source_ref": "genie3_feature_code",
+              "role": "implementation_evidence",
+              "locator": "create_np_features_from_target_config"
+            }
+          ]
+        }
+      },
+      {
+        "id": "unconditional_layout_initializes_unknown_features",
+        "from": "modules.unconditional_token_layout",
+        "to": "modules.unconditional_placeholder_initializer",
+        "kind": "data_flow",
+        "carries": [
+          "representations.sample_feature_dictionary"
+        ],
+        "operation": "initialize_unknown_values_and_conditioning_masks",
+        "evidence": {
+          "status": "confirmed_from_code",
+          "refs": [
+            {
+              "source_ref": "genie3_feature_code",
+              "role": "implementation_evidence",
+              "locator": "create_np_features_from_length"
+            }
+          ]
+        }
+      },
+      {
+        "id": "unconditional_unknown_features_derive_frame_indices",
+        "from": "modules.unconditional_placeholder_initializer",
+        "to": "modules.unconditional_frame_indices",
+        "kind": "data_flow",
+        "carries": [
+          "representations.sample_feature_dictionary"
+        ],
+        "operation": "derive_frame_indices_and_masks",
+        "evidence": {
+          "status": "confirmed_from_code",
+          "refs": [
+            {
+              "source_ref": "genie3_feature_code",
+              "role": "implementation_evidence",
+              "locator": "_update_np_features_on_token_frame_index and _update_np_features_on_token_struct_frame_mask"
+            }
+          ]
+        }
+      },
+      {
+        "id": "motif_parser_defines_scaffold_layout",
+        "from": "modules.motif_problem_parser",
+        "to": "modules.motif_scaffold_tokens",
+        "kind": "data_flow",
+        "carries": [
+          "representations.design_request"
+        ],
+        "operation": "select_numeric_scaffold_segments",
+        "evidence": {
+          "status": "confirmed_from_code",
+          "refs": [
+            {
+              "source_ref": "genie3_feature_code",
+              "role": "implementation_evidence",
+              "locator": "create_np_features_from_motif_config scaffold branch"
+            }
+          ]
+        }
+      },
+      {
+        "id": "motif_parser_selects_conditioned_segments",
+        "from": "modules.motif_problem_parser",
+        "to": "modules.motif_conditioned_tokens",
+        "kind": "data_flow",
+        "carries": [
+          "representations.design_request"
+        ],
+        "operation": "select_known_motif_segments",
+        "evidence": {
+          "status": "confirmed_from_code",
+          "refs": [
+            {
+              "source_ref": "genie3_feature_code",
+              "role": "implementation_evidence",
+              "locator": "create_np_features_from_motif_config motif branch"
+            }
+          ]
+        }
+      },
+      {
+        "id": "motif_scaffold_tokens_enter_assembler",
+        "from": "modules.motif_scaffold_tokens",
+        "to": "modules.motif_feature_assembler",
+        "kind": "data_flow",
+        "carries": [
+          "representations.sample_feature_dictionary"
+        ],
+        "operation": "provide_unknown_scaffold_segments",
+        "evidence": {
+          "status": "confirmed_from_code",
+          "refs": [
+            {
+              "source_ref": "genie3_feature_code",
+              "role": "implementation_evidence",
+              "locator": "create_np_features_from_motif_config"
+            }
+          ]
+        }
+      },
+      {
+        "id": "motif_conditioned_tokens_enter_assembler",
+        "from": "modules.motif_conditioned_tokens",
+        "to": "modules.motif_feature_assembler",
+        "kind": "data_flow",
+        "carries": [
+          "representations.sample_feature_dictionary"
+        ],
+        "operation": "provide_conditioned_motif_segments",
+        "evidence": {
+          "status": "confirmed_from_code",
+          "refs": [
+            {
+              "source_ref": "genie3_feature_code",
+              "role": "implementation_evidence",
+              "locator": "create_np_features_from_motif_config"
+            }
+          ]
+        }
+      },
+      {
+        "id": "target_parser_defines_binder_request",
+        "from": "modules.target_problem_parser",
+        "to": "modules.binder_tokens",
+        "kind": "data_flow",
+        "carries": [
+          "representations.design_request"
+        ],
+        "operation": "select_binder_length_or_framework",
+        "evidence": {
+          "status": "confirmed_from_code",
+          "refs": [
+            {
+              "source_ref": "genie3_feature_code",
+              "role": "implementation_evidence",
+              "locator": "create_np_features_from_target_config binder features"
+            }
+          ]
+        }
+      },
+      {
+        "id": "target_parser_selects_target_interface",
+        "from": "modules.target_problem_parser",
+        "to": "modules.target_conditioned_tokens",
+        "kind": "data_flow",
+        "carries": [
+          "representations.design_request"
+        ],
+        "operation": "select_target_chains_and_interface_residues",
+        "evidence": {
+          "status": "confirmed_from_code",
+          "refs": [
+            {
+              "source_ref": "genie3_feature_code",
+              "role": "implementation_evidence",
+              "locator": "create_np_features_from_target_config target features"
+            }
+          ]
+        }
+      },
+      {
+        "id": "binder_tokens_enter_target_assembler",
+        "from": "modules.binder_tokens",
+        "to": "modules.binder_target_feature_assembler",
+        "kind": "data_flow",
+        "carries": [
+          "representations.sample_feature_dictionary"
+        ],
+        "operation": "provide_binder_features",
+        "evidence": {
+          "status": "confirmed_from_code",
+          "refs": [
+            {
+              "source_ref": "genie3_feature_code",
+              "role": "implementation_evidence",
+              "locator": "create_np_features_from_target_config"
+            }
+          ]
+        }
+      },
+      {
+        "id": "target_tokens_enter_target_assembler",
+        "from": "modules.target_conditioned_tokens",
+        "to": "modules.binder_target_feature_assembler",
+        "kind": "data_flow",
+        "carries": [
+          "representations.sample_feature_dictionary"
+        ],
+        "operation": "provide_conditioned_target_features",
+        "evidence": {
+          "status": "confirmed_from_code",
+          "refs": [
+            {
+              "source_ref": "genie3_feature_code",
+              "role": "implementation_evidence",
+              "locator": "create_np_features_from_target_config"
+            }
+          ]
+        }
       }
     ],
     "claims": [
@@ -6221,6 +7105,178 @@ export const manifest = {
         "path": "facebookresearch/DiT/train.py",
         "url": "https://github.com/facebookresearch/DiT/blob/ed81ce2229091fd4ecc9a223645f95cf379d582b/train.py",
         "href": "https://github.com/facebookresearch/DiT/blob/ed81ce2229091fd4ecc9a223645f95cf379d582b/train.py"
+      },
+      {
+        "id": "af2_2021",
+        "kind": "paper",
+        "title": "Highly accurate protein structure prediction with AlphaFold",
+        "authors": [
+          "John Jumper",
+          "Richard Evans",
+          "Alexander Pritzel",
+          "Tim Green",
+          "Michael Figurnov",
+          "Olaf Ronneberger",
+          "Kathryn Tunyasuvunakool",
+          "Russ Bates",
+          "Augustin Zidek",
+          "Anna Potapenko",
+          "Alex Bridgland",
+          "Clemens Meyer",
+          "Simon A. A. Kohl",
+          "Andrew J. Ballard",
+          "Andrew Cowie",
+          "Bernardino Romera-Paredes",
+          "Stanislav Nikolov",
+          "Rishub Jain",
+          "Jonas Adler",
+          "Trevor Back",
+          "Stig Petersen",
+          "David Reiman",
+          "Ellen Clancy",
+          "Michal Zielinski",
+          "Martin Steinegger",
+          "Michalina Pacholska",
+          "Tamas Berghammer",
+          "Sebastian Bodenstein",
+          "David Silver",
+          "Oriol Vinyals",
+          "Andrew W. Senior",
+          "Koray Kavukcuoglu",
+          "Pushmeet Kohli",
+          "Demis Hassabis"
+        ],
+        "year": 2021,
+        "identifiers": {
+          "doi": "10.1038/s41586-021-03819-2"
+        },
+        "url": "https://www.nature.com/articles/s41586-021-03819-2",
+        "href": "https://www.nature.com/articles/s41586-021-03819-2"
+      },
+      {
+        "id": "af2_2021_supplement",
+        "kind": "paper",
+        "title": "Highly accurate protein structure prediction with AlphaFold: Supplementary Information",
+        "authors": [
+          "John Jumper",
+          "Richard Evans",
+          "Alexander Pritzel",
+          "Tim Green",
+          "Michael Figurnov",
+          "Olaf Ronneberger",
+          "Kathryn Tunyasuvunakool",
+          "Russ Bates",
+          "Augustin Zidek",
+          "Anna Potapenko",
+          "Alex Bridgland",
+          "Clemens Meyer",
+          "Simon A. A. Kohl",
+          "Andrew J. Ballard",
+          "Andrew Cowie",
+          "Bernardino Romera-Paredes",
+          "Stanislav Nikolov",
+          "Rishub Jain",
+          "Jonas Adler",
+          "Trevor Back",
+          "Stig Petersen",
+          "David Reiman",
+          "Ellen Clancy",
+          "Michal Zielinski",
+          "Martin Steinegger",
+          "Michalina Pacholska",
+          "Tamas Berghammer",
+          "Sebastian Bodenstein",
+          "David Silver",
+          "Oriol Vinyals",
+          "Andrew W. Senior",
+          "Koray Kavukcuoglu",
+          "Pushmeet Kohli",
+          "Demis Hassabis"
+        ],
+        "year": 2021,
+        "identifiers": {
+          "doi": "10.1038/s41586-021-03819-2",
+          "component": "supplementary_information"
+        },
+        "url": "https://static-content.springer.com/esm/art%3A10.1038%2Fs41586-021-03819-2/MediaObjects/41586_2021_3819_MOESM1_ESM.pdf",
+        "href": "https://static-content.springer.com/esm/art%3A10.1038%2Fs41586-021-03819-2/MediaObjects/41586_2021_3819_MOESM1_ESM.pdf"
+      },
+      {
+        "id": "af2_runner_code",
+        "kind": "code",
+        "title": "AlphaFold prediction and ranking entry point",
+        "organization": "Google DeepMind",
+        "repository": "google-deepmind/alphafold",
+        "revision": "09ed0c5d5a32d794ed9f78b70906cbeaff0ef439",
+        "path": "run_alphafold.py",
+        "url": "https://github.com/google-deepmind/alphafold/blob/09ed0c5d5a32d794ed9f78b70906cbeaff0ef439/run_alphafold.py",
+        "href": "https://github.com/google-deepmind/alphafold/blob/09ed0c5d5a32d794ed9f78b70906cbeaff0ef439/run_alphafold.py"
+      },
+      {
+        "id": "af2_data_pipeline_code",
+        "kind": "code",
+        "title": "AlphaFold monomer input feature pipeline",
+        "organization": "Google DeepMind",
+        "repository": "google-deepmind/alphafold",
+        "revision": "09ed0c5d5a32d794ed9f78b70906cbeaff0ef439",
+        "path": "alphafold/data/pipeline.py",
+        "url": "https://github.com/google-deepmind/alphafold/blob/09ed0c5d5a32d794ed9f78b70906cbeaff0ef439/alphafold/data/pipeline.py",
+        "href": "https://github.com/google-deepmind/alphafold/blob/09ed0c5d5a32d794ed9f78b70906cbeaff0ef439/alphafold/data/pipeline.py"
+      },
+      {
+        "id": "af2_model_wrapper_code",
+        "kind": "code",
+        "title": "AlphaFold model runner and monomer selection wrapper",
+        "organization": "Google DeepMind",
+        "repository": "google-deepmind/alphafold",
+        "revision": "09ed0c5d5a32d794ed9f78b70906cbeaff0ef439",
+        "path": "alphafold/model/model.py",
+        "url": "https://github.com/google-deepmind/alphafold/blob/09ed0c5d5a32d794ed9f78b70906cbeaff0ef439/alphafold/model/model.py",
+        "href": "https://github.com/google-deepmind/alphafold/blob/09ed0c5d5a32d794ed9f78b70906cbeaff0ef439/alphafold/model/model.py"
+      },
+      {
+        "id": "af2_model_code",
+        "kind": "code",
+        "title": "AlphaFold monomer model and recycling implementation",
+        "organization": "Google DeepMind",
+        "repository": "google-deepmind/alphafold",
+        "revision": "09ed0c5d5a32d794ed9f78b70906cbeaff0ef439",
+        "path": "alphafold/model/modules.py",
+        "url": "https://github.com/google-deepmind/alphafold/blob/09ed0c5d5a32d794ed9f78b70906cbeaff0ef439/alphafold/model/modules.py",
+        "href": "https://github.com/google-deepmind/alphafold/blob/09ed0c5d5a32d794ed9f78b70906cbeaff0ef439/alphafold/model/modules.py"
+      },
+      {
+        "id": "af2_structure_code",
+        "kind": "code",
+        "title": "AlphaFold monomer structure module",
+        "organization": "Google DeepMind",
+        "repository": "google-deepmind/alphafold",
+        "revision": "09ed0c5d5a32d794ed9f78b70906cbeaff0ef439",
+        "path": "alphafold/model/folding.py",
+        "url": "https://github.com/google-deepmind/alphafold/blob/09ed0c5d5a32d794ed9f78b70906cbeaff0ef439/alphafold/model/folding.py",
+        "href": "https://github.com/google-deepmind/alphafold/blob/09ed0c5d5a32d794ed9f78b70906cbeaff0ef439/alphafold/model/folding.py"
+      },
+      {
+        "id": "af2_config_code",
+        "kind": "code",
+        "title": "AlphaFold model configuration",
+        "organization": "Google DeepMind",
+        "repository": "google-deepmind/alphafold",
+        "revision": "09ed0c5d5a32d794ed9f78b70906cbeaff0ef439",
+        "path": "alphafold/model/config.py",
+        "url": "https://github.com/google-deepmind/alphafold/blob/09ed0c5d5a32d794ed9f78b70906cbeaff0ef439/alphafold/model/config.py",
+        "href": "https://github.com/google-deepmind/alphafold/blob/09ed0c5d5a32d794ed9f78b70906cbeaff0ef439/alphafold/model/config.py"
+      },
+      {
+        "id": "af2_relax_code",
+        "kind": "code",
+        "title": "AlphaFold Amber relaxation wrapper",
+        "organization": "Google DeepMind",
+        "repository": "google-deepmind/alphafold",
+        "revision": "09ed0c5d5a32d794ed9f78b70906cbeaff0ef439",
+        "path": "alphafold/relax/relax.py",
+        "url": "https://github.com/google-deepmind/alphafold/blob/09ed0c5d5a32d794ed9f78b70906cbeaff0ef439/alphafold/relax/relax.py",
+        "href": "https://github.com/google-deepmind/alphafold/blob/09ed0c5d5a32d794ed9f78b70906cbeaff0ef439/alphafold/relax/relax.py"
       },
       {
         "id": "genie2_2024",
@@ -6478,6 +7534,17 @@ export const manifest = {
         "path": "src/genie3/generation/utils/feat_utils.py",
         "url": "https://github.com/aqlaboratory/genie3/blob/d77ae5ac04212ff1e8b29b585859a3244c614804/src/genie3/generation/utils/feat_utils.py",
         "href": "https://github.com/aqlaboratory/genie3/blob/d77ae5ac04212ff1e8b29b585859a3244c614804/src/genie3/generation/utils/feat_utils.py"
+      },
+      {
+        "id": "genie3_sample_dataset_registry_code",
+        "kind": "code",
+        "title": "Genie 3 generation task-source router",
+        "organization": "AQLaboratory",
+        "repository": "aqlaboratory/genie3",
+        "revision": "d77ae5ac04212ff1e8b29b585859a3244c614804",
+        "path": "src/genie3/generation/data/sample_dataset/registry.py",
+        "url": "https://github.com/aqlaboratory/genie3/blob/d77ae5ac04212ff1e8b29b585859a3244c614804/src/genie3/generation/data/sample_dataset/registry.py",
+        "href": "https://github.com/aqlaboratory/genie3/blob/d77ae5ac04212ff1e8b29b585859a3244c614804/src/genie3/generation/data/sample_dataset/registry.py"
       },
       {
         "id": "genie3_diffusion_code",
@@ -8395,9 +9462,10 @@ export const manifest = {
           "id": "feature_bundle",
           "name": "features",
           "type": "input",
-          "shape": "B x N token metadata + B x N x N pairwise masks",
+          "shape": "B x N token fields + B x A atom fields",
           "representationRef": "representations.feature_bundle",
           "scale": "mixed",
+          "glyph": "single",
           "scopeRef": "scopes.inference",
           "architectureRef": "value_sites.feature_bundle"
         },
@@ -10127,7 +11195,8 @@ export const manifest = {
             "prominence": "primary",
             "treatment": "block",
             "col": 2,
-            "row": 2
+            "row": 2,
+            "board_ref": "task_featurization"
           },
           {
             "id": "feature_bundle",
@@ -10137,7 +11206,6 @@ export const manifest = {
             "prominence": "secondary",
             "treatment": "compact",
             "density": "compact",
-            "glyph": "pair",
             "col": 3,
             "row": 2
           },
@@ -10292,7 +11360,7 @@ export const manifest = {
             "id": "projection_b02be531dc86",
             "from": "design_request",
             "to": "feature_builder",
-            "projection": "direct",
+            "projection": "boundary",
             "origin": "canonical",
             "kind": "data_flow",
             "relation_path": [
@@ -10352,7 +11420,7 @@ export const manifest = {
             "id": "projection_58ea1b4c269a",
             "from": "feature_builder",
             "to": "feature_bundle",
-            "projection": "direct",
+            "projection": "boundary",
             "origin": "canonical",
             "kind": "data_flow",
             "relation_path": [
@@ -10495,14 +11563,22 @@ export const manifest = {
           }
         ],
         "classifications": {
+          "modules.binder_target_feature_assembler": "collapsed:modules.feature_builder",
+          "modules.binder_tokens": "collapsed:modules.feature_builder",
           "modules.coordinate_initializer": "collapsed:modules.diffusion_sampler",
           "modules.ddim_update": "collapsed:modules.diffusion_sampler",
           "modules.diffusion_sampler": "visible",
+          "modules.feature_batch_assembler": "collapsed:modules.feature_builder",
           "modules.feature_builder": "visible",
           "modules.frame_update": "collapsed:modules.diffusion_sampler",
           "modules.frenet_frame_builder": "excluded",
           "modules.global_token_adapter": "collapsed:modules.diffusion_sampler",
           "modules.invariant_point_attention": "excluded",
+          "modules.motif_conditioned_tokens": "collapsed:modules.feature_builder",
+          "modules.motif_feature_assembler": "collapsed:modules.feature_builder",
+          "modules.motif_featurizer": "collapsed:modules.feature_builder",
+          "modules.motif_problem_parser": "collapsed:modules.feature_builder",
+          "modules.motif_scaffold_tokens": "collapsed:modules.feature_builder",
           "modules.noise_readout": "collapsed:modules.diffusion_sampler",
           "modules.pair_biased_attention_update": "collapsed:modules.diffusion_sampler",
           "modules.pair_feature_embedder": "excluded",
@@ -10513,8 +11589,16 @@ export const manifest = {
           "modules.single_feature_embedder": "excluded",
           "modules.single_to_pair_update": "collapsed:modules.diffusion_sampler",
           "modules.structure_transition": "collapsed:modules.diffusion_sampler",
+          "modules.target_conditioned_tokens": "collapsed:modules.feature_builder",
+          "modules.target_featurizer": "collapsed:modules.feature_builder",
+          "modules.target_problem_parser": "collapsed:modules.feature_builder",
+          "modules.task_source_router": "collapsed:modules.feature_builder",
           "modules.timestep_controller": "collapsed:modules.diffusion_sampler",
           "modules.triangle_multiplication_stack": "collapsed:modules.diffusion_sampler",
+          "modules.unconditional_featurizer": "collapsed:modules.feature_builder",
+          "modules.unconditional_frame_indices": "collapsed:modules.feature_builder",
+          "modules.unconditional_placeholder_initializer": "collapsed:modules.feature_builder",
+          "modules.unconditional_token_layout": "collapsed:modules.feature_builder",
           "value_sites.coordinate_prediction": "collapsed:modules.diffusion_sampler",
           "value_sites.current_coordinates": "collapsed:modules.diffusion_sampler",
           "value_sites.current_frames": "collapsed:modules.diffusion_sampler",
@@ -15686,7 +16770,7 @@ export const manifest = {
             "instance_fact_ref": "block_instances.structure_ipa.ports.mask",
             "kind": "representation",
             "rep_ref": "feature_bundle",
-            "shape": "B x N token metadata + B x N x N pairwise masks",
+            "shape": "B x N token fields + B x A atom fields",
             "scale": "mixed",
             "glyph": "vector",
             "notation": "m",
@@ -17989,6 +19073,1095 @@ export const manifest = {
             ]
           }
         ]
+      },
+      {
+        "id": "task_featurization",
+        "title": "Task Featurization",
+        "summary": "Exactly one configured task source selects the unconditional, motif, or target path for a run. Unknown designed regions stay C-alpha tokens; Atom14 selectively expands known motif or target-interface residues before all paths converge on one model-ready feature batch.",
+        "subject_ref": "modules.feature_builder",
+        "expansion_depth": 1,
+        "grid": {
+          "columns": 5,
+          "rows": 3,
+          "column_sizing": "content",
+          "row_sizing": "content",
+          "row_gap": 28
+        },
+        "nodes": [
+          {
+            "id": "value_design_request",
+            "ref": "value_sites.design_request",
+            "prominence": "context",
+            "treatment": "chip",
+            "density": "micro",
+            "col": 1,
+            "row": 2
+          },
+          {
+            "id": "module_task_source_router",
+            "ref": "modules.task_source_router",
+            "prominence": "primary",
+            "treatment": "block",
+            "col": 2,
+            "row": 2,
+            "role": "choose exactly one task path",
+            "detail": "Based on the requested task, Genie 3 uses the corresponding featurization adapter: unconditional generation, motif scaffolding, or binder design."
+          },
+          {
+            "id": "module_target_featurizer",
+            "ref": "modules.target_featurizer",
+            "prominence": "primary",
+            "treatment": "block",
+            "col": 3,
+            "row": 1,
+            "board_ref": "binder_design_task_featurization",
+            "role": "unknown binder plus known target",
+            "detail": "Used when source is target. The binder begins as unknown C-alpha tokens, while the target supplies conditioned C-alpha structure. In Atom14 mode, selected target-interface residues additionally expand into side-chain heavy-atom tokens."
+          },
+          {
+            "id": "module_motif_featurizer",
+            "ref": "modules.motif_featurizer",
+            "prominence": "primary",
+            "treatment": "block",
+            "col": 3,
+            "row": 2,
+            "board_ref": "motif_task_featurization",
+            "role": "unknown scaffold plus known motif",
+            "detail": "Used when source is motif. Scaffold residues remain unknown C-alpha tokens. Known motif residues carry sequence and coordinate conditioning; in Atom14 mode they expand into C-alpha plus available side-chain heavy-atom tokens."
+          },
+          {
+            "id": "module_unconditional_featurizer",
+            "ref": "modules.unconditional_featurizer",
+            "prominence": "primary",
+            "treatment": "block",
+            "col": 3,
+            "row": 3,
+            "board_ref": "unconditional_task_featurization",
+            "role": "length to unknown C-alpha slots",
+            "detail": "Used when source is unconditional. Every requested residue becomes one active C-alpha token with unknown identity, placeholder conditioning coordinates, and sequence, structure, and interface masks disabled. Atom14 does not expand these unknown residues."
+          },
+          {
+            "id": "module_feature_batch_assembler",
+            "ref": "modules.feature_batch_assembler",
+            "prominence": "primary",
+            "treatment": "block",
+            "col": 4,
+            "row": 2,
+            "role": "shared feature-batch interface",
+            "detail": "Whichever task path was selected emits the same feature vocabulary. This stage pads token and atom axes, stacks samples, and prepares typed tensors for the sampler."
+          },
+          {
+            "id": "value_feature_bundle",
+            "ref": "value_sites.feature_bundle",
+            "prominence": "secondary",
+            "treatment": "compact",
+            "density": "compact",
+            "col": 5,
+            "row": 2,
+            "role": "token and atom conditioning fields",
+            "detail": "The batch contains token/atom identities, known values, and one-dimensional conditioning masks. Pairwise masks and pair features are derived later inside the pair embedder."
+          }
+        ],
+        "parent": "design_overview",
+        "edge_overrides": [
+          {
+            "match": {
+              "relation_ref": "relations.design_request_enters_feature_builder"
+            },
+            "label": "source + constraints",
+            "connection": {
+              "title": "Generation specification",
+              "role": "task selection input",
+              "inside": "The source field chooses one feature path while its length, motif, or target metadata supplies that path's constraints."
+            }
+          },
+          {
+            "match": {
+              "relation_ref": "relations.task_router_dispatches_unconditional_request"
+            },
+            "label": "source: unconditional",
+            "connection": {
+              "title": "Unconditional path",
+              "role": "length-only request",
+              "inside": "The router selects this path when the dataset source is unconditional and passes the requested length range."
+            }
+          },
+          {
+            "match": {
+              "relation_ref": "relations.task_router_dispatches_motif_request"
+            },
+            "label": "source: motif",
+            "connection": {
+              "title": "Motif-scaffolding path",
+              "role": "motif-constrained request",
+              "inside": "The router selects this path for motif problem files containing scaffold ranges and one or more structural motif segments."
+            }
+          },
+          {
+            "match": {
+              "relation_ref": "relations.task_router_dispatches_target_request"
+            },
+            "label": "source: target",
+            "connection": {
+              "title": "Binder-design path",
+              "role": "target-constrained request",
+              "inside": "The router selects this path for target problems that specify a binder length or framework plus target chains and interface annotations."
+            }
+          },
+          {
+            "match": {
+              "relation_ref": "relations.unconditional_featurizer_produces_sample_features"
+            },
+            "label": "unknown C-alpha tokens",
+            "connection": {
+              "title": "Unconditional sample features",
+              "role": "unconditioned token layout",
+              "inside": "The featurizer creates one unknown C-alpha token per requested residue and leaves sequence, structure, and interface masks unset."
+            }
+          },
+          {
+            "match": {
+              "relation_ref": "relations.motif_featurizer_produces_sample_features"
+            },
+            "label": "scaffold + motif features",
+            "connection": {
+              "title": "Motif-conditioned sample features",
+              "role": "mixed generated and known regions",
+              "inside": "Unknown scaffold residues stay C-alpha tokens while known motif residues carry sequence and coordinate masks and may be atomized."
+            }
+          },
+          {
+            "match": {
+              "relation_ref": "relations.target_featurizer_produces_sample_features"
+            },
+            "label": "binder + target features",
+            "connection": {
+              "title": "Target-conditioned sample features",
+              "role": "binder and target context",
+              "inside": "Unknown binder tokens are concatenated with conditioned target-chain tokens, including the selected target-interface mask."
+            }
+          },
+          {
+            "match": {
+              "relation_ref": "relations.feature_builder_produces_feature_bundle"
+            },
+            "label": "pad + stack + type",
+            "connection": {
+              "title": "Model-ready feature batch",
+              "role": "shared model interface",
+              "inside": "The assembler pads token and atom fields to common lengths, stacks samples, and prepares the typed tensors consumed by sampling."
+            }
+          }
+        ],
+        "projection_mode": "derived",
+        "edges": [
+          {
+            "id": "projection_87c341459930",
+            "from": "module_feature_batch_assembler",
+            "to": "value_feature_bundle",
+            "projection": "direct",
+            "origin": "canonical",
+            "kind": "data_flow",
+            "relation_path": [
+              "relations.feature_builder_produces_feature_bundle"
+            ],
+            "provenance_hops": [
+              {
+                "relation_ref": "relations.feature_builder_produces_feature_bundle"
+              }
+            ],
+            "hidden_refs": [
+
+            ],
+            "carries": [
+              "representations.feature_bundle"
+            ],
+            "presentation": {
+              "label": "pad + stack + type",
+              "connection": {
+                "title": "Model-ready feature batch",
+                "role": "shared model interface",
+                "inside": "The assembler pads token and atom fields to common lengths, stacks samples, and prepares the typed tensors consumed by sampling."
+              }
+            }
+          },
+          {
+            "id": "projection_99a624bbf428",
+            "from": "module_motif_featurizer",
+            "to": "module_feature_batch_assembler",
+            "projection": "direct",
+            "origin": "canonical",
+            "kind": "data_flow",
+            "relation_path": [
+              "relations.motif_featurizer_produces_sample_features"
+            ],
+            "provenance_hops": [
+              {
+                "relation_ref": "relations.motif_featurizer_produces_sample_features"
+              }
+            ],
+            "hidden_refs": [
+
+            ],
+            "carries": [
+              "representations.sample_feature_dictionary"
+            ],
+            "presentation": {
+              "label": "scaffold + motif features",
+              "connection": {
+                "title": "Motif-conditioned sample features",
+                "role": "mixed generated and known regions",
+                "inside": "Unknown scaffold residues stay C-alpha tokens while known motif residues carry sequence and coordinate masks and may be atomized."
+              }
+            }
+          },
+          {
+            "id": "projection_144b5f8496fb",
+            "from": "module_target_featurizer",
+            "to": "module_feature_batch_assembler",
+            "projection": "direct",
+            "origin": "canonical",
+            "kind": "data_flow",
+            "relation_path": [
+              "relations.target_featurizer_produces_sample_features"
+            ],
+            "provenance_hops": [
+              {
+                "relation_ref": "relations.target_featurizer_produces_sample_features"
+              }
+            ],
+            "hidden_refs": [
+
+            ],
+            "carries": [
+              "representations.sample_feature_dictionary"
+            ],
+            "presentation": {
+              "label": "binder + target features",
+              "connection": {
+                "title": "Target-conditioned sample features",
+                "role": "binder and target context",
+                "inside": "Unknown binder tokens are concatenated with conditioned target-chain tokens, including the selected target-interface mask."
+              }
+            }
+          },
+          {
+            "id": "projection_7a3cc88b526c",
+            "from": "module_task_source_router",
+            "to": "module_motif_featurizer",
+            "projection": "direct",
+            "origin": "canonical",
+            "kind": "data_flow",
+            "relation_path": [
+              "relations.task_router_dispatches_motif_request"
+            ],
+            "provenance_hops": [
+              {
+                "relation_ref": "relations.task_router_dispatches_motif_request"
+              }
+            ],
+            "hidden_refs": [
+
+            ],
+            "carries": [
+              "representations.design_request"
+            ],
+            "presentation": {
+              "label": "source: motif",
+              "connection": {
+                "title": "Motif-scaffolding path",
+                "role": "motif-constrained request",
+                "inside": "The router selects this path for motif problem files containing scaffold ranges and one or more structural motif segments."
+              }
+            }
+          },
+          {
+            "id": "projection_2a088d7923f2",
+            "from": "module_task_source_router",
+            "to": "module_target_featurizer",
+            "projection": "direct",
+            "origin": "canonical",
+            "kind": "data_flow",
+            "relation_path": [
+              "relations.task_router_dispatches_target_request"
+            ],
+            "provenance_hops": [
+              {
+                "relation_ref": "relations.task_router_dispatches_target_request"
+              }
+            ],
+            "hidden_refs": [
+
+            ],
+            "carries": [
+              "representations.design_request"
+            ],
+            "presentation": {
+              "label": "source: target",
+              "connection": {
+                "title": "Binder-design path",
+                "role": "target-constrained request",
+                "inside": "The router selects this path for target problems that specify a binder length or framework plus target chains and interface annotations."
+              }
+            }
+          },
+          {
+            "id": "projection_dd9634608563",
+            "from": "module_task_source_router",
+            "to": "module_unconditional_featurizer",
+            "projection": "direct",
+            "origin": "canonical",
+            "kind": "data_flow",
+            "relation_path": [
+              "relations.task_router_dispatches_unconditional_request"
+            ],
+            "provenance_hops": [
+              {
+                "relation_ref": "relations.task_router_dispatches_unconditional_request"
+              }
+            ],
+            "hidden_refs": [
+
+            ],
+            "carries": [
+              "representations.design_request"
+            ],
+            "presentation": {
+              "label": "source: unconditional",
+              "connection": {
+                "title": "Unconditional path",
+                "role": "length-only request",
+                "inside": "The router selects this path when the dataset source is unconditional and passes the requested length range."
+              }
+            }
+          },
+          {
+            "id": "projection_88cf9d4ab1a8",
+            "from": "module_unconditional_featurizer",
+            "to": "module_feature_batch_assembler",
+            "projection": "direct",
+            "origin": "canonical",
+            "kind": "data_flow",
+            "relation_path": [
+              "relations.unconditional_featurizer_produces_sample_features"
+            ],
+            "provenance_hops": [
+              {
+                "relation_ref": "relations.unconditional_featurizer_produces_sample_features"
+              }
+            ],
+            "hidden_refs": [
+
+            ],
+            "carries": [
+              "representations.sample_feature_dictionary"
+            ],
+            "presentation": {
+              "label": "unknown C-alpha tokens",
+              "connection": {
+                "title": "Unconditional sample features",
+                "role": "unconditioned token layout",
+                "inside": "The featurizer creates one unknown C-alpha token per requested residue and leaves sequence, structure, and interface masks unset."
+              }
+            }
+          },
+          {
+            "id": "projection_06cfac09bece",
+            "from": "value_design_request",
+            "to": "module_task_source_router",
+            "projection": "direct",
+            "origin": "canonical",
+            "kind": "data_flow",
+            "relation_path": [
+              "relations.design_request_enters_feature_builder"
+            ],
+            "provenance_hops": [
+              {
+                "relation_ref": "relations.design_request_enters_feature_builder"
+              }
+            ],
+            "hidden_refs": [
+
+            ],
+            "carries": [
+              "representations.design_request"
+            ],
+            "presentation": {
+              "label": "source + constraints",
+              "connection": {
+                "title": "Generation specification",
+                "role": "task selection input",
+                "inside": "The source field chooses one feature path while its length, motif, or target metadata supplies that path's constraints."
+              }
+            }
+          }
+        ],
+        "classifications": {
+          "modules.binder_target_feature_assembler": "collapsed:modules.target_featurizer",
+          "modules.binder_tokens": "collapsed:modules.target_featurizer",
+          "modules.feature_batch_assembler": "visible",
+          "modules.motif_conditioned_tokens": "collapsed:modules.motif_featurizer",
+          "modules.motif_feature_assembler": "collapsed:modules.motif_featurizer",
+          "modules.motif_featurizer": "visible",
+          "modules.motif_problem_parser": "collapsed:modules.motif_featurizer",
+          "modules.motif_scaffold_tokens": "collapsed:modules.motif_featurizer",
+          "modules.target_conditioned_tokens": "collapsed:modules.target_featurizer",
+          "modules.target_featurizer": "visible",
+          "modules.target_problem_parser": "collapsed:modules.target_featurizer",
+          "modules.task_source_router": "visible",
+          "modules.unconditional_featurizer": "visible",
+          "modules.unconditional_frame_indices": "collapsed:modules.unconditional_featurizer",
+          "modules.unconditional_placeholder_initializer": "collapsed:modules.unconditional_featurizer",
+          "modules.unconditional_token_layout": "collapsed:modules.unconditional_featurizer",
+          "value_sites.design_request": "visible",
+          "value_sites.feature_bundle": "visible"
+        },
+        "projectionMode": "derived"
+      },
+      {
+        "id": "unconditional_task_featurization",
+        "title": "Unconditional Generation Task Featurization",
+        "summary": "Illustrative example: a requested length of 100 becomes 100 active C-alpha coordinate slots with unknown residue identities and all conditioning masks disabled. Their shape is later used to initialize the Gaussian coordinate state.",
+        "parent": "task_featurization",
+        "subject_ref": "modules.unconditional_featurizer",
+        "expansion_depth": 1,
+        "grid": {
+          "columns": 3,
+          "rows": 1,
+          "column_sizing": "content",
+          "row_sizing": "content"
+        },
+        "nodes": [
+          {
+            "id": "module_unconditional_token_layout",
+            "ref": "modules.unconditional_token_layout",
+            "prominence": "primary",
+            "treatment": "block",
+            "col": 1,
+            "row": 1
+          },
+          {
+            "id": "module_unconditional_placeholder_initializer",
+            "ref": "modules.unconditional_placeholder_initializer",
+            "prominence": "primary",
+            "treatment": "block",
+            "col": 2,
+            "row": 1
+          },
+          {
+            "id": "module_unconditional_frame_indices",
+            "ref": "modules.unconditional_frame_indices",
+            "prominence": "primary",
+            "treatment": "block",
+            "col": 3,
+            "row": 1
+          }
+        ],
+        "exclude": [
+          {
+            "ref": "modules.task_source_router",
+            "reason": "The parent task-featurization board owns selection of the unconditional task adapter."
+          },
+          {
+            "ref": "modules.feature_batch_assembler",
+            "reason": "The parent task-featurization board owns convergence into the shared batch assembler."
+          }
+        ],
+        "edge_overrides": [
+          {
+            "match": {
+              "relation_ref": "relations.unconditional_layout_initializes_unknown_features"
+            },
+            "label": "active C-alpha slots",
+            "connection": {
+              "title": "Unknown feature initialization",
+              "role": "establish generated positions",
+              "inside": "Each active token receives an unknown residue slot, a placeholder coordinate field, and disabled sequence, structure, and interface conditioning masks."
+            }
+          },
+          {
+            "match": {
+              "relation_ref": "relations.unconditional_unknown_features_derive_frame_indices"
+            },
+            "label": "token + frame indices",
+            "connection": {
+              "title": "Frame-index metadata",
+              "role": "prepare later frame construction",
+              "inside": "Neighbor indices and validity masks describe where local frames can be reconstructed after noisy coordinates are available."
+            }
+          }
+        ],
+        "projection_mode": "derived",
+        "edges": [
+          {
+            "id": "projection_d239593fa3c3",
+            "from": "module_unconditional_placeholder_initializer",
+            "to": "module_unconditional_frame_indices",
+            "projection": "direct",
+            "origin": "canonical",
+            "kind": "data_flow",
+            "relation_path": [
+              "relations.unconditional_unknown_features_derive_frame_indices"
+            ],
+            "provenance_hops": [
+              {
+                "relation_ref": "relations.unconditional_unknown_features_derive_frame_indices"
+              }
+            ],
+            "hidden_refs": [
+
+            ],
+            "carries": [
+              "representations.sample_feature_dictionary"
+            ],
+            "presentation": {
+              "label": "token + frame indices",
+              "connection": {
+                "title": "Frame-index metadata",
+                "role": "prepare later frame construction",
+                "inside": "Neighbor indices and validity masks describe where local frames can be reconstructed after noisy coordinates are available."
+              }
+            }
+          },
+          {
+            "id": "projection_949fc34e4d27",
+            "from": "module_unconditional_token_layout",
+            "to": "module_unconditional_placeholder_initializer",
+            "projection": "direct",
+            "origin": "canonical",
+            "kind": "data_flow",
+            "relation_path": [
+              "relations.unconditional_layout_initializes_unknown_features"
+            ],
+            "provenance_hops": [
+              {
+                "relation_ref": "relations.unconditional_layout_initializes_unknown_features"
+              }
+            ],
+            "hidden_refs": [
+
+            ],
+            "carries": [
+              "representations.sample_feature_dictionary"
+            ],
+            "presentation": {
+              "label": "active C-alpha slots",
+              "connection": {
+                "title": "Unknown feature initialization",
+                "role": "establish generated positions",
+                "inside": "Each active token receives an unknown residue slot, a placeholder coordinate field, and disabled sequence, structure, and interface conditioning masks."
+              }
+            }
+          }
+        ],
+        "classifications": {
+          "modules.feature_batch_assembler": "excluded",
+          "modules.task_source_router": "excluded",
+          "modules.unconditional_frame_indices": "visible",
+          "modules.unconditional_placeholder_initializer": "visible",
+          "modules.unconditional_token_layout": "visible"
+        },
+        "projectionMode": "derived"
+      },
+      {
+        "id": "motif_task_featurization",
+        "title": "Motif Scaffolding Task Featurization",
+        "summary": "Illustrative example: 20 scaffold residues, motif segment A1, then 30 scaffold residues. The 50 designed residues remain unknown C-alpha tokens; A1 carries known sequence and coordinates and can selectively atomize in Atom14 mode.",
+        "parent": "task_featurization",
+        "subject_ref": "modules.motif_featurizer",
+        "expansion_depth": 1,
+        "grid": {
+          "columns": 3,
+          "rows": 2,
+          "column_sizing": "content",
+          "row_sizing": "content",
+          "row_gap": 28
+        },
+        "reference_panels": [
+          {
+            "id": "authors_partial_atomization",
+            "title": "Authors' partial-atomization diagram",
+            "asset": "../../assets/reference-panels/genie3/figure_1_partial_atomization.png",
+            "alt": "Author diagram titled Partial Atomization. Motif scaffolding places an atomized known motif between unknown C-alpha scaffold segments; binder design places an atomized target interface beside an unknown binder.",
+            "caption": "Figure 1 shows the same task distinction as this board—known motif or target-interface residues may expose side-chain atoms, while designed regions remain unknown C-alpha tokens.",
+            "source_ref": "genie3_2026",
+            "locator": "Figure 1, Partial Atomization panel",
+            "license_note": "Cropped from Lin et al. (2026), licensed CC BY 4.0.",
+            "position": "right"
+          }
+        ],
+        "nodes": [
+          {
+            "id": "module_motif_problem_parser",
+            "ref": "modules.motif_problem_parser",
+            "prominence": "primary",
+            "treatment": "block",
+            "col": 1,
+            "row": 2
+          },
+          {
+            "id": "module_motif_scaffold_tokens",
+            "ref": "modules.motif_scaffold_tokens",
+            "prominence": "primary",
+            "treatment": "block",
+            "col": 2,
+            "row": 1
+          },
+          {
+            "id": "module_motif_conditioned_tokens",
+            "ref": "modules.motif_conditioned_tokens",
+            "prominence": "primary",
+            "treatment": "block",
+            "col": 2,
+            "row": 2
+          },
+          {
+            "id": "module_motif_feature_assembler",
+            "ref": "modules.motif_feature_assembler",
+            "prominence": "primary",
+            "treatment": "block",
+            "col": 3,
+            "row": 2
+          }
+        ],
+        "exclude": [
+          {
+            "ref": "modules.task_source_router",
+            "reason": "The parent task-featurization board owns selection of the motif-scaffolding task adapter."
+          },
+          {
+            "ref": "modules.feature_batch_assembler",
+            "reason": "The parent task-featurization board owns convergence into the shared batch assembler."
+          }
+        ],
+        "edge_overrides": [
+          {
+            "match": {
+              "relation_ref": "relations.motif_parser_defines_scaffold_layout"
+            },
+            "label": "scaffold lengths",
+            "connection": {
+              "title": "Scaffold segments",
+              "role": "regions to design",
+              "inside": "Numeric layout segments specify how many unknown C-alpha residues appear before, between, or after the known motifs."
+            }
+          },
+          {
+            "match": {
+              "relation_ref": "relations.motif_parser_selects_conditioned_segments"
+            },
+            "label": "known motif segments",
+            "connection": {
+              "title": "Motif segments",
+              "role": "structural constraints",
+              "inside": "Named motif segments select the residue identities and coordinates that remain available as conditioning context."
+            }
+          },
+          {
+            "match": {
+              "relation_ref": "relations.motif_scaffold_tokens_enter_assembler"
+            },
+            "label": "unknown C-alpha tokens",
+            "connection": {
+              "title": "Generated scaffold features",
+              "role": "unknown design regions",
+              "inside": "Scaffold tokens carry their sequence positions but expose neither residue identity nor structural coordinates as conditioning."
+            }
+          },
+          {
+            "match": {
+              "relation_ref": "relations.motif_conditioned_tokens_enter_assembler"
+            },
+            "label": "conditioned motif tokens",
+            "connection": {
+              "title": "Known motif features",
+              "role": "sequence and structure context",
+              "inside": "Motif tokens carry known identities and coordinates; Atom14 mode selectively adds available side-chain heavy-atom tokens."
+            }
+          }
+        ],
+        "projection_mode": "derived",
+        "edges": [
+          {
+            "id": "projection_9a5015b24992",
+            "from": "module_motif_conditioned_tokens",
+            "to": "module_motif_feature_assembler",
+            "projection": "direct",
+            "origin": "canonical",
+            "kind": "data_flow",
+            "relation_path": [
+              "relations.motif_conditioned_tokens_enter_assembler"
+            ],
+            "provenance_hops": [
+              {
+                "relation_ref": "relations.motif_conditioned_tokens_enter_assembler"
+              }
+            ],
+            "hidden_refs": [
+
+            ],
+            "carries": [
+              "representations.sample_feature_dictionary"
+            ],
+            "presentation": {
+              "label": "conditioned motif tokens",
+              "connection": {
+                "title": "Known motif features",
+                "role": "sequence and structure context",
+                "inside": "Motif tokens carry known identities and coordinates; Atom14 mode selectively adds available side-chain heavy-atom tokens."
+              }
+            }
+          },
+          {
+            "id": "projection_d84b034ac4e8",
+            "from": "module_motif_problem_parser",
+            "to": "module_motif_conditioned_tokens",
+            "projection": "direct",
+            "origin": "canonical",
+            "kind": "data_flow",
+            "relation_path": [
+              "relations.motif_parser_selects_conditioned_segments"
+            ],
+            "provenance_hops": [
+              {
+                "relation_ref": "relations.motif_parser_selects_conditioned_segments"
+              }
+            ],
+            "hidden_refs": [
+
+            ],
+            "carries": [
+              "representations.design_request"
+            ],
+            "presentation": {
+              "label": "known motif segments",
+              "connection": {
+                "title": "Motif segments",
+                "role": "structural constraints",
+                "inside": "Named motif segments select the residue identities and coordinates that remain available as conditioning context."
+              }
+            }
+          },
+          {
+            "id": "projection_665470c20356",
+            "from": "module_motif_problem_parser",
+            "to": "module_motif_scaffold_tokens",
+            "projection": "direct",
+            "origin": "canonical",
+            "kind": "data_flow",
+            "relation_path": [
+              "relations.motif_parser_defines_scaffold_layout"
+            ],
+            "provenance_hops": [
+              {
+                "relation_ref": "relations.motif_parser_defines_scaffold_layout"
+              }
+            ],
+            "hidden_refs": [
+
+            ],
+            "carries": [
+              "representations.design_request"
+            ],
+            "presentation": {
+              "label": "scaffold lengths",
+              "connection": {
+                "title": "Scaffold segments",
+                "role": "regions to design",
+                "inside": "Numeric layout segments specify how many unknown C-alpha residues appear before, between, or after the known motifs."
+              }
+            }
+          },
+          {
+            "id": "projection_9920b5a00944",
+            "from": "module_motif_scaffold_tokens",
+            "to": "module_motif_feature_assembler",
+            "projection": "direct",
+            "origin": "canonical",
+            "kind": "data_flow",
+            "relation_path": [
+              "relations.motif_scaffold_tokens_enter_assembler"
+            ],
+            "provenance_hops": [
+              {
+                "relation_ref": "relations.motif_scaffold_tokens_enter_assembler"
+              }
+            ],
+            "hidden_refs": [
+
+            ],
+            "carries": [
+              "representations.sample_feature_dictionary"
+            ],
+            "presentation": {
+              "label": "unknown C-alpha tokens",
+              "connection": {
+                "title": "Generated scaffold features",
+                "role": "unknown design regions",
+                "inside": "Scaffold tokens carry their sequence positions but expose neither residue identity nor structural coordinates as conditioning."
+              }
+            }
+          }
+        ],
+        "classifications": {
+          "modules.feature_batch_assembler": "excluded",
+          "modules.motif_conditioned_tokens": "visible",
+          "modules.motif_feature_assembler": "visible",
+          "modules.motif_problem_parser": "visible",
+          "modules.motif_scaffold_tokens": "visible",
+          "modules.task_source_router": "excluded"
+        },
+        "projectionMode": "derived"
+      },
+      {
+        "id": "binder_design_task_featurization",
+        "title": "Binder Design Task Featurization",
+        "summary": "Illustrative example: a 100-residue binder request plus a target PDB and interface list becomes 100 unknown binder C-alpha slots followed by conditioned target tokens; Atom14 selectively expands the marked target-interface residues.",
+        "parent": "task_featurization",
+        "subject_ref": "modules.target_featurizer",
+        "expansion_depth": 1,
+        "grid": {
+          "columns": 3,
+          "rows": 2,
+          "column_sizing": "content",
+          "row_sizing": "content",
+          "row_gap": 28
+        },
+        "reference_panels": [
+          {
+            "id": "authors_partial_atomization",
+            "title": "Authors' partial-atomization diagram",
+            "asset": "../../assets/reference-panels/genie3/figure_1_partial_atomization.png",
+            "alt": "Author diagram titled Partial Atomization. Motif scaffolding places an atomized known motif between unknown C-alpha scaffold segments; binder design places an atomized target interface beside an unknown binder.",
+            "caption": "Figure 1 shows the same task distinction as this board—known motif or target-interface residues may expose side-chain atoms, while designed regions remain unknown C-alpha tokens.",
+            "source_ref": "genie3_2026",
+            "locator": "Figure 1, Partial Atomization panel",
+            "license_note": "Cropped from Lin et al. (2026), licensed CC BY 4.0.",
+            "position": "right"
+          }
+        ],
+        "nodes": [
+          {
+            "id": "module_target_problem_parser",
+            "ref": "modules.target_problem_parser",
+            "prominence": "primary",
+            "treatment": "block",
+            "col": 1,
+            "row": 2
+          },
+          {
+            "id": "module_binder_tokens",
+            "ref": "modules.binder_tokens",
+            "prominence": "primary",
+            "treatment": "block",
+            "col": 2,
+            "row": 1
+          },
+          {
+            "id": "module_target_conditioned_tokens",
+            "ref": "modules.target_conditioned_tokens",
+            "prominence": "primary",
+            "treatment": "block",
+            "col": 2,
+            "row": 2
+          },
+          {
+            "id": "module_binder_target_feature_assembler",
+            "ref": "modules.binder_target_feature_assembler",
+            "prominence": "primary",
+            "treatment": "block",
+            "col": 3,
+            "row": 2
+          }
+        ],
+        "exclude": [
+          {
+            "ref": "modules.task_source_router",
+            "reason": "The parent task-featurization board owns selection of the binder-design task adapter."
+          },
+          {
+            "ref": "modules.feature_batch_assembler",
+            "reason": "The parent task-featurization board owns convergence into the shared batch assembler."
+          }
+        ],
+        "edge_overrides": [
+          {
+            "match": {
+              "relation_ref": "relations.target_parser_defines_binder_request"
+            },
+            "label": "binder specification",
+            "connection": {
+              "title": "Binder region",
+              "role": "chain to design",
+              "inside": "The problem supplies either a requested binder length or a binder framework from which the generated-chain features are built."
+            }
+          },
+          {
+            "match": {
+              "relation_ref": "relations.target_parser_selects_target_interface"
+            },
+            "label": "target + interface",
+            "connection": {
+              "title": "Target context",
+              "role": "structure to bind",
+              "inside": "The target PDB supplies conditioned structure while the selected residue list marks the intended binding interface."
+            }
+          },
+          {
+            "match": {
+              "relation_ref": "relations.binder_tokens_enter_target_assembler"
+            },
+            "label": "binder features",
+            "connection": {
+              "title": "Generated binder features",
+              "role": "unknown chain",
+              "inside": "A length-based binder contributes unknown C-alpha tokens; a supplied framework may contribute its own conditioned regions."
+            }
+          },
+          {
+            "match": {
+              "relation_ref": "relations.target_tokens_enter_target_assembler"
+            },
+            "label": "conditioned target tokens",
+            "connection": {
+              "title": "Target feature context",
+              "role": "fixed structural context",
+              "inside": "Every target residue supplies conditioned C-alpha structure, and Atom14 selectively expands marked interface residues with side-chain atoms."
+            }
+          }
+        ],
+        "projection_mode": "derived",
+        "edges": [
+          {
+            "id": "projection_13f6df403970",
+            "from": "module_binder_tokens",
+            "to": "module_binder_target_feature_assembler",
+            "projection": "direct",
+            "origin": "canonical",
+            "kind": "data_flow",
+            "relation_path": [
+              "relations.binder_tokens_enter_target_assembler"
+            ],
+            "provenance_hops": [
+              {
+                "relation_ref": "relations.binder_tokens_enter_target_assembler"
+              }
+            ],
+            "hidden_refs": [
+
+            ],
+            "carries": [
+              "representations.sample_feature_dictionary"
+            ],
+            "presentation": {
+              "label": "binder features",
+              "connection": {
+                "title": "Generated binder features",
+                "role": "unknown chain",
+                "inside": "A length-based binder contributes unknown C-alpha tokens; a supplied framework may contribute its own conditioned regions."
+              }
+            }
+          },
+          {
+            "id": "projection_3ed13a7c100c",
+            "from": "module_target_conditioned_tokens",
+            "to": "module_binder_target_feature_assembler",
+            "projection": "direct",
+            "origin": "canonical",
+            "kind": "data_flow",
+            "relation_path": [
+              "relations.target_tokens_enter_target_assembler"
+            ],
+            "provenance_hops": [
+              {
+                "relation_ref": "relations.target_tokens_enter_target_assembler"
+              }
+            ],
+            "hidden_refs": [
+
+            ],
+            "carries": [
+              "representations.sample_feature_dictionary"
+            ],
+            "presentation": {
+              "label": "conditioned target tokens",
+              "connection": {
+                "title": "Target feature context",
+                "role": "fixed structural context",
+                "inside": "Every target residue supplies conditioned C-alpha structure, and Atom14 selectively expands marked interface residues with side-chain atoms."
+              }
+            }
+          },
+          {
+            "id": "projection_647615a79bd6",
+            "from": "module_target_problem_parser",
+            "to": "module_binder_tokens",
+            "projection": "direct",
+            "origin": "canonical",
+            "kind": "data_flow",
+            "relation_path": [
+              "relations.target_parser_defines_binder_request"
+            ],
+            "provenance_hops": [
+              {
+                "relation_ref": "relations.target_parser_defines_binder_request"
+              }
+            ],
+            "hidden_refs": [
+
+            ],
+            "carries": [
+              "representations.design_request"
+            ],
+            "presentation": {
+              "label": "binder specification",
+              "connection": {
+                "title": "Binder region",
+                "role": "chain to design",
+                "inside": "The problem supplies either a requested binder length or a binder framework from which the generated-chain features are built."
+              }
+            }
+          },
+          {
+            "id": "projection_453d65ce8a72",
+            "from": "module_target_problem_parser",
+            "to": "module_target_conditioned_tokens",
+            "projection": "direct",
+            "origin": "canonical",
+            "kind": "data_flow",
+            "relation_path": [
+              "relations.target_parser_selects_target_interface"
+            ],
+            "provenance_hops": [
+              {
+                "relation_ref": "relations.target_parser_selects_target_interface"
+              }
+            ],
+            "hidden_refs": [
+
+            ],
+            "carries": [
+              "representations.design_request"
+            ],
+            "presentation": {
+              "label": "target + interface",
+              "connection": {
+                "title": "Target context",
+                "role": "structure to bind",
+                "inside": "The target PDB supplies conditioned structure while the selected residue list marks the intended binding interface."
+              }
+            }
+          }
+        ],
+        "classifications": {
+          "modules.binder_target_feature_assembler": "visible",
+          "modules.binder_tokens": "visible",
+          "modules.feature_batch_assembler": "excluded",
+          "modules.target_conditioned_tokens": "visible",
+          "modules.target_problem_parser": "visible",
+          "modules.task_source_router": "excluded"
+        },
+        "projectionMode": "derived"
       }
     ]
   }

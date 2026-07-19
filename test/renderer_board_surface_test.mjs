@@ -6,6 +6,7 @@ import {
   createViewportState,
   fitViewportToBounds,
   normalizedWheelDelta,
+  pinchViewportBetween,
   surfaceResourceId,
   surfaceResourceUrl,
   zoomViewportAt,
@@ -132,6 +133,18 @@ test("zoom keeps the architecture point beneath the pointer fixed", () => {
   assert.equal(origin.y + zoomed.y + localBefore.y * zoomed.scale, point.y);
 });
 
+test("pinch scales and translates around the moving two-finger midpoint", () => {
+  const pinched = pinchViewportBetween(
+    createViewportState(),
+    [{ x: 100, y: 250 }, { x: 200, y: 250 }],
+    [{ x: 100, y: 250 }, { x: 300, y: 250 }],
+  );
+
+  assert.equal(pinched.scale, 2);
+  assert.equal(pinched.x, -100);
+  assert.equal(pinched.y, -250);
+});
+
 test("fit centers small content and respects explicit bounds origin", () => {
   const fitted = fitViewportToBounds(
     createViewportState(),
@@ -214,6 +227,37 @@ test("each bound canvas handles only its own wheel and pointer gestures", () => 
   assert.equal(second.surface.getViewport().x, beforePan.x + 30);
   assert.equal(second.surface.getViewport().y, beforePan.y + 45);
   assert(!second.canvas.classList.values.has("is-panning"));
+});
+
+test("a two-touch gesture pinches even when it begins over a node", () => {
+  const scheduler = manualScheduler();
+  const board = fakeSurface("touch", scheduler);
+  const nodeTarget = {
+    closest(selector) {
+      return selector.includes(".arch-node") ? this : null;
+    },
+  };
+  const touch = (pointerId, clientX) => ({
+    target: nodeTarget,
+    pointerType: "touch",
+    pointerId,
+    clientX,
+    clientY: 250,
+    preventDefault() {},
+  });
+
+  board.canvas.emit("pointerdown", touch(1, 100));
+  board.canvas.emit("pointerdown", touch(2, 200));
+  board.canvas.emit("pointermove", touch(2, 300));
+  scheduler.flush();
+
+  assert.equal(board.surface.getViewport().scale, 2);
+  assert.equal(board.surface.getViewport().x, -100);
+  assert.equal(board.zoomValue.textContent, "200%");
+
+  board.canvas.emit("pointerup", touch(1, 100));
+  board.canvas.emit("pointerup", touch(2, 300));
+  assert(!board.canvas.classList.values.has("is-panning"));
 });
 
 test("surface-scoped SVG resources never duplicate marker identifiers", () => {

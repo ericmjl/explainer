@@ -88,6 +88,7 @@ import {
   semanticTexFallbackParts,
   semanticTexForBinding,
 } from "./semantic-pseudocode.mjs";
+import { pinchViewportBetween } from "./board-surface.mjs";
 import { installThemeSwitcher } from "../../theme-state.mjs";
 
 const pageParams = new URLSearchParams(window.location.search);
@@ -156,6 +157,7 @@ const elements = {
   moduleLayer: document.getElementById("moduleLayer"),
   regionLayer: document.getElementById("boardRegionLayer"),
   edgeLayer: document.getElementById("edgeLayer"),
+  referencePanelLayer: document.getElementById("referencePanelLayer"),
   focusPanel: document.querySelector(".focus-panel"),
   focusHeader: document.getElementById("focusHeader"),
   focusEyebrow: document.getElementById("focusEyebrow"),
@@ -258,7 +260,11 @@ const viewport = {
   startClientY: 0,
   startX: 0,
   startY: 0,
+  pointerId: null,
 };
+const canvasTouchPointers = new Map();
+let canvasPinch = null;
+let suppressCanvasClicksUntil = 0;
 
 function render() {
   installThemeSwitcher(document.getElementById("rendererThemeSwitcher"));
@@ -2292,6 +2298,7 @@ function renderBoard() {
   elements.canvas.dataset.boardId = board.id;
   elements.canvas.setAttribute("aria-label", `${board.title} architecture map`);
   elements.canvas.classList.toggle("is-root-board", state.boardStack.length === 1);
+  renderReferencePanels(board);
 
   renderAudienceNavigation();
   state.modelMapDirty = true;
@@ -2346,6 +2353,71 @@ function renderScaleLanes(board) {
     label.textContent = lane.label || humanizeRef(lane.id);
     guide.appendChild(label);
     elements.representationLaneLayer.appendChild(guide);
+  }
+}
+
+function renderReferencePanels(board) {
+  const panels = Array.isArray(board.reference_panels) ? board.reference_panels : [];
+  elements.referencePanelLayer.replaceChildren();
+  elements.referencePanelLayer.hidden = panels.length === 0;
+  elements.canvas.classList.toggle("has-reference-panels", panels.length > 0);
+
+  for (const panel of panels) {
+    const figure = document.createElement("figure");
+    figure.className = "reference-panel";
+    figure.dataset.referencePanelId = panel.id;
+
+    const heading = document.createElement("div");
+    heading.className = "reference-panel-heading";
+    const eyebrow = document.createElement("span");
+    eyebrow.className = "reference-panel-eyebrow";
+    eyebrow.textContent = "Published reference";
+    const title = document.createElement("strong");
+    title.textContent = panel.title;
+    heading.append(eyebrow, title);
+    figure.appendChild(heading);
+
+    const asset = audienceHref(panel.asset);
+    if (asset) {
+      const imageLink = document.createElement("a");
+      imageLink.className = "reference-panel-image-link";
+      imageLink.href = asset;
+      imageLink.target = "_blank";
+      imageLink.rel = "noreferrer";
+      imageLink.setAttribute("aria-label", `Open reference image: ${panel.title}`);
+      const image = document.createElement("img");
+      image.src = asset;
+      image.alt = panel.alt;
+      image.loading = "eager";
+      image.decoding = "async";
+      imageLink.appendChild(image);
+      figure.appendChild(imageLink);
+    }
+
+    const caption = document.createElement("figcaption");
+    caption.className = "reference-panel-caption";
+    caption.textContent = panel.caption;
+    figure.appendChild(caption);
+
+    const source = bibliographySource(panel.source_ref);
+    const sourceHref = audienceHref(source?.href || source?.url);
+    const citation = document.createElement(sourceHref ? "a" : "span");
+    citation.className = "reference-panel-citation";
+    citation.textContent = [source?.title || panel.source_ref, panel.locator]
+      .filter(Boolean)
+      .join(" · ");
+    if (sourceHref) {
+      citation.href = sourceHref;
+      citation.target = "_blank";
+      citation.rel = "noreferrer";
+    }
+    figure.appendChild(citation);
+
+    const license = document.createElement("small");
+    license.className = "reference-panel-license";
+    license.textContent = panel.license_note;
+    figure.appendChild(license);
+    elements.referencePanelLayer.appendChild(figure);
   }
 }
 
@@ -2508,7 +2580,7 @@ function fitViewport(width, height) {
 function boardViewportAvailableSize(canvasRect, baseX, baseY) {
   const lowerChromeReserve = modelMap?.offsetParent ? modelMap.offsetHeight + 42 : 74;
   return {
-    availableW: Math.max(120, canvasRect.width - baseX * 2),
+    availableW: Math.max(120, elements.moduleLayer.offsetWidth || canvasRect.width - baseX * 2),
     availableH: Math.max(120, canvasRect.height - baseY - lowerChromeReserve),
   };
 }
@@ -5027,6 +5099,7 @@ function ensurePanZoom() {
   elements.canvas.addEventListener("pointermove", onCanvasPointerMove);
   elements.canvas.addEventListener("pointerup", endPan);
   elements.canvas.addEventListener("pointercancel", endPan);
+  elements.canvas.addEventListener("click", onCanvasClickCapture, true);
 }
 
 function onCanvasControlClick(event) {
@@ -5070,22 +5143,117 @@ function normalizedWheelDelta(event) {
 }
 
 function onCanvasPointerDown(event) {
+  if (event.pointerType === "touch") {
+    if (event.target.closest(".board-chrome")) return;
+    canvasTouchPointers.set(event.pointerId, {
+      clientX: event.clientX,
+      clientY: event.clientY,
+    });
+    if (canvasTouchPointers.size === 2) {
+      event.preventDefault();
+      beginCanvasPinch(event);
+      return;
+    }
+    if (canvasTouchPointers.size > 2) return;
+    if (event.target.closest(".arch-node, .arch-rep, .edge-hit")) return;
+    beginCanvasPan(event);
+    return;
+  }
   if (event.button !== 0 && event.button !== 1) return;
   if (event.target.closest(".arch-node, .arch-rep, .edge-hit, .board-chrome")) return;
+  beginCanvasPan(event);
+}
+
+function beginCanvasPan(event) {
   if (state.selection) focusOverview();
   hideCanvasTooltip();
   viewport.isPanning = true;
+  viewport.pointerId = event.pointerId;
   state.userMovedViewport = true;
   viewport.startClientX = event.clientX;
   viewport.startClientY = event.clientY;
   viewport.startX = viewport.x;
   viewport.startY = viewport.y;
   elements.canvas.classList.add("is-panning");
-  elements.canvas.setPointerCapture(event.pointerId);
+  captureCanvasPointer(event.pointerId);
+}
+
+function canvasPoint(pointer) {
+  const rect = elements.canvas.getBoundingClientRect();
+  return {
+    x: pointer.clientX - rect.left,
+    y: pointer.clientY - rect.top,
+  };
+}
+
+function captureCanvasPointer(pointerId) {
+  try {
+    elements.canvas.setPointerCapture(pointerId);
+  } catch (_error) {
+    // Pointer capture is an optimization; bubbling events remain sufficient.
+  }
+}
+
+function releaseCanvasPointer(pointerId) {
+  try {
+    if (elements.canvas.hasPointerCapture(pointerId)) {
+      elements.canvas.releasePointerCapture(pointerId);
+    }
+  } catch (_error) {
+    // The browser may implicitly release a touch before pointerup is handled.
+  }
+}
+
+function beginCanvasPinch(event) {
+  const entries = Array.from(canvasTouchPointers.entries()).slice(0, 2);
+  if (entries.length < 2) return;
+  if (state.selection) focusOverview();
+  closeQuestionMenu({ restoreFocus: true });
+  hideCanvasTooltip();
+  viewport.isPanning = false;
+  viewport.pointerId = null;
+  canvasPinch = {
+    pointerIds: entries.map(([pointerId]) => pointerId),
+    viewport: { ...viewport },
+    points: entries.map(([, pointer]) => canvasPoint(pointer)),
+  };
+  suppressCanvasClicksUntil = Number.POSITIVE_INFINITY;
+  state.userMovedViewport = true;
+  elements.canvas.classList.add("is-panning");
+  canvasPinch.pointerIds.forEach(captureCanvasPointer);
 }
 
 function onCanvasPointerMove(event) {
+  if (event.pointerType === "touch" && canvasTouchPointers.has(event.pointerId)) {
+    canvasTouchPointers.set(event.pointerId, {
+      clientX: event.clientX,
+      clientY: event.clientY,
+    });
+    if (canvasPinch) {
+      const currentPoints = canvasPinch.pointerIds.map(
+        (pointerId) => canvasTouchPointers.get(pointerId),
+      );
+      if (currentPoints.every(Boolean)) {
+        event.preventDefault();
+        const next = pinchViewportBetween(
+          canvasPinch.viewport,
+          canvasPinch.points,
+          currentPoints.map(canvasPoint),
+          {
+            x: elements.moduleLayer.offsetLeft,
+            y: elements.moduleLayer.offsetTop,
+          },
+        );
+        viewport.x = next.x;
+        viewport.y = next.y;
+        viewport.scale = next.scale;
+        applyViewport();
+      }
+      return;
+    }
+  }
   if (!viewport.isPanning) return;
+  if (event.pointerId != null && event.pointerId !== viewport.pointerId) return;
   event.preventDefault();
   viewport.x = viewport.startX + event.clientX - viewport.startClientX;
   viewport.y = viewport.startY + event.clientY - viewport.startClientY;
@@ -5093,12 +5261,42 @@ function onCanvasPointerMove(event) {
 }
 
 function endPan(event) {
+  if (event?.pointerType === "touch" || canvasTouchPointers.has(event?.pointerId)) {
+    canvasTouchPointers.delete(event.pointerId);
+    releaseCanvasPointer(event.pointerId);
+    if (canvasPinch) {
+      suppressCanvasClicksUntil = Date.now() + 450;
+      if (canvasTouchPointers.size >= 2) {
+        beginCanvasPinch(event);
+        return;
+      }
+      canvasPinch = null;
+      if (canvasTouchPointers.size === 1) {
+        const [pointerId, pointer] = canvasTouchPointers.entries().next().value;
+        viewport.isPanning = true;
+        viewport.pointerId = pointerId;
+        viewport.startClientX = pointer.clientX;
+        viewport.startClientY = pointer.clientY;
+        viewport.startX = viewport.x;
+        viewport.startY = viewport.y;
+        return;
+      }
+    }
+    if (!viewport.isPanning || viewport.pointerId !== event.pointerId) return;
+  }
   if (!viewport.isPanning) return;
   viewport.isPanning = false;
+  viewport.pointerId = null;
   elements.canvas.classList.remove("is-panning");
-  if (event?.pointerId && elements.canvas.hasPointerCapture(event.pointerId)) {
-    elements.canvas.releasePointerCapture(event.pointerId);
-  }
+  if (event?.pointerId != null) releaseCanvasPointer(event.pointerId);
+}
+
+function onCanvasClickCapture(event) {
+  if (Date.now() >= suppressCanvasClicksUntil) return;
+  if (event.target.closest(".board-chrome")) return;
+  event.preventDefault();
+  event.stopPropagation();
+  event.stopImmediatePropagation();
 }
 
 function zoomAtCanvasCenter(factor) {
@@ -5185,3 +5383,4 @@ if (typeof ResizeObserver === "function") {
   }).observe(elements.canvas);
 }
 render();
+window.__architectureRendererBoot?.ready?.();

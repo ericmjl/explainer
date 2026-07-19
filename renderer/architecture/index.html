@@ -64,7 +64,8 @@
           <p id="semanticLocationStatus" class="sr-only" role="status" aria-live="polite" aria-atomic="true"></p>
           <p id="canvasHelp" class="sr-only">
             Select a block or connection to inspect it. Open a detail node to move deeper.
-            Drag the canvas to follow long flows. Use a two-finger scroll or mouse wheel to zoom around the pointer.
+            Drag the canvas to follow long flows. Pinch with two fingers on a touchscreen,
+            or use a two-finger trackpad scroll or mouse wheel, to zoom around the gesture.
           </p>
 
           <div id="scaleLaneLayer" class="scale-lane-layer" aria-hidden="true" hidden></div>
@@ -72,6 +73,12 @@
           <div id="representationLaneLayer" class="representation-lane-layer" aria-hidden="true"></div>
           <div id="moduleLayer" class="module-layer"></div>
           <svg id="edgeLayer" class="edge-layer" aria-label="Architecture connections"></svg>
+          <aside
+            id="referencePanelLayer"
+            class="reference-panel-layer board-chrome"
+            aria-label="Published reference figures"
+            hidden
+          ></aside>
 
           <div id="canvasControls" class="canvas-controls board-chrome" role="group" aria-label="Canvas controls">
             <button type="button" data-zoom="out" aria-label="Zoom out" title="Zoom out">−</button>
@@ -81,6 +88,22 @@
           </div>
 
           <div id="canvasTooltip" class="canvas-tooltip" role="tooltip" hidden></div>
+          <section
+            id="rendererStartupError"
+            class="renderer-startup-error board-chrome"
+            role="alert"
+            aria-live="assertive"
+            hidden
+          >
+            <p class="eyebrow">Renderer startup</p>
+            <h2>The architecture could not be displayed</h2>
+            <p>
+              Reload this page to fetch one consistent set of renderer files.
+              If the problem remains, temporarily disable a content blocker for this site.
+            </p>
+            <code id="rendererStartupErrorDetail"></code>
+            <button id="rendererStartupRetry" type="button">Reload architecture</button>
+          </section>
         </section>
 
         <section id="comparisonWorkspace" class="comparison-workspace" aria-labelledby="comparisonQuestion" hidden>
@@ -199,6 +222,38 @@
         elkScript.onload = () => window.dispatchEvent(new Event("elk-ready"));
         document.head.appendChild(elkScript);
       }
+    </script>
+    <script>
+      (function () {
+        var failures = [];
+        var ready = false;
+        var detail = function (value) {
+          if (!value) return "";
+          return String(value.message || value.reason || value);
+        };
+        window.addEventListener("error", function (event) {
+          failures.push(detail(event.error || event.message));
+        });
+        window.addEventListener("unhandledrejection", function (event) {
+          failures.push(detail(event.reason));
+        });
+        window.__architectureRendererBoot = {
+          ready: function () {
+            ready = true;
+            document.body.dataset.rendererReady = "true";
+          },
+        };
+        window.setTimeout(function () {
+          if (ready) return;
+          var panel = document.getElementById("rendererStartupError");
+          var output = document.getElementById("rendererStartupErrorDetail");
+          if (output) output.textContent = failures[failures.length - 1] || "The module graph did not finish loading.";
+          if (panel) panel.hidden = false;
+        }, 5000);
+        document.getElementById("rendererStartupRetry").addEventListener("click", function () {
+          window.location.reload();
+        });
+      }());
     </script>
     <script type="module" src="./renderer.js"></script>
   </body>
