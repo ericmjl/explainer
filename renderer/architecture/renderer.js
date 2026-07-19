@@ -89,6 +89,12 @@ import {
   semanticTexForBinding,
 } from "./semantic-pseudocode.mjs";
 import { pinchViewportBetween } from "./board-surface.mjs";
+import {
+  NAV_DIRECTIONS,
+  neighborsOf,
+  nextMenuIndex,
+  resolveKeyAction,
+} from "./keyboard-navigation.mjs";
 import { installThemeSwitcher } from "../../theme-state.mjs";
 
 const pageParams = new URLSearchParams(window.location.search);
@@ -223,6 +229,11 @@ let referenceFigurePan = null;
 let questionCopyFallback = null;
 let questionCopyFallbackText = null;
 let questionCopyFallbackInvoker = null;
+// Keyboard navigation disambiguation menu (shown when a parent/child step
+// has more than one candidate). Lazily created and reattached to document.body
+// like the question menu above.
+let navMenu = null;
+let navMenuState = null;
 const connectivityHighlights = new Map();
 let connectivityHighlightSequence = 0;
 let semanticTraceInteractions = new Map();
@@ -283,6 +294,7 @@ function render() {
   renderPageChrome();
   ensureBoardChrome();
   ensureQuestionMenu();
+  ensureKeyboardNavigation();
   elements.focusReset.addEventListener("click", resetFocusedDetail);
   elements.focusCompare?.addEventListener("click", onFocusCompareClick);
   elements.focusQuestion?.addEventListener("click", onFocusQuestionClick);
@@ -1697,6 +1709,216 @@ function ensureQuestionMenu() {
   window.addEventListener("scroll", () => closeQuestionMenu({ restoreFocus: true }), true);
 }
 
+// Keyboard navigation (canvas-chat-style semantics, explainer's visual style):
+// z zooms in on the selected node, Shift+Z fits the whole board, j/k step to a
+// parent or child of the selection. When a step has more than one candidate a
+// small explainer-style menu opens; j/k cycle, Enter confirms, Escape cancels.
+function ensureKeyboardNavigation() {
+  if (navMenu) return;
+  navMenu = document.createElement("div");
+  navMenu.id = "architectureNavMenu";
+  navMenu.className = "architecture-nav-menu";
+  navMenu.setAttribute("role", "listbox");
+  navMenu.setAttribute("aria-label", "Graph navigation candidates");
+  navMenu.hidden = true;
+  navMenu.addEventListener("click", onNavMenuClick);
+  document.body.appendChild(navMenu);
+  document.addEventListener("keydown", onCanvasKeyDown);
+  window.addEventListener("resize", () => closeNavMenu());
+  window.addEventListener("scroll", () => closeNavMenu(), true);
+}
+
+function onCanvasKeyDown(event) {
+  if (questionMenu && !questionMenu.hidden) return;
+  if (questionCopyFallback && !questionCopyFallback.hidden) return;
+  const action = resolveKeyAction(event, { menuOpen: Boolean(navMenuState) });
+  if (!action) return;
+  switch (action) {
+    case "menu-cancel":
+      closeNavMenu();
+      break;
+    case "menu-confirm":
+      confirmNavMenu();
+      break;
+    case "menu-up":
+      cycleNavMenu(-1);
+      break;
+    case "menu-down":
+      cycleNavMenu(1);
+      break;
+    case "zoom-in":
+      zoomToSelection();
+      break;
+    case "zoom-out":
+      state.userMovedViewport = false;
+      fitToContent({ readable: false });
+      break;
+    case "nav-parent":
+      navigateAlong(NAV_DIRECTIONS.PARENT);
+      break;
+    case "nav-child":
+      navigateAlong(NAV_DIRECTIONS.CHILD);
+      break;
+    default:
+      return;
+  }
+  event.preventDefault();
+}
+
+function currentBoardSelectionNodeId() {
+  const selection = state.selection;
+  if (!selection || selection.kind !== "node") return null;
+  if (selection.boardId !== currentBoard().id) return null;
+  return selection.occurrenceId;
+}
+
+function navigateAlong(direction) {
+  const id = currentBoardSelectionNodeId();
+  if (!id) return;
+  const edges = state.displayEdges || [];
+  const visible = new Set(visibleNodes(currentBoard()).map((node) => node.id));
+  const candidates = neighborsOf(id, direction, edges, visible);
+  if (candidates.length === 0) return;
+  if (candidates.length === 1) {
+    closeNavMenu();
+    focusNodeOccurrence(candidates[0]);
+    centerOnNode(candidates[0]);
+    return;
+  }
+  openNavMenu(direction, id, candidates);
+}
+
+function openNavMenu(direction, anchorId, candidates) {
+  ensureKeyboardNavigation();
+  navMenuState = {
+    direction,
+    anchorId,
+    candidates,
+    selectedIndex: 0,
+  };
+  navMenu.innerHTML = candidates
+    .map((id, index) => `<button type="button" role="option" data-nav-index="${index}" data-nav-id="${escapeHtml(id)}"><span>${escapeHtml(nodeLabelById(id))}</span></button>`)
+    .join("");
+  highlightNavMenuItem(0);
+  navMenu.hidden = false;
+  positionNavMenu(anchorId, direction);
+  navMenu.querySelector('button[data-nav-index="0"]')?.focus({ preventScroll: true });
+}
+
+// Anchor the menu to the rendered DOM rect of the selected node so the menu
+// tracks the node under any pan/zoom state (the module layer is transformed).
+function positionNavMenu(anchorId, direction) {
+  navMenu.style.left = "0px";
+  navMenu.style.top = "0px";
+  const menuRect = navMenu.getBoundingClientRect();
+  const node = elements.moduleLayer.querySelector(`[data-node-id="${anchorId}"]`);
+  const rect = node?.getBoundingClientRect();
+  let left;
+  let top;
+  if (rect && rect.width > 0) {
+    left = rect.left + Math.max(0, rect.width - menuRect.width) / 2;
+    top = direction === NAV_DIRECTIONS.PARENT
+      ? Math.max(8, rect.top - menuRect.height - 10)
+      : rect.bottom + 10;
+  } else {
+    left = (window.innerWidth - menuRect.width) / 2;
+    top = (window.innerHeight - menuRect.height) / 2;
+  }
+  left = Math.min(Math.max(8, left), window.innerWidth - menuRect.width - 8);
+  top = Math.min(Math.max(8, top), window.innerHeight - menuRect.height - 8);
+  navMenu.style.left = `${Math.round(left)}px`;
+  navMenu.style.top = `${Math.round(top)}px`;
+}
+
+function highlightNavMenuItem(index) {
+  if (!navMenuState) return;
+  navMenuState.selectedIndex = index;
+  const buttons = navMenu.querySelectorAll("button[data-nav-index]");
+  buttons.forEach((button) => {
+    const match = Number(button.dataset.navIndex) === index;
+    button.classList.toggle("is-selected", match);
+    button.setAttribute("aria-selected", match ? "true" : "false");
+  });
+}
+
+function cycleNavMenu(delta) {
+  if (!navMenuState) return;
+  const next = nextMenuIndex(navMenuState.selectedIndex, delta, navMenuState.candidates.length);
+  highlightNavMenuItem(next);
+  navMenu.querySelector(`button[data-nav-index="${next}"]`)?.focus({ preventScroll: true });
+}
+
+function confirmNavMenu() {
+  if (!navMenuState) return;
+  const id = navMenuState.candidates[navMenuState.selectedIndex];
+  closeNavMenu();
+  if (!id) return;
+  focusNodeOccurrence(id);
+  centerOnNode(id);
+}
+
+function closeNavMenu() {
+  if (!navMenuState) return;
+  navMenuState = null;
+  if (navMenu) navMenu.hidden = true;
+}
+
+function onNavMenuClick(event) {
+  const button = event.target.closest("button[data-nav-index]");
+  if (!button || !navMenuState) return;
+  highlightNavMenuItem(Number(button.dataset.navIndex));
+  confirmNavMenu();
+}
+
+// Recenter the viewport on a node without changing the zoom level so walking
+// the graph with j/k stays stable. The math matches fitToContent: a canvas-
+// local point (cx, cy) lands on screen at baseX + viewport.x + cx*scale, so
+// solving for viewport.x to put that point at the viewport center has no
+// baseX term (it cancels).
+function centerOnNode(id) {
+  const box = nodeBox(id);
+  if (!box) return;
+  const canvasRect = elements.canvas.getBoundingClientRect();
+  const { availableW, availableH } = boardViewportAvailableSize(
+    canvasRect,
+    elements.moduleLayer.offsetLeft,
+    elements.moduleLayer.offsetTop,
+  );
+  viewport.x = availableW / 2 - box.cx * viewport.scale;
+  viewport.y = availableH / 2 - box.cy * viewport.scale;
+  state.userMovedViewport = true;
+  applyViewport();
+}
+
+// Zoom so the currently selected node fills most of the viewport. Falls back
+// to a plain center zoom when nothing is selected. Never shrinks the view.
+function zoomToSelection() {
+  const id = currentBoardSelectionNodeId();
+  const box = id && nodeBox(id);
+  if (!box) {
+    state.userMovedViewport = true;
+    zoomAtCanvasCenter(1.18);
+    return;
+  }
+  const canvasRect = elements.canvas.getBoundingClientRect();
+  const { availableW, availableH } = boardViewportAvailableSize(
+    canvasRect,
+    elements.moduleLayer.offsetLeft,
+    elements.moduleLayer.offsetTop,
+  );
+  const fill = 0.7;
+  const targetScale = Math.min(
+    (availableW * fill) / Math.max(1, box.width),
+    (availableH * fill) / Math.max(1, box.height),
+    viewport.maxScale,
+  );
+  viewport.scale = clamp(Math.max(targetScale, viewport.scale), viewport.minScale, viewport.maxScale);
+  viewport.x = availableW / 2 - box.cx * viewport.scale;
+  viewport.y = availableH / 2 - box.cy * viewport.scale;
+  state.userMovedViewport = true;
+  applyViewport();
+}
+
 function questionBreadcrumbs() {
   return state.boardStack.map((boardId) => boardsById.get(boardId)).filter(Boolean)
     .map((board) => ({ id: board.id, title: board.title }));
@@ -1744,6 +1966,7 @@ function openQuestionMenu(target, { clientX = 0, clientY = 0, invoker = null } =
   if (!target || !questionMenu) return;
   hideCanvasTooltip();
   clearConnectivityHighlights();
+  closeNavMenu();
   questionMenuTarget = target;
   questionMenuInvoker = invoker;
   questionMenuIdentifier.textContent = questionIdentifierForTarget(target);
