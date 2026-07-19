@@ -68,6 +68,15 @@ class RendererWorkspaceTest < Minitest::Test
     refute_includes css, ".renderer-source-link"
   end
 
+  def test_implementation_evidence_has_a_friendlier_audience_label
+    renderer = read("renderer/architecture/renderer.js")
+
+    assert_includes renderer, "function citationRoleLabel(role)"
+    assert_includes renderer,
+      '.replace(/implementation_evidence$/, "implementation_reference")'
+    assert_includes renderer, "const role = citationRoleLabel(ref.role)"
+  end
+
   def test_renderer_uses_one_canonical_selection_and_no_retired_parallel_states
     renderer = read("renderer/architecture/renderer.js")
 

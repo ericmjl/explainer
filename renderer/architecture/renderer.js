@@ -5219,13 +5219,19 @@ function citationByline(source) {
   return [authors, source?.organization, source?.year].filter(Boolean).join(" · ");
 }
 
+function citationRoleLabel(role) {
+  return String(role || "supporting_evidence")
+    .replace(/implementation_evidence$/, "implementation_reference")
+    .replaceAll("_", " ");
+}
+
 function renderCitation(ref) {
   const source = bibliographySource(ref.source_ref);
   const title = source?.title || ref.path || ref.source_ref || "Unresolved source";
   const href = audienceHref(source?.href || source?.url || ref.path);
   const byline = citationByline(source);
   const locator = ref.locator || ref.lines;
-  const role = String(ref.role || "supporting_evidence").replaceAll("_", " ");
+  const role = citationRoleLabel(ref.role);
   const kind = source?.kind || ref.kind || "source";
   const titleMarkup = href
     ? `<a href="${escapeHtml(href)}" target="_blank" rel="noreferrer">${escapeHtml(title)}</a>`
