@@ -326,6 +326,13 @@ module PseudocodeContract
       end
     end
 
+    diagnostics.concat(rendered_noop_assignment_errors(
+      line,
+      path,
+      bindings: bindings,
+      symbols_by_id: symbols_by_id,
+    ))
+
     if callee_ref && !bindings.any? { |binding| binding["access"] == "call" && binding["architecture_ref"] == statement_ref }
       diagnostics << diagnostic(
         "missing_callee_call_binding", "#{path}.code_bindings",
@@ -350,6 +357,46 @@ module PseudocodeContract
     diagnostics
   end
   private_class_method :line_errors
+
+  # A lexical handoff can look meaningful in source while collapsing to a
+  # no-op after semantic symbols are typeset. For example, `x_step = x_t`
+  # renders as `x_t = x_t` when both occurrences intentionally share TeX.
+  # Reject only the unambiguous bare-assignment case; repeated notation inside
+  # a real expression such as `x_t = update(x_t)` remains valid.
+  def rendered_noop_assignment_errors(line, path, bindings:, symbols_by_id:)
+    match = line["text"].to_s.match(
+      /\A\s*([A-Za-z_][A-Za-z0-9_]*)\s*=\s*([A-Za-z_][A-Za-z0-9_]*)\s*\z/,
+    )
+    return [] unless match
+
+    write = bindings.find do |binding|
+      binding.is_a?(Hash) && binding["access"] == "write" && binding["lexeme"] == match[1]
+    end
+    read = bindings.find do |binding|
+      binding.is_a?(Hash) && binding["access"] == "read" && binding["lexeme"] == match[2]
+    end
+    return [] unless write&.dig("symbol_ref") && read&.dig("symbol_ref")
+
+    write_symbol = symbols_by_id[write["symbol_ref"]]
+    read_symbol = symbols_by_id[read["symbol_ref"]]
+    return [] unless write_symbol && read_symbol
+
+    write_display = binding_display(write, write_symbol)
+    read_display = binding_display(read, read_symbol)
+    return [] unless write_display == read_display
+
+    [diagnostic(
+      "rendered_noop_assignment", "#{path}.text",
+      "#{match[1]} = #{match[2]} renders as #{write_display} = #{read_display}; " \
+      "remove the presentation-only handoff or use distinguishable notation",
+    )]
+  end
+  private_class_method :rendered_noop_assignment_errors
+
+  def binding_display(binding, symbol)
+    (binding["tex"] || symbol["tex"] || symbol["name"]).to_s.gsub(/\s+/, "")
+  end
+  private_class_method :binding_display
 
   def architecture_fact_index(architecture)
     refs = Set["architecture"]

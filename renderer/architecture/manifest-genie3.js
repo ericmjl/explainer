@@ -4,9 +4,9 @@ export const manifest = {
     "generator": "architecture-manifest-builder-v0.4.6",
     "inputDigests": {
       "references/bibliography.yaml": "abe9226586bfb64261c81b7756b7275c48a3a172a9a18b5f91f7acfd3145e374",
-      "architectures/genie3.yaml": "d5fa7111d849a7e83ec13468283da422c9e3de8973c995324ae1ff457b6a2bc3",
-      "views/genie3-semantic-zoom.view.yaml": "e9574098fcaa8cde9cbe3b508dc0a6a4d0431919af338ad1fb4146f57f638fe9",
-      "pseudocode/genie3.yaml": "f6980f6073739ce70e5ef72d6f4530987b0887cd67723788195569b161f5cc87",
+      "architectures/genie3.yaml": "30ed727051173ad7eb3f1381ae53b67e0bc12ade2727ab2421f4b0e728daec4d",
+      "views/genie3-semantic-zoom.view.yaml": "423a685b4a6699dece123336da699c3b3dc905ab9450b2c7dbad37c7135b5622",
+      "pseudocode/genie3.yaml": "822369fcf368f6fc2cf07c70a810d408a122d4cc1bad4f33ef2fbbf6b848d09c",
       "standard_blocks/pair-biased-attention.yaml": "88379fcd3ad641e38da23ce3b5a9ccef84344149d9c8fac51792ad63cb9da7dc",
       "standard_blocks/invariant-point-attention.yaml": "a88d3bd473e6bbfeb6846085f7d5091e6e8b0e33fbbd8292af4d578df22b2c27"
     }
@@ -1876,18 +1876,17 @@ export const manifest = {
           {
             "portRef": "ports.mask",
             "relationRefs": [
-              "relations.feature_bundle_masks_ipa"
+              "relations.token_structure_frame_mask_masks_ipa"
             ],
-            "selector": "token_struct_frame_mask",
             "relations": [
               {
-                "relationRef": "relations.feature_bundle_masks_ipa",
-                "from": "value_sites.feature_bundle",
+                "relationRef": "relations.token_structure_frame_mask_masks_ipa",
+                "from": "value_sites.token_structure_frame_mask",
                 "to": "modules.invariant_point_attention",
                 "kind": "conditioning",
                 "operation": "mask_invalid_token_frames",
                 "carries": [
-                  "representations.feature_bundle"
+                  "representations.token_structure_frame_mask"
                 ]
               }
             ]
@@ -3218,7 +3217,7 @@ export const manifest = {
         "scale": "mixed",
         "semantic_role": "one source-specific unbatched dictionary of token- and atom-indexed features",
         "shape": "N token fields + A atom fields",
-        "glyph": "single",
+        "glyph": "dictionary",
         "carries": [
           "task-specific token and atom layout",
           "known sequence and coordinate values",
@@ -3231,6 +3230,30 @@ export const manifest = {
               "source_ref": "genie3_feature_code",
               "role": "implementation_evidence",
               "locator": "create_np_features_from_length, create_np_features_from_motif_config, and create_np_features_from_target_config"
+            }
+          ]
+        }
+      },
+      {
+        "id": "token_structure_frame_mask",
+        "scale": "token",
+        "semantic_role": "per-token binary mask indicating which token positions own valid local structural frames",
+        "shape": "B x N",
+        "carries": [
+          "one frame-validity flag per padded token position"
+        ],
+        "evidence": {
+          "status": "confirmed_from_code",
+          "refs": [
+            {
+              "source_ref": "genie3_feature_schema_code",
+              "role": "schema_evidence",
+              "locator": "FEATURES[\"token_struct_frame_mask\"]"
+            },
+            {
+              "source_ref": "genie3_structure_code",
+              "role": "consumer_evidence",
+              "locator": "StructureLayer.forward"
             }
           ]
         }
@@ -3805,6 +3828,22 @@ export const manifest = {
             }
           ]
         }
+      },
+      {
+        "id": "token_structure_frame_mask",
+        "representation_ref": "representations.token_structure_frame_mask",
+        "scope_ref": "modules.structure_decoder",
+        "role": "ipa_attention_mask",
+        "evidence": {
+          "status": "confirmed_from_code",
+          "refs": [
+            {
+              "source_ref": "genie3_structure_code",
+              "role": "implementation_evidence",
+              "locator": "StructureLayer.forward"
+            }
+          ]
+        }
       }
     ],
     "valueSiteInterfaces": {
@@ -3831,8 +3870,8 @@ export const manifest = {
           "relations.feature_bundle_conditions_frame_builder",
           "relations.feature_bundle_conditions_single_embedder",
           "relations.feature_bundle_conditions_pair_embedder",
-          "relations.feature_bundle_masks_ipa",
-          "relations.feature_bundle_conditions_sequence_sampler"
+          "relations.feature_bundle_conditions_sequence_sampler",
+          "relations.feature_bundle_exposes_token_structure_frame_mask"
         ],
         "producerRefs": [
           "modules.feature_batch_assembler"
@@ -3842,8 +3881,8 @@ export const manifest = {
           "modules.frenet_frame_builder",
           "modules.single_feature_embedder",
           "modules.pair_feature_embedder",
-          "modules.invariant_point_attention",
-          "modules.sequence_sampler"
+          "modules.sequence_sampler",
+          "value_sites.token_structure_frame_mask"
         ]
       },
       "initial_coordinates": {
@@ -4304,6 +4343,20 @@ export const manifest = {
         ],
         "consumerRefs": [
 
+        ]
+      },
+      "token_structure_frame_mask": {
+        "incomingRelationRefs": [
+          "relations.feature_bundle_exposes_token_structure_frame_mask"
+        ],
+        "outgoingRelationRefs": [
+          "relations.token_structure_frame_mask_masks_ipa"
+        ],
+        "producerRefs": [
+          "value_sites.feature_bundle"
+        ],
+        "consumerRefs": [
+          "modules.invariant_point_attention"
         ]
       }
     },
@@ -6140,12 +6193,12 @@ export const manifest = {
         }
       },
       {
-        "id": "feature_bundle_masks_ipa",
-        "from": "value_sites.feature_bundle",
+        "id": "token_structure_frame_mask_masks_ipa",
+        "from": "value_sites.token_structure_frame_mask",
         "to": "modules.invariant_point_attention",
         "kind": "conditioning",
         "carries": [
-          "representations.feature_bundle"
+          "representations.token_structure_frame_mask"
         ],
         "operation": "mask_invalid_token_frames",
         "evidence": {
@@ -7110,6 +7163,31 @@ export const manifest = {
               "source_ref": "genie3_feature_code",
               "role": "implementation_evidence",
               "locator": "create_np_features_from_target_config"
+            }
+          ]
+        }
+      },
+      {
+        "id": "feature_bundle_exposes_token_structure_frame_mask",
+        "from": "value_sites.feature_bundle",
+        "to": "value_sites.token_structure_frame_mask",
+        "kind": "data_flow",
+        "carries": [
+          "representations.token_structure_frame_mask"
+        ],
+        "operation": "select_token_struct_frame_mask",
+        "evidence": {
+          "status": "confirmed_from_code",
+          "refs": [
+            {
+              "source_ref": "genie3_feature_schema_code",
+              "role": "schema_evidence",
+              "locator": "FEATURES[\"token_struct_frame_mask\"]"
+            },
+            {
+              "source_ref": "genie3_structure_code",
+              "role": "consumer_evidence",
+              "locator": "StructureLayer.forward"
             }
           ]
         }
@@ -10227,57 +10305,6 @@ export const manifest = {
           ]
         },
         {
-          "id": "enter_reverse_step",
-          "text": "x_step = x_t",
-          "refs": "Sampler._sample",
-          "sourceRefs": [
-            {
-              "source": "sampler_code",
-              "locator": "Sampler._sample"
-            }
-          ],
-          "scopeRef": "scopes.reverse_step",
-          "statementRef": "relations.current_coordinates_enter_reverse_step",
-          "architectureRefs": [
-            "relations.current_coordinates_enter_reverse_step"
-          ],
-          "operation": "read_current_reverse_state",
-          "inputs": [
-            "current_coordinates"
-          ],
-          "outputs": [
-            "step_coordinates"
-          ],
-          "codeBindings": [
-            {
-              "lexeme": "x_step",
-              "access": "write",
-              "symbolId": "step_coordinates",
-              "tex": "x_t",
-              "architectureRef": "value_sites.step_coordinates",
-              "occurrences": [
-                {
-                  "start": 0,
-                  "end": 6
-                }
-              ]
-            },
-            {
-              "lexeme": "x_t",
-              "access": "read",
-              "symbolId": "current_coordinates",
-              "tex": "x_t",
-              "architectureRef": "value_sites.current_coordinates",
-              "occurrences": [
-                {
-                  "start": 9,
-                  "end": 12
-                }
-              ]
-            }
-          ]
-        },
-        {
           "id": "derive_frames",
           "text": "T_t = FrenetFrames(x_step, features.left_center_right_indices)",
           "refs": "compute_noisy_structure_frames",
@@ -10958,57 +10985,6 @@ export const manifest = {
           ]
         },
         {
-          "id": "prepare_sampler_math",
-          "text": "x_sampler = x_step",
-          "refs": "DDIMSampler._step",
-          "sourceRefs": [
-            {
-              "source": "ddim_code",
-              "locator": "DDIMSampler._step"
-            }
-          ],
-          "scopeRef": "scopes.sampler_math",
-          "statementRef": "relations.step_coordinates_enter_sampler_math",
-          "architectureRefs": [
-            "relations.step_coordinates_enter_sampler_math"
-          ],
-          "operation": "prepare_fixed_sampler_math_input",
-          "inputs": [
-            "step_coordinates"
-          ],
-          "outputs": [
-            "sampler_step_coordinates"
-          ],
-          "codeBindings": [
-            {
-              "lexeme": "x_sampler",
-              "access": "write",
-              "symbolId": "sampler_step_coordinates",
-              "tex": "x_t",
-              "architectureRef": "value_sites.sampler_step_coordinates",
-              "occurrences": [
-                {
-                  "start": 0,
-                  "end": 9
-                }
-              ]
-            },
-            {
-              "lexeme": "x_step",
-              "access": "read",
-              "symbolId": "step_coordinates",
-              "tex": "x_t",
-              "architectureRef": "value_sites.step_coordinates",
-              "occurrences": [
-                {
-                  "start": 12,
-                  "end": 18
-                }
-              ]
-            }
-          ]
-        },
-        {
           "id": "read_noise",
           "text": "epsilon_theta = x_sampler - x_hat",
           "refs": "DDIMSampler._step",
@@ -11672,6 +11648,30 @@ export const manifest = {
             }
           },
           {
+            "id": "projection_ce6d4d6abf5a",
+            "from": "feature_bundle",
+            "to": "diffusion_sampler",
+            "projection": "boundary",
+            "origin": "canonical",
+            "kind": "data_flow",
+            "relation_path": [
+              "relations.feature_bundle_exposes_token_structure_frame_mask"
+            ],
+            "provenance_hops": [
+              {
+                "relation_ref": "relations.feature_bundle_exposes_token_structure_frame_mask"
+              }
+            ],
+            "hidden_refs": [
+
+            ],
+            "carries": [
+              "representations.token_structure_frame_mask"
+            ],
+            "presentation": {
+            }
+          },
+          {
             "id": "projection_60325d5ce7a8",
             "from": "final_coordinates",
             "to": "pdb_exporter",
@@ -11825,6 +11825,7 @@ export const manifest = {
           "value_sites.single_with_global_tokens": "collapsed:modules.diffusion_sampler",
           "value_sites.step_coordinates": "collapsed:modules.diffusion_sampler",
           "value_sites.timestep": "collapsed:modules.diffusion_sampler",
+          "value_sites.token_structure_frame_mask": "collapsed:modules.diffusion_sampler",
           "value_sites.updated_frames": "collapsed:modules.diffusion_sampler"
         },
         "projectionMode": "derived"
@@ -12184,6 +12185,30 @@ export const manifest = {
             }
           },
           {
+            "id": "projection_0ba13ae70e93",
+            "from": "feature_bundle",
+            "to": "reverse_diffusion_step",
+            "projection": "boundary",
+            "origin": "canonical",
+            "kind": "data_flow",
+            "relation_path": [
+              "relations.feature_bundle_exposes_token_structure_frame_mask"
+            ],
+            "provenance_hops": [
+              {
+                "relation_ref": "relations.feature_bundle_exposes_token_structure_frame_mask"
+              }
+            ],
+            "hidden_refs": [
+
+            ],
+            "carries": [
+              "representations.token_structure_frame_mask"
+            ],
+            "presentation": {
+            }
+          },
+          {
             "id": "projection_7d68a4f2ddd3",
             "from": "feature_bundle",
             "to": "sequence_sampler",
@@ -12395,6 +12420,7 @@ export const manifest = {
           "value_sites.single_with_global_tokens": "collapsed:modules.reverse_diffusion_step",
           "value_sites.step_coordinates": "collapsed:modules.reverse_diffusion_step",
           "value_sites.timestep": "collapsed:modules.reverse_diffusion_step",
+          "value_sites.token_structure_frame_mask": "collapsed:modules.reverse_diffusion_step",
           "value_sites.updated_frames": "collapsed:modules.reverse_diffusion_step"
         },
         "projectionMode": "derived"
@@ -12416,8 +12442,7 @@ export const manifest = {
           {
             "id": "feature_bundle",
             "ref": "value_sites.feature_bundle",
-            "label": "cached task context",
-            "notation": "F",
+            "label": "cached feature dictionary",
             "prominence": "context",
             "treatment": "chip",
             "density": "micro",
@@ -12780,6 +12805,30 @@ export const manifest = {
             }
           },
           {
+            "id": "projection_146353dbf7dd",
+            "from": "feature_bundle",
+            "to": "denoiser",
+            "projection": "boundary",
+            "origin": "canonical",
+            "kind": "data_flow",
+            "relation_path": [
+              "relations.feature_bundle_exposes_token_structure_frame_mask"
+            ],
+            "provenance_hops": [
+              {
+                "relation_ref": "relations.feature_bundle_exposes_token_structure_frame_mask"
+              }
+            ],
+            "hidden_refs": [
+
+            ],
+            "carries": [
+              "representations.token_structure_frame_mask"
+            ],
+            "presentation": {
+            }
+          },
+          {
             "id": "projection_db706d71ad18",
             "from": "feature_bundle",
             "to": "frenet_frame_builder",
@@ -13009,6 +13058,7 @@ export const manifest = {
           "value_sites.single_with_global_tokens": "collapsed:modules.denoiser",
           "value_sites.step_coordinates": "visible",
           "value_sites.timestep": "visible",
+          "value_sites.token_structure_frame_mask": "collapsed:modules.denoiser",
           "value_sites.updated_frames": "collapsed:modules.denoiser"
         },
         "projectionMode": "derived"
@@ -13469,8 +13519,7 @@ export const manifest = {
           {
             "id": "feature_bundle",
             "ref": "value_sites.feature_bundle",
-            "label": "task features",
-            "notation": "F",
+            "label": "task feature dictionary",
             "prominence": "secondary",
             "treatment": "compact",
             "density": "compact",
@@ -13805,25 +13854,25 @@ export const manifest = {
             }
           },
           {
-            "id": "projection_30e9735342cf",
+            "id": "projection_ca24c84d80ca",
             "from": "feature_bundle",
             "to": "structure_decoder",
             "projection": "boundary",
             "origin": "canonical",
-            "kind": "conditioning",
+            "kind": "data_flow",
             "relation_path": [
-              "relations.feature_bundle_masks_ipa"
+              "relations.feature_bundle_exposes_token_structure_frame_mask"
             ],
             "provenance_hops": [
               {
-                "relation_ref": "relations.feature_bundle_masks_ipa"
+                "relation_ref": "relations.feature_bundle_exposes_token_structure_frame_mask"
               }
             ],
             "hidden_refs": [
 
             ],
             "carries": [
-              "representations.feature_bundle"
+              "representations.token_structure_frame_mask"
             ],
             "presentation": {
             }
@@ -14183,6 +14232,7 @@ export const manifest = {
           "value_sites.single_after_transition": "collapsed:modules.structure_decoder",
           "value_sites.single_with_global_tokens": "collapsed:modules.latent_transformer",
           "value_sites.timestep": "visible",
+          "value_sites.token_structure_frame_mask": "collapsed:modules.structure_decoder",
           "value_sites.updated_frames": "collapsed:modules.structure_decoder"
         },
         "projectionMode": "derived"
@@ -14907,7 +14957,9 @@ export const manifest = {
           "columns": 8,
           "rows": 5,
           "column_sizing": "content",
-          "col_gap": 32
+          "col_gap": 32,
+          "row_sizing": "content",
+          "row_gap": 28
         },
         "regions": [
           {
@@ -14936,13 +14988,23 @@ export const manifest = {
           {
             "id": "feature_bundle",
             "ref": "value_sites.feature_bundle",
+            "label": "feature dictionary",
+            "prominence": "context",
+            "treatment": "chip",
+            "density": "micro",
+            "col": 1,
+            "row": 1
+          },
+          {
+            "id": "token_structure_frame_mask",
+            "ref": "value_sites.token_structure_frame_mask",
             "label": "valid-frame mask",
             "notation": "M",
             "prominence": "context",
             "treatment": "chip",
             "density": "micro",
             "glyph": "vector",
-            "col": 1,
+            "col": 2,
             "row": 1
           },
           {
@@ -15062,6 +15124,29 @@ export const manifest = {
           }
         ],
         "edge_overrides": [
+          {
+            "match": {
+              "relation_ref": "relations.feature_bundle_exposes_token_structure_frame_mask"
+            },
+            "label": "select mask",
+            "connection": {
+              "title": "Dictionary field selection",
+              "role": "token-frame validity",
+              "inside": "The structure layer reads token_struct_frame_mask from the cached feature dictionary as one binary value per token."
+            }
+          },
+          {
+            "match": {
+              "relation_ref": "relations.token_structure_frame_mask_masks_ipa"
+            },
+            "label": "valid frames",
+            "tone": "conditioning",
+            "connection": {
+              "title": "IPA validity mask",
+              "role": "attention-logit masking",
+              "inside": "Invalid token frames are excluded before IPA normalizes its combined scalar, point-distance, and pair-bias logits."
+            }
+          },
           {
             "match": {
               "relation_ref": "relations.refined_pair_features_bias_ipa"
@@ -15191,27 +15276,33 @@ export const manifest = {
             }
           },
           {
-            "id": "projection_adee27c9f987",
+            "id": "projection_792bfdcdbf8d",
             "from": "feature_bundle",
-            "to": "invariant_point_attention",
+            "to": "token_structure_frame_mask",
             "projection": "direct",
             "origin": "canonical",
-            "kind": "conditioning",
+            "kind": "data_flow",
             "relation_path": [
-              "relations.feature_bundle_masks_ipa"
+              "relations.feature_bundle_exposes_token_structure_frame_mask"
             ],
             "provenance_hops": [
               {
-                "relation_ref": "relations.feature_bundle_masks_ipa"
+                "relation_ref": "relations.feature_bundle_exposes_token_structure_frame_mask"
               }
             ],
             "hidden_refs": [
 
             ],
             "carries": [
-              "representations.feature_bundle"
+              "representations.token_structure_frame_mask"
             ],
             "presentation": {
+              "label": "select mask",
+              "connection": {
+                "title": "Dictionary field selection",
+                "role": "token-frame validity",
+                "inside": "The structure layer reads token_struct_frame_mask from the cached feature dictionary as one binary value per token."
+              }
             }
           },
           {
@@ -15396,6 +15487,37 @@ export const manifest = {
             }
           },
           {
+            "id": "projection_6d8579f4e2b5",
+            "from": "token_structure_frame_mask",
+            "to": "invariant_point_attention",
+            "projection": "direct",
+            "origin": "canonical",
+            "kind": "conditioning",
+            "relation_path": [
+              "relations.token_structure_frame_mask_masks_ipa"
+            ],
+            "provenance_hops": [
+              {
+                "relation_ref": "relations.token_structure_frame_mask_masks_ipa"
+              }
+            ],
+            "hidden_refs": [
+
+            ],
+            "carries": [
+              "representations.token_structure_frame_mask"
+            ],
+            "presentation": {
+              "label": "valid frames",
+              "tone": "conditioning",
+              "connection": {
+                "title": "IPA validity mask",
+                "role": "attention-logit masking",
+                "inside": "Invalid token frames are excluded before IPA normalizes its combined scalar, point-distance, and pair-bias logits."
+              }
+            }
+          },
+          {
             "id": "projection_e6e037484cef",
             "from": "updated_frames",
             "to": "decoder_frames",
@@ -15463,6 +15585,7 @@ export const manifest = {
           "value_sites.refined_single_features": "excluded",
           "value_sites.single_after_ipa": "visible",
           "value_sites.single_after_transition": "visible",
+          "value_sites.token_structure_frame_mask": "visible",
           "value_sites.updated_frames": "visible"
         },
         "projectionMode": "derived"
@@ -16962,9 +17085,9 @@ export const manifest = {
             "template_fact_ref": "standard_blocks.invariant_point_attention.ports.mask",
             "instance_fact_ref": "block_instances.structure_ipa.ports.mask",
             "kind": "representation",
-            "rep_ref": "feature_bundle",
-            "shape": "B x N token fields + B x A atom fields",
-            "scale": "mixed",
+            "rep_ref": "token_structure_frame_mask",
+            "shape": "B x N",
+            "scale": "token",
             "glyph": "vector",
             "notation": "m",
             "port_ref": "ports.mask"
@@ -17835,10 +17958,10 @@ export const manifest = {
             "kind": "conditioning",
             "tone": "conditioning",
             "carries": [
-              "representations.feature_bundle"
+              "representations.token_structure_frame_mask"
             ],
             "relation_path": [
-              "relations.feature_bundle_masks_ipa"
+              "relations.token_structure_frame_mask_masks_ipa"
             ],
             "grounding": "canonical_relation_path",
             "standard_block_ref": "standard_blocks/invariant-point-attention.yaml",

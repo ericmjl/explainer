@@ -284,24 +284,6 @@ lines:
       - lexeme: t
         symbol_ref: timestep
         access: read
-  - id: enter_reverse_step
-    text: "x_step = x_t"
-    scope_ref: scopes.reverse_step
-    statement_ref: relations.current_coordinates_enter_reverse_step
-    operation: read_current_reverse_state
-    inputs: [current_coordinates]
-    outputs: [step_coordinates]
-    architecture_refs: []
-    source_refs:
-      - source: sampler_code
-        locator: Sampler._sample
-    code_bindings:
-      - lexeme: x_step
-        symbol_ref: step_coordinates
-        access: write
-      - lexeme: x_t
-        symbol_ref: current_coordinates
-        access: read
   - id: derive_frames
     text: "T_t = FrenetFrames(x_step, features.left_center_right_indices)"
     scope_ref: scopes.reverse_step
@@ -515,24 +497,6 @@ lines:
         access: read
       - lexeme: t
         symbol_ref: timestep
-        access: read
-  - id: prepare_sampler_math
-    text: "x_sampler = x_step"
-    scope_ref: scopes.sampler_math
-    statement_ref: relations.step_coordinates_enter_sampler_math
-    operation: prepare_fixed_sampler_math_input
-    inputs: [step_coordinates]
-    outputs: [sampler_step_coordinates]
-    architecture_refs: []
-    source_refs:
-      - source: ddim_code
-        locator: DDIMSampler._step
-    code_bindings:
-      - lexeme: x_sampler
-        symbol_ref: sampler_step_coordinates
-        access: write
-      - lexeme: x_step
-        symbol_ref: step_coordinates
         access: read
   - id: read_noise
     text: "epsilon_theta = x_sampler - x_hat"

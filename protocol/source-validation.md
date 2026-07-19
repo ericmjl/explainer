@@ -141,8 +141,10 @@ non-exact differences, and usage evidence.
 Registered `pseudocode-v0.2` inputs compile through
 `semantic-pseudocode-compiler-v0.3`. The compiler records scope and statement
 identity plus deterministic variable/call lexeme ranges; it does not parse raw
-code or invent graph associations. Legacy v0.1 traces remain readable while
-they are migrated.
+code or invent graph associations. Its preflight contract does recognize bare
+assignments whose bound write/read symbols typeset identically, because those
+would become misleading visual no-ops. Legacy v0.1 traces remain readable
+while they are migrated.
 
 Registered comparisons are schema-checked and resolved against the same
 compiled reusable boards emitted to the browser. This rejects foreign,

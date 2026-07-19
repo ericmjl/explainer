@@ -332,6 +332,7 @@ class RendererSemanticPseudocodeBrowserTest < Minitest::Test
     browser.set_window(width: 1440, height: 1000)
     verify_ipa_token_to_graph_and_back(browser, base)
     verify_high_level_call_drilldown(browser, base)
+    verify_dictionary_field_selection(browser, base)
     verify_published_reference_panel(browser, base)
     verify_grouped_inspector_and_stable_status(browser, base)
     verify_math_symbols_and_theme(browser, base)
@@ -640,6 +641,44 @@ class RendererSemanticPseudocodeBrowserTest < Minitest::Test
     assert closed
   end
 
+  def verify_dictionary_field_selection(browser, base)
+    browser.navigate("#{base}?arch=genie3&board=structure_decoder")
+    result = wait_for(browser, "the feature dictionary and selected IPA mask") do
+      browser.execute(<<~JS)
+        const dictionary = document.querySelector('[data-node-id="feature_bundle"]');
+        const mask = document.querySelector('[data-node-id="token_structure_frame_mask"]');
+        const extract = document.querySelector(
+          '.edge-hit[data-relation-path~="relations.feature_bundle_exposes_token_structure_frame_mask"]',
+        );
+        const conditioning = document.querySelector(
+          '.edge-hit[data-relation-path~="relations.token_structure_frame_mask_masks_ipa"]',
+        );
+        const single = document.querySelector('[data-node-id="decoder_single_state"]');
+        const pair = document.querySelector('[data-node-id="refined_pair_features"]');
+        const frames = document.querySelector('[data-node-id="decoder_frames"]');
+        if (!dictionary || !mask || !extract || !conditioning || !single || !pair || !frames) return null;
+        return {
+          dictionaryGlyph: dictionary.classList.contains('tensor-dictionary'),
+          dictionaryMeaning: dictionary.querySelector('.tensor-meaning')?.textContent || '',
+          maskGlyph: mask.classList.contains('tensor-vector'),
+          maskMeaning: mask.querySelector('.tensor-meaning')?.textContent || '',
+          maskSymbol: mask.querySelector('.tensor-symbol')?.textContent || '',
+          dictionaryMaskGap: mask.offsetLeft - (dictionary.offsetLeft + dictionary.offsetWidth),
+          singlePairGap: pair.offsetTop - (single.offsetTop + single.offsetHeight),
+          pairFrameGap: frames.offsetTop - (pair.offsetTop + pair.offsetHeight),
+        };
+      JS
+    end
+    assert result["dictionaryGlyph"]
+    assert_equal "feature dictionary", result["dictionaryMeaning"]
+    assert result["maskGlyph"]
+    assert_equal "valid-frame mask", result["maskMeaning"]
+    assert_equal "M", result["maskSymbol"]
+    assert_operator result["dictionaryMaskGap"], :>=, 24
+    assert_operator result["singlePairGap"], :>=, 20
+    assert_operator result["pairFrameGap"], :>=, 20
+  end
+
   def verify_mobile_board_trace(browser, base)
     browser.set_window(width: 640, height: 900)
     browser.navigate("#{base}?arch=genie3")
@@ -712,6 +751,10 @@ class RendererSemanticPseudocodeBrowserTest < Minitest::Test
 
     assert_operator layout["panelWidth"], :>=, 339,
       "the desktop inspector should leave room for readable pseudocode"
+    assert_equal 3, layout["traceLines"].length,
+      "the reverse-step trace should contain only its three meaningful operations"
+    assert_includes layout["traceLines"].first, "FrenetFrames",
+      "the reverse-step trace should begin by deriving frames from the current state"
     assert layout["traceLines"].any? { |line| line.include?("DirectionalDDIMMath") },
       "the reverse-step board should show the collapsed sampler call"
     refute layout["traceLines"].any? { |line| line.include?("DDIMUpdate") || line.include?("epsilon_theta =") },

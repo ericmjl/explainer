@@ -54,8 +54,8 @@ export const comparisonIndex = {
       "architectures/genie2.yaml": "d5fbf1c1a91ef74dcef47388855e83b7e5571deb7d63a5eb2657177355c2f96a",
       "views/genie2-semantic-zoom.view.yaml": "8b8fe70a2866cad0051913e38e4d2a5b0fef68b0aeb14127c4d27eb36d353158",
       "standard_blocks/invariant-point-attention.yaml": "a88d3bd473e6bbfeb6846085f7d5091e6e8b0e33fbbd8292af4d578df22b2c27",
-      "architectures/genie3.yaml": "d5fa7111d849a7e83ec13468283da422c9e3de8973c995324ae1ff457b6a2bc3",
-      "views/genie3-semantic-zoom.view.yaml": "e9574098fcaa8cde9cbe3b508dc0a6a4d0431919af338ad1fb4146f57f638fe9"
+      "architectures/genie3.yaml": "30ed727051173ad7eb3f1381ae53b67e0bc12ade2727ab2421f4b0e728daec4d",
+      "views/genie3-semantic-zoom.view.yaml": "423a685b4a6699dece123336da699c3b3dc905ab9450b2c7dbad37c7135b5622"
     }
   },
   "items": [

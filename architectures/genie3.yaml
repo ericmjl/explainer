@@ -496,7 +496,7 @@ representations:
     scale: mixed
     semantic_role: one source-specific unbatched dictionary of token- and atom-indexed features
     shape: N token fields + A atom fields
-    glyph: single
+    glyph: dictionary
     carries:
     - task-specific token and atom layout
     - known sequence and coordinate values
@@ -507,6 +507,21 @@ representations:
       - source_ref: genie3_feature_code
         role: implementation_evidence
         locator: create_np_features_from_length, create_np_features_from_motif_config, and create_np_features_from_target_config
+  - id: token_structure_frame_mask
+    scale: token
+    semantic_role: per-token binary mask indicating which token positions own valid local structural frames
+    shape: B x N
+    carries:
+    - one frame-validity flag per padded token position
+    evidence:
+      status: confirmed_from_code
+      refs:
+      - source_ref: genie3_feature_schema_code
+        role: schema_evidence
+        locator: FEATURES["token_struct_frame_mask"]
+      - source_ref: genie3_structure_code
+        role: consumer_evidence
+        locator: StructureLayer.forward
 value_sites:
   - id: design_request
     representation_ref: representations.design_request
@@ -685,6 +700,16 @@ value_sites:
     boundary: output
     role: task_output
     evidence: *export_evidence
+  - id: token_structure_frame_mask
+    representation_ref: representations.token_structure_frame_mask
+    scope_ref: modules.structure_decoder
+    role: ipa_attention_mask
+    evidence:
+      status: confirmed_from_code
+      refs:
+      - source_ref: genie3_structure_code
+        role: implementation_evidence
+        locator: StructureLayer.forward
 modules:
   - id: feature_builder
     parent_ref: architecture
@@ -1243,8 +1268,7 @@ block_instances:
       - port_ref: ports.frames
         relation_refs: [relations.decoder_frames_condition_ipa]
       - port_ref: ports.mask
-        relation_refs: [relations.feature_bundle_masks_ipa]
-        selector: token_struct_frame_mask
+        relation_refs: [relations.token_structure_frame_mask_masks_ipa]
       - port_ref: ports.updated_single_state
         relation_refs: [relations.ipa_produces_updated_single_state]
     evidence:
@@ -1604,11 +1628,12 @@ relations:
     carries: [representations.token_frames]
     operation: express_attention_points_in_frames
     evidence: *structure_relation_evidence
-  - id: feature_bundle_masks_ipa
-    from: value_sites.feature_bundle
+  - id: token_structure_frame_mask_masks_ipa
+    from: value_sites.token_structure_frame_mask
     to: modules.invariant_point_attention
     kind: conditioning
-    carries: [representations.feature_bundle]
+    carries:
+    - representations.token_structure_frame_mask
     operation: mask_invalid_token_frames
     evidence: *structure_relation_evidence
   - id: ipa_produces_updated_single_state
@@ -2020,6 +2045,22 @@ relations:
       - source_ref: genie3_feature_code
         role: implementation_evidence
         locator: create_np_features_from_target_config
+  - id: feature_bundle_exposes_token_structure_frame_mask
+    from: value_sites.feature_bundle
+    to: value_sites.token_structure_frame_mask
+    kind: data_flow
+    carries:
+    - representations.token_structure_frame_mask
+    operation: select_token_struct_frame_mask
+    evidence:
+      status: confirmed_from_code
+      refs:
+      - source_ref: genie3_feature_schema_code
+        role: schema_evidence
+        locator: FEATURES["token_struct_frame_mask"]
+      - source_ref: genie3_structure_code
+        role: consumer_evidence
+        locator: StructureLayer.forward
 claims:
   - id: atomization_is_task_dependent
     statement: Genie 3 does not represent every generated residue with atom14 coordinates. Unknown scaffold residues use one C-alpha token, while known motif or interface residues can be expanded into atom14-ordered heavy-atom tokens.
