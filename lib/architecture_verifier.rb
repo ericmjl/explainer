@@ -321,14 +321,19 @@ module ArchitectureVerifier
           )
         end
       end
-      each_source_ref(architecture) do |source_ref, path|
-        next if bibliography_sources.key?(source_ref)
+      {
+        architecture_file => architecture,
+        view_file => view,
+      }.each do |file, document|
+        each_source_ref(document) do |source_ref, path|
+          next if bibliography_sources.key?(source_ref)
 
-        diagnostics << diagnostic(
-          "source_semantics", "unknown_bibliography_source",
-          "references unknown bibliography source #{source_ref}",
-          file: architecture_file, path: path
-        )
+          diagnostics << diagnostic(
+            "source_semantics", "unknown_bibliography_source",
+            "references unknown bibliography source #{source_ref}",
+            file: file, path: path
+          )
+        end
       end
       registered_blocks = Array(source_set["standard_blocks"]).to_set
       blocks_by_path = Array(source_set["standard_blocks"]).each_with_index.to_h do |relative, index|
@@ -591,6 +596,22 @@ module ArchitectureVerifier
           else
             occupied[cell] = node["id"]
           end
+        end
+        duplicate_ids(Array(board["reference_panels"])).each do |id|
+          diagnostics << diagnostic(
+            "board_layout", "duplicate_reference_panel",
+            "reference panels contain duplicate id #{id}", file: file, board: board_id
+          )
+        end
+        Array(board["reference_panels"]).each do |panel|
+          asset = panel["asset"]
+          next if asset && File.file?(File.join(@root, asset))
+
+          diagnostics << diagnostic(
+            "board_layout", "missing_reference_panel_asset",
+            "reference panel #{panel['id']} asset is missing: #{asset.inspect}",
+            file: file, board: board_id
+          )
         end
         Array(board["edge_overrides"]).each_with_index do |override, index|
           if override.key?("route_clearance") && !override["route_side"]

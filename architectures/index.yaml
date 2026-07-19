@@ -24,6 +24,13 @@ source_sets:
       - standard_blocks/adaln-zero-conditioning.yaml
       - standard_blocks/sinusoidal-timestep-embedding.yaml
       - standard_blocks/per-item-adaln-conditioning.yaml
+  - id: af2
+    label: AlphaFold 2 Monomer
+    directory_role: architecture
+    architecture: architectures/alphafold2.yaml
+    view: views/alphafold2-semantic-zoom.view.yaml
+    pseudocode: pseudocode/alphafold2.yaml
+    standard_blocks: []
   - id: genie2
     label: Genie 2 Protein Backbone Diffusion
     directory_role: architecture

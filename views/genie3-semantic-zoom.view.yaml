@@ -32,6 +32,7 @@ boards:
         treatment: block
         col: 2
         row: 2
+        board_ref: task_featurization
       - id: feature_bundle
         ref: value_sites.feature_bundle
         label: token + conditioning features
@@ -39,7 +40,6 @@ boards:
         prominence: secondary
         treatment: compact
         density: compact
-        glyph: pair
         col: 3
         row: 2
       - id: diffusion_sampler
@@ -1137,3 +1137,337 @@ boards:
     subject_ref: modules.invariant_point_attention
     expansion_depth: 0
     block_instance_ref: block_instances.structure_ipa
+  - id: task_featurization
+    title: Task Featurization
+    summary: Exactly one configured task source selects the unconditional, motif, or target path for a run. Unknown designed regions stay C-alpha tokens; Atom14 selectively expands known motif or target-interface residues before all paths converge on one model-ready feature batch.
+    subject_ref: modules.feature_builder
+    expansion_depth: 1
+    grid:
+      columns: 5
+      rows: 3
+      column_sizing: content
+      row_sizing: content
+      row_gap: 28
+    nodes:
+    - id: value_design_request
+      ref: value_sites.design_request
+      prominence: context
+      treatment: chip
+      density: micro
+      col: 1
+      row: 2
+    - id: module_task_source_router
+      ref: modules.task_source_router
+      prominence: primary
+      treatment: block
+      col: 2
+      row: 2
+      role: choose exactly one task path
+      detail: 'Based on the requested task, Genie 3 uses the corresponding featurization adapter: unconditional generation, motif scaffolding, or binder design.'
+    - id: module_target_featurizer
+      ref: modules.target_featurizer
+      prominence: primary
+      treatment: block
+      col: 3
+      row: 1
+      board_ref: binder_design_task_featurization
+      role: unknown binder plus known target
+      detail: Used when source is target. The binder begins as unknown C-alpha tokens, while the target supplies conditioned C-alpha structure. In Atom14 mode, selected target-interface residues additionally expand into side-chain heavy-atom tokens.
+    - id: module_motif_featurizer
+      ref: modules.motif_featurizer
+      prominence: primary
+      treatment: block
+      col: 3
+      row: 2
+      board_ref: motif_task_featurization
+      role: unknown scaffold plus known motif
+      detail: Used when source is motif. Scaffold residues remain unknown C-alpha tokens. Known motif residues carry sequence and coordinate conditioning; in Atom14 mode they expand into C-alpha plus available side-chain heavy-atom tokens.
+    - id: module_unconditional_featurizer
+      ref: modules.unconditional_featurizer
+      prominence: primary
+      treatment: block
+      col: 3
+      row: 3
+      board_ref: unconditional_task_featurization
+      role: length to unknown C-alpha slots
+      detail: Used when source is unconditional. Every requested residue becomes one active C-alpha token with unknown identity, placeholder conditioning coordinates, and sequence, structure, and interface masks disabled. Atom14 does not expand these unknown residues.
+    - id: module_feature_batch_assembler
+      ref: modules.feature_batch_assembler
+      prominence: primary
+      treatment: block
+      col: 4
+      row: 2
+      role: shared feature-batch interface
+      detail: Whichever task path was selected emits the same feature vocabulary. This stage pads token and atom axes, stacks samples, and prepares typed tensors for the sampler.
+    - id: value_feature_bundle
+      ref: value_sites.feature_bundle
+      prominence: secondary
+      treatment: compact
+      density: compact
+      col: 5
+      row: 2
+      role: token and atom conditioning fields
+      detail: The batch contains token/atom identities, known values, and one-dimensional conditioning masks. Pairwise masks and pair features are derived later inside the pair embedder.
+    parent: design_overview
+    edge_overrides:
+    - match:
+        relation_ref: relations.design_request_enters_feature_builder
+      label: source + constraints
+      connection:
+        title: Generation specification
+        role: task selection input
+        inside: The source field chooses one feature path while its length, motif, or target metadata supplies that path's constraints.
+    - match:
+        relation_ref: relations.task_router_dispatches_unconditional_request
+      label: 'source: unconditional'
+      connection:
+        title: Unconditional path
+        role: length-only request
+        inside: The router selects this path when the dataset source is unconditional and passes the requested length range.
+    - match:
+        relation_ref: relations.task_router_dispatches_motif_request
+      label: 'source: motif'
+      connection:
+        title: Motif-scaffolding path
+        role: motif-constrained request
+        inside: The router selects this path for motif problem files containing scaffold ranges and one or more structural motif segments.
+    - match:
+        relation_ref: relations.task_router_dispatches_target_request
+      label: 'source: target'
+      connection:
+        title: Binder-design path
+        role: target-constrained request
+        inside: The router selects this path for target problems that specify a binder length or framework plus target chains and interface annotations.
+    - match:
+        relation_ref: relations.unconditional_featurizer_produces_sample_features
+      label: unknown C-alpha tokens
+      connection:
+        title: Unconditional sample features
+        role: unconditioned token layout
+        inside: The featurizer creates one unknown C-alpha token per requested residue and leaves sequence, structure, and interface masks unset.
+    - match:
+        relation_ref: relations.motif_featurizer_produces_sample_features
+      label: scaffold + motif features
+      connection:
+        title: Motif-conditioned sample features
+        role: mixed generated and known regions
+        inside: Unknown scaffold residues stay C-alpha tokens while known motif residues carry sequence and coordinate masks and may be atomized.
+    - match:
+        relation_ref: relations.target_featurizer_produces_sample_features
+      label: binder + target features
+      connection:
+        title: Target-conditioned sample features
+        role: binder and target context
+        inside: Unknown binder tokens are concatenated with conditioned target-chain tokens, including the selected target-interface mask.
+    - match:
+        relation_ref: relations.feature_builder_produces_feature_bundle
+      label: pad + stack + type
+      connection:
+        title: Model-ready feature batch
+        role: shared model interface
+        inside: The assembler pads token and atom fields to common lengths, stacks samples, and prepares the typed tensors consumed by sampling.
+
+  - id: unconditional_task_featurization
+    title: Unconditional Generation Task Featurization
+    summary: "Illustrative example: a requested length of 100 becomes 100 active C-alpha coordinate slots with unknown residue identities and all conditioning masks disabled. Their shape is later used to initialize the Gaussian coordinate state."
+    parent: task_featurization
+    subject_ref: modules.unconditional_featurizer
+    expansion_depth: 1
+    grid:
+      columns: 3
+      rows: 1
+      column_sizing: content
+      row_sizing: content
+    nodes:
+      - id: module_unconditional_token_layout
+        ref: modules.unconditional_token_layout
+        prominence: primary
+        treatment: block
+        col: 1
+        row: 1
+      - id: module_unconditional_placeholder_initializer
+        ref: modules.unconditional_placeholder_initializer
+        prominence: primary
+        treatment: block
+        col: 2
+        row: 1
+      - id: module_unconditional_frame_indices
+        ref: modules.unconditional_frame_indices
+        prominence: primary
+        treatment: block
+        col: 3
+        row: 1
+    exclude:
+      - ref: modules.task_source_router
+        reason: The parent task-featurization board owns selection of the unconditional task adapter.
+      - ref: modules.feature_batch_assembler
+        reason: The parent task-featurization board owns convergence into the shared batch assembler.
+    edge_overrides:
+      - match: { relation_ref: relations.unconditional_layout_initializes_unknown_features }
+        label: active C-alpha slots
+        connection:
+          title: Unknown feature initialization
+          role: establish generated positions
+          inside: Each active token receives an unknown residue slot, a placeholder coordinate field, and disabled sequence, structure, and interface conditioning masks.
+      - match: { relation_ref: relations.unconditional_unknown_features_derive_frame_indices }
+        label: token + frame indices
+        connection:
+          title: Frame-index metadata
+          role: prepare later frame construction
+          inside: Neighbor indices and validity masks describe where local frames can be reconstructed after noisy coordinates are available.
+
+  - id: motif_task_featurization
+    title: Motif Scaffolding Task Featurization
+    summary: "Illustrative example: 20 scaffold residues, motif segment A1, then 30 scaffold residues. The 50 designed residues remain unknown C-alpha tokens; A1 carries known sequence and coordinates and can selectively atomize in Atom14 mode."
+    parent: task_featurization
+    subject_ref: modules.motif_featurizer
+    expansion_depth: 1
+    grid:
+      columns: 3
+      rows: 2
+      column_sizing: content
+      row_sizing: content
+      row_gap: 28
+    reference_panels:
+      - id: authors_partial_atomization
+        title: Authors' partial-atomization diagram
+        asset: assets/reference-panels/genie3/figure_1_partial_atomization.png
+        alt: Author diagram titled Partial Atomization. Motif scaffolding places an atomized known motif between unknown C-alpha scaffold segments; binder design places an atomized target interface beside an unknown binder.
+        caption: Figure 1 shows the same task distinction as this board—known motif or target-interface residues may expose side-chain atoms, while designed regions remain unknown C-alpha tokens.
+        source_ref: genie3_2026
+        locator: Figure 1, Partial Atomization panel
+        license_note: Cropped from Lin et al. (2026), licensed CC BY 4.0.
+        position: right
+    nodes:
+      - id: module_motif_problem_parser
+        ref: modules.motif_problem_parser
+        prominence: primary
+        treatment: block
+        col: 1
+        row: 2
+      - id: module_motif_scaffold_tokens
+        ref: modules.motif_scaffold_tokens
+        prominence: primary
+        treatment: block
+        col: 2
+        row: 1
+      - id: module_motif_conditioned_tokens
+        ref: modules.motif_conditioned_tokens
+        prominence: primary
+        treatment: block
+        col: 2
+        row: 2
+      - id: module_motif_feature_assembler
+        ref: modules.motif_feature_assembler
+        prominence: primary
+        treatment: block
+        col: 3
+        row: 2
+    exclude:
+      - ref: modules.task_source_router
+        reason: The parent task-featurization board owns selection of the motif-scaffolding task adapter.
+      - ref: modules.feature_batch_assembler
+        reason: The parent task-featurization board owns convergence into the shared batch assembler.
+    edge_overrides:
+      - match: { relation_ref: relations.motif_parser_defines_scaffold_layout }
+        label: scaffold lengths
+        connection:
+          title: Scaffold segments
+          role: regions to design
+          inside: Numeric layout segments specify how many unknown C-alpha residues appear before, between, or after the known motifs.
+      - match: { relation_ref: relations.motif_parser_selects_conditioned_segments }
+        label: known motif segments
+        connection:
+          title: Motif segments
+          role: structural constraints
+          inside: Named motif segments select the residue identities and coordinates that remain available as conditioning context.
+      - match: { relation_ref: relations.motif_scaffold_tokens_enter_assembler }
+        label: unknown C-alpha tokens
+        connection:
+          title: Generated scaffold features
+          role: unknown design regions
+          inside: Scaffold tokens carry their sequence positions but expose neither residue identity nor structural coordinates as conditioning.
+      - match: { relation_ref: relations.motif_conditioned_tokens_enter_assembler }
+        label: conditioned motif tokens
+        connection:
+          title: Known motif features
+          role: sequence and structure context
+          inside: Motif tokens carry known identities and coordinates; Atom14 mode selectively adds available side-chain heavy-atom tokens.
+
+  - id: binder_design_task_featurization
+    title: Binder Design Task Featurization
+    summary: "Illustrative example: a 100-residue binder request plus a target PDB and interface list becomes 100 unknown binder C-alpha slots followed by conditioned target tokens; Atom14 selectively expands the marked target-interface residues."
+    parent: task_featurization
+    subject_ref: modules.target_featurizer
+    expansion_depth: 1
+    grid:
+      columns: 3
+      rows: 2
+      column_sizing: content
+      row_sizing: content
+      row_gap: 28
+    reference_panels:
+      - id: authors_partial_atomization
+        title: Authors' partial-atomization diagram
+        asset: assets/reference-panels/genie3/figure_1_partial_atomization.png
+        alt: Author diagram titled Partial Atomization. Motif scaffolding places an atomized known motif between unknown C-alpha scaffold segments; binder design places an atomized target interface beside an unknown binder.
+        caption: Figure 1 shows the same task distinction as this board—known motif or target-interface residues may expose side-chain atoms, while designed regions remain unknown C-alpha tokens.
+        source_ref: genie3_2026
+        locator: Figure 1, Partial Atomization panel
+        license_note: Cropped from Lin et al. (2026), licensed CC BY 4.0.
+        position: right
+    nodes:
+      - id: module_target_problem_parser
+        ref: modules.target_problem_parser
+        prominence: primary
+        treatment: block
+        col: 1
+        row: 2
+      - id: module_binder_tokens
+        ref: modules.binder_tokens
+        prominence: primary
+        treatment: block
+        col: 2
+        row: 1
+      - id: module_target_conditioned_tokens
+        ref: modules.target_conditioned_tokens
+        prominence: primary
+        treatment: block
+        col: 2
+        row: 2
+      - id: module_binder_target_feature_assembler
+        ref: modules.binder_target_feature_assembler
+        prominence: primary
+        treatment: block
+        col: 3
+        row: 2
+    exclude:
+      - ref: modules.task_source_router
+        reason: The parent task-featurization board owns selection of the binder-design task adapter.
+      - ref: modules.feature_batch_assembler
+        reason: The parent task-featurization board owns convergence into the shared batch assembler.
+    edge_overrides:
+      - match: { relation_ref: relations.target_parser_defines_binder_request }
+        label: binder specification
+        connection:
+          title: Binder region
+          role: chain to design
+          inside: The problem supplies either a requested binder length or a binder framework from which the generated-chain features are built.
+      - match: { relation_ref: relations.target_parser_selects_target_interface }
+        label: target + interface
+        connection:
+          title: Target context
+          role: structure to bind
+          inside: The target PDB supplies conditioned structure while the selected residue list marks the intended binding interface.
+      - match: { relation_ref: relations.binder_tokens_enter_target_assembler }
+        label: binder features
+        connection:
+          title: Generated binder features
+          role: unknown chain
+          inside: A length-based binder contributes unknown C-alpha tokens; a supplied framework may contribute its own conditioned regions.
+      - match: { relation_ref: relations.target_tokens_enter_target_assembler }
+        label: conditioned target tokens
+        connection:
+          title: Target feature context
+          role: fixed structural context
+          inside: Every target residue supplies conditioned C-alpha structure, and Atom14 selectively expands marked interface residues with side-chain atoms.

@@ -30,6 +30,7 @@ module ArchitectureEdit
   REGISTRY_PATH = "architectures/index.yaml"
   STAGED_SOURCE_DIRECTORIES = %w[
     architectures
+    assets
     views
     pseudocode
     standard_blocks

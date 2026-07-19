@@ -1,0 +1,184 @@
+schema_version: pseudocode-v0.2
+id: alphafold2
+title: AlphaFold 2 Monomer Prediction Trace
+sources:
+  - id: runner_code
+    source_ref: af2_runner_code
+  - id: data_pipeline_code
+    source_ref: af2_data_pipeline_code
+  - id: model_wrapper_code
+    source_ref: af2_model_wrapper_code
+  - id: model_code
+    source_ref: af2_model_code
+  - id: relax_code
+    source_ref: af2_relax_code
+root_scope: monomer_prediction
+scopes:
+  - id: monomer_prediction
+    label: AlphaFold 2 monomer prediction
+    kind: program
+    parent_ref: pseudocode
+    subject_ref: architecture
+symbols:
+  - id: fasta_input
+    name: fasta_path
+    type: input
+    scope_ref: scopes.monomer_prediction
+    architecture_ref: value_sites.fasta_input
+  - id: raw_feature_bundle
+    name: raw_features
+    type: representation
+    scope_ref: scopes.monomer_prediction
+    architecture_ref: value_sites.raw_feature_bundle
+  - id: model_predictions
+    name: predictions
+    type: representation
+    scope_ref: scopes.monomer_prediction
+    architecture_ref: value_sites.model_predictions
+  - id: ranked_predictions
+    name: ranked_predictions
+    type: representation
+    scope_ref: scopes.monomer_prediction
+    architecture_ref: value_sites.ranked_predictions
+  - id: final_predictions
+    name: final_predictions
+    type: representation
+    scope_ref: scopes.monomer_prediction
+    architecture_ref: value_sites.final_predictions
+  - id: prediction_artifacts_output
+    name: artifacts
+    type: output
+    scope_ref: scopes.monomer_prediction
+    architecture_ref: value_sites.prediction_artifacts_output
+lines:
+  - id: build_raw_features
+    text: "raw_features = FeaturePipeline(fasta_path)"
+    comment: Parse one sequence, search sequence databases, find templates, and assemble their raw features.
+    scope_ref: scopes.monomer_prediction
+    statement_ref: modules.feature_pipeline
+    operation: build_sequence_msa_template_features
+    inputs: [fasta_input]
+    outputs: [raw_feature_bundle]
+    architecture_refs:
+      - relations.fasta_enters_feature_pipeline
+      - relations.feature_pipeline_produces_raw_feature_bundle
+    source_refs:
+      - source: runner_code
+        locator: predict_structure; data_pipeline.process call
+      - source: data_pipeline_code
+        locator: DataPipeline.process
+    code_bindings:
+      - lexeme: raw_features
+        symbol_ref: raw_feature_bundle
+        access: write
+      - lexeme: FeaturePipeline
+        architecture_ref: modules.feature_pipeline
+        access: call
+      - lexeme: fasta_path
+        symbol_ref: fasta_input
+        access: read
+  - id: run_prediction_ensemble
+    text: "predictions = PredictionEnsemble(raw_features)"
+    comment: Process the shared features separately for each configured monomer model, then execute ensemble-aware recycling inference.
+    scope_ref: scopes.monomer_prediction
+    statement_ref: modules.prediction_ensemble
+    operation: ensemble_recycling_inference
+    inputs: [raw_feature_bundle]
+    outputs: [model_predictions]
+    architecture_refs:
+      - relations.raw_feature_bundle_enters_prediction_ensemble
+      - relations.prediction_ensemble_produces_model_predictions
+    source_refs:
+      - source: runner_code
+        locator: predict_structure; model_runners loop
+      - source: model_wrapper_code
+        locator: RunModel.process_features and RunModel.predict
+      - source: model_code
+        locator: AlphaFold.__call__; recycling and ensemble_representations execution
+    code_bindings:
+      - lexeme: predictions
+        symbol_ref: model_predictions
+        access: write
+      - lexeme: PredictionEnsemble
+        architecture_ref: modules.prediction_ensemble
+        access: call
+      - lexeme: raw_features
+        symbol_ref: raw_feature_bundle
+        access: read
+  - id: rank_model_predictions
+    text: "ranked_predictions = RankByConfidence(predictions)"
+    comment: Monomer runs use mean pLDDT as ranking confidence and sort candidates in descending order.
+    scope_ref: scopes.monomer_prediction
+    statement_ref: modules.confidence_ranker
+    operation: rank_by_mean_plddt
+    inputs: [model_predictions]
+    outputs: [ranked_predictions]
+    architecture_refs:
+      - relations.model_predictions_enter_confidence_ranker
+      - relations.confidence_ranker_produces_ranked_predictions
+    source_refs:
+      - source: model_wrapper_code
+        locator: get_confidence_metrics; non-multimer ranking_confidence branch
+      - source: runner_code
+        locator: predict_structure; ranked_order construction
+    code_bindings:
+      - lexeme: ranked_predictions
+        symbol_ref: ranked_predictions
+        access: write
+      - lexeme: RankByConfidence
+        architecture_ref: modules.confidence_ranker
+        access: call
+      - lexeme: predictions
+        symbol_ref: model_predictions
+        access: read
+  - id: relax_or_pass_through
+    text: "final_predictions = RelaxSelectedOrPassThrough(ranked_predictions)"
+    comment: Relax the best, all, or none according to policy; retain the unrelaxed structure for every candidate not selected.
+    scope_ref: scopes.monomer_prediction
+    statement_ref: modules.relaxation_stage
+    operation: optional_amber_relaxation
+    inputs: [ranked_predictions]
+    outputs: [final_predictions]
+    architecture_refs:
+      - relations.ranked_predictions_enter_relaxation_stage
+      - relations.relaxation_stage_produces_final_predictions
+    source_refs:
+      - source: runner_code
+        locator: predict_structure; ModelsToRelax selection and ranked output fallback
+      - source: relax_code
+        locator: AmberRelaxation.process
+    code_bindings:
+      - lexeme: final_predictions
+        symbol_ref: final_predictions
+        access: write
+      - lexeme: RelaxSelectedOrPassThrough
+        architecture_ref: modules.relaxation_stage
+        access: call
+      - lexeme: ranked_predictions
+        symbol_ref: ranked_predictions
+        access: read
+  - id: export_prediction_artifacts
+    text: "artifacts = ExportPredictionArtifacts(final_predictions)"
+    comment: Serialize ranked structures and the feature, confidence, ranking, timing, and optional relaxation records produced by the run.
+    scope_ref: scopes.monomer_prediction
+    statement_ref: modules.artifact_exporter
+    operation: serialize_prediction_artifacts
+    inputs: [final_predictions]
+    outputs: [prediction_artifacts_output]
+    architecture_refs:
+      - relations.final_predictions_enter_artifact_exporter
+      - relations.artifact_exporter_writes_prediction_artifacts
+    source_refs:
+      - source: runner_code
+        locator: predict_structure; feature, result, confidence, structure, ranking, timing, and relaxation writes
+    code_bindings:
+      - lexeme: artifacts
+        symbol_ref: prediction_artifacts_output
+        access: write
+      - lexeme: ExportPredictionArtifacts
+        architecture_ref: modules.artifact_exporter
+        access: call
+      - lexeme: final_predictions
+        symbol_ref: final_predictions
+        access: read
+claims: []

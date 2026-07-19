@@ -61,7 +61,7 @@ module SourceContract
             "schema_required", path, "missing required property #{field}",
           )
         end
-        %w[grid nodes regions lanes elide exclude edge_overrides].each do |field|
+        %w[grid nodes regions lanes elide exclude edge_overrides reference_panels].each do |field|
           next unless board.key?(field)
 
           errors << JsonSchemaSubset::Diagnostic.new(

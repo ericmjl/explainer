@@ -1,0 +1,175 @@
+schema_version: visualization-v0.4
+id: alphafold2_semantic_zoom
+title: AlphaFold 2 Monomer Prediction
+entry:
+  architecture: architectures/alphafold2.yaml
+root_board: monomer_prediction
+boards:
+  - id: monomer_prediction
+    title: AlphaFold 2 Monomer Prediction
+    summary: A single-chain FASTA is expanded into sequence, MSA, and template features; an ensemble of recycling model runs predicts candidate structures and confidence; candidates are ranked, optionally relaxed, and exported as prediction artifacts.
+    subject_ref: architecture
+    expansion_depth: 1
+    grid:
+      columns: 6
+      rows: 4
+      column_sizing: content
+      col_gap: 28
+      row_gap: 28
+    nodes:
+      - id: fasta_input
+        ref: value_sites.fasta_input
+        label: single-chain FASTA
+        notation: .fasta
+        prominence: context
+        treatment: chip
+        density: micro
+        col: 1
+        row: 2
+      - id: feature_pipeline
+        ref: modules.feature_pipeline
+        label: MSA + template feature pipeline
+        prominence: primary
+        treatment: compact
+        density: compact
+        col: 2
+        row: 2
+      - id: raw_feature_bundle
+        ref: value_sites.raw_feature_bundle
+        label: raw feature bundle
+        notation: features
+        prominence: secondary
+        treatment: compact
+        density: compact
+        col: 2
+        row: 3
+      - id: prediction_ensemble
+        ref: modules.prediction_ensemble
+        label: model ensemble + recycling
+        prominence: primary
+        treatment: compact
+        density: compact
+        col: 3
+        row: 2
+      - id: model_predictions
+        ref: value_sites.model_predictions
+        label: candidate structures + confidence
+        notation: predictions
+        prominence: secondary
+        treatment: compact
+        density: compact
+        col: 3
+        row: 3
+      - id: confidence_ranker
+        ref: modules.confidence_ranker
+        label: confidence ranking
+        prominence: primary
+        treatment: compact
+        density: compact
+        col: 4
+        row: 2
+      - id: ranked_predictions
+        ref: value_sites.ranked_predictions
+        label: ranked candidates
+        notation: ranked
+        prominence: secondary
+        treatment: compact
+        density: compact
+        col: 4
+        row: 3
+      - id: relaxation_stage
+        ref: modules.relaxation_stage
+        label: optional Amber relaxation
+        prominence: primary
+        treatment: compact
+        density: compact
+        col: 5
+        row: 2
+      - id: final_predictions
+        ref: value_sites.final_predictions
+        label: relaxed or unrelaxed candidates
+        notation: final
+        prominence: secondary
+        treatment: compact
+        density: compact
+        col: 5
+        row: 3
+      - id: artifact_exporter
+        ref: modules.artifact_exporter
+        label: prediction artifact exporter
+        prominence: primary
+        treatment: compact
+        density: compact
+        col: 6
+        row: 2
+      - id: prediction_artifacts_output
+        ref: value_sites.prediction_artifacts_output
+        label: ranked structures + confidence files
+        notation: artifacts
+        prominence: context
+        treatment: chip
+        density: micro
+        glyph: vector
+        col: 6
+        row: 3
+    edge_overrides:
+      - match: { relation_ref: relations.fasta_enters_feature_pipeline }
+        label: amino-acid sequence
+        connection:
+          title: Monomer sequence input
+          role: task boundary input
+          inside: The data pipeline parses exactly one FASTA sequence before launching database searches and template lookup.
+      - match: { relation_ref: relations.feature_pipeline_produces_raw_feature_bundle }
+        label: sequence + MSA + templates
+        connection:
+          title: Raw model features
+          role: shared pipeline output
+          inside: Sequence features are combined with deduplicated MSA features and featurized template hits for subsequent per-model processing.
+      - match: { relation_ref: relations.raw_feature_bundle_enters_prediction_ensemble }
+        label: shared raw features
+        connection:
+          title: Features enter model execution
+          role: ensemble input
+          inside: Each configured monomer model processes the shared raw bundle with its own seed before running its recycling inference path.
+      - match: { relation_ref: relations.prediction_ensemble_produces_model_predictions }
+        label: structures + confidence
+        connection:
+          title: Candidate model outputs
+          role: ensemble result set
+          inside: Each model run returns atom coordinates and confidence outputs, including per-residue pLDDT and the scalar used for ranking.
+      - match: { relation_ref: relations.model_predictions_enter_confidence_ranker }
+        label: candidate scores
+        connection:
+          title: Confidence inputs
+          role: candidate comparison
+          inside: The ranker reads the monomer ranking confidence attached to every candidate while retaining the associated predicted structure.
+      - match: { relation_ref: relations.confidence_ranker_produces_ranked_predictions }
+        label: descending mean pLDDT
+        connection:
+          title: Ranked candidate order
+          role: monomer selection order
+          inside: Monomer candidates are ordered by their mean predicted LDDT so the highest-confidence prediction is first.
+      - match: { relation_ref: relations.ranked_predictions_enter_relaxation_stage }
+        label: best / all / none
+        connection:
+          title: Relaxation policy
+          role: optional physical refinement
+          inside: The configured policy selects the best candidate, every candidate, or no candidates for Amber relaxation while preserving rank order.
+      - match: { relation_ref: relations.relaxation_stage_produces_final_predictions }
+        label: relaxed or pass-through
+        connection:
+          title: Final structure variants
+          role: post-processing result
+          inside: Selected structures use their relaxed coordinates; candidates not selected for relaxation pass through in unrelaxed form.
+      - match: { relation_ref: relations.final_predictions_enter_artifact_exporter }
+        label: ordered structures + metadata
+        connection:
+          title: Results enter serialization
+          role: artifact assembly
+          inside: The exporter pairs each ordered structure with its confidence values, ranking order, features, model outputs, timings, and optional relaxation metrics.
+      - match: { relation_ref: relations.artifact_exporter_writes_prediction_artifacts }
+        label: ranked outputs
+        connection:
+          title: Prediction artifact directory
+          role: task boundary output
+          inside: The run writes ranked PDB and mmCIF structures alongside confidence JSON, raw result pickles, the feature bundle, ranking metadata, and timings.

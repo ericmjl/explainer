@@ -113,6 +113,38 @@ Common presentation fields:
 
 Do not author `expandable`; drilldown is determined only by `board_ref`.
 
+## Published Reference Panels
+
+An ordinary board may place one or more cited author figures beside its
+architecture graph with `reference_panels`. A panel is view-owned explanatory
+material, not a module, value site, or relation: it never participates in
+projection, routing, selection, or semantic zoom.
+
+```yaml
+reference_panels:
+  - id: authors_partial_atomization
+    title: Authors' partial-atomization diagram
+    asset: assets/reference-panels/genie3/figure_1_partial_atomization.png
+    alt: Author diagram comparing motif scaffolding and binder design.
+    caption: Known regions expose atom-level context while designed regions remain C-alpha tokens.
+    source_ref: genie3_2026
+    locator: Figure 1, Partial Atomization panel
+    license_note: Cropped from Lin et al. (2026), licensed CC BY 4.0.
+    position: right
+```
+
+Reference images must be raster assets under `assets/reference-panels/` and
+must include meaningful alternative text, board-specific caption prose, an
+existing bibliography `source_ref`, a precise figure locator, and an explicit
+license or attribution note. `position: right` reserves a side rail without
+changing the authored grid; the renderer keeps the panel outside canvas pan
+and zoom and links both the image and its publication source.
+
+The static publisher copies only assets named by selected boards. A crop may
+help readers relate a paper figure to the explainer, but it is never evidence
+that silently creates architecture facts; canonical facts and their evidence
+remain in the architecture source.
+
 ## Reusable-Block Detail Boards
 
 A reusable algorithm detail is the one exception to an architecture board's

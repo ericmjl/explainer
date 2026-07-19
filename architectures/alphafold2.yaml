@@ -1,0 +1,529 @@
+schema_version: architecture-v0.4
+id: alphafold2
+name: AlphaFold 2 Monomer Prediction
+family: protein_structure_prediction
+status: draft
+task_modes:
+  - monomer_structure_prediction
+reference_configuration:
+  model_preset: monomer
+  configured_models: 5
+  configured_recycles_before_final_pass: 3
+  method_repository_revision: 09ed0c5d5a32d794ed9f78b70906cbeaff0ef439
+  evidence:
+    status: confirmed_from_code
+    refs:
+      - source_ref: af2_config_code
+        role: configuration_evidence
+        locator: MODEL_PRESETS, CONFIG_DIFFS, and CONFIG.model.num_recycle
+      - source_ref: af2_runner_code
+        role: implementation_evidence
+        locator: main; model_names and model_runners construction
+      - source_ref: af2_model_code
+        role: implementation_evidence
+        locator: AlphaFold.__call__
+        note: Three configured recycling calls are followed by the final prediction call.
+sources:
+  - source_ref: af2_2021
+    role: architecture_description
+  - source_ref: af2_2021_supplement
+    role: detailed_architecture_description
+  - source_ref: af2_runner_code
+    role: inference_orchestration
+  - source_ref: af2_data_pipeline_code
+    role: feature_pipeline_implementation
+  - source_ref: af2_model_wrapper_code
+    role: model_runner_implementation
+  - source_ref: af2_model_code
+    role: monomer_model_implementation
+  - source_ref: af2_structure_code
+    role: structure_module_implementation
+  - source_ref: af2_config_code
+    role: reference_configuration
+  - source_ref: af2_relax_code
+    role: relaxation_implementation
+decomposition:
+  status: complete
+  evidence:
+    status: confirmed_from_code
+    refs:
+      - source_ref: af2_runner_code
+        role: implementation_evidence
+        locator: predict_structure
+        note: The root accounts for feature generation, configured model predictions, confidence ranking, optional relaxation, and result serialization.
+execution:
+  loops: []
+state_semantics: {}
+conditioning: []
+scale_transitions: []
+training_inference:
+  objective:
+    kind: composite_structure_and_auxiliary_losses
+    notes:
+      - Training combines structure losses with auxiliary heads and incorporates self-distillation examples.
+      - This first source-set wave models the released monomer inference boundary; training internals remain outside the root board.
+  schedule:
+    kind: staged_supervised_and_self_distillation
+  sampler:
+    kind: monomer_ensemble_with_recycling
+    configurable: true
+  teacher_forcing: none
+  self_conditioning: recycled_previous_predictions
+  checkpoint_notes:
+    - The released runner loads separately parameterized monomer model configurations and ranks their predictions.
+    - Exact training-loop implementation is not included in the released inference repository and will remain paper-backed when expanded.
+  evidence:
+    status: confirmed_from_paper
+    refs:
+      - source_ref: af2_2021_supplement
+        role: training_and_inference_evidence
+        locator: Supplementary Methods 1.3 and 1.9-1.11; Algorithms 2 and 30-32
+representations:
+  - id: fasta_sequence
+    scale: protein
+    semantic_role: single-chain amino-acid sequence submitted for structure prediction
+    shape: N_res residues
+    glyph: vector
+    carries:
+      - protein identifier
+      - primary amino-acid sequence
+    evidence:
+      status: confirmed_from_code
+      refs:
+        - source_ref: af2_data_pipeline_code
+          role: implementation_evidence
+          locator: DataPipeline.process
+  - id: raw_feature_bundle
+    scale: protein
+    semantic_role: heterogeneous raw feature dictionary shared by the configured monomer model runs
+    shape: dictionary of sequence, MSA, template, mask, and metadata arrays
+    carries:
+      - target sequence features
+      - deduplicated multiple-sequence alignment features
+      - featurized structural template hits
+      - residue and template masks
+    evidence:
+      status: confirmed_from_code
+      refs:
+        - source_ref: af2_data_pipeline_code
+          role: implementation_evidence
+          locator: DataPipeline.process
+  - id: model_prediction_set
+    scale: candidate_set
+    semantic_role: per-model predicted structures and confidence outputs before ranking
+    shape: N_model candidates with N_res x 37 x 3 atom coordinates and confidence fields
+    glyph: coordinates
+    carries:
+      - predicted all-atom coordinates
+      - per-residue pLDDT
+      - ranking confidence
+      - optional predicted aligned error and predicted TM score
+    evidence:
+      status: confirmed_from_code
+      refs:
+        - source_ref: af2_model_wrapper_code
+          role: implementation_evidence
+          locator: RunModel.predict and get_confidence_metrics
+        - source_ref: af2_runner_code
+          role: implementation_evidence
+          locator: predict_structure; model_runners loop
+  - id: ranked_prediction_set
+    scale: candidate_set
+    semantic_role: candidate structures ordered by monomer confidence
+    shape: ordered N_model candidates with structures and confidence fields
+    glyph: coordinates
+    carries:
+      - descending monomer confidence order
+      - predicted structures and their metrics
+    evidence:
+      status: confirmed_from_code
+      refs:
+        - source_ref: af2_runner_code
+          role: implementation_evidence
+          locator: predict_structure; ranked_order construction
+        - source_ref: af2_model_wrapper_code
+          role: implementation_evidence
+          locator: get_confidence_metrics
+  - id: final_prediction_set
+    scale: candidate_set
+    semantic_role: ranked candidate structures after configured Amber relaxation or unrelaxed pass-through
+    shape: ordered N_model candidates with selected relaxed coordinates
+    glyph: coordinates
+    carries:
+      - relaxed coordinates for selected candidates
+      - unrelaxed coordinates for unselected candidates
+      - original rank order
+    evidence:
+      status: confirmed_from_code
+      refs:
+        - source_ref: af2_runner_code
+          role: implementation_evidence
+          locator: predict_structure; ModelsToRelax selection and ranked output writes
+        - source_ref: af2_relax_code
+          role: implementation_evidence
+          locator: AmberRelaxation.process
+  - id: prediction_artifact_bundle
+    scale: run
+    semantic_role: serialized prediction directory containing structures, confidences, raw results, features, and run metadata
+    shape: directory of PDB, mmCIF, JSON, pickle, and metadata files
+    carries:
+      - ranked structure files
+      - confidence and predicted-aligned-error files
+      - raw feature and model-result dictionaries
+      - ranking, timing, and optional relaxation metadata
+    evidence:
+      status: confirmed_from_code
+      refs:
+        - source_ref: af2_runner_code
+          role: implementation_evidence
+          locator: predict_structure
+value_sites:
+  - id: fasta_input
+    representation_ref: representations.fasta_sequence
+    scope_ref: architecture
+    boundary: input
+    role: task_input
+    evidence:
+      status: confirmed_from_code
+      refs:
+        - source_ref: af2_runner_code
+          role: implementation_evidence
+          locator: predict_structure; fasta_path
+  - id: raw_feature_bundle
+    representation_ref: representations.raw_feature_bundle
+    scope_ref: architecture
+    role: shared_model_input
+    evidence:
+      status: confirmed_from_code
+      refs:
+        - source_ref: af2_runner_code
+          role: implementation_evidence
+          locator: predict_structure; feature_dict
+  - id: model_predictions
+    representation_ref: representations.model_prediction_set
+    scope_ref: architecture
+    role: unranked_candidates
+    evidence:
+      status: confirmed_from_code
+      refs:
+        - source_ref: af2_runner_code
+          role: implementation_evidence
+          locator: predict_structure; prediction_result and unrelaxed_proteins
+  - id: ranked_predictions
+    representation_ref: representations.ranked_prediction_set
+    scope_ref: architecture
+    role: confidence_ordered_candidates
+    evidence:
+      status: confirmed_from_code
+      refs:
+        - source_ref: af2_runner_code
+          role: implementation_evidence
+          locator: predict_structure; ranked_order
+  - id: final_predictions
+    representation_ref: representations.final_prediction_set
+    scope_ref: architecture
+    role: postprocessed_candidates
+    evidence:
+      status: confirmed_from_code
+      refs:
+        - source_ref: af2_runner_code
+          role: implementation_evidence
+          locator: predict_structure; relaxed_pdbs and ranked output fallback
+  - id: prediction_artifacts_output
+    representation_ref: representations.prediction_artifact_bundle
+    scope_ref: architecture
+    boundary: output
+    role: task_output
+    evidence:
+      status: confirmed_from_code
+      refs:
+        - source_ref: af2_runner_code
+          role: implementation_evidence
+          locator: predict_structure; output file writes
+modules:
+  - id: feature_pipeline
+    parent_ref: architecture
+    decomposition:
+      status: partial
+      reason: Database search, template processing, MSA clustering, and model-specific feature transforms are deferred to the feature-pipeline drilldown.
+    label: MSA and Template Feature Pipeline
+    kind: adapter
+    mechanisms:
+      - fasta_parsing
+      - genetic_database_search
+      - template_search
+      - raw_feature_assembly
+    role: parse one protein sequence, search sequence and structure databases, and assemble the shared raw model features
+    scale: protein
+    evidence:
+      status: confirmed_from_code
+      refs:
+        - source_ref: af2_data_pipeline_code
+          role: implementation_evidence
+          locator: DataPipeline.process
+        - source_ref: af2_runner_code
+          role: orchestration_evidence
+          locator: predict_structure; data_pipeline.process call
+  - id: prediction_ensemble
+    parent_ref: architecture
+    decomposition:
+      status: partial
+      reason: Per-model feature processing, Algorithm 2, recycling state, Evoformer, Structure Module, and prediction heads are reserved for paper-aligned child boards.
+    label: Monomer Model Ensemble and Recycling
+    kind: controller
+    mechanisms:
+      - per_model_feature_processing
+      - parameterized_model_execution
+      - representation_ensembling
+      - prediction_recycling
+    role: run every configured monomer parameter set on independently processed features and collect its structure and confidence prediction
+    scale: candidate_set
+    evidence:
+      status: confirmed_from_code
+      refs:
+        - source_ref: af2_runner_code
+          role: orchestration_evidence
+          locator: main; model_runners construction and predict_structure model loop
+        - source_ref: af2_model_wrapper_code
+          role: implementation_evidence
+          locator: RunModel.process_features and RunModel.predict
+        - source_ref: af2_model_code
+          role: implementation_evidence
+          locator: AlphaFold and AlphaFoldIteration
+        - source_ref: af2_2021_supplement
+          role: architecture_evidence
+          locator: Algorithm 2
+  - id: confidence_ranker
+    parent_ref: architecture
+    decomposition:
+      status: leaf
+    label: Monomer Confidence Ranker
+    kind: controller
+    mechanisms:
+      - mean_plddt_scoring
+      - descending_candidate_sort
+    role: order candidate structures by the monomer ranking confidence derived from mean predicted LDDT
+    scale: candidate_set
+    evidence:
+      status: confirmed_from_code
+      refs:
+        - source_ref: af2_model_wrapper_code
+          role: implementation_evidence
+          locator: get_confidence_metrics; non-multimer branch
+        - source_ref: af2_runner_code
+          role: orchestration_evidence
+          locator: predict_structure; ranking_confidences and ranked_order
+  - id: relaxation_stage
+    parent_ref: architecture
+    decomposition:
+      status: partial
+      reason: The root accounts for policy selection and its output semantics; OpenMM/Amber minimization internals are intentionally deferred.
+    label: Optional Amber Relaxation
+    kind: refiner
+    mechanisms:
+      - best_all_none_policy
+      - amber_energy_minimization
+      - unrelaxed_pass_through
+    role: relax the configured subset of ranked candidates and preserve unrelaxed coordinates for every unselected candidate
+    scale: candidate_set
+    evidence:
+      status: confirmed_from_code
+      refs:
+        - source_ref: af2_runner_code
+          role: orchestration_evidence
+          locator: predict_structure; ModelsToRelax selection and ranked output fallback
+        - source_ref: af2_relax_code
+          role: implementation_evidence
+          locator: AmberRelaxation.process
+  - id: artifact_exporter
+    parent_ref: architecture
+    decomposition:
+      status: leaf
+    label: Prediction Artifact Exporter
+    kind: serializer
+    mechanisms:
+      - structure_serialization
+      - confidence_serialization
+      - run_metadata_serialization
+    role: write ranked structures and the feature, model-result, confidence, ranking, timing, and relaxation records for the prediction run
+    scale: run
+    evidence:
+      status: confirmed_from_code
+      refs:
+        - source_ref: af2_runner_code
+          role: implementation_evidence
+          locator: predict_structure; output file writes
+relations:
+  - id: fasta_enters_feature_pipeline
+    from: value_sites.fasta_input
+    to: modules.feature_pipeline
+    kind: data_flow
+    carries: [representations.fasta_sequence]
+    operation: parse_monomer_fasta
+    evidence:
+      status: confirmed_from_code
+      refs:
+        - source_ref: af2_runner_code
+          role: implementation_evidence
+          locator: predict_structure; data_pipeline.process call
+  - id: feature_pipeline_produces_raw_feature_bundle
+    from: modules.feature_pipeline
+    to: value_sites.raw_feature_bundle
+    kind: data_flow
+    carries: [representations.raw_feature_bundle]
+    operation: assemble_sequence_msa_and_template_features
+    evidence:
+      status: confirmed_from_code
+      refs:
+        - source_ref: af2_data_pipeline_code
+          role: implementation_evidence
+          locator: DataPipeline.process
+  - id: raw_feature_bundle_enters_prediction_ensemble
+    from: value_sites.raw_feature_bundle
+    to: modules.prediction_ensemble
+    kind: data_flow
+    carries: [representations.raw_feature_bundle]
+    operation: process_features_per_model
+    evidence:
+      status: confirmed_from_code
+      refs:
+        - source_ref: af2_runner_code
+          role: implementation_evidence
+          locator: predict_structure; model_runner.process_features call
+        - source_ref: af2_model_wrapper_code
+          role: implementation_evidence
+          locator: RunModel.process_features
+  - id: prediction_ensemble_produces_model_predictions
+    from: modules.prediction_ensemble
+    to: value_sites.model_predictions
+    kind: data_flow
+    carries: [representations.model_prediction_set]
+    operation: collect_structure_and_confidence_predictions
+    evidence:
+      status: confirmed_from_code
+      refs:
+        - source_ref: af2_runner_code
+          role: implementation_evidence
+          locator: predict_structure; model_runners loop
+        - source_ref: af2_model_wrapper_code
+          role: implementation_evidence
+          locator: RunModel.predict
+  - id: model_predictions_enter_confidence_ranker
+    from: value_sites.model_predictions
+    to: modules.confidence_ranker
+    kind: data_flow
+    carries: [representations.model_prediction_set]
+    operation: read_candidate_ranking_confidences
+    evidence:
+      status: confirmed_from_code
+      refs:
+        - source_ref: af2_runner_code
+          role: implementation_evidence
+          locator: predict_structure; ranking_confidences
+  - id: confidence_ranker_produces_ranked_predictions
+    from: modules.confidence_ranker
+    to: value_sites.ranked_predictions
+    kind: data_flow
+    carries: [representations.ranked_prediction_set]
+    operation: sort_candidates_by_mean_plddt
+    evidence:
+      status: confirmed_from_code
+      refs:
+        - source_ref: af2_runner_code
+          role: implementation_evidence
+          locator: predict_structure; ranked_order construction
+        - source_ref: af2_model_wrapper_code
+          role: implementation_evidence
+          locator: get_confidence_metrics; non-multimer branch
+  - id: ranked_predictions_enter_relaxation_stage
+    from: value_sites.ranked_predictions
+    to: modules.relaxation_stage
+    kind: data_flow
+    carries: [representations.ranked_prediction_set]
+    operation: select_best_all_or_none_for_relaxation
+    evidence:
+      status: confirmed_from_code
+      refs:
+        - source_ref: af2_runner_code
+          role: implementation_evidence
+          locator: predict_structure; ModelsToRelax selection
+  - id: relaxation_stage_produces_final_predictions
+    from: modules.relaxation_stage
+    to: value_sites.final_predictions
+    kind: data_flow
+    carries: [representations.final_prediction_set]
+    operation: combine_relaxed_and_unrelaxed_candidates
+    evidence:
+      status: confirmed_from_code
+      refs:
+        - source_ref: af2_runner_code
+          role: implementation_evidence
+          locator: predict_structure; relaxed_pdbs and ranked output fallback
+        - source_ref: af2_relax_code
+          role: implementation_evidence
+          locator: AmberRelaxation.process
+  - id: final_predictions_enter_artifact_exporter
+    from: value_sites.final_predictions
+    to: modules.artifact_exporter
+    kind: data_flow
+    carries: [representations.final_prediction_set]
+    operation: assemble_ordered_prediction_artifacts
+    evidence:
+      status: confirmed_from_code
+      refs:
+        - source_ref: af2_runner_code
+          role: implementation_evidence
+          locator: predict_structure; ranked structure and metadata writes
+  - id: artifact_exporter_writes_prediction_artifacts
+    from: modules.artifact_exporter
+    to: value_sites.prediction_artifacts_output
+    kind: data_flow
+    carries: [representations.prediction_artifact_bundle]
+    operation: serialize_prediction_directory
+    evidence:
+      status: confirmed_from_code
+      refs:
+        - source_ref: af2_runner_code
+          role: implementation_evidence
+          locator: predict_structure; output file writes
+claims:
+  - id: monomer_candidates_are_ranked_by_mean_plddt
+    statement: The released monomer path ranks candidate predictions by mean per-residue pLDDT rather than the multimer ipTM-weighted score.
+    scope:
+      module_ref: modules.confidence_ranker
+    evidence:
+      status: confirmed_from_code
+      refs:
+        - source_ref: af2_model_wrapper_code
+          role: implementation_evidence
+          locator: get_confidence_metrics
+        - source_ref: af2_runner_code
+          role: implementation_evidence
+          locator: predict_structure; ranked_order construction
+  - id: relaxation_is_optional_postprocessing
+    statement: Amber relaxation operates after confidence ranking and does not feed coordinates back into AlphaFold model inference.
+    scope:
+      module_ref: modules.relaxation_stage
+    evidence:
+      status: confirmed_from_code
+      refs:
+        - source_ref: af2_runner_code
+          role: implementation_evidence
+          locator: predict_structure; model loop, ranked_order, and relaxation loop
+open_questions:
+  - id: partition_first_model_drilldown
+    question: How should the first prediction-ensemble drilldown divide paper Algorithm 2 between recycling control and one AlphaFoldIteration execution?
+    status: deferred
+    affected_refs:
+      - modules.prediction_ensemble
+    blocking: false
+    resolution_criteria: Align the Algorithm 2 and Algorithms 30-32 scopes with the released AlphaFold and AlphaFoldIteration call boundary while keeping recycled before/after value sites distinct.
+    evidence:
+      status: open_question
+      refs:
+        - source_ref: af2_2021_supplement
+          role: architecture_context
+          locator: Algorithms 2 and 30-32
+        - source_ref: af2_model_code
+          role: implementation_context
+          locator: AlphaFold and AlphaFoldIteration

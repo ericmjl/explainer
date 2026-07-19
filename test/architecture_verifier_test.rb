@@ -11,6 +11,7 @@ class ArchitectureVerifierTest < Minitest::Test
   ROOT = File.expand_path("..", __dir__)
   STAGED_DIRECTORIES = %w[
     architectures
+    assets
     comparisons
     views
     references

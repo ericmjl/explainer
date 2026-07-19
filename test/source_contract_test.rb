@@ -54,6 +54,34 @@ class SourceContractTest < Minitest::Test
     assert_diagnostic diagnostics, "schema_unknown_property", /nodes/
   end
 
+  def test_reference_panels_are_cited_raster_presentation_not_graph_nodes
+    view = deep_copy(@view)
+    board = view.fetch("boards").first
+    board["reference_panels"] = [{
+      "id" => "authors_diagram",
+      "title" => "Authors' diagram",
+      "asset" => "assets/reference-panels/example/figure_1.png",
+      "alt" => "A diagram explaining the architecture.",
+      "caption" => "A board-specific reading of the published diagram.",
+      "source_ref" => "generic_method_note",
+      "locator" => "Figure 1",
+      "license_note" => "Used with attribution.",
+      "position" => "right",
+    }]
+
+    assert_empty SourceContract.errors(view)
+
+    invalid = deep_copy(view)
+    panel = invalid.fetch("boards").first.fetch("reference_panels").first
+    panel["asset"] = "references/source.svg"
+    panel["position"] = "inside_grid"
+    panel.delete("license_note")
+    diagnostics = SourceContract.errors(invalid)
+    assert_diagnostic diagnostics, "schema_pattern", /reference_panels\[0\]\.asset/
+    assert_diagnostic diagnostics, "schema_enum", /reference_panels\[0\]\.position/
+    assert_diagnostic diagnostics, "schema_required", /reference_panels\[0\]/
+  end
+
   def test_rejects_unknown_fields_and_status_typos
     architecture = deep_copy(@architecture)
     architecture.fetch("modules").first["ouputs"] = []

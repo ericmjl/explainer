@@ -495,6 +495,13 @@ def lint_projected_view(view, arch)
     end
 
     require_unique_ids("node on board #{board_id}", board["nodes"])
+    require_unique_ids("reference panel on board #{board_id}", board["reference_panels"])
+    Array(board["reference_panels"]).each do |panel|
+      asset = panel["asset"]
+      if asset && !File.file?(File.join(ROOT, asset))
+        @errors << "board #{board_id} reference panel #{panel['id']} asset is missing: #{asset}"
+      end
+    end
     columns = board.dig("grid", "columns")
     rows = board.dig("grid", "rows")
     occupied = {}
@@ -570,6 +577,7 @@ end
 
 def lint_view(view, arch, module_ids, rep_ids, relations_by_id)
   lint_source_contract(view, "view #{view['id'] || 'unknown'}")
+  lint_source_ref_targets(view, "view #{view['id'] || 'unknown'}")
   schema_version = view["schema_version"]
   unless VIEW_SCHEMA_VERSIONS.include?(schema_version)
     @errors << "unsupported visualization schema_version #{schema_version.inspect}"
