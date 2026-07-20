@@ -27,17 +27,17 @@ Pseudocode and comparisons also bind to stable facts instead of copying them.
 
 | Layer | Current contract | Compatibility |
 | --- | --- | --- |
-| Architecture facts | `architecture-v0.4` | All registered source sets use v0.4. |
+| Architecture facts | `architecture-v0.5` | All registered source sets use v0.5. |
 | Semantic-zoom boards | `visualization-v0.4` | All registered views use v0.4. |
 | Semantic pseudocode | `pseudocode-v0.2` | Registered v0.1 traces remain readable. |
-| Reusable algorithms | `standard-block-v0.2` | Registered v0.1 blocks remain supported. |
+| Reusable algorithms | `standard-block-v0.3` | Registered v0.1/v0.2 blocks remain supported. |
 | Curated comparisons | `architecture-comparison-v0.1` | Registered through `comparison-registry-v0.1`. |
 | Typed edit plans | `architecture-edit-v0.2` | v0.1 plans remain accepted. |
-| Browser manifest | `architecture-manifest-v0.4` | Compiler output, not an authoring format. |
+| Browser manifest | `architecture-manifest-v0.5` | Compiler output, not an authoring format. |
 | Semantic layout | `semantic_flow_v1` | Produces reviewable `col`/`row` values in view YAML. |
 
 Compiler versions are recorded in generated manifests. The current manifest
-builder is `architecture-manifest-builder-v0.4.6`; semantic pseudocode and
+builder is `architecture-manifest-builder-v0.5.0`; semantic pseudocode and
 comparisons are independently versioned as
 `semantic-pseudocode-compiler-v0.3` and
 `architecture-comparison-compiler-v0.1`.

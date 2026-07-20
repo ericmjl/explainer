@@ -1,6 +1,6 @@
 # Fact Ownership and Derived Interfaces v0.1
 
-Status: **implemented by architecture-v0.4**.
+Status: **implemented by architecture-v0.5**.
 
 The durable source must contain one editable copy of every architectural fact.
 References may connect facts, and the generated manifest may materialize
@@ -91,7 +91,7 @@ group's representation, and a site may belong to at most one state group.
 
 ## Generated Manifest Fields
 
-`architecture-manifest-v0.4` intentionally materializes convenient read-only
+`architecture-manifest-v0.5` intentionally materializes convenient read-only
 indexes:
 
 - `valueSiteInterfaces`: incoming/outgoing relation refs and producer/consumer

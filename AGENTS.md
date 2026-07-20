@@ -21,7 +21,7 @@ When updating an architecture, prefer editing the declarative sources first:
 - Use stable IDs in snake_case. Keep IDs semantic, not visual:
   `input_adapter`, `context_memory`, `refinement_stack`, not `left_box_1`.
 - Give every architectural fact one owner. Reference that fact from other
-  sections and views instead of copying it. In architecture-v0.4, top-level
+  sections and views instead of copying it. In architecture-v0.5, top-level
   `relations` own information-flow identity, semantics, and evidence.
 - Give every relation a stable semantic snake_case `id`; do not author
   anonymous architecture `edges`.
@@ -36,7 +36,7 @@ When updating an architecture, prefer editing the declarative sources first:
   into distinct value sites; never encode a state update as an ambiguous
   self-edge.
 - Derive module interfaces from canonical relations. Do not separately author
-  module `inputs`/`outputs` in architecture-v0.4. Conditioning references one
+  module `inputs`/`outputs` in architecture-v0.5. Conditioning references one
   relation without copying endpoints; scale transitions reference an ordered
   relation path; state lifecycle groups never copy producer/consumer lists.
 - Every nontrivial claim should have `evidence.status` and `evidence.refs`.
@@ -61,7 +61,8 @@ When updating an architecture, prefer editing the declarative sources first:
   - `scale_transitions` for compression, broadcast, pooling, and reshaping.
   - `training_inference` for objectives, schedules, samplers, and deployment
     notes when relevant.
-- Reuse algorithm anatomy through `standard-block-v0.2` plus architecture
+- Reuse algorithm anatomy through typed `standard-block-v0.2` or parameterized
+  `standard-block-v0.3` plus architecture
   `block_instances`. Bind ports only to canonical `relations.*`; do not copy
   endpoints or representation facts. Select an explicit variant and declare
   `conformance: exact`, `wrapped`, or `reduced`. Non-exact reuse requires a
@@ -88,7 +89,7 @@ When updating an architecture, prefer editing the declarative sources first:
   declared input/output needs a matching read/write binding. Use distinct
   symbols and value sites for before/after state so a trace never disguises a
   state transition as an ambiguous self-update.
-- Reusable internals remain owned by `standard-block-v0.2` steps. Add semantic
+- Reusable internals remain owned by their versioned standard-block steps. Add semantic
   `code_bindings` there and let the compiler scope them to each block instance;
   method pseudocode should call the instance or surrounding module rather than
   copying the internal algorithm.

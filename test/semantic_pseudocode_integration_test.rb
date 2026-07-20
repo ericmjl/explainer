@@ -109,7 +109,7 @@ class SemanticPseudocodeIntegrationTest < Minitest::Test
       end
     end
 
-    assert_equal ["Compute attention weights", "Extract values and update state"],
+    assert_equal ["Compute attention weights", "Extract and fuse values"],
       board.fetch("segments").map { |segment| segment.fetch("label") }
   end
 

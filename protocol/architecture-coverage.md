@@ -1,6 +1,6 @@
 # Architecture Decomposition Coverage v0.1
 
-Status: **implemented in architecture-v0.4 compilation**.
+Status: **implemented in architecture-v0.5 compilation**.
 
 Coverage is a top-down declaration of how completely each architectural scope
 has been decomposed. It does not guess how much of an unknown real system has
@@ -62,7 +62,7 @@ unless a future source needs a more specific override.
 
 ## Compiler Invariants
 
-For architecture-v0.4:
+For architecture-v0.5:
 
 - the root and every module must declare one valid status;
 - `complete` scopes must own at least one immediate module;
@@ -77,7 +77,7 @@ specification.
 
 ## Compiled Coverage
 
-`architecture-manifest-v0.4` includes `architecture.coverage`:
+`architecture-manifest-v0.5` includes `architecture.coverage`:
 
 ```yaml
 method: declared_decomposition_closure

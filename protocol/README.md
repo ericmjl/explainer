@@ -8,7 +8,7 @@ the design in detail.
 
 | Document | Scope |
 | --- | --- |
-| `architecture-language.md` | architecture-v0.4 source vocabulary |
+| `architecture-language.md` | architecture-v0.5 source vocabulary |
 | `architecture-edit-language.md` | backwards-compatible architecture-edit-v0.1/v0.2 prepare/show/apply plans |
 | `architecture-review-workspace.md` | loopback-only human review UX over typed edit plans |
 | `source-validation.md` | strict parsing, schemas, semantic checks, source-set verification, and deterministic compilation |
@@ -26,11 +26,11 @@ the design in detail.
 Current source sets compile as:
 
 ```text
-architecture-v0.4 + visualization-v0.4
-  + pseudocode-v0.1/v0.2 + standard-block-v0.1/v0.2
+architecture-v0.5 + visualization-v0.4
+  + pseudocode-v0.1/v0.2 + standard-block-v0.1/v0.2/v0.3
   -> strict YAML + shared executable schemas
   -> Ruby evidence/ownership/coverage/projection/pseudocode pipeline
-  -> architecture-manifest-v0.4
+  -> architecture-manifest-v0.5
   + optional architecture-comparison-v0.1 compiled alignment metadata
   -> canonical browser audience view
   -> scripts/build_pages.rb allowlist
@@ -73,6 +73,6 @@ renderer.
 
 Architecture-v0.1/v0.2/v0.3 and visualization-v0.1/v0.2/v0.3 behavior is
 documented only where migration requires it, primarily in
-`architecture-projection-model.md`. New sources use architecture-v0.4 and
+`architecture-projection-model.md`. New sources use architecture-v0.5 and
 visualization-v0.4; do not copy legacy authored-edge examples into current
 views.

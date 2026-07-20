@@ -41,10 +41,10 @@ current sources use anchors for repeated evidence objects.
 
 The implementation-independent source schemas are:
 
-- `schemas/architecture-v0.4.schema.json`;
+- `schemas/architecture-v0.5.schema.json`;
 - `schemas/visualization-v0.4.schema.json`;
 - `schemas/bibliography-v0.1.schema.json`;
-- `schemas/standard-block-v0.2.schema.json`;
+- `schemas/standard-block-v0.3.schema.json`;
 - `schemas/pseudocode-v0.2.schema.json`;
 - `schemas/comparison-registry-v0.1.schema.json`; and
 - `schemas/architecture-comparison-v0.1.schema.json`.
@@ -132,8 +132,12 @@ view, and reusable-block sources used to resolve board-local facts. Its
 compiled `comparisonIndex` stores subject and alignment metadata but never copies either
 manifest-owned board scene.
 
-Registered `standard-block-v0.2` inputs are schema-checked and validated for
-local refs, variant step membership, visual coverage, and output production.
+Registered `standard-block-v0.2`/`standard-block-v0.3` inputs are schema-checked
+and validated for local refs, variant step membership, visual coverage, and
+output production. V0.3 additionally validates symbolic parameter references,
+boundary/configuration unification, complete instance bindings, and typed
+operation shape rules. Conflicts and unresolved dimensions fail compilation;
+the resolved shape solution is emitted only as instance-scoped manifest data.
 Architecture block instances additionally validate their subject, required
 ports, relation direction/kind/cardinality, exact interface coverage, honest
 non-exact differences, and usage evidence.

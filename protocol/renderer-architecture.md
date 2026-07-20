@@ -45,8 +45,8 @@ reusable presentation rules.
    pan/zoom controls, evidence citations, and an optional second comparison
    board.
 
-The builder compiles current architecture-v0.4 / visualization-v0.4 sources
-into architecture-manifest-v0.4 projected boards. A narrow legacy path still
+The builder compiles current architecture-v0.5 / visualization-v0.4 sources
+into architecture-manifest-v0.5 projected boards. A narrow legacy path still
 accepts old architecture `edges` and v0.2 `relations` and normalizes them into
 architecture-manifest-v0.2. Manifests are generated internal representations,
 not second durable source contracts.
@@ -60,7 +60,7 @@ The current pipeline is implemented in Ruby through shared build/lint
 components:
 
 ```text
-architecture-v0.4 + visualization-v0.4
+architecture-v0.5 + visualization-v0.4
                   ↓
 strict YAML + executable schema + evidence validation
                   ↓
@@ -68,7 +68,7 @@ ownership validation + decomposition coverage compilation
                   ↓
 semantic board projector
                   ↓
-deterministic architecture-manifest-v0.4 projected boards
+deterministic architecture-manifest-v0.5 projected boards
                   ↓
 browser layout and geometric wire router
 ```
