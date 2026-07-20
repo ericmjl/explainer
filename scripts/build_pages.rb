@@ -34,6 +34,7 @@ module PagesBuild
     renderer/architecture/edge-annotations.mjs
     renderer/architecture/flow-families.mjs
     renderer/architecture/index.html
+    renderer/architecture/keyboard-navigation.mjs
     renderer/architecture/math-notation.mjs
     renderer/architecture/orthogonal-routing.mjs
     renderer/architecture/question-context.mjs

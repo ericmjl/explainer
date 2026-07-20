@@ -332,12 +332,57 @@ class RendererSemanticPseudocodeBrowserTest < Minitest::Test
     browser.set_window(width: 1440, height: 1000)
     verify_ipa_token_to_graph_and_back(browser, base)
     verify_high_level_call_drilldown(browser, base)
+    verify_keyboard_board_traversal(browser, base)
     verify_dictionary_field_selection(browser, base)
     verify_published_reference_panel(browser, base)
     verify_grouped_inspector_and_stable_status(browser, base)
     verify_math_symbols_and_theme(browser, base)
     verify_touch_pinch_zoom(browser, base)
     verify_mobile_board_trace(browser, base)
+  end
+
+  def verify_keyboard_board_traversal(browser, base)
+    browser.navigate("#{base}?arch=genie3")
+    entered = wait_for(browser, "Enter to open the selected sampler board") do
+      browser.execute(<<~JS)
+        const sampler = document.querySelector('[data-node-id="diffusion_sampler"] .arch-node-main');
+        if (!sampler) return null;
+        sampler.click();
+        document.dispatchEvent(new KeyboardEvent('keydown', {
+          key: 'Enter',
+          bubbles: true,
+          cancelable: true,
+        }));
+        return new URLSearchParams(window.location.search).get('board');
+      JS
+    end
+    assert_equal "sampling_loop", entered
+
+    ready_to_exit = wait_for(browser, "the sampler board transition to finish") do
+      browser.execute(<<~JS)
+        const canvas = document.querySelector('#architectureCanvas');
+        return Boolean(document.querySelector('[data-node-id="reverse_diffusion_step"]'))
+          && !canvas?.classList.contains('is-board-fading')
+          && !canvas?.classList.contains('is-board-transition');
+      JS
+    end
+    assert ready_to_exit
+
+    exited = wait_for(browser, "Escape to return to the parent board") do
+      browser.execute(<<~JS)
+        document.dispatchEvent(new KeyboardEvent('keydown', {
+          key: 'Escape',
+          bubbles: true,
+          cancelable: true,
+        }));
+        const board = new URLSearchParams(window.location.search).get('board');
+        const atRoot = !board || board === 'design_overview';
+        return atRoot && document.querySelector('[data-node-id="diffusion_sampler"]')
+          ? 'design_overview'
+          : null;
+      JS
+    end
+    assert_equal "design_overview", exited
   end
 
   def verify_ipa_token_to_graph_and_back(browser, base)
