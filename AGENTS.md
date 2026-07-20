@@ -458,6 +458,7 @@ ruby -Ilib:test test/renderer_deep_link_chrome_test.rb
 ruby -Ilib:test test/renderer_deep_link_state_test.rb
 ruby -Ilib:test test/renderer_deep_link_integration_test.rb
 ruby -Ilib:test test/renderer_board_surface_test.rb
+ruby -Ilib:test test/renderer_keyboard_navigation_test.rb
 ruby -Ilib:test test/renderer_comparison_state_test.rb
 ruby -Ilib:test test/renderer_comparison_board_test.rb
 ruby -Ilib:test test/renderer_comparison_workspace_test.rb

@@ -176,6 +176,40 @@ class RendererWorkspaceTest < Minitest::Test
     assert_match(/\.arch-node\.is-selected-node,[^{]+\{[^}]*z-index:\s*7/m, css)
   end
 
+  def test_keyboard_zoom_uses_one_incremental_step_toward_the_selection
+    renderer = read("renderer/architecture/renderer.js")
+    zoom = function_source(renderer, "zoomToSelection", "questionBreadcrumbs")
+
+    assert_includes renderer, "nextKeyboardZoomScale"
+    assert_includes zoom, "viewport.scale = nextKeyboardZoomScale("
+    assert_includes zoom, "viewport.x = availableW / 2 - box.cx * viewport.scale"
+    refute_includes zoom, "const fill = 0.7"
+  end
+
+  def test_keyboard_navigation_bootstraps_from_the_first_visible_occurrence
+    renderer = read("renderer/architecture/renderer.js")
+    navigate = function_source(renderer, "navigateAlong", "openNavMenu")
+
+    assert_includes navigate, "focusFirstVisibleOccurrence();"
+    assert_includes navigate, "const first = visibleNodes(currentBoard())[0];"
+    assert_includes navigate, "focusNodeOccurrence(first.id)"
+    assert_includes navigate, "centerOnNode(first.id);"
+  end
+
+  def test_enter_and_escape_traverse_semantic_board_levels
+    renderer = read("renderer/architecture/renderer.js")
+    dispatch = function_source(renderer, "onCanvasKeyDown", "currentBoardSelectionNodeId")
+    enter = function_source(renderer, "enterSelectedBoard", "exitToParentBoard")
+    exit_board = function_source(renderer, "exitToParentBoard", "navigateAlong")
+
+    assert_includes dispatch, 'case "board-enter"'
+    assert_includes dispatch, 'case "board-exit"'
+    assert_includes enter, "targetBoardForNode(node)"
+    assert_includes enter, "pushBoard(targetBoard.id, node.id);"
+    assert_includes exit_board, "state.boardStack.length <= 1"
+    assert_includes exit_board, "popToBoard(state.boardStack.length - 2);"
+  end
+
   def test_drilldown_uses_a_compact_accessible_magnifying_button
     renderer = read("renderer/architecture/renderer.js")
     css = read("styles.css")
