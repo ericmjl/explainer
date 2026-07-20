@@ -165,6 +165,16 @@ class RendererWorkspaceTest < Minitest::Test
     refute_includes zoom, "const fill = 0.7"
   end
 
+  def test_keyboard_navigation_bootstraps_from_the_first_visible_occurrence
+    renderer = read("renderer/architecture/renderer.js")
+    navigate = function_source(renderer, "navigateAlong", "openNavMenu")
+
+    assert_includes navigate, "focusFirstVisibleOccurrence();"
+    assert_includes navigate, "const first = visibleNodes(currentBoard())[0];"
+    assert_includes navigate, "focusNodeOccurrence(first.id)"
+    assert_includes navigate, "centerOnNode(first.id);"
+  end
+
   def test_drilldown_uses_a_compact_accessible_magnifying_button
     renderer = read("renderer/architecture/renderer.js")
     css = read("styles.css")

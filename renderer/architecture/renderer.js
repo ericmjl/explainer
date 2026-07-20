@@ -1776,7 +1776,10 @@ function currentBoardSelectionNodeId() {
 
 function navigateAlong(direction) {
   const id = currentBoardSelectionNodeId();
-  if (!id) return;
+  if (!id) {
+    focusFirstVisibleOccurrence();
+    return;
+  }
   const edges = state.displayEdges || [];
   const visible = new Set(visibleNodes(currentBoard()).map((node) => node.id));
   const candidates = neighborsOf(id, direction, edges, visible);
@@ -1788,6 +1791,14 @@ function navigateAlong(direction) {
     return;
   }
   openNavMenu(direction, id, candidates);
+}
+
+function focusFirstVisibleOccurrence() {
+  const first = visibleNodes(currentBoard())[0];
+  if (!first || !focusNodeOccurrence(first.id)) return false;
+  closeNavMenu();
+  centerOnNode(first.id);
+  return true;
 }
 
 function openNavMenu(direction, anchorId, candidates) {
