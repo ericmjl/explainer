@@ -3,7 +3,7 @@ id: genie3_reduced_vs_full_ipa
 title: Genie 3 Reduced Attention vs Full Frame-Aware IPA
 status: review
 question: What does Genie 3's reduced latent attention retain, change, and remove relative to full frame-aware IPA?
-summary: Both paths use scalar attention, pair-logit bias, attention-weighted pair-value aggregation, and a residual-normalized single-state update. Full IPA additionally forms frame-aware point logits and point outputs; the reduced latent path omits that geometry and adds its latent-block transition and final mask.
+summary: Both attention cores use scalar attention, pair-logit bias, and attention-weighted pair-value aggregation. Full IPA additionally forms frame-aware point logits and point outputs; the reduced latent block omits that geometry and owns a residual-normalized transition wrapper that sits outside full IPA in the structure decoder.
 subjects:
   primary:
     label: Reduced latent attention
@@ -23,8 +23,8 @@ groups:
     label: Full IPA only
     description: Frame-aware point operations present only in the full structure-decoder IPA path.
   - id: reduced_only
-    label: Reduced wrapper only
-    description: Latent-block wrapper behavior added after the reduced attention update.
+    label: Reduced instance wrapper only
+    description: Wrapper behavior owned by the reduced latent block but kept outside the full IPA module boundary.
 alignments:
   - id: scalar_projection
     group_ref: groups.shared
@@ -108,14 +108,13 @@ alignments:
     explanation: Reduced attention fuses scalar and pair contexts, whereas full IPA also fuses the frame-aware local point context.
     evidence: *both_attention_evidence
   - id: residual_normalization
-    group_ref: groups.shared
+    group_ref: groups.reduced_only
     label: Residual, dropout, and normalization
-    relationship: analogous
+    relationship: primary_only
     primary_refs:
       - block_instances.latent_reduced_pair_attention.steps.residual_norm
-    counterpart_refs:
-      - block_instances.structure_ipa.steps.residual_norm
-    explanation: Each architecture wrapper adds the attention delta back to the incoming single state and normalizes the result.
+    counterpart_refs: []
+    explanation: The reduced block instance owns its residual wrapper. Genie 3's structure decoder performs the analogous operation in StructureLayer after the full IPA module returns, so it is intentionally outside the full IPA standard-block instance.
     evidence: &both_wrapper_evidence
       status: confirmed_from_code
       refs:
@@ -160,8 +159,8 @@ findings:
       - alignments.frame_aware_point_path
       - alignments.output_fusion
     evidence: *both_attention_evidence
-  - id: wrappers_are_not_identical
-    statement: Both uses apply residual normalization, but only the reduced latent wrapper includes the selected transition-and-final-mask step.
+  - id: wrapper_scope_differs
+    statement: The reduced latent block owns residual normalization and its transition-and-mask wrapper, whereas the structure decoder keeps its residual and transition operations outside the full IPA module boundary.
     alignment_refs:
       - alignments.residual_normalization
       - alignments.latent_transition_and_output_mask

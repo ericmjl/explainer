@@ -4,11 +4,11 @@ export const manifest = {
     "generator": "architecture-manifest-builder-v0.4.6",
     "inputDigests": {
       "references/bibliography.yaml": "abe9226586bfb64261c81b7756b7275c48a3a172a9a18b5f91f7acfd3145e374",
-      "architectures/genie3.yaml": "e239d3e5c38a40a9821f0579a4c54e61fe2c892fc1665a6ef383bd5b676cbb37",
-      "views/genie3-semantic-zoom.view.yaml": "bf6279698c1f377ec8e5fd1176d53bfd8825d6044fd442ab00af9cb515e1b4ce",
+      "architectures/genie3.yaml": "e91326b4c1cd47aac5f2be64d4b2ab49d58c84269bf12a9feee0525a4ce24517",
+      "views/genie3-semantic-zoom.view.yaml": "df225112f3b15c3d3049eeb8e14d8cf1b162a22bd2af9ccac3418dd4f33cf06c",
       "pseudocode/genie3.yaml": "822369fcf368f6fc2cf07c70a810d408a122d4cc1bad4f33ef2fbbf6b848d09c",
       "standard_blocks/pair-biased-attention.yaml": "9cd25cca99e46326432232d92a00d84d82b3e59d028aff4e47d73aa31bac9381",
-      "standard_blocks/invariant-point-attention.yaml": "d185138554938b05509aeb1789cfd2a0275d561991bca4dfd22605ad40cc847b"
+      "standard_blocks/invariant-point-attention.yaml": "e3b01431067731b468242ffee22ca22ccc22c98cf3c8ddcb8399075d560c86e1"
     }
   },
   "architecture": {
@@ -245,9 +245,10 @@ export const manifest = {
         "modules.structure_decoder": {
           "status": "complete",
           "depth": 4,
-          "immediateModuleCount": 3,
+          "immediateModuleCount": 4,
           "immediateModuleRefs": [
             "modules.invariant_point_attention",
+            "modules.ipa_residual_norm",
             "modules.structure_transition",
             "modules.frame_update"
           ]
@@ -293,6 +294,14 @@ export const manifest = {
           ]
         },
         "modules.invariant_point_attention": {
+          "status": "leaf",
+          "depth": 5,
+          "immediateModuleCount": 0,
+          "immediateModuleRefs": [
+
+          ]
+        },
+        "modules.ipa_residual_norm": {
           "status": "leaf",
           "depth": 5,
           "immediateModuleCount": 0,
@@ -454,11 +463,11 @@ export const manifest = {
         }
       },
       "summary": {
-        "scopeCount": 42,
+        "scopeCount": 43,
         "expandedScopeCount": 11,
         "completeExpandedScopeCount": 11,
         "partialScopeCount": 0,
-        "leafFrontierCount": 31,
+        "leafFrontierCount": 32,
         "opaqueFrontierCount": 0,
         "partialFrontierCount": 0,
         "maximumAuthoredDepth": 5
@@ -1063,7 +1072,7 @@ export const manifest = {
         "mechanisms": [
           "invariant_point_attention"
         ],
-        "role": "update the decoder single state using pair bias and points expressed in the current token frames",
+        "role": "produce an additive single-state update using pair bias and points expressed in the current token frames",
         "scale": "token",
         "attention": {
           "pattern": "full",
@@ -1088,6 +1097,32 @@ export const manifest = {
         }
       },
       {
+        "id": "ipa_residual_norm",
+        "parent_ref": "modules.structure_decoder",
+        "decomposition": {
+          "status": "leaf"
+        },
+        "label": "IPA Residual + Norm",
+        "kind": "normalization",
+        "mechanisms": [
+          "residual_connection",
+          "dropout",
+          "layer_normalization"
+        ],
+        "role": "add the IPA update to the incoming decoder single state, then apply dropout and LayerNorm",
+        "scale": "token",
+        "evidence": {
+          "status": "confirmed_from_code",
+          "refs": [
+            {
+              "source_ref": "genie3_structure_code",
+              "role": "implementation_evidence",
+              "locator": "StructureNet.forward and StructureLayer.forward"
+            }
+          ]
+        }
+      },
+      {
         "id": "structure_transition",
         "parent_ref": "modules.structure_decoder",
         "decomposition": {
@@ -1095,7 +1130,7 @@ export const manifest = {
         },
         "label": "Structure Transition",
         "kind": "feed_forward",
-        "role": "normalize and transform the IPA-updated single state",
+        "role": "apply a three-layer per-token MLP residually, then apply dropout and LayerNorm",
         "scale": "token",
         "evidence": {
           "status": "confirmed_from_code",
@@ -1796,9 +1831,9 @@ export const manifest = {
         "standardBlockRef": "standard_blocks/invariant-point-attention.yaml",
         "standardBlockName": "Invariant Point Attention",
         "subjectRef": "modules.invariant_point_attention",
-        "variant": "full_ipa_residual_norm",
-        "variantLabel": "Full IPA + residual normalization",
-        "variantDescription": "Full scalar, point, and pair aggregation followed by the StructureLayer residual, dropout, and LayerNorm wrapper.",
+        "variant": "full_ipa",
+        "variantLabel": "Full frame-aware IPA",
+        "variantDescription": "Full scalar, point-distance, pair-bias, scalar-value, point-value, and pair-value attention ending at the projected IPA update.",
         "useScope": "whole_module",
         "conformance": "exact",
         "evidence": {
@@ -1809,12 +1844,6 @@ export const manifest = {
               "role": "implementation_evidence",
               "locator": "InvariantPointAttention.forward",
               "note": "Full IPA implements scalar and point attention, pair bias, and attention-weighted pair-value aggregation."
-            },
-            {
-              "source_ref": "genie3_structure_code",
-              "role": "wrapper_evidence",
-              "locator": "StructureLayer.forward",
-              "note": "The structure layer applies the residual, dropout, and LayerNorm wrapper represented by this variant."
             }
           ]
         },
@@ -1892,17 +1921,17 @@ export const manifest = {
             ]
           },
           {
-            "portRef": "ports.updated_single_state",
+            "portRef": "ports.ipa_delta",
             "relationRefs": [
-              "relations.ipa_produces_updated_single_state"
+              "relations.ipa_produces_delta"
             ],
             "relations": [
               {
-                "relationRef": "relations.ipa_produces_updated_single_state",
+                "relationRef": "relations.ipa_produces_delta",
                 "from": "modules.invariant_point_attention",
-                "to": "value_sites.single_after_ipa",
-                "kind": "state_update",
-                "operation": "residual_attention_update",
+                "to": "value_sites.ipa_delta",
+                "kind": "data_flow",
+                "operation": "project_ipa_delta",
                 "carries": [
                   "representations.single_features"
                 ]
@@ -2674,15 +2703,15 @@ export const manifest = {
               "values.pair_value_context"
             ],
             "outputs": [
-              "values.ipa_delta"
+              "ports.ipa_delta"
             ],
             "codeBindings": [
               {
                 "lexeme": "ipa_delta",
                 "access": "write",
-                "localRef": "values.ipa_delta",
-                "templateFactRef": "standard_blocks.invariant_point_attention.values.ipa_delta",
-                "instanceFactRef": "block_instances.structure_ipa.values.ipa_delta",
+                "localRef": "ports.ipa_delta",
+                "templateFactRef": "standard_blocks.invariant_point_attention.ports.ipa_delta",
+                "instanceFactRef": "block_instances.structure_ipa.ports.ipa_delta",
                 "occurrences": [
                   {
                     "start": 0,
@@ -2726,62 +2755,6 @@ export const manifest = {
                   {
                     "start": 74,
                     "end": 92
-                  }
-                ]
-              }
-            ]
-          },
-          {
-            "id": "residual_norm",
-            "templateFactRef": "standard_blocks.invariant_point_attention.steps.residual_norm",
-            "instanceFactRef": "block_instances.structure_ipa.steps.residual_norm",
-            "label": "Residual, dropout, and norm",
-            "operation": "residual_normalization",
-            "code": "updated_single_state = layer_norm(single_state + dropout(ipa_delta))",
-            "inputs": [
-              "ports.single_state",
-              "values.ipa_delta"
-            ],
-            "outputs": [
-              "ports.updated_single_state"
-            ],
-            "codeBindings": [
-              {
-                "lexeme": "updated_single_state",
-                "access": "write",
-                "localRef": "ports.updated_single_state",
-                "templateFactRef": "standard_blocks.invariant_point_attention.ports.updated_single_state",
-                "instanceFactRef": "block_instances.structure_ipa.ports.updated_single_state",
-                "occurrences": [
-                  {
-                    "start": 0,
-                    "end": 20
-                  }
-                ]
-              },
-              {
-                "lexeme": "single_state",
-                "access": "read",
-                "localRef": "ports.single_state",
-                "templateFactRef": "standard_blocks.invariant_point_attention.ports.single_state",
-                "instanceFactRef": "block_instances.structure_ipa.ports.single_state",
-                "occurrences": [
-                  {
-                    "start": 34,
-                    "end": 46
-                  }
-                ]
-              },
-              {
-                "lexeme": "ipa_delta",
-                "access": "read",
-                "localRef": "values.ipa_delta",
-                "templateFactRef": "standard_blocks.invariant_point_attention.values.ipa_delta",
-                "instanceFactRef": "block_instances.structure_ipa.values.ipa_delta",
-                "occurrences": [
-                  {
-                    "start": 57,
-                    "end": 66
                   }
                 ]
               }
@@ -3794,6 +3767,22 @@ export const manifest = {
         }
       },
       {
+        "id": "ipa_delta",
+        "representation_ref": "representations.single_features",
+        "scope_ref": "modules.structure_decoder",
+        "role": "invariant_point_attention_update",
+        "evidence": {
+          "status": "confirmed_from_code",
+          "refs": [
+            {
+              "source_ref": "genie3_ipa_code",
+              "role": "implementation_evidence",
+              "locator": "InvariantPointAttention.forward"
+            }
+          ]
+        }
+      },
+      {
         "id": "single_after_ipa",
         "representation_ref": "representations.single_features",
         "scope_ref": "modules.structure_decoder",
@@ -4292,14 +4281,16 @@ export const manifest = {
           "relations.transition_state_reenters_decoder"
         ],
         "outgoingRelationRefs": [
-          "relations.decoder_single_state_enters_ipa"
+          "relations.decoder_single_state_enters_ipa",
+          "relations.decoder_single_state_skips_to_ipa_residual_norm"
         ],
         "producerRefs": [
           "value_sites.refined_single_features",
           "value_sites.single_after_transition"
         ],
         "consumerRefs": [
-          "modules.invariant_point_attention"
+          "modules.invariant_point_attention",
+          "modules.ipa_residual_norm"
         ]
       },
       "decoder_frames": {
@@ -4320,15 +4311,29 @@ export const manifest = {
           "modules.frame_update"
         ]
       },
+      "ipa_delta": {
+        "incomingRelationRefs": [
+          "relations.ipa_produces_delta"
+        ],
+        "outgoingRelationRefs": [
+          "relations.ipa_delta_enters_residual_norm"
+        ],
+        "producerRefs": [
+          "modules.invariant_point_attention"
+        ],
+        "consumerRefs": [
+          "modules.ipa_residual_norm"
+        ]
+      },
       "single_after_ipa": {
         "incomingRelationRefs": [
-          "relations.ipa_produces_updated_single_state"
+          "relations.ipa_residual_norm_produces_updated_single_state"
         ],
         "outgoingRelationRefs": [
           "relations.ipa_state_enters_structure_transition"
         ],
         "producerRefs": [
-          "modules.invariant_point_attention"
+          "modules.ipa_residual_norm"
         ],
         "consumerRefs": [
           "modules.structure_transition"
@@ -4500,6 +4505,7 @@ export const manifest = {
           "repeats": 8,
           "reruns": [
             "modules.invariant_point_attention",
+            "modules.ipa_residual_norm",
             "modules.structure_transition",
             "modules.frame_update"
           ],
@@ -6297,14 +6303,74 @@ export const manifest = {
         }
       },
       {
-        "id": "ipa_produces_updated_single_state",
+        "id": "ipa_produces_delta",
         "from": "modules.invariant_point_attention",
+        "to": "value_sites.ipa_delta",
+        "kind": "data_flow",
+        "carries": [
+          "representations.single_features"
+        ],
+        "operation": "project_ipa_delta",
+        "evidence": {
+          "status": "confirmed_from_code",
+          "refs": [
+            {
+              "source_ref": "genie3_structure_code",
+              "role": "implementation_evidence",
+              "locator": "StructureNet.forward and StructureLayer.forward"
+            }
+          ]
+        }
+      },
+      {
+        "id": "ipa_delta_enters_residual_norm",
+        "from": "value_sites.ipa_delta",
+        "to": "modules.ipa_residual_norm",
+        "kind": "data_flow",
+        "carries": [
+          "representations.single_features"
+        ],
+        "operation": "supply_ipa_delta",
+        "evidence": {
+          "status": "confirmed_from_code",
+          "refs": [
+            {
+              "source_ref": "genie3_structure_code",
+              "role": "implementation_evidence",
+              "locator": "StructureNet.forward and StructureLayer.forward"
+            }
+          ]
+        }
+      },
+      {
+        "id": "decoder_single_state_skips_to_ipa_residual_norm",
+        "from": "value_sites.decoder_single_state",
+        "to": "modules.ipa_residual_norm",
+        "kind": "skip",
+        "carries": [
+          "representations.single_features"
+        ],
+        "operation": "preserve_residual_state",
+        "evidence": {
+          "status": "confirmed_from_code",
+          "refs": [
+            {
+              "source_ref": "genie3_structure_code",
+              "role": "implementation_evidence",
+              "locator": "StructureNet.forward and StructureLayer.forward"
+            }
+          ]
+        }
+      },
+      {
+        "id": "ipa_residual_norm_produces_updated_single_state",
+        "from": "modules.ipa_residual_norm",
         "to": "value_sites.single_after_ipa",
         "kind": "state_update",
         "carries": [
           "representations.single_features"
         ],
-        "operation": "residual_attention_update",
+        "operation": "residual_dropout_layer_norm",
         "evidence": {
           "status": "confirmed_from_code",
           "refs": [
@@ -8680,7 +8746,7 @@ export const manifest = {
       "schemaVersion": "standard-block-v0.2",
       "name": "Invariant Point Attention",
       "sourceYaml": "../../standard_blocks/invariant-point-attention.yaml",
-      "description": "Combine scalar attention, pair bias, and frame-aware point-distance logits, then aggregate scalar and point values alongside attention-weighted pair values into a residual-normalized single-state update.",
+      "description": "Combine scalar attention, pair bias, and frame-aware point-distance logits, then aggregate scalar, point, and attention-weighted pair values into a projected IPA update.",
       "math": [
         {
           "id": "project_scalar_terms",
@@ -8746,11 +8812,6 @@ export const manifest = {
           "id": "project_ipa_delta",
           "text": "ipa_delta = output_projection(concat(scalar_context, local_point_context, pair_value_context))",
           "operation": "output_projection"
-        },
-        {
-          "id": "residual_norm",
-          "text": "updated_single_state = layer_norm(single_state + dropout(ipa_delta))",
-          "operation": "residual_normalization"
         }
       ],
       "kind": "attention",
@@ -8813,25 +8874,24 @@ export const manifest = {
           "notation": "m"
         },
         {
-          "id": "updated_single_state",
-          "label": "IPA-updated single state",
+          "id": "ipa_delta",
+          "label": "IPA update",
           "direction": "output",
           "kind": "representation",
           "required": true,
           "cardinality": "one",
           "relation_kinds": [
-            "data_flow",
-            "state_update"
+            "data_flow"
           ],
           "glyph": "single",
-          "notation": "s_ipa"
+          "notation": "delta_s"
         }
       ],
       "variants": [
         {
-          "id": "full_ipa_residual_norm",
-          "label": "Full IPA + residual normalization",
-          "description": "Full scalar, point, and pair aggregation followed by the StructureLayer residual, dropout, and LayerNorm wrapper.",
+          "id": "full_ipa",
+          "label": "Full frame-aware IPA",
+          "description": "Full scalar, point-distance, pair-bias, scalar-value, point-value, and pair-value attention ending at the projected IPA update.",
           "step_refs": [
             "steps.project_scalar_terms",
             "steps.project_local_points",
@@ -8845,12 +8905,11 @@ export const manifest = {
             "steps.aggregate_global_points",
             "steps.return_points_to_local_frame",
             "steps.aggregate_pair_values",
-            "steps.project_ipa_delta",
-            "steps.residual_norm"
+            "steps.project_ipa_delta"
           ]
         }
       ],
-      "defaultVariant": "full_ipa_residual_norm",
+      "defaultVariant": "full_ipa",
       "values": [
         {
           "id": "scalar_terms",
@@ -8935,13 +8994,6 @@ export const manifest = {
           "kind": "representation",
           "glyph": "single",
           "notation": "o_z"
-        },
-        {
-          "id": "ipa_delta",
-          "label": "IPA delta",
-          "kind": "representation",
-          "glyph": "single",
-          "notation": "delta_s"
         }
       ],
       "steps": [
@@ -9341,13 +9393,13 @@ export const manifest = {
             "values.pair_value_context"
           ],
           "outputs": [
-            "values.ipa_delta"
+            "ports.ipa_delta"
           ],
           "code": "ipa_delta = output_projection(concat(scalar_context, local_point_context, pair_value_context))",
           "code_bindings": [
             {
               "lexeme": "ipa_delta",
-              "ref": "values.ipa_delta",
+              "ref": "ports.ipa_delta",
               "access": "write"
             },
             {
@@ -9366,41 +9418,11 @@ export const manifest = {
               "access": "read"
             }
           ]
-        },
-        {
-          "id": "residual_norm",
-          "label": "Residual, dropout, and norm",
-          "operation": "residual_normalization",
-          "inputs": [
-            "ports.single_state",
-            "values.ipa_delta"
-          ],
-          "outputs": [
-            "ports.updated_single_state"
-          ],
-          "code": "updated_single_state = layer_norm(single_state + dropout(ipa_delta))",
-          "code_bindings": [
-            {
-              "lexeme": "updated_single_state",
-              "ref": "ports.updated_single_state",
-              "access": "write"
-            },
-            {
-              "lexeme": "single_state",
-              "ref": "ports.single_state",
-              "access": "read"
-            },
-            {
-              "lexeme": "ipa_delta",
-              "ref": "values.ipa_delta",
-              "access": "read"
-            }
-          ]
         }
       ],
       "visualTemplate": {
         "grid": {
-          "columns": 14,
+          "columns": 12,
           "rows": 9,
           "column_sizing": "content",
           "row_sizing": "content",
@@ -9441,9 +9463,9 @@ export const manifest = {
             "treatment": "chip"
           },
           {
-            "id": "updated_single_state",
-            "ref": "ports.updated_single_state",
-            "col": 14,
+            "id": "ipa_delta",
+            "ref": "ports.ipa_delta",
+            "col": 12,
             "row": 8,
             "prominence": "secondary",
             "treatment": "compact"
@@ -9647,22 +9669,6 @@ export const manifest = {
             "row": 8,
             "prominence": "primary",
             "treatment": "compact"
-          },
-          {
-            "id": "ipa_delta",
-            "ref": "values.ipa_delta",
-            "col": 12,
-            "row": 8,
-            "prominence": "context",
-            "treatment": "compact"
-          },
-          {
-            "id": "residual_norm",
-            "ref": "steps.residual_norm",
-            "col": 13,
-            "row": 8,
-            "prominence": "primary",
-            "treatment": "compact"
           }
         ],
         "segments": [
@@ -9695,8 +9701,8 @@ export const manifest = {
           },
           {
             "id": "value_extraction",
-            "label": "Extract values and update state",
-            "description": "Reuse the shared attention weights for scalar, point, and pair values, return points to the local frame, align the three final contexts, concatenate and project them, and apply the residual wrapper.",
+            "label": "Extract and fuse values",
+            "description": "Reuse the shared attention weights for scalar, point, and pair values, return points to the local frame, align the three final contexts, then concatenate and project them into the IPA update.",
             "node_refs": [
               "steps.aggregate_scalar_values",
               "values.scalar_context",
@@ -9707,19 +9713,17 @@ export const manifest = {
               "steps.aggregate_pair_values",
               "values.pair_value_context",
               "steps.project_ipa_delta",
-              "values.ipa_delta",
-              "steps.residual_norm",
-              "ports.updated_single_state"
+              "ports.ipa_delta"
             ]
           }
         ]
       },
       "evidencePolicy": {
-        "generic_definition": "Full IPA anatomy is reusable vocabulary; each architecture instance must separately prove its core and wrapper variant.",
+        "generic_definition": "Full IPA anatomy is reusable vocabulary ending at the projected attention update; residual addition, dropout, and normalization belong to the surrounding architecture layer.",
         "usage_requires": [
           "Evidence for scalar, point-distance, and pair logit terms.",
           "Evidence for scalar and point aggregation plus attention-weighted pair-value aggregation.",
-          "Evidence for the residual/dropout/normalization wrapper when full_ipa_residual_norm is selected."
+          "Evidence that the output projection returns the IPA update before any architecture-owned residual wrapper."
         ]
       }
     }
@@ -11535,6 +11539,10 @@ export const manifest = {
             "reason": "Token masks and frame conditioning inside IPA are expanded on the structure-decoder board."
           },
           {
+            "ref": "modules.ipa_residual_norm",
+            "reason": "The IPA residual wrapper is expanded with the attention core on the structure-decoder board."
+          },
+          {
             "ref": "modules.frenet_frame_builder",
             "reason": "Frame construction is expanded inside the sampling loop."
           },
@@ -11854,6 +11862,7 @@ export const manifest = {
           "modules.frenet_frame_builder": "excluded",
           "modules.global_token_adapter": "collapsed:modules.diffusion_sampler",
           "modules.invariant_point_attention": "excluded",
+          "modules.ipa_residual_norm": "excluded",
           "modules.motif_conditioned_tokens": "collapsed:modules.feature_builder",
           "modules.motif_feature_assembler": "collapsed:modules.feature_builder",
           "modules.motif_featurizer": "collapsed:modules.feature_builder",
@@ -12046,6 +12055,10 @@ export const manifest = {
           {
             "ref": "modules.invariant_point_attention",
             "reason": "Frame-point attention is expanded below the reverse-step board on the structure-decoder board."
+          },
+          {
+            "ref": "modules.ipa_residual_norm",
+            "reason": "Residual addition and normalization are expanded below the reverse-step board on the structure-decoder board."
           },
           {
             "ref": "modules.frame_update",
@@ -12464,6 +12477,7 @@ export const manifest = {
           "modules.frenet_frame_builder": "collapsed:modules.reverse_diffusion_step",
           "modules.global_token_adapter": "collapsed:modules.reverse_diffusion_step",
           "modules.invariant_point_attention": "excluded",
+          "modules.ipa_residual_norm": "excluded",
           "modules.noise_readout": "collapsed:modules.reverse_diffusion_step",
           "modules.pair_biased_attention_update": "collapsed:modules.reverse_diffusion_step",
           "modules.pair_feature_embedder": "excluded",
@@ -12631,6 +12645,10 @@ export const manifest = {
           {
             "ref": "modules.invariant_point_attention",
             "reason": "Frame-point attention is expanded on the structure-decoder board."
+          },
+          {
+            "ref": "modules.ipa_residual_norm",
+            "reason": "The surrounding IPA residual wrapper is expanded on the structure-decoder board."
           },
           {
             "ref": "modules.frame_update",
@@ -13107,6 +13125,7 @@ export const manifest = {
           "modules.frenet_frame_builder": "visible",
           "modules.global_token_adapter": "collapsed:modules.denoiser",
           "modules.invariant_point_attention": "excluded",
+          "modules.ipa_residual_norm": "excluded",
           "modules.noise_readout": "collapsed:modules.directional_ddim_sampler_math",
           "modules.pair_biased_attention_update": "collapsed:modules.denoiser",
           "modules.pair_feature_embedder": "excluded",
@@ -14286,6 +14305,7 @@ export const manifest = {
           "modules.frenet_frame_builder": "excluded",
           "modules.global_token_adapter": "collapsed:modules.latent_transformer",
           "modules.invariant_point_attention": "collapsed:modules.structure_decoder",
+          "modules.ipa_residual_norm": "collapsed:modules.structure_decoder",
           "modules.latent_transformer": "visible",
           "modules.noise_readout": "excluded",
           "modules.pair_biased_attention_update": "collapsed:modules.latent_transformer",
@@ -14305,6 +14325,7 @@ export const manifest = {
           "value_sites.feature_bundle": "visible",
           "value_sites.initial_pair_features": "elided",
           "value_sites.initial_single_features": "elided",
+          "value_sites.ipa_delta": "collapsed:modules.structure_decoder",
           "value_sites.pair_after_single_update": "collapsed:modules.latent_transformer",
           "value_sites.pair_after_transition": "collapsed:modules.latent_transformer",
           "value_sites.pair_after_triangle_updates": "collapsed:modules.latent_transformer",
@@ -15034,12 +15055,12 @@ export const manifest = {
       {
         "id": "structure_decoder",
         "title": "Eight-Layer Equivariant Structure Decoder",
-        "summary": "Full IPA uses mature single and pair features plus current frames. A transition updates the invariant state, then a rigid increment moves every valid token frame; the updated state repeats for eight layers.",
+        "summary": "Full IPA produces an additive update from mature single and pair features plus current frames. The structure layer adds that update back to the incoming state, applies dropout and LayerNorm, runs a residual transition, then composes a rigid frame increment; the updated state repeats for eight layers.",
         "parent": "denoiser_forward",
         "subject_ref": "modules.structure_decoder",
         "expansion_depth": 1,
         "grid": {
-          "columns": 8,
+          "columns": 10,
           "rows": 5,
           "column_sizing": "content",
           "col_gap": 32,
@@ -15057,6 +15078,8 @@ export const manifest = {
               "refined_pair_features",
               "decoder_frames",
               "invariant_point_attention",
+              "ipa_delta",
+              "ipa_residual_norm",
               "single_after_ipa",
               "structure_transition",
               "single_after_transition",
@@ -15136,6 +15159,26 @@ export const manifest = {
             "board_ref": "genie3_ipa_internals"
           },
           {
+            "id": "ipa_delta",
+            "ref": "value_sites.ipa_delta",
+            "label": "IPA update",
+            "notation": "delta_s",
+            "prominence": "context",
+            "treatment": "compact",
+            "density": "compact",
+            "col": 4,
+            "row": 3
+          },
+          {
+            "id": "ipa_residual_norm",
+            "ref": "modules.ipa_residual_norm",
+            "prominence": "primary",
+            "treatment": "compact",
+            "density": "compact",
+            "col": 5,
+            "row": 3
+          },
+          {
             "id": "single_after_ipa",
             "ref": "value_sites.single_after_ipa",
             "label": "attention-updated singles",
@@ -15143,7 +15186,7 @@ export const manifest = {
             "prominence": "secondary",
             "treatment": "compact",
             "density": "compact",
-            "col": 4,
+            "col": 6,
             "row": 3
           },
           {
@@ -15152,7 +15195,7 @@ export const manifest = {
             "prominence": "secondary",
             "treatment": "compact",
             "density": "compact",
-            "col": 5,
+            "col": 7,
             "row": 3
           },
           {
@@ -15163,7 +15206,7 @@ export const manifest = {
             "prominence": "secondary",
             "treatment": "compact",
             "density": "compact",
-            "col": 6,
+            "col": 8,
             "row": 3
           },
           {
@@ -15172,7 +15215,7 @@ export const manifest = {
             "prominence": "primary",
             "treatment": "compact",
             "density": "compact",
-            "col": 6,
+            "col": 8,
             "row": 4
           },
           {
@@ -15183,7 +15226,7 @@ export const manifest = {
             "prominence": "secondary",
             "treatment": "compact",
             "density": "compact",
-            "col": 7,
+            "col": 9,
             "row": 4
           },
           {
@@ -15194,7 +15237,7 @@ export const manifest = {
             "prominence": "context",
             "treatment": "compact",
             "density": "compact",
-            "col": 8,
+            "col": 10,
             "row": 4
           }
         ],
@@ -15254,6 +15297,53 @@ export const manifest = {
               "title": "Frame-aware point attention",
               "role": "equivariant geometric context",
               "inside": "Query, key, and value points are expressed in the current token frames so global rigid motions preserve the update."
+            }
+          },
+          {
+            "match": {
+              "relation_ref": "relations.ipa_produces_delta"
+            },
+            "label": "delta_s only",
+            "connection": {
+              "title": "Projected IPA update",
+              "role": "attention branch output",
+              "inside": "IPA concatenates its scalar, pair, and local point contexts and projects them to an additive update; it does not add the incoming state itself."
+            }
+          },
+          {
+            "match": {
+              "relation_ref": "relations.decoder_single_state_skips_to_ipa_residual_norm"
+            },
+            "label": "preserve s_l",
+            "tone": "skip",
+            "route_side": "top",
+            "route_clearance": 36,
+            "connection": {
+              "title": "IPA residual path",
+              "role": "preserved decoder state",
+              "inside": "The incoming single state bypasses IPA and meets its projected update in the surrounding StructureLayer wrapper."
+            }
+          },
+          {
+            "match": {
+              "relation_ref": "relations.ipa_residual_norm_produces_updated_single_state"
+            },
+            "label": "add + dropout + norm",
+            "connection": {
+              "title": "Attention-updated state",
+              "role": "structure-layer wrapper output",
+              "inside": "StructureLayer adds the IPA update to the preserved state, applies dropout to the sum, and then applies LayerNorm."
+            }
+          },
+          {
+            "match": {
+              "relation_ref": "relations.structure_transition_produces_single_state"
+            },
+            "label": "residual MLP + norm",
+            "connection": {
+              "title": "Structure transition",
+              "role": "token-wise channel update",
+              "inside": "A three-layer MLP mixes each token's channels, adds its result back to the input, then applies dropout and LayerNorm before frame regression."
             }
           },
           {
@@ -15361,6 +15451,39 @@ export const manifest = {
             }
           },
           {
+            "id": "projection_e4ea3b2c4d7c",
+            "from": "decoder_single_state",
+            "to": "ipa_residual_norm",
+            "projection": "direct",
+            "origin": "canonical",
+            "kind": "skip",
+            "relation_path": [
+              "relations.decoder_single_state_skips_to_ipa_residual_norm"
+            ],
+            "provenance_hops": [
+              {
+                "relation_ref": "relations.decoder_single_state_skips_to_ipa_residual_norm"
+              }
+            ],
+            "hidden_refs": [
+
+            ],
+            "carries": [
+              "representations.single_features"
+            ],
+            "presentation": {
+              "label": "preserve s_l",
+              "tone": "skip",
+              "route_side": "top",
+              "route_clearance": 36,
+              "connection": {
+                "title": "IPA residual path",
+                "role": "preserved decoder state",
+                "inside": "The incoming single state bypasses IPA and meets its projected update in the surrounding StructureLayer wrapper."
+              }
+            }
+          },
+          {
             "id": "projection_792bfdcdbf8d",
             "from": "feature_bundle",
             "to": "token_structure_frame_mask",
@@ -15415,18 +15538,18 @@ export const manifest = {
             }
           },
           {
-            "id": "projection_a5d4bbb29495",
+            "id": "projection_bcdb9aa0d2dc",
             "from": "invariant_point_attention",
-            "to": "single_after_ipa",
+            "to": "ipa_delta",
             "projection": "direct",
             "origin": "canonical",
-            "kind": "state_update",
+            "kind": "data_flow",
             "relation_path": [
-              "relations.ipa_produces_updated_single_state"
+              "relations.ipa_produces_delta"
             ],
             "provenance_hops": [
               {
-                "relation_ref": "relations.ipa_produces_updated_single_state"
+                "relation_ref": "relations.ipa_produces_delta"
               }
             ],
             "hidden_refs": [
@@ -15436,6 +15559,66 @@ export const manifest = {
               "representations.single_features"
             ],
             "presentation": {
+              "label": "delta_s only",
+              "connection": {
+                "title": "Projected IPA update",
+                "role": "attention branch output",
+                "inside": "IPA concatenates its scalar, pair, and local point contexts and projects them to an additive update; it does not add the incoming state itself."
+              }
+            }
+          },
+          {
+            "id": "projection_261a83332398",
+            "from": "ipa_delta",
+            "to": "ipa_residual_norm",
+            "projection": "direct",
+            "origin": "canonical",
+            "kind": "data_flow",
+            "relation_path": [
+              "relations.ipa_delta_enters_residual_norm"
+            ],
+            "provenance_hops": [
+              {
+                "relation_ref": "relations.ipa_delta_enters_residual_norm"
+              }
+            ],
+            "hidden_refs": [
+
+            ],
+            "carries": [
+              "representations.single_features"
+            ],
+            "presentation": {
+            }
+          },
+          {
+            "id": "projection_ce41232b0bb0",
+            "from": "ipa_residual_norm",
+            "to": "single_after_ipa",
+            "projection": "direct",
+            "origin": "canonical",
+            "kind": "state_update",
+            "relation_path": [
+              "relations.ipa_residual_norm_produces_updated_single_state"
+            ],
+            "provenance_hops": [
+              {
+                "relation_ref": "relations.ipa_residual_norm_produces_updated_single_state"
+              }
+            ],
+            "hidden_refs": [
+
+            ],
+            "carries": [
+              "representations.single_features"
+            ],
+            "presentation": {
+              "label": "add + dropout + norm",
+              "connection": {
+                "title": "Attention-updated state",
+                "role": "structure-layer wrapper output",
+                "inside": "StructureLayer adds the IPA update to the preserved state, applies dropout to the sum, and then applies LayerNorm."
+              }
             }
           },
           {
@@ -15569,6 +15752,12 @@ export const manifest = {
               "representations.single_features"
             ],
             "presentation": {
+              "label": "residual MLP + norm",
+              "connection": {
+                "title": "Structure transition",
+                "role": "token-wise channel update",
+                "inside": "A three-layer MLP mixes each token's channels, adds its result back to the input, then applies dropout and LayerNorm before frame regression."
+              }
             }
           },
           {
@@ -15660,12 +15849,14 @@ export const manifest = {
         "classifications": {
           "modules.frame_update": "visible",
           "modules.invariant_point_attention": "visible",
+          "modules.ipa_residual_norm": "visible",
           "modules.structure_transition": "visible",
           "value_sites.current_frames": "excluded",
           "value_sites.decoder_frames": "visible",
           "value_sites.decoder_output_frames": "visible",
           "value_sites.decoder_single_state": "visible",
           "value_sites.feature_bundle": "visible",
+          "value_sites.ipa_delta": "visible",
           "value_sites.refined_pair_features": "visible",
           "value_sites.refined_single_features": "excluded",
           "value_sites.single_after_ipa": "visible",
@@ -17081,13 +17272,13 @@ export const manifest = {
         "id": "genie3_ipa_internals",
         "kind": "standard_block_instance",
         "title": "Genie 3 Invariant Point Attention Internals",
-        "summary": "Full IPA combines scalar, pair, and frame-aware point terms, then the structure-layer wrapper applies residual dropout and LayerNorm.",
+        "summary": "Full IPA combines scalar, pair, and frame-aware point terms, aggregates their values, and ends at the projected additive update. Residual addition, dropout, and LayerNorm are shown on the parent structure-decoder board.",
         "parent": "structure_decoder",
         "subject_ref": "modules.invariant_point_attention",
         "expansion_depth": 0,
         "block_instance_ref": "block_instances.structure_ipa",
         "grid": {
-          "columns": 14,
+          "columns": 12,
           "rows": 9,
           "column_sizing": "content",
           "row_sizing": "content",
@@ -17179,25 +17370,25 @@ export const manifest = {
             "port_ref": "ports.mask"
           },
           {
-            "id": "updated_single_state",
-            "label": "IPA-updated single state",
-            "col": 14,
+            "id": "ipa_delta",
+            "label": "IPA update",
+            "col": 12,
             "row": 8,
             "prominence": "secondary",
             "treatment": "compact",
             "standard_block_ref": "standard_blocks/invariant-point-attention.yaml",
             "standard_block_id": "invariant_point_attention",
             "block_instance_ref": "block_instances.structure_ipa",
-            "template_fact_ref": "standard_blocks.invariant_point_attention.ports.updated_single_state",
-            "instance_fact_ref": "block_instances.structure_ipa.ports.updated_single_state",
+            "template_fact_ref": "standard_blocks.invariant_point_attention.ports.ipa_delta",
+            "instance_fact_ref": "block_instances.structure_ipa.ports.ipa_delta",
             "kind": "representation",
             "rep_ref": "single_features",
             "shape": "B x N x 384",
             "scale": "token",
             "glyph": "single",
             "flow_family": "single",
-            "notation": "s_ipa",
-            "port_ref": "ports.updated_single_state"
+            "notation": "delta_s",
+            "port_ref": "ports.ipa_delta"
           },
           {
             "id": "project_scalar_terms",
@@ -17648,42 +17839,6 @@ export const manifest = {
             "detail": "output_projection",
             "code": "ipa_delta = output_projection(concat(scalar_context, local_point_context, pair_value_context))",
             "operation": "output_projection"
-          },
-          {
-            "id": "ipa_delta",
-            "label": "IPA delta",
-            "col": 12,
-            "row": 8,
-            "prominence": "context",
-            "treatment": "compact",
-            "standard_block_ref": "standard_blocks/invariant-point-attention.yaml",
-            "standard_block_id": "invariant_point_attention",
-            "block_instance_ref": "block_instances.structure_ipa",
-            "template_fact_ref": "standard_blocks.invariant_point_attention.values.ipa_delta",
-            "instance_fact_ref": "block_instances.structure_ipa.values.ipa_delta",
-            "kind": "representation",
-            "scale": "item",
-            "glyph": "single",
-            "flow_family": "single",
-            "notation": "delta_s"
-          },
-          {
-            "id": "residual_norm",
-            "label": "Residual, dropout, and norm",
-            "col": 13,
-            "row": 8,
-            "prominence": "primary",
-            "treatment": "compact",
-            "standard_block_ref": "standard_blocks/invariant-point-attention.yaml",
-            "standard_block_id": "invariant_point_attention",
-            "block_instance_ref": "block_instances.structure_ipa",
-            "template_fact_ref": "standard_blocks.invariant_point_attention.steps.residual_norm",
-            "instance_fact_ref": "block_instances.structure_ipa.steps.residual_norm",
-            "kind": "operation",
-            "scale": "operation",
-            "detail": "residual_normalization",
-            "code": "updated_single_state = layer_norm(single_state + dropout(ipa_delta))",
-            "operation": "residual_normalization"
           }
         ],
         "edges": [
@@ -18454,88 +18609,22 @@ export const manifest = {
             "to": "ipa_delta",
             "kind": "data_flow",
             "carries": [
-
+              "representations.single_features"
             ],
-            "grounding": "standard_block_template",
+            "relation_path": [
+              "relations.ipa_produces_delta"
+            ],
+            "grounding": "canonical_relation_path",
             "standard_block_ref": "standard_blocks/invariant-point-attention.yaml",
             "standard_block_id": "invariant_point_attention",
             "block_instance_ref": "block_instances.structure_ipa",
             "template_fact_ref": "standard_blocks.invariant_point_attention.steps.project_ipa_delta",
             "instance_fact_ref": "block_instances.structure_ipa.steps.project_ipa_delta",
-            "template_data_ref": "values.ipa_delta",
+            "template_data_ref": "ports.ipa_delta",
             "connection": {
               "title": "Concatenate + project",
               "role": "reusable step output",
               "inside": "ipa_delta = output_projection(concat(scalar_context, local_point_context, pair_value_context))"
-            }
-          },
-          {
-            "id": "structure_ipa__residual_norm__input_1",
-            "from": "single_state",
-            "to": "residual_norm",
-            "kind": "data_flow",
-            "carries": [
-              "representations.single_features"
-            ],
-            "relation_path": [
-              "relations.decoder_single_state_enters_ipa"
-            ],
-            "grounding": "canonical_relation_path",
-            "standard_block_ref": "standard_blocks/invariant-point-attention.yaml",
-            "standard_block_id": "invariant_point_attention",
-            "block_instance_ref": "block_instances.structure_ipa",
-            "template_fact_ref": "standard_blocks.invariant_point_attention.steps.residual_norm",
-            "instance_fact_ref": "block_instances.structure_ipa.steps.residual_norm",
-            "template_data_ref": "ports.single_state",
-            "connection": {
-              "title": "Residual, dropout, and norm",
-              "role": "reusable step input",
-              "inside": "updated_single_state = layer_norm(single_state + dropout(ipa_delta))"
-            }
-          },
-          {
-            "id": "structure_ipa__residual_norm__input_2",
-            "from": "ipa_delta",
-            "to": "residual_norm",
-            "kind": "data_flow",
-            "carries": [
-
-            ],
-            "grounding": "standard_block_template",
-            "standard_block_ref": "standard_blocks/invariant-point-attention.yaml",
-            "standard_block_id": "invariant_point_attention",
-            "block_instance_ref": "block_instances.structure_ipa",
-            "template_fact_ref": "standard_blocks.invariant_point_attention.steps.residual_norm",
-            "instance_fact_ref": "block_instances.structure_ipa.steps.residual_norm",
-            "template_data_ref": "values.ipa_delta",
-            "connection": {
-              "title": "Residual, dropout, and norm",
-              "role": "reusable step input",
-              "inside": "updated_single_state = layer_norm(single_state + dropout(ipa_delta))"
-            }
-          },
-          {
-            "id": "structure_ipa__residual_norm__output_1",
-            "from": "residual_norm",
-            "to": "updated_single_state",
-            "kind": "state_update",
-            "carries": [
-              "representations.single_features"
-            ],
-            "relation_path": [
-              "relations.ipa_produces_updated_single_state"
-            ],
-            "grounding": "canonical_relation_path",
-            "standard_block_ref": "standard_blocks/invariant-point-attention.yaml",
-            "standard_block_id": "invariant_point_attention",
-            "block_instance_ref": "block_instances.structure_ipa",
-            "template_fact_ref": "standard_blocks.invariant_point_attention.steps.residual_norm",
-            "instance_fact_ref": "block_instances.structure_ipa.steps.residual_norm",
-            "template_data_ref": "ports.updated_single_state",
-            "connection": {
-              "title": "Residual, dropout, and norm",
-              "role": "reusable step output",
-              "inside": "updated_single_state = layer_norm(single_state + dropout(ipa_delta))"
             }
           }
         ],
@@ -18570,8 +18659,8 @@ export const manifest = {
           },
           {
             "id": "value_extraction",
-            "label": "Extract values and update state",
-            "description": "Reuse the shared attention weights for scalar, point, and pair values, return points to the local frame, align the three final contexts, concatenate and project them, and apply the residual wrapper.",
+            "label": "Extract and fuse values",
+            "description": "Reuse the shared attention weights for scalar, point, and pair values, return points to the local frame, align the three final contexts, then concatenate and project them into the IPA update.",
             "order": 2,
             "node_ids": [
               "aggregate_scalar_values",
@@ -18583,9 +18672,7 @@ export const manifest = {
               "aggregate_pair_values",
               "pair_value_context",
               "project_ipa_delta",
-              "ipa_delta",
-              "residual_norm",
-              "updated_single_state"
+              "ipa_delta"
             ]
           }
         ],
@@ -18593,8 +18680,8 @@ export const manifest = {
         "standardBlockRef": "standard_blocks/invariant-point-attention.yaml",
         "standardBlockId": "invariant_point_attention",
         "blockInstanceRef": "block_instances.structure_ipa",
-        "variant": "full_ipa_residual_norm",
-        "variantLabel": "Full IPA + residual normalization",
+        "variant": "full_ipa",
+        "variantLabel": "Full frame-aware IPA",
         "useScope": "whole_module",
         "conformance": "exact",
         "pseudocode": [
@@ -19361,15 +19448,15 @@ export const manifest = {
               "values.pair_value_context"
             ],
             "outputs": [
-              "values.ipa_delta"
+              "ports.ipa_delta"
             ],
             "codeBindings": [
               {
                 "lexeme": "ipa_delta",
                 "access": "write",
-                "localRef": "values.ipa_delta",
-                "templateFactRef": "standard_blocks.invariant_point_attention.values.ipa_delta",
-                "instanceFactRef": "block_instances.structure_ipa.values.ipa_delta",
+                "localRef": "ports.ipa_delta",
+                "templateFactRef": "standard_blocks.invariant_point_attention.ports.ipa_delta",
+                "instanceFactRef": "block_instances.structure_ipa.ports.ipa_delta",
                 "occurrences": [
                   {
                     "start": 0,
@@ -19413,62 +19500,6 @@ export const manifest = {
                   {
                     "start": 74,
                     "end": 92
-                  }
-                ]
-              }
-            ]
-          },
-          {
-            "id": "residual_norm",
-            "templateFactRef": "standard_blocks.invariant_point_attention.steps.residual_norm",
-            "instanceFactRef": "block_instances.structure_ipa.steps.residual_norm",
-            "label": "Residual, dropout, and norm",
-            "operation": "residual_normalization",
-            "code": "updated_single_state = layer_norm(single_state + dropout(ipa_delta))",
-            "inputs": [
-              "ports.single_state",
-              "values.ipa_delta"
-            ],
-            "outputs": [
-              "ports.updated_single_state"
-            ],
-            "codeBindings": [
-              {
-                "lexeme": "updated_single_state",
-                "access": "write",
-                "localRef": "ports.updated_single_state",
-                "templateFactRef": "standard_blocks.invariant_point_attention.ports.updated_single_state",
-                "instanceFactRef": "block_instances.structure_ipa.ports.updated_single_state",
-                "occurrences": [
-                  {
-                    "start": 0,
-                    "end": 20
-                  }
-                ]
-              },
-              {
-                "lexeme": "single_state",
-                "access": "read",
-                "localRef": "ports.single_state",
-                "templateFactRef": "standard_blocks.invariant_point_attention.ports.single_state",
-                "instanceFactRef": "block_instances.structure_ipa.ports.single_state",
-                "occurrences": [
-                  {
-                    "start": 34,
-                    "end": 46
-                  }
-                ]
-              },
-              {
-                "lexeme": "ipa_delta",
-                "access": "read",
-                "localRef": "values.ipa_delta",
-                "templateFactRef": "standard_blocks.invariant_point_attention.values.ipa_delta",
-                "instanceFactRef": "block_instances.structure_ipa.values.ipa_delta",
-                "occurrences": [
-                  {
-                    "start": 57,
-                    "end": 66
                   }
                 ]
               }

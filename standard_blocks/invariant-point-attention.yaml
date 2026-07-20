@@ -3,7 +3,7 @@ id: invariant_point_attention
 name: Invariant Point Attention
 kind: attention
 status: review
-description: Combine scalar attention, pair bias, and frame-aware point-distance logits, then aggregate scalar and point values alongside attention-weighted pair values into a residual-normalized single-state update.
+description: Combine scalar attention, pair bias, and frame-aware point-distance logits, then aggregate scalar, point, and attention-weighted pair values into a projected IPA update.
 ports:
   - id: single_state
     label: single state
@@ -41,19 +41,19 @@ ports:
     relation_kinds: [conditioning, control]
     glyph: vector
     notation: m
-  - id: updated_single_state
-    label: IPA-updated single state
+  - id: ipa_delta
+    label: IPA update
     direction: output
     kind: representation
     required: true
     cardinality: one
-    relation_kinds: [data_flow, state_update]
+    relation_kinds: [data_flow]
     glyph: single
-    notation: s_ipa
+    notation: delta_s
 variants:
-  - id: full_ipa_residual_norm
-    label: Full IPA + residual normalization
-    description: Full scalar, point, and pair aggregation followed by the StructureLayer residual, dropout, and LayerNorm wrapper.
+  - id: full_ipa
+    label: Full frame-aware IPA
+    description: Full scalar, point-distance, pair-bias, scalar-value, point-value, and pair-value attention ending at the projected IPA update.
     step_refs:
       - steps.project_scalar_terms
       - steps.project_local_points
@@ -68,8 +68,7 @@ variants:
       - steps.return_points_to_local_frame
       - steps.aggregate_pair_values
       - steps.project_ipa_delta
-      - steps.residual_norm
-default_variant: full_ipa_residual_norm
+default_variant: full_ipa
 values:
   - { id: scalar_terms, label: scalar Q/K/V, kind: representation, glyph: single, notation: qkv_s }
   - { id: local_points, label: local Q/K/V points, kind: geometry, glyph: coordinates, notation: qkv_p }
@@ -83,7 +82,6 @@ values:
   - { id: global_point_context, label: global point context, kind: geometry, glyph: coordinates, notation: o_p_global }
   - { id: local_point_context, label: local points + norms, kind: geometry, glyph: coordinates, notation: o_p_local }
   - { id: pair_value_context, label: pair-value context, kind: representation, glyph: single, notation: o_z }
-  - { id: ipa_delta, label: IPA delta, kind: representation, glyph: single, notation: delta_s }
 steps:
   - id: project_scalar_terms
     label: Project scalar Q/K/V
@@ -215,26 +213,16 @@ steps:
     label: Concatenate + project
     operation: output_projection
     inputs: [values.scalar_context, values.local_point_context, values.pair_value_context]
-    outputs: [values.ipa_delta]
+    outputs: [ports.ipa_delta]
     code: "ipa_delta = output_projection(concat(scalar_context, local_point_context, pair_value_context))"
     code_bindings:
-      - { lexeme: ipa_delta, ref: values.ipa_delta, access: write }
+      - { lexeme: ipa_delta, ref: ports.ipa_delta, access: write }
       - { lexeme: scalar_context, ref: values.scalar_context, access: read }
       - { lexeme: local_point_context, ref: values.local_point_context, access: read }
       - { lexeme: pair_value_context, ref: values.pair_value_context, access: read }
-  - id: residual_norm
-    label: Residual, dropout, and norm
-    operation: residual_normalization
-    inputs: [ports.single_state, values.ipa_delta]
-    outputs: [ports.updated_single_state]
-    code: "updated_single_state = layer_norm(single_state + dropout(ipa_delta))"
-    code_bindings:
-      - { lexeme: updated_single_state, ref: ports.updated_single_state, access: write }
-      - { lexeme: single_state, ref: ports.single_state, access: read }
-      - { lexeme: ipa_delta, ref: values.ipa_delta, access: read }
 visual_template:
   grid:
-    columns: 14
+    columns: 12
     rows: 9
     column_sizing: content
     row_sizing: content
@@ -245,7 +233,7 @@ visual_template:
     - { id: pair_context, ref: ports.pair_context, col: 1, row: 3, prominence: secondary, treatment: compact }
     - { id: frames, ref: ports.frames, col: 1, row: 4, prominence: secondary, treatment: compact }
     - { id: mask, ref: ports.mask, col: 4, row: 4, prominence: context, treatment: chip }
-    - { id: updated_single_state, ref: ports.updated_single_state, col: 14, row: 8, prominence: secondary, treatment: compact }
+    - { id: ipa_delta, ref: ports.ipa_delta, col: 12, row: 8, prominence: secondary, treatment: compact }
     - { id: project_scalar_terms, ref: steps.project_scalar_terms, col: 2, row: 1, prominence: primary, treatment: compact }
     - { id: scalar_terms, ref: values.scalar_terms, col: 3, row: 1, prominence: context, treatment: compact }
     - { id: scalar_attention_logits, ref: steps.scalar_attention_logits, col: 4, row: 1, prominence: primary, treatment: compact }
@@ -271,8 +259,6 @@ visual_template:
     - { id: return_points_to_local_frame, ref: steps.return_points_to_local_frame, col: 9, row: 9, prominence: primary, treatment: compact }
     - { id: local_point_context, ref: values.local_point_context, col: 10, row: 9, prominence: context, treatment: compact }
     - { id: project_ipa_delta, ref: steps.project_ipa_delta, col: 11, row: 8, prominence: primary, treatment: compact }
-    - { id: ipa_delta, ref: values.ipa_delta, col: 12, row: 8, prominence: context, treatment: compact }
-    - { id: residual_norm, ref: steps.residual_norm, col: 13, row: 8, prominence: primary, treatment: compact }
   segments:
     - id: attention_weights
       label: Compute attention weights
@@ -299,8 +285,8 @@ visual_template:
         - steps.softmax_attention
         - values.attention_weights
     - id: value_extraction
-      label: Extract values and update state
-      description: Reuse the shared attention weights for scalar, point, and pair values, return points to the local frame, align the three final contexts, concatenate and project them, and apply the residual wrapper.
+      label: Extract and fuse values
+      description: Reuse the shared attention weights for scalar, point, and pair values, return points to the local frame, align the three final contexts, then concatenate and project them into the IPA update.
       node_refs:
         - steps.aggregate_scalar_values
         - values.scalar_context
@@ -311,12 +297,10 @@ visual_template:
         - steps.aggregate_pair_values
         - values.pair_value_context
         - steps.project_ipa_delta
-        - values.ipa_delta
-        - steps.residual_norm
-        - ports.updated_single_state
+        - ports.ipa_delta
 evidence_policy:
-  generic_definition: Full IPA anatomy is reusable vocabulary; each architecture instance must separately prove its core and wrapper variant.
+  generic_definition: Full IPA anatomy is reusable vocabulary ending at the projected attention update; residual addition, dropout, and normalization belong to the surrounding architecture layer.
   usage_requires:
     - Evidence for scalar, point-distance, and pair logit terms.
     - Evidence for scalar and point aggregation plus attention-weighted pair-value aggregation.
-    - Evidence for the residual/dropout/normalization wrapper when full_ipa_residual_norm is selected.
+    - Evidence that the output projection returns the IPA update before any architecture-owned residual wrapper.

@@ -82,6 +82,8 @@ boards:
         reason: The task overview suppresses the separate internal pair-geometry use so it does not become a duplicate feature-to-sampler wire.
       - ref: modules.invariant_point_attention
         reason: Residue-mask use inside IPA belongs to the structure-decoder detail rather than the task overview.
+      - ref: modules.ipa_residual_norm
+        reason: The IPA residual wrapper belongs to the same structure-decoder detail as the attention core.
       - ref: modules.frenet_frame_builder
         reason: Frenet construction is expanded inside the sampling loop; the task overview keeps one feature-to-sampler connection.
     edge_overrides:
@@ -253,6 +255,8 @@ boards:
         reason: The sampling-loop board represents all learned uses of x_t through one denoiser wire; noisy pair geometry is expanded on the invariant-encoder board.
       - ref: modules.invariant_point_attention
         reason: Frame-point conditioning and residue masking are internal to the structure decoder and are expanded on its child board.
+      - ref: modules.ipa_residual_norm
+        reason: Residual addition and normalization are internal to the structure decoder and are expanded on its child board.
       - ref: modules.backbone_update
         reason: Frame composition is internal to the structure decoder; suppressing it here keeps one derived-frames-to-denoiser wire.
     edge_overrides:
@@ -605,6 +609,8 @@ boards:
         reason: Frenet frames enter this child board as an already-derived denoiser input from the sampling board.
       - ref: modules.invariant_point_attention
         reason: The invariant encoder board stops at the single and refined-pair outputs; IPA is expanded on the sibling structure-decoder board.
+      - ref: modules.ipa_residual_norm
+        reason: The invariant encoder board stops before the structure layer's IPA residual wrapper.
     edge_overrides:
       - match: { relation_ref: relations.feature_bundle_conditions_single_feature_net }
         label: residue/chain + motif AA
@@ -762,12 +768,12 @@ boards:
 
   - id: structure_decoder
     title: One Equivariant Structure Layer (Repeated ×8)
-    summary: IPA combines single, pair, and current-frame information; a residue-wise transition updates the latent state; a learned six-parameter rigid increment is composed into every residue frame.
+    summary: IPA combines single, pair, and current-frame information into an additive update. The structure layer adds it to the incoming state, applies dropout and LayerNorm, runs a residual transition, and composes a learned six-parameter rigid increment into every residue frame.
     parent: denoiser_forward
     subject_ref: modules.equivariant_structure_decoder
     expansion_depth: 1
     grid:
-      columns: 7
+      columns: 9
       rows: 6
       column_sizing: content
       col_gap: 46
@@ -817,6 +823,22 @@ boards:
         col: 3
         row: 3
         board_ref: genie2_ipa_internals
+      - id: ipa_delta
+        ref: value_sites.ipa_delta
+        label: IPA update
+        notation: delta_s
+        prominence: context
+        treatment: compact
+        density: compact
+        col: 4
+        row: 3
+      - id: ipa_residual_norm
+        ref: modules.ipa_residual_norm
+        prominence: primary
+        treatment: compact
+        density: compact
+        col: 5
+        row: 3
       - id: single_after_ipa
         ref: value_sites.single_after_ipa
         label: attention-updated single state
@@ -824,14 +846,14 @@ boards:
         prominence: secondary
         treatment: compact
         density: compact
-        col: 4
+        col: 6
         row: 3
       - id: structure_transition
         ref: modules.structure_transition
         prominence: primary
         treatment: compact
         density: compact
-        col: 5
+        col: 7
         row: 3
       - id: single_after_transition
         ref: value_sites.single_after_transition
@@ -840,13 +862,13 @@ boards:
         prominence: secondary
         treatment: compact
         density: compact
-        col: 6
+        col: 8
         row: 3
       - id: backbone_update
         ref: modules.backbone_update
         prominence: primary
         treatment: block
-        col: 6
+        col: 8
         row: 5
       - id: updated_frames
         ref: value_sites.updated_frames
@@ -855,7 +877,7 @@ boards:
         prominence: secondary
         treatment: compact
         density: compact
-        col: 7
+        col: 9
         row: 5
     exclude:
       - ref: modules.frenet_frame_builder
@@ -881,18 +903,33 @@ boards:
           title: Equivariant geometric context
           role: spatial attention
           inside: Query, key, and value points are transformed through current residue frames so attention responds equivariantly to global rigid motions.
-      - match: { relation_ref: relations.ipa_produces_updated_single_state }
-        label: residual + norm
+      - match: { relation_ref: relations.ipa_produces_delta }
+        label: delta_s only
         connection:
-          title: IPA-updated state
-          role: geometric attention output
-          inside: IPA is added to the incoming single state, followed by dropout and layer normalization.
+          title: Projected IPA update
+          role: attention branch output
+          inside: IPA concatenates its scalar, pair, and local point contexts and projects them to an additive update; it does not add the incoming state itself.
+      - match: { relation_ref: relations.single_features_skip_to_ipa_residual_norm }
+        label: preserve s
+        tone: skip
+        route_side: top
+        route_clearance: 36
+        connection:
+          title: IPA residual path
+          role: preserved single state
+          inside: The incoming single state bypasses IPA and meets its projected update in the surrounding StructureLayer wrapper.
+      - match: { relation_ref: relations.ipa_residual_norm_produces_updated_single_state }
+        label: add + dropout + norm
+        connection:
+          title: Attention-updated state
+          role: structure-layer wrapper output
+          inside: StructureLayer adds the IPA update to the preserved state, applies dropout to the sum, and then applies LayerNorm.
       - match: { relation_ref: relations.structure_transition_produces_single_state }
         label: residue-wise MLP
         connection:
           title: Structure transition
           role: latent channel update
-          inside: A transition network mixes channels independently at each residue before frame regression.
+          inside: A three-layer MLP mixes channels independently at each residue, adds its result back to the input, then applies dropout and LayerNorm before frame regression.
       - match: { relation_ref: relations.single_state_enters_backbone_update }
         label: regress 6 parameters
         connection:
@@ -918,7 +955,7 @@ boards:
   - id: genie2_ipa_internals
     kind: standard_block_instance
     title: Genie 2 Invariant Point Attention Internals
-    summary: Full IPA combines scalar, pair, and frame-aware point terms, then the structure-layer wrapper applies residual dropout and LayerNorm.
+    summary: Full IPA combines scalar, pair, and frame-aware point terms, aggregates their values, and ends at the projected additive update. Residual addition, dropout, and LayerNorm are shown on the parent structure-decoder board.
     parent: structure_decoder
     subject_ref: modules.invariant_point_attention
     expansion_depth: 0

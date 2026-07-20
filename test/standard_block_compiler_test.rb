@@ -80,7 +80,7 @@ class StandardBlockCompilerTest < Minitest::Test
 
     assert_equal "standard_block_template", board.fetch("projectionMode")
     assert_equal "block_instances.structure_ipa", board.fetch("blockInstanceRef")
-    assert_equal "full_ipa_residual_norm", board.fetch("variant")
+    assert_equal "full_ipa", board.fetch("variant")
     refute_empty board.fetch("nodes")
     refute_empty board.fetch("edges")
     cells = board.fetch("nodes").map { |node| [node.fetch("col"), node.fetch("row")] }

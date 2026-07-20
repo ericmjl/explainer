@@ -117,7 +117,7 @@ block_instances:
   - id: structure_ipa
     block_ref: standard_blocks/invariant-point-attention.yaml
     subject_ref: modules.invariant_point_attention
-    variant: full_ipa_residual_norm
+    variant: full_ipa
     use_scope: whole_module
     conformance: exact
     port_bindings:
@@ -130,8 +130,8 @@ block_instances:
       - port_ref: ports.mask
         relation_refs: [relations.feature_bundle_masks_ipa]
         selector: token_struct_frame_mask
-      - port_ref: ports.updated_single_state
-        relation_refs: [relations.ipa_produces_updated_single_state]
+      - port_ref: ports.ipa_delta
+        relation_refs: [relations.ipa_produces_delta]
     evidence:
       status: confirmed_from_code
       refs:
