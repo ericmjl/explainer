@@ -1,16 +1,16 @@
 export const manifest = {
-  "schemaVersion": "architecture-manifest-v0.4",
+  "schemaVersion": "architecture-manifest-v0.5",
   "build": {
-    "generator": "architecture-manifest-builder-v0.4.6",
+    "generator": "architecture-manifest-builder-v0.5.0",
     "inputDigests": {
       "references/bibliography.yaml": "abe9226586bfb64261c81b7756b7275c48a3a172a9a18b5f91f7acfd3145e374",
-      "architectures/alphafold2.yaml": "23c41cc0dacde426b7981272401e113f6d713b1868844135d9a2dab5bb6f00bc",
+      "architectures/alphafold2.yaml": "a754a17dc83303c7dff50f6925771b01dc51d237dae382476b8bf87fbead77fe",
       "views/alphafold2-semantic-zoom.view.yaml": "6b317c6d224a7e3b8416839247c0c12d6b9e0cd34d859475f4529a939d51fe8e",
       "pseudocode/alphafold2.yaml": "dc6534469437eba99e292899d31f28860a89f091d9457288e7d927af66598fac"
     }
   },
   "architecture": {
-    "schemaVersion": "architecture-v0.4",
+    "schemaVersion": "architecture-v0.5",
     "id": "alphafold2",
     "name": "AlphaFold 2 Monomer Network",
     "family": "protein_structure_prediction",

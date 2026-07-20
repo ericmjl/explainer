@@ -3,6 +3,7 @@
 require "set"
 
 require_relative "standard_block_contract"
+require_relative "standard_block_shapes"
 
 # Compiles reusable standard-block templates into instance-scoped explanatory
 # scenes. Canonical architecture relations remain untouched: only boundary
@@ -24,7 +25,7 @@ module StandardBlockCompiler
     def initialize(blocks_by_path:)
       @blocks_by_path = blocks_by_path
       @blocks_by_path.each_value do |block|
-        next unless block["schema_version"] == "standard-block-v0.2"
+        next unless StandardBlockContract::SUPPORTED_VERSIONS.include?(block["schema_version"])
 
         StandardBlockContract.validate_definition!(block)
       end
@@ -77,6 +78,8 @@ module StandardBlockCompiler
           "useScope" => instance.fetch("useScope"),
           "conformance" => instance.fetch("conformance"),
           "differenceSummary" => instance["differenceSummary"],
+          "shapeParameters" => instance["shapeParameters"],
+          "shapeParameterSources" => instance["shapeParameterSources"],
           "pseudocode" => instance.fetch("pseudocode"),
         ).compact
       end
@@ -106,6 +109,14 @@ module StandardBlockCompiler
       active_refs = active_data_refs | active_step_refs
       bindings = Array(instance.fetch("port_bindings"))
       bindings_by_port = bindings.to_h { |binding| [binding.fetch("port_ref"), binding] }
+      shape_result = StandardBlockShapes.resolve!(
+        block: block,
+        instance: instance,
+        architecture: context.fetch(:architecture),
+        relations_by_ref: context.fetch(:relations_by_ref),
+        representations_by_ref: context.fetch(:representations_by_ref),
+        active_steps: steps,
+      )
       scene = compile_scene(
         block: block,
         block_path: block_path,
@@ -113,6 +124,7 @@ module StandardBlockCompiler
         steps: steps,
         active_refs: active_refs,
         bindings_by_port: bindings_by_port,
+        resolved_shapes: shape_result.shapes,
         context: context,
       )
 
@@ -129,6 +141,8 @@ module StandardBlockCompiler
         "conformance" => instance.fetch("conformance"),
         "differenceSummary" => instance["difference_summary"],
         "evidence" => instance.fetch("evidence"),
+        "shapeParameters" => shape_result.parameter_bindings.empty? ? nil : shape_result.parameter_bindings,
+        "shapeParameterSources" => shape_result.parameter_sources.empty? ? nil : shape_result.parameter_sources,
         "portBindings" => compile_bindings(bindings, context),
         "pseudocode" => steps.map do |step|
           {
@@ -188,7 +202,7 @@ module StandardBlockCompiler
       end
     end
 
-    def compile_scene(block:, block_path:, instance:, steps:, active_refs:, bindings_by_port:, context:)
+    def compile_scene(block:, block_path:, instance:, steps:, active_refs:, bindings_by_port:, resolved_shapes:, context:)
       block_id = block.fetch("id")
       instance_id = instance.fetch("id")
       ports_by_ref = Array(block.fetch("ports")).to_h { |port| ["ports.#{port.fetch('id')}", port] }
@@ -210,6 +224,7 @@ module StandardBlockCompiler
           block_path: block_path,
           instance: instance,
           binding: bindings_by_port[ref],
+          resolved_shape: resolved_shapes[ref],
           context: context,
         )
       end
@@ -272,7 +287,7 @@ module StandardBlockCompiler
       }.compact
     end
 
-    def compile_node(visual:, ref:, object:, block:, block_path:, instance:, binding:, context:)
+    def compile_node(visual:, ref:, object:, block:, block_path:, instance:, binding:, resolved_shape:, context:)
       namespace, local_id = ref.split(".", 2)
       base = {
         "id" => visual.fetch("id"),
@@ -304,7 +319,9 @@ module StandardBlockCompiler
         base.merge(
           "kind" => "representation",
           "rep_ref" => representation_ref&.delete_prefix("representations."),
-          "shape" => object["shape"] || representation&.dig("shape"),
+          "shape" => resolved_shape&.dig("label") || object["shape"] || representation&.dig("shape"),
+          "resolved_shape" => resolved_shape,
+          "shape_status" => resolved_shape ? "resolved" : nil,
           "scale" => object["scale"] || representation&.dig("scale") || "item",
           "glyph" => glyph,
           "flow_family" => flow_family(glyph),
@@ -348,7 +365,12 @@ module StandardBlockCompiler
     def representation_for_binding(binding, context)
       relation_ref = Array(binding && binding["relation_refs"]).first
       relation = relation_ref && context.fetch(:relations_by_ref)[relation_ref]
-      representation_ref = Array(relation && relation["carries"]).first
+      carries = Array(relation && relation["carries"])
+      selector = binding && binding["selector"]
+      representation_ref = if selector
+        carries.find { |ref| ref == selector || ref.delete_prefix("representations.") == selector }
+      end
+      representation_ref ||= carries.first
       [representation_ref, representation_ref && context.fetch(:representations_by_ref)[representation_ref]]
     end
 

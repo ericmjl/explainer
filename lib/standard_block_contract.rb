@@ -4,12 +4,14 @@ require "set"
 
 require_relative "json_schema_subset"
 require_relative "source_contract"
+require_relative "standard_block_shapes"
 
 # Structural and semantic contract for reusable algorithm blocks. Templates own
 # local algorithm anatomy; architecture block_instances own concrete uses and
 # bind public ports to canonical relations without copying their endpoints.
 module StandardBlockContract
   Diagnostic = JsonSchemaSubset::Diagnostic
+  SUPPORTED_VERSIONS = %w[standard-block-v0.2 standard-block-v0.3].freeze
 
   class ValidationError < StandardError
     attr_reader :diagnostics
@@ -24,9 +26,9 @@ module StandardBlockContract
 
   def definition_errors(block)
     diagnostics = SourceContract.errors(block)
-    return diagnostics unless block.is_a?(Hash) && block["schema_version"] == "standard-block-v0.2"
+    return diagnostics unless block.is_a?(Hash) && SUPPORTED_VERSIONS.include?(block["schema_version"])
 
-    diagnostics + semantic_definition_errors(block)
+    diagnostics + semantic_definition_errors(block) + StandardBlockShapes.definition_errors(block)
   end
 
   def validate_definition!(block)
@@ -63,10 +65,10 @@ module StandardBlockContract
         diagnostics << diagnostic("unknown_standard_block", "#{path}.block_ref", "cannot resolve #{block_ref.inspect}")
         next
       end
-      unless block["schema_version"] == "standard-block-v0.2"
+      unless SUPPORTED_VERSIONS.include?(block["schema_version"])
         diagnostics << diagnostic(
           "legacy_block_instance", "#{path}.block_ref",
-          "block instances require standard-block-v0.2; #{block_ref} is #{block['schema_version'].inspect}",
+          "block instances require standard-block-v0.2 or v0.3; #{block_ref} is #{block['schema_version'].inspect}",
         )
         next
       end
@@ -178,6 +180,24 @@ module StandardBlockContract
             "exact conformance leaves incident relations unbound: #{missing.to_a.sort.join(', ')}",
           )
         end
+      end
+
+      if block["schema_version"] == StandardBlockShapes::SUPPORTED_VERSION
+        variant = Array(block["variants"]).find { |candidate| candidate["id"] == instance["variant"] }
+        active_step_refs = Array(variant && variant["step_refs"]).to_set
+        active_steps = Array(block["steps"]).select do |step|
+          active_step_refs.include?("steps.#{step['id']}")
+        end
+        diagnostics.concat(StandardBlockShapes.resolution_errors(
+          block: block,
+          instance: instance,
+          architecture: architecture,
+          relations_by_ref: relations_by_ref,
+          representations_by_ref: Array(architecture["representations"]).to_h do |representation|
+            ["representations.#{representation['id']}", representation]
+          end,
+          active_steps: active_steps,
+        ))
       end
 
       diagnostics.concat(legacy_ownership_errors(architecture, instance, subject, bound_relation_refs, path))

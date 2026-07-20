@@ -1,6 +1,6 @@
 # frozen_string_literal: true
 
-# Validate and compile architecture-v0.4's top-down decomposition coverage.
+# Validate and compile the current architecture language's top-down decomposition coverage.
 # Coverage is reported as explicit scope/frontier counts, never as a guessed
 # percentage of an unknowable complete architecture.
 module ArchitectureCoverage
@@ -11,7 +11,7 @@ module ArchitectureCoverage
   module_function
 
   def errors(architecture)
-    return [] unless architecture["schema_version"] == "architecture-v0.4"
+    return [] unless %w[architecture-v0.4 architecture-v0.5].include?(architecture["schema_version"])
 
     modules = Array(architecture["modules"])
     children = Hash.new { |hash, key| hash[key] = [] }

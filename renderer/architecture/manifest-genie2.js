@@ -1,17 +1,17 @@
 export const manifest = {
-  "schemaVersion": "architecture-manifest-v0.4",
+  "schemaVersion": "architecture-manifest-v0.5",
   "build": {
-    "generator": "architecture-manifest-builder-v0.4.6",
+    "generator": "architecture-manifest-builder-v0.5.0",
     "inputDigests": {
       "references/bibliography.yaml": "abe9226586bfb64261c81b7756b7275c48a3a172a9a18b5f91f7acfd3145e374",
-      "architectures/genie2.yaml": "02c59589c342aa24654a24c8cb89345d062a715b5c58f61ee33eddb3c23e50ed",
+      "architectures/genie2.yaml": "dc70626daca21c212b372e601a3a064ee1a1ea01e226b955b21e00e4c308bdb0",
       "views/genie2-semantic-zoom.view.yaml": "e5ed5c07d6c8bc3215aa09b1e2ca261c2861a1dc19bdf8c3968d69c23e28b0d2",
       "pseudocode/genie2.yaml": "b78ca953f8ebed98a688501d7485e3b2e79fb50b2e9434d876012c1ee4289bd0",
-      "standard_blocks/invariant-point-attention.yaml": "e3b01431067731b468242ffee22ca22ccc22c98cf3c8ddcb8399075d560c86e1"
+      "standard_blocks/invariant-point-attention.yaml": "a5c02021172a36135808767943f20309424cc956240bf956ed156d1c380bb7b5"
     }
   },
   "architecture": {
-    "schemaVersion": "architecture-v0.4",
+    "schemaVersion": "architecture-v0.5",
     "id": "genie2",
     "name": "Genie 2 Protein Backbone Diffusion",
     "family": "protein_structure_diffusion",
@@ -30,7 +30,10 @@ export const manifest = {
       "triangular_attention": false,
       "structure_layers": 8,
       "structure_recycles": 1,
+      "ipa_hidden_feature_dimension": 16,
       "ipa_heads": 12,
+      "ipa_query_key_points": 4,
+      "ipa_value_points": 8,
       "evidence": {
         "status": "confirmed_from_code",
         "refs": [
@@ -861,6 +864,54 @@ export const manifest = {
               "note": "The IPA module implements scalar, point, pair-bias, and pair-value attention terms."
             }
           ]
+        },
+        "shapeParameters": {
+          "c_hidden": 16,
+          "h": 12,
+          "p_q": 4,
+          "p_v": 8,
+          "b": "B",
+          "n": "N",
+          "c_s": 384,
+          "c_z": 128
+        },
+        "shapeParameterSources": {
+          "c_hidden": {
+            "kind": "configuration",
+            "ref": "reference_configuration.ipa_hidden_feature_dimension"
+          },
+          "h": {
+            "kind": "configuration",
+            "ref": "reference_configuration.ipa_heads"
+          },
+          "p_q": {
+            "kind": "configuration",
+            "ref": "reference_configuration.ipa_query_key_points"
+          },
+          "p_v": {
+            "kind": "configuration",
+            "ref": "reference_configuration.ipa_value_points"
+          },
+          "b": {
+            "kind": "boundary",
+            "portRef": "ports.single_state",
+            "representationRef": "representations.single_features"
+          },
+          "n": {
+            "kind": "boundary",
+            "portRef": "ports.single_state",
+            "representationRef": "representations.single_features"
+          },
+          "c_s": {
+            "kind": "boundary",
+            "portRef": "ports.single_state",
+            "representationRef": "representations.single_features"
+          },
+          "c_z": {
+            "kind": "boundary",
+            "portRef": "ports.pair_context",
+            "representationRef": "representations.pair_features"
+          }
         },
         "portBindings": [
           {
@@ -4838,7 +4889,7 @@ export const manifest = {
   "standardBlocks": {
     "invariant_point_attention": {
       "id": "invariant_point_attention",
-      "schemaVersion": "standard-block-v0.2",
+      "schemaVersion": "standard-block-v0.3",
       "name": "Invariant Point Attention",
       "sourceYaml": "../../standard_blocks/invariant-point-attention.yaml",
       "description": "Combine scalar attention, pair bias, and frame-aware point-distance logits, then aggregate scalar, point, and attention-weighted pair values into a projected IPA update.",
@@ -4911,6 +4962,64 @@ export const manifest = {
       ],
       "kind": "attention",
       "status": "review",
+      "parameters": [
+        {
+          "id": "b",
+          "notation": "B",
+          "kind": "batch",
+          "resolution": "boundary",
+          "role": "leading batch axes"
+        },
+        {
+          "id": "n",
+          "notation": "N",
+          "kind": "sequence",
+          "resolution": "boundary",
+          "role": "number of residue or atom tokens"
+        },
+        {
+          "id": "c_s",
+          "notation": "C_s",
+          "kind": "channel",
+          "resolution": "boundary",
+          "role": "single-state channel width"
+        },
+        {
+          "id": "c_z",
+          "notation": "C_z",
+          "kind": "channel",
+          "resolution": "boundary",
+          "role": "pair-context channel width"
+        },
+        {
+          "id": "c_hidden",
+          "notation": "C_h",
+          "kind": "channel",
+          "resolution": "instance",
+          "role": "per-head scalar query/key/value width"
+        },
+        {
+          "id": "h",
+          "notation": "H",
+          "kind": "heads",
+          "resolution": "instance",
+          "role": "number of attention heads"
+        },
+        {
+          "id": "p_q",
+          "notation": "P_q",
+          "kind": "points",
+          "resolution": "instance",
+          "role": "query and key points per head"
+        },
+        {
+          "id": "p_v",
+          "notation": "P_v",
+          "kind": "points",
+          "resolution": "instance",
+          "role": "value points per head"
+        }
+      ],
       "ports": [
         {
           "id": "single_state",
@@ -4924,7 +5033,24 @@ export const manifest = {
             "state_update"
           ],
           "glyph": "single",
-          "notation": "s"
+          "notation": "s",
+          "shape_contract": {
+            "kind": "tensor",
+            "axes": [
+              {
+                "id": "batch",
+                "dimension": "b"
+              },
+              {
+                "id": "query_token",
+                "dimension": "n"
+              },
+              {
+                "id": "single_channel",
+                "dimension": "c_s"
+              }
+            ]
+          }
         },
         {
           "id": "pair_context",
@@ -4938,7 +5064,28 @@ export const manifest = {
             "data_flow"
           ],
           "glyph": "pair",
-          "notation": "z"
+          "notation": "z",
+          "shape_contract": {
+            "kind": "tensor",
+            "axes": [
+              {
+                "id": "batch",
+                "dimension": "b"
+              },
+              {
+                "id": "query_token",
+                "dimension": "n"
+              },
+              {
+                "id": "key_token",
+                "dimension": "n"
+              },
+              {
+                "id": "pair_channel",
+                "dimension": "c_z"
+              }
+            ]
+          }
         },
         {
           "id": "frames",
@@ -4952,7 +5099,20 @@ export const manifest = {
             "data_flow"
           ],
           "glyph": "frames",
-          "notation": "T"
+          "notation": "T",
+          "shape_contract": {
+            "kind": "frames",
+            "axes": [
+              {
+                "id": "batch",
+                "dimension": "b"
+              },
+              {
+                "id": "query_token",
+                "dimension": "n"
+              }
+            ]
+          }
         },
         {
           "id": "mask",
@@ -4966,7 +5126,20 @@ export const manifest = {
             "control"
           ],
           "glyph": "vector",
-          "notation": "m"
+          "notation": "m",
+          "shape_contract": {
+            "kind": "tensor",
+            "axes": [
+              {
+                "id": "batch",
+                "dimension": "b"
+              },
+              {
+                "id": "query_token",
+                "dimension": "n"
+              }
+            ]
+          }
         },
         {
           "id": "ipa_delta",
@@ -4979,7 +5152,24 @@ export const manifest = {
             "data_flow"
           ],
           "glyph": "single",
-          "notation": "delta_s"
+          "notation": "delta_s",
+          "shape_contract": {
+            "kind": "tensor",
+            "axes": [
+              {
+                "id": "batch",
+                "dimension": "b"
+              },
+              {
+                "id": "query_token",
+                "dimension": "n"
+              },
+              {
+                "id": "single_channel",
+                "dimension": "c_s"
+              }
+            ]
+          }
         }
       ],
       "variants": [
@@ -5011,84 +5201,536 @@ export const manifest = {
           "label": "scalar Q/K/V",
           "kind": "representation",
           "glyph": "single",
-          "notation": "qkv_s"
+          "notation": "qkv_s",
+          "shape_contract": {
+            "kind": "tuple",
+            "fields": [
+              {
+                "id": "q",
+                "shape": {
+                  "kind": "tensor",
+                  "axes": [
+                    {
+                      "id": "batch",
+                      "dimension": "b"
+                    },
+                    {
+                      "id": "query_token",
+                      "dimension": "n"
+                    },
+                    {
+                      "id": "head",
+                      "dimension": "h"
+                    },
+                    {
+                      "id": "hidden_channel",
+                      "dimension": "c_hidden"
+                    }
+                  ]
+                }
+              },
+              {
+                "id": "k",
+                "shape": {
+                  "kind": "tensor",
+                  "axes": [
+                    {
+                      "id": "batch",
+                      "dimension": "b"
+                    },
+                    {
+                      "id": "key_token",
+                      "dimension": "n"
+                    },
+                    {
+                      "id": "head",
+                      "dimension": "h"
+                    },
+                    {
+                      "id": "hidden_channel",
+                      "dimension": "c_hidden"
+                    }
+                  ]
+                }
+              },
+              {
+                "id": "v",
+                "shape": {
+                  "kind": "tensor",
+                  "axes": [
+                    {
+                      "id": "batch",
+                      "dimension": "b"
+                    },
+                    {
+                      "id": "key_token",
+                      "dimension": "n"
+                    },
+                    {
+                      "id": "head",
+                      "dimension": "h"
+                    },
+                    {
+                      "id": "value_channel",
+                      "dimension": "c_hidden"
+                    }
+                  ]
+                }
+              }
+            ]
+          }
         },
         {
           "id": "local_points",
           "label": "local Q/K/V points",
           "kind": "geometry",
           "glyph": "coordinates",
-          "notation": "qkv_p"
+          "notation": "qkv_p",
+          "shape_contract": {
+            "kind": "tuple",
+            "fields": [
+              {
+                "id": "q",
+                "shape": {
+                  "kind": "tensor",
+                  "axes": [
+                    {
+                      "id": "batch",
+                      "dimension": "b"
+                    },
+                    {
+                      "id": "query_token",
+                      "dimension": "n"
+                    },
+                    {
+                      "id": "head",
+                      "dimension": "h"
+                    },
+                    {
+                      "id": "query_point",
+                      "dimension": "p_q"
+                    },
+                    {
+                      "id": "coordinate",
+                      "dimension": 3
+                    }
+                  ]
+                }
+              },
+              {
+                "id": "k",
+                "shape": {
+                  "kind": "tensor",
+                  "axes": [
+                    {
+                      "id": "batch",
+                      "dimension": "b"
+                    },
+                    {
+                      "id": "key_token",
+                      "dimension": "n"
+                    },
+                    {
+                      "id": "head",
+                      "dimension": "h"
+                    },
+                    {
+                      "id": "query_point",
+                      "dimension": "p_q"
+                    },
+                    {
+                      "id": "coordinate",
+                      "dimension": 3
+                    }
+                  ]
+                }
+              },
+              {
+                "id": "v",
+                "shape": {
+                  "kind": "tensor",
+                  "axes": [
+                    {
+                      "id": "batch",
+                      "dimension": "b"
+                    },
+                    {
+                      "id": "key_token",
+                      "dimension": "n"
+                    },
+                    {
+                      "id": "head",
+                      "dimension": "h"
+                    },
+                    {
+                      "id": "value_point",
+                      "dimension": "p_v"
+                    },
+                    {
+                      "id": "coordinate",
+                      "dimension": 3
+                    }
+                  ]
+                }
+              }
+            ]
+          }
         },
         {
           "id": "global_points",
           "label": "global Q/K/V points",
           "kind": "geometry",
           "glyph": "coordinates",
-          "notation": "T_qkv_p"
+          "notation": "T_qkv_p",
+          "shape_contract": {
+            "kind": "tuple",
+            "fields": [
+              {
+                "id": "q",
+                "shape": {
+                  "kind": "tensor",
+                  "axes": [
+                    {
+                      "id": "batch",
+                      "dimension": "b"
+                    },
+                    {
+                      "id": "query_token",
+                      "dimension": "n"
+                    },
+                    {
+                      "id": "head",
+                      "dimension": "h"
+                    },
+                    {
+                      "id": "query_point",
+                      "dimension": "p_q"
+                    },
+                    {
+                      "id": "coordinate",
+                      "dimension": 3
+                    }
+                  ]
+                }
+              },
+              {
+                "id": "k",
+                "shape": {
+                  "kind": "tensor",
+                  "axes": [
+                    {
+                      "id": "batch",
+                      "dimension": "b"
+                    },
+                    {
+                      "id": "key_token",
+                      "dimension": "n"
+                    },
+                    {
+                      "id": "head",
+                      "dimension": "h"
+                    },
+                    {
+                      "id": "query_point",
+                      "dimension": "p_q"
+                    },
+                    {
+                      "id": "coordinate",
+                      "dimension": 3
+                    }
+                  ]
+                }
+              },
+              {
+                "id": "v",
+                "shape": {
+                  "kind": "tensor",
+                  "axes": [
+                    {
+                      "id": "batch",
+                      "dimension": "b"
+                    },
+                    {
+                      "id": "key_token",
+                      "dimension": "n"
+                    },
+                    {
+                      "id": "head",
+                      "dimension": "h"
+                    },
+                    {
+                      "id": "value_point",
+                      "dimension": "p_v"
+                    },
+                    {
+                      "id": "coordinate",
+                      "dimension": 3
+                    }
+                  ]
+                }
+              }
+            ]
+          }
         },
         {
           "id": "scalar_logits",
           "label": "scalar logits",
           "kind": "logit",
           "glyph": "pair",
-          "notation": "l_s"
+          "notation": "l_s",
+          "shape_contract": {
+            "kind": "tensor",
+            "axes": [
+              {
+                "id": "batch",
+                "dimension": "b"
+              },
+              {
+                "id": "head",
+                "dimension": "h"
+              },
+              {
+                "id": "query_token",
+                "dimension": "n"
+              },
+              {
+                "id": "key_token",
+                "dimension": "n"
+              }
+            ]
+          }
         },
         {
           "id": "point_logits",
           "label": "point-distance logits",
           "kind": "logit",
           "glyph": "pair",
-          "notation": "l_p"
+          "notation": "l_p",
+          "shape_contract": {
+            "kind": "tensor",
+            "axes": [
+              {
+                "id": "batch",
+                "dimension": "b"
+              },
+              {
+                "id": "head",
+                "dimension": "h"
+              },
+              {
+                "id": "query_token",
+                "dimension": "n"
+              },
+              {
+                "id": "key_token",
+                "dimension": "n"
+              }
+            ]
+          }
         },
         {
           "id": "pair_bias",
           "label": "pair bias",
           "kind": "logit",
           "glyph": "pair",
-          "notation": "b_z"
+          "notation": "b_z",
+          "shape_contract": {
+            "kind": "tensor",
+            "axes": [
+              {
+                "id": "batch",
+                "dimension": "b"
+              },
+              {
+                "id": "head",
+                "dimension": "h"
+              },
+              {
+                "id": "query_token",
+                "dimension": "n"
+              },
+              {
+                "id": "key_token",
+                "dimension": "n"
+              }
+            ]
+          }
         },
         {
           "id": "combined_logits",
           "label": "combined masked logits",
           "kind": "logit",
           "glyph": "pair",
-          "notation": "l"
+          "notation": "l",
+          "shape_contract": {
+            "kind": "tensor",
+            "axes": [
+              {
+                "id": "batch",
+                "dimension": "b"
+              },
+              {
+                "id": "head",
+                "dimension": "h"
+              },
+              {
+                "id": "query_token",
+                "dimension": "n"
+              },
+              {
+                "id": "key_token",
+                "dimension": "n"
+              }
+            ]
+          }
         },
         {
           "id": "attention_weights",
           "label": "attention weights",
           "kind": "weight",
           "glyph": "pair",
-          "notation": "a"
+          "notation": "a",
+          "shape_contract": {
+            "kind": "tensor",
+            "axes": [
+              {
+                "id": "batch",
+                "dimension": "b"
+              },
+              {
+                "id": "head",
+                "dimension": "h"
+              },
+              {
+                "id": "query_token",
+                "dimension": "n"
+              },
+              {
+                "id": "key_token",
+                "dimension": "n"
+              }
+            ]
+          }
         },
         {
           "id": "scalar_context",
           "label": "scalar context",
           "kind": "representation",
           "glyph": "single",
-          "notation": "o_s"
+          "notation": "o_s",
+          "shape_contract": {
+            "kind": "tensor",
+            "axes": [
+              {
+                "id": "batch",
+                "dimension": "b"
+              },
+              {
+                "id": "query_token",
+                "dimension": "n"
+              },
+              {
+                "id": "head",
+                "dimension": "h"
+              },
+              {
+                "id": "value_channel",
+                "dimension": "c_hidden"
+              }
+            ]
+          }
         },
         {
           "id": "global_point_context",
           "label": "global point context",
           "kind": "geometry",
           "glyph": "coordinates",
-          "notation": "o_p_global"
+          "notation": "o_p_global",
+          "shape_contract": {
+            "kind": "tensor",
+            "axes": [
+              {
+                "id": "batch",
+                "dimension": "b"
+              },
+              {
+                "id": "query_token",
+                "dimension": "n"
+              },
+              {
+                "id": "head",
+                "dimension": "h"
+              },
+              {
+                "id": "value_point",
+                "dimension": "p_v"
+              },
+              {
+                "id": "coordinate",
+                "dimension": 3
+              }
+            ]
+          }
         },
         {
           "id": "local_point_context",
           "label": "local points + norms",
           "kind": "geometry",
           "glyph": "coordinates",
-          "notation": "o_p_local"
+          "notation": "o_p_local",
+          "shape_contract": {
+            "kind": "tensor",
+            "axes": [
+              {
+                "id": "batch",
+                "dimension": "b"
+              },
+              {
+                "id": "query_token",
+                "dimension": "n"
+              },
+              {
+                "id": "head",
+                "dimension": "h"
+              },
+              {
+                "id": "value_point",
+                "dimension": "p_v"
+              },
+              {
+                "id": "point_feature",
+                "dimension": 4
+              }
+            ]
+          }
         },
         {
           "id": "pair_value_context",
           "label": "pair-value context",
           "kind": "representation",
           "glyph": "single",
-          "notation": "o_z"
+          "notation": "o_z",
+          "shape_contract": {
+            "kind": "tensor",
+            "axes": [
+              {
+                "id": "batch",
+                "dimension": "b"
+              },
+              {
+                "id": "query_token",
+                "dimension": "n"
+              },
+              {
+                "id": "head",
+                "dimension": "h"
+              },
+              {
+                "id": "pair_channel",
+                "dimension": "c_z"
+              }
+            ]
+          }
         }
       ],
       "steps": [
@@ -5096,6 +5738,7 @@ export const manifest = {
           "id": "project_scalar_terms",
           "label": "Project scalar Q/K/V",
           "operation": "scalar_qkv_projection",
+          "shape_rule": "scalar_qkv_projection",
           "inputs": [
             "ports.single_state"
           ],
@@ -5130,6 +5773,7 @@ export const manifest = {
           "id": "project_local_points",
           "label": "Project local Q/K/V points",
           "operation": "point_qkv_projection",
+          "shape_rule": "point_qkv_projection",
           "inputs": [
             "ports.single_state"
           ],
@@ -5164,6 +5808,7 @@ export const manifest = {
           "id": "transform_points_to_global",
           "label": "Express points in global frame",
           "operation": "rigid_apply",
+          "shape_rule": "rigid_apply",
           "inputs": [
             "values.local_points",
             "ports.frames"
@@ -5214,6 +5859,7 @@ export const manifest = {
           "id": "scalar_attention_logits",
           "label": "Form scalar logits",
           "operation": "attention_logits",
+          "shape_rule": "attention_logits",
           "inputs": [
             "values.scalar_terms"
           ],
@@ -5243,6 +5889,7 @@ export const manifest = {
           "id": "point_distance_logits",
           "label": "Form point-distance logits",
           "operation": "invariant_point_distance",
+          "shape_rule": "point_distance_logits",
           "inputs": [
             "values.global_points"
           ],
@@ -5272,6 +5919,7 @@ export const manifest = {
           "id": "project_pair_bias",
           "label": "Project pair bias",
           "operation": "pair_bias_projection",
+          "shape_rule": "pair_bias_projection",
           "inputs": [
             "ports.pair_context"
           ],
@@ -5296,6 +5944,7 @@ export const manifest = {
           "id": "combine_and_mask_logits",
           "label": "Combine logits and apply mask",
           "operation": "ipa_logit_composition",
+          "shape_rule": "logit_composition",
           "inputs": [
             "values.scalar_logits",
             "values.point_logits",
@@ -5338,6 +5987,7 @@ export const manifest = {
           "id": "softmax_attention",
           "label": "Normalize over keys",
           "operation": "softmax",
+          "shape_rule": "softmax",
           "inputs": [
             "values.combined_logits"
           ],
@@ -5362,6 +6012,7 @@ export const manifest = {
           "id": "aggregate_scalar_values",
           "label": "Aggregate scalar values",
           "operation": "weighted_sum",
+          "shape_rule": "weighted_sum",
           "inputs": [
             "values.attention_weights",
             "values.scalar_terms"
@@ -5392,6 +6043,7 @@ export const manifest = {
           "id": "aggregate_global_points",
           "label": "Aggregate value points",
           "operation": "weighted_point_sum",
+          "shape_rule": "weighted_point_sum",
           "inputs": [
             "values.attention_weights",
             "values.global_points"
@@ -5422,6 +6074,7 @@ export const manifest = {
           "id": "return_points_to_local_frame",
           "label": "Return points to query frame",
           "operation": "rigid_inverse_apply",
+          "shape_rule": "rigid_inverse_apply",
           "inputs": [
             "values.global_point_context",
             "ports.frames"
@@ -5452,6 +6105,7 @@ export const manifest = {
           "id": "aggregate_pair_values",
           "label": "Attention-weighted pair-value aggregation",
           "operation": "pair_value_aggregation",
+          "shape_rule": "pair_value_aggregation",
           "inputs": [
             "values.attention_weights",
             "ports.pair_context"
@@ -5482,6 +6136,7 @@ export const manifest = {
           "id": "project_ipa_delta",
           "label": "Concatenate + project",
           "operation": "output_projection",
+          "shape_rule": "output_projection",
           "inputs": [
             "values.scalar_context",
             "values.local_point_context",
@@ -9712,6 +10367,25 @@ export const manifest = {
             "kind": "representation",
             "rep_ref": "single_features",
             "shape": "B x N x 384",
+            "resolved_shape": {
+              "kind": "tensor",
+              "axes": [
+                {
+                  "id": "batch",
+                  "dimension": "B"
+                },
+                {
+                  "id": "query_token",
+                  "dimension": "N"
+                },
+                {
+                  "id": "single_channel",
+                  "dimension": 384
+                }
+              ],
+              "label": "B x N x 384"
+            },
+            "shape_status": "resolved",
             "scale": "residue",
             "glyph": "single",
             "flow_family": "single",
@@ -9733,6 +10407,29 @@ export const manifest = {
             "kind": "representation",
             "rep_ref": "pair_features",
             "shape": "B x N x N x 128",
+            "resolved_shape": {
+              "kind": "tensor",
+              "axes": [
+                {
+                  "id": "batch",
+                  "dimension": "B"
+                },
+                {
+                  "id": "query_token",
+                  "dimension": "N"
+                },
+                {
+                  "id": "key_token",
+                  "dimension": "N"
+                },
+                {
+                  "id": "pair_channel",
+                  "dimension": 128
+                }
+              ],
+              "label": "B x N x N x 128"
+            },
+            "shape_status": "resolved",
             "scale": "pair",
             "glyph": "pair",
             "flow_family": "pair",
@@ -9753,7 +10450,22 @@ export const manifest = {
             "instance_fact_ref": "block_instances.structure_ipa.ports.frames",
             "kind": "representation",
             "rep_ref": "residue_frames",
-            "shape": "B x N x (3 x 3 + 3)",
+            "shape": "B x N",
+            "resolved_shape": {
+              "kind": "frames",
+              "axes": [
+                {
+                  "id": "batch",
+                  "dimension": "B"
+                },
+                {
+                  "id": "query_token",
+                  "dimension": "N"
+                }
+              ],
+              "label": "B x N"
+            },
+            "shape_status": "resolved",
             "scale": "residue",
             "glyph": "frames",
             "flow_family": "frame",
@@ -9774,7 +10486,22 @@ export const manifest = {
             "instance_fact_ref": "block_instances.structure_ipa.ports.mask",
             "kind": "representation",
             "rep_ref": "feature_bundle",
-            "shape": "B x N fields + B x N x N masks",
+            "shape": "B x N",
+            "resolved_shape": {
+              "kind": "tensor",
+              "axes": [
+                {
+                  "id": "batch",
+                  "dimension": "B"
+                },
+                {
+                  "id": "query_token",
+                  "dimension": "N"
+                }
+              ],
+              "label": "B x N"
+            },
+            "shape_status": "resolved",
             "scale": "mixed",
             "glyph": "vector",
             "notation": "m",
@@ -9795,6 +10522,25 @@ export const manifest = {
             "kind": "representation",
             "rep_ref": "single_features",
             "shape": "B x N x 384",
+            "resolved_shape": {
+              "kind": "tensor",
+              "axes": [
+                {
+                  "id": "batch",
+                  "dimension": "B"
+                },
+                {
+                  "id": "query_token",
+                  "dimension": "N"
+                },
+                {
+                  "id": "single_channel",
+                  "dimension": 384
+                }
+              ],
+              "label": "B x N x 384"
+            },
+            "shape_status": "resolved",
             "scale": "residue",
             "glyph": "single",
             "flow_family": "single",
@@ -9832,6 +10578,89 @@ export const manifest = {
             "template_fact_ref": "standard_blocks.invariant_point_attention.values.scalar_terms",
             "instance_fact_ref": "block_instances.structure_ipa.values.scalar_terms",
             "kind": "representation",
+            "shape": "q: B x N x 12 x 16; k: B x N x 12 x 16; v: B x N x 12 x 16",
+            "resolved_shape": {
+              "kind": "tuple",
+              "fields": [
+                {
+                  "id": "q",
+                  "shape": {
+                    "kind": "tensor",
+                    "axes": [
+                      {
+                        "id": "batch",
+                        "dimension": "B"
+                      },
+                      {
+                        "id": "query_token",
+                        "dimension": "N"
+                      },
+                      {
+                        "id": "head",
+                        "dimension": 12
+                      },
+                      {
+                        "id": "hidden_channel",
+                        "dimension": 16
+                      }
+                    ],
+                    "label": "B x N x 12 x 16"
+                  }
+                },
+                {
+                  "id": "k",
+                  "shape": {
+                    "kind": "tensor",
+                    "axes": [
+                      {
+                        "id": "batch",
+                        "dimension": "B"
+                      },
+                      {
+                        "id": "key_token",
+                        "dimension": "N"
+                      },
+                      {
+                        "id": "head",
+                        "dimension": 12
+                      },
+                      {
+                        "id": "hidden_channel",
+                        "dimension": 16
+                      }
+                    ],
+                    "label": "B x N x 12 x 16"
+                  }
+                },
+                {
+                  "id": "v",
+                  "shape": {
+                    "kind": "tensor",
+                    "axes": [
+                      {
+                        "id": "batch",
+                        "dimension": "B"
+                      },
+                      {
+                        "id": "key_token",
+                        "dimension": "N"
+                      },
+                      {
+                        "id": "head",
+                        "dimension": 12
+                      },
+                      {
+                        "id": "value_channel",
+                        "dimension": 16
+                      }
+                    ],
+                    "label": "B x N x 12 x 16"
+                  }
+                }
+              ],
+              "label": "q: B x N x 12 x 16; k: B x N x 12 x 16; v: B x N x 12 x 16"
+            },
+            "shape_status": "resolved",
             "scale": "item",
             "glyph": "single",
             "flow_family": "single",
@@ -9868,6 +10697,30 @@ export const manifest = {
             "template_fact_ref": "standard_blocks.invariant_point_attention.values.scalar_logits",
             "instance_fact_ref": "block_instances.structure_ipa.values.scalar_logits",
             "kind": "representation",
+            "shape": "B x 12 x N x N",
+            "resolved_shape": {
+              "kind": "tensor",
+              "axes": [
+                {
+                  "id": "batch",
+                  "dimension": "B"
+                },
+                {
+                  "id": "head",
+                  "dimension": 12
+                },
+                {
+                  "id": "query_token",
+                  "dimension": "N"
+                },
+                {
+                  "id": "key_token",
+                  "dimension": "N"
+                }
+              ],
+              "label": "B x 12 x N x N"
+            },
+            "shape_status": "resolved",
             "scale": "item",
             "glyph": "pair",
             "flow_family": "pair",
@@ -9904,6 +10757,101 @@ export const manifest = {
             "template_fact_ref": "standard_blocks.invariant_point_attention.values.local_points",
             "instance_fact_ref": "block_instances.structure_ipa.values.local_points",
             "kind": "representation",
+            "shape": "q: B x N x 12 x 4 x 3; k: B x N x 12 x 4 x 3; v: B x N x 12 x 8 x 3",
+            "resolved_shape": {
+              "kind": "tuple",
+              "fields": [
+                {
+                  "id": "q",
+                  "shape": {
+                    "kind": "tensor",
+                    "axes": [
+                      {
+                        "id": "batch",
+                        "dimension": "B"
+                      },
+                      {
+                        "id": "query_token",
+                        "dimension": "N"
+                      },
+                      {
+                        "id": "head",
+                        "dimension": 12
+                      },
+                      {
+                        "id": "query_point",
+                        "dimension": 4
+                      },
+                      {
+                        "id": "coordinate",
+                        "dimension": 3
+                      }
+                    ],
+                    "label": "B x N x 12 x 4 x 3"
+                  }
+                },
+                {
+                  "id": "k",
+                  "shape": {
+                    "kind": "tensor",
+                    "axes": [
+                      {
+                        "id": "batch",
+                        "dimension": "B"
+                      },
+                      {
+                        "id": "key_token",
+                        "dimension": "N"
+                      },
+                      {
+                        "id": "head",
+                        "dimension": 12
+                      },
+                      {
+                        "id": "query_point",
+                        "dimension": 4
+                      },
+                      {
+                        "id": "coordinate",
+                        "dimension": 3
+                      }
+                    ],
+                    "label": "B x N x 12 x 4 x 3"
+                  }
+                },
+                {
+                  "id": "v",
+                  "shape": {
+                    "kind": "tensor",
+                    "axes": [
+                      {
+                        "id": "batch",
+                        "dimension": "B"
+                      },
+                      {
+                        "id": "key_token",
+                        "dimension": "N"
+                      },
+                      {
+                        "id": "head",
+                        "dimension": 12
+                      },
+                      {
+                        "id": "value_point",
+                        "dimension": 8
+                      },
+                      {
+                        "id": "coordinate",
+                        "dimension": 3
+                      }
+                    ],
+                    "label": "B x N x 12 x 8 x 3"
+                  }
+                }
+              ],
+              "label": "q: B x N x 12 x 4 x 3; k: B x N x 12 x 4 x 3; v: B x N x 12 x 8 x 3"
+            },
+            "shape_status": "resolved",
             "scale": "item",
             "glyph": "coordinates",
             "flow_family": "coordinate",
@@ -9940,6 +10888,101 @@ export const manifest = {
             "template_fact_ref": "standard_blocks.invariant_point_attention.values.global_points",
             "instance_fact_ref": "block_instances.structure_ipa.values.global_points",
             "kind": "representation",
+            "shape": "q: B x N x 12 x 4 x 3; k: B x N x 12 x 4 x 3; v: B x N x 12 x 8 x 3",
+            "resolved_shape": {
+              "kind": "tuple",
+              "fields": [
+                {
+                  "id": "q",
+                  "shape": {
+                    "kind": "tensor",
+                    "axes": [
+                      {
+                        "id": "batch",
+                        "dimension": "B"
+                      },
+                      {
+                        "id": "query_token",
+                        "dimension": "N"
+                      },
+                      {
+                        "id": "head",
+                        "dimension": 12
+                      },
+                      {
+                        "id": "query_point",
+                        "dimension": 4
+                      },
+                      {
+                        "id": "coordinate",
+                        "dimension": 3
+                      }
+                    ],
+                    "label": "B x N x 12 x 4 x 3"
+                  }
+                },
+                {
+                  "id": "k",
+                  "shape": {
+                    "kind": "tensor",
+                    "axes": [
+                      {
+                        "id": "batch",
+                        "dimension": "B"
+                      },
+                      {
+                        "id": "key_token",
+                        "dimension": "N"
+                      },
+                      {
+                        "id": "head",
+                        "dimension": 12
+                      },
+                      {
+                        "id": "query_point",
+                        "dimension": 4
+                      },
+                      {
+                        "id": "coordinate",
+                        "dimension": 3
+                      }
+                    ],
+                    "label": "B x N x 12 x 4 x 3"
+                  }
+                },
+                {
+                  "id": "v",
+                  "shape": {
+                    "kind": "tensor",
+                    "axes": [
+                      {
+                        "id": "batch",
+                        "dimension": "B"
+                      },
+                      {
+                        "id": "key_token",
+                        "dimension": "N"
+                      },
+                      {
+                        "id": "head",
+                        "dimension": 12
+                      },
+                      {
+                        "id": "value_point",
+                        "dimension": 8
+                      },
+                      {
+                        "id": "coordinate",
+                        "dimension": 3
+                      }
+                    ],
+                    "label": "B x N x 12 x 8 x 3"
+                  }
+                }
+              ],
+              "label": "q: B x N x 12 x 4 x 3; k: B x N x 12 x 4 x 3; v: B x N x 12 x 8 x 3"
+            },
+            "shape_status": "resolved",
             "scale": "item",
             "glyph": "coordinates",
             "flow_family": "coordinate",
@@ -9976,6 +11019,30 @@ export const manifest = {
             "template_fact_ref": "standard_blocks.invariant_point_attention.values.point_logits",
             "instance_fact_ref": "block_instances.structure_ipa.values.point_logits",
             "kind": "representation",
+            "shape": "B x 12 x N x N",
+            "resolved_shape": {
+              "kind": "tensor",
+              "axes": [
+                {
+                  "id": "batch",
+                  "dimension": "B"
+                },
+                {
+                  "id": "head",
+                  "dimension": 12
+                },
+                {
+                  "id": "query_token",
+                  "dimension": "N"
+                },
+                {
+                  "id": "key_token",
+                  "dimension": "N"
+                }
+              ],
+              "label": "B x 12 x N x N"
+            },
+            "shape_status": "resolved",
             "scale": "item",
             "glyph": "pair",
             "flow_family": "pair",
@@ -10012,6 +11079,30 @@ export const manifest = {
             "template_fact_ref": "standard_blocks.invariant_point_attention.values.pair_bias",
             "instance_fact_ref": "block_instances.structure_ipa.values.pair_bias",
             "kind": "representation",
+            "shape": "B x 12 x N x N",
+            "resolved_shape": {
+              "kind": "tensor",
+              "axes": [
+                {
+                  "id": "batch",
+                  "dimension": "B"
+                },
+                {
+                  "id": "head",
+                  "dimension": 12
+                },
+                {
+                  "id": "query_token",
+                  "dimension": "N"
+                },
+                {
+                  "id": "key_token",
+                  "dimension": "N"
+                }
+              ],
+              "label": "B x 12 x N x N"
+            },
+            "shape_status": "resolved",
             "scale": "item",
             "glyph": "pair",
             "flow_family": "pair",
@@ -10048,6 +11139,30 @@ export const manifest = {
             "template_fact_ref": "standard_blocks.invariant_point_attention.values.combined_logits",
             "instance_fact_ref": "block_instances.structure_ipa.values.combined_logits",
             "kind": "representation",
+            "shape": "B x 12 x N x N",
+            "resolved_shape": {
+              "kind": "tensor",
+              "axes": [
+                {
+                  "id": "batch",
+                  "dimension": "B"
+                },
+                {
+                  "id": "head",
+                  "dimension": 12
+                },
+                {
+                  "id": "query_token",
+                  "dimension": "N"
+                },
+                {
+                  "id": "key_token",
+                  "dimension": "N"
+                }
+              ],
+              "label": "B x 12 x N x N"
+            },
+            "shape_status": "resolved",
             "scale": "item",
             "glyph": "pair",
             "flow_family": "pair",
@@ -10084,6 +11199,30 @@ export const manifest = {
             "template_fact_ref": "standard_blocks.invariant_point_attention.values.attention_weights",
             "instance_fact_ref": "block_instances.structure_ipa.values.attention_weights",
             "kind": "representation",
+            "shape": "B x 12 x N x N",
+            "resolved_shape": {
+              "kind": "tensor",
+              "axes": [
+                {
+                  "id": "batch",
+                  "dimension": "B"
+                },
+                {
+                  "id": "head",
+                  "dimension": 12
+                },
+                {
+                  "id": "query_token",
+                  "dimension": "N"
+                },
+                {
+                  "id": "key_token",
+                  "dimension": "N"
+                }
+              ],
+              "label": "B x 12 x N x N"
+            },
+            "shape_status": "resolved",
             "scale": "item",
             "glyph": "pair",
             "flow_family": "pair",
@@ -10120,6 +11259,30 @@ export const manifest = {
             "template_fact_ref": "standard_blocks.invariant_point_attention.values.scalar_context",
             "instance_fact_ref": "block_instances.structure_ipa.values.scalar_context",
             "kind": "representation",
+            "shape": "B x N x 12 x 16",
+            "resolved_shape": {
+              "kind": "tensor",
+              "axes": [
+                {
+                  "id": "batch",
+                  "dimension": "B"
+                },
+                {
+                  "id": "query_token",
+                  "dimension": "N"
+                },
+                {
+                  "id": "head",
+                  "dimension": 12
+                },
+                {
+                  "id": "value_channel",
+                  "dimension": 16
+                }
+              ],
+              "label": "B x N x 12 x 16"
+            },
+            "shape_status": "resolved",
             "scale": "item",
             "glyph": "single",
             "flow_family": "single",
@@ -10156,6 +11319,30 @@ export const manifest = {
             "template_fact_ref": "standard_blocks.invariant_point_attention.values.pair_value_context",
             "instance_fact_ref": "block_instances.structure_ipa.values.pair_value_context",
             "kind": "representation",
+            "shape": "B x N x 12 x 128",
+            "resolved_shape": {
+              "kind": "tensor",
+              "axes": [
+                {
+                  "id": "batch",
+                  "dimension": "B"
+                },
+                {
+                  "id": "query_token",
+                  "dimension": "N"
+                },
+                {
+                  "id": "head",
+                  "dimension": 12
+                },
+                {
+                  "id": "pair_channel",
+                  "dimension": 128
+                }
+              ],
+              "label": "B x N x 12 x 128"
+            },
+            "shape_status": "resolved",
             "scale": "item",
             "glyph": "single",
             "flow_family": "single",
@@ -10192,6 +11379,34 @@ export const manifest = {
             "template_fact_ref": "standard_blocks.invariant_point_attention.values.global_point_context",
             "instance_fact_ref": "block_instances.structure_ipa.values.global_point_context",
             "kind": "representation",
+            "shape": "B x N x 12 x 8 x 3",
+            "resolved_shape": {
+              "kind": "tensor",
+              "axes": [
+                {
+                  "id": "batch",
+                  "dimension": "B"
+                },
+                {
+                  "id": "query_token",
+                  "dimension": "N"
+                },
+                {
+                  "id": "head",
+                  "dimension": 12
+                },
+                {
+                  "id": "value_point",
+                  "dimension": 8
+                },
+                {
+                  "id": "coordinate",
+                  "dimension": 3
+                }
+              ],
+              "label": "B x N x 12 x 8 x 3"
+            },
+            "shape_status": "resolved",
             "scale": "item",
             "glyph": "coordinates",
             "flow_family": "coordinate",
@@ -10228,6 +11443,34 @@ export const manifest = {
             "template_fact_ref": "standard_blocks.invariant_point_attention.values.local_point_context",
             "instance_fact_ref": "block_instances.structure_ipa.values.local_point_context",
             "kind": "representation",
+            "shape": "B x N x 12 x 8 x 4",
+            "resolved_shape": {
+              "kind": "tensor",
+              "axes": [
+                {
+                  "id": "batch",
+                  "dimension": "B"
+                },
+                {
+                  "id": "query_token",
+                  "dimension": "N"
+                },
+                {
+                  "id": "head",
+                  "dimension": 12
+                },
+                {
+                  "id": "value_point",
+                  "dimension": 8
+                },
+                {
+                  "id": "point_feature",
+                  "dimension": 4
+                }
+              ],
+              "label": "B x N x 12 x 8 x 4"
+            },
+            "shape_status": "resolved",
             "scale": "item",
             "glyph": "coordinates",
             "flow_family": "coordinate",
@@ -11095,6 +12338,54 @@ export const manifest = {
         "variantLabel": "Full frame-aware IPA",
         "useScope": "whole_module",
         "conformance": "exact",
+        "shapeParameters": {
+          "c_hidden": 16,
+          "h": 12,
+          "p_q": 4,
+          "p_v": 8,
+          "b": "B",
+          "n": "N",
+          "c_s": 384,
+          "c_z": 128
+        },
+        "shapeParameterSources": {
+          "c_hidden": {
+            "kind": "configuration",
+            "ref": "reference_configuration.ipa_hidden_feature_dimension"
+          },
+          "h": {
+            "kind": "configuration",
+            "ref": "reference_configuration.ipa_heads"
+          },
+          "p_q": {
+            "kind": "configuration",
+            "ref": "reference_configuration.ipa_query_key_points"
+          },
+          "p_v": {
+            "kind": "configuration",
+            "ref": "reference_configuration.ipa_value_points"
+          },
+          "b": {
+            "kind": "boundary",
+            "portRef": "ports.single_state",
+            "representationRef": "representations.single_features"
+          },
+          "n": {
+            "kind": "boundary",
+            "portRef": "ports.single_state",
+            "representationRef": "representations.single_features"
+          },
+          "c_s": {
+            "kind": "boundary",
+            "portRef": "ports.single_state",
+            "representationRef": "representations.single_features"
+          },
+          "c_z": {
+            "kind": "boundary",
+            "portRef": "ports.pair_context",
+            "representationRef": "representations.pair_features"
+          }
+        },
         "pseudocode": [
           {
             "id": "project_scalar_terms",

@@ -1,4 +1,4 @@
-schema_version: architecture-v0.4
+schema_version: architecture-v0.5
 id: genie2
 name: Genie 2 Protein Backbone Diffusion
 family: protein_structure_diffusion
@@ -16,7 +16,10 @@ reference_configuration:
   triangular_attention: false
   structure_layers: 8
   structure_recycles: 1
+  ipa_hidden_feature_dimension: 16
   ipa_heads: 12
+  ipa_query_key_points: 4
+  ipa_value_points: 8
   evidence:
     status: confirmed_from_code
     refs:
@@ -823,6 +826,11 @@ block_instances:
         selector: residue_mask
       - port_ref: ports.ipa_delta
         relation_refs: [relations.ipa_produces_delta]
+    parameter_bindings:
+      - { parameter_ref: parameters.c_hidden, configuration_ref: reference_configuration.ipa_hidden_feature_dimension }
+      - { parameter_ref: parameters.h, configuration_ref: reference_configuration.ipa_heads }
+      - { parameter_ref: parameters.p_q, configuration_ref: reference_configuration.ipa_query_key_points }
+      - { parameter_ref: parameters.p_v, configuration_ref: reference_configuration.ipa_value_points }
     evidence:
       status: confirmed_from_code
       refs:

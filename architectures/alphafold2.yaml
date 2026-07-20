@@ -1,4 +1,4 @@
-schema_version: architecture-v0.4
+schema_version: architecture-v0.5
 id: alphafold2
 name: AlphaFold 2 Monomer Network
 family: protein_structure_prediction

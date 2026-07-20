@@ -18,7 +18,8 @@ require_relative "../lib/strict_yaml"
 ROOT = File.expand_path("..", __dir__)
 REGISTRY = "architectures/index.yaml"
 BIBLIOGRAPHY_SCHEMA_VERSIONS = Set["bibliography-v0.1"].freeze
-ARCHITECTURE_SCHEMA_VERSIONS = Set["architecture-v0.1", "architecture-v0.2", "architecture-v0.3", "architecture-v0.4"].freeze
+ARCHITECTURE_SCHEMA_VERSIONS = Set["architecture-v0.1", "architecture-v0.2", "architecture-v0.3", "architecture-v0.4", "architecture-v0.5"].freeze
+CURRENT_ARCHITECTURE_SCHEMA_VERSIONS = Set["architecture-v0.4", "architecture-v0.5"].freeze
 VIEW_SCHEMA_VERSIONS = Set["visualization-v0.1", "visualization-v0.2", "visualization-v0.3", "visualization-v0.4"].freeze
 SNAKE_CASE_ID = /\A[a-z][a-z0-9_]*\z/
 
@@ -193,7 +194,7 @@ def lint_architecture(arch, standard_blocks)
     @errors << "architecture-v0.2 source missing relations" unless arch.key?("relations")
     @errors << "architecture-v0.2 source still uses legacy edges" if arch.key?("edges")
   end
-  if %w[architecture-v0.3 architecture-v0.4].include?(schema_version)
+  if %w[architecture-v0.3 architecture-v0.4 architecture-v0.5].include?(schema_version)
     @errors << "#{schema_version} source missing value_sites" unless arch.key?("value_sites")
     @errors << "#{schema_version} source missing relations" unless arch.key?("relations")
     @errors << "#{schema_version} source still uses legacy edges" if arch.key?("edges")
@@ -202,7 +203,7 @@ def lint_architecture(arch, standard_blocks)
   Array(arch["sources"]).each_with_index do |ref, index|
     lint_source_ref("architecture source ref #{index}", ref, require_role: true)
   end
-  require_evidence("architecture decomposition", arch["decomposition"]) if schema_version == "architecture-v0.4"
+  require_evidence("architecture decomposition", arch["decomposition"]) if CURRENT_ARCHITECTURE_SCHEMA_VERSIONS.include?(schema_version)
 
   module_ids = require_unique_ids("architecture module", arch["modules"])
   rep_ids = require_unique_ids("architecture representation", arch["representations"])
@@ -210,7 +211,7 @@ def lint_architecture(arch, standard_blocks)
   claim_ids = require_unique_ids("architecture claim", arch["claims"])
   block_instance_ids = require_unique_ids("architecture block instance", arch["block_instances"])
   relations = architecture_relations(arch)
-  relation_ids = if %w[architecture-v0.2 architecture-v0.3 architecture-v0.4].include?(schema_version)
+  relation_ids = if %w[architecture-v0.2 architecture-v0.3 architecture-v0.4 architecture-v0.5].include?(schema_version)
     require_unique_ids("architecture relation", relations)
   else
     Set.new(ids(relations))
@@ -219,13 +220,13 @@ def lint_architecture(arch, standard_blocks)
     relation_id = relation["id"]
     acc[relation_id] = relation if relation_id
   end
-  known_nodes = if %w[architecture-v0.3 architecture-v0.4].include?(schema_version)
+  known_nodes = if %w[architecture-v0.3 architecture-v0.4 architecture-v0.5].include?(schema_version)
     Set.new(module_ids.map { |id| "modules.#{id}" } + value_site_ids.map { |id| "value_sites.#{id}" })
   else
     module_ids | rep_ids
   end
 
-  if %w[architecture-v0.2 architecture-v0.3 architecture-v0.4].include?(schema_version)
+  if %w[architecture-v0.2 architecture-v0.3 architecture-v0.4 architecture-v0.5].include?(schema_version)
     relations.each_with_index do |relation, index|
       relation_id = relation["id"]
       @errors << "architecture relation at index #{index} missing id" unless relation_id
@@ -260,7 +261,7 @@ def lint_architecture(arch, standard_blocks)
     unless scope_ref == "architecture" || (scope_ref&.start_with?("modules.") && module_ids.include?(untyped_ref(scope_ref, "modules")))
       @errors << "value site #{site['id']} has unknown scope_ref #{scope_ref.inspect}"
     end
-    require_evidence("value site #{site['id']}", site) if schema_version == "architecture-v0.4"
+    require_evidence("value site #{site['id']}", site) if CURRENT_ARCHITECTURE_SCHEMA_VERSIONS.include?(schema_version)
   end
   Array(arch["modules"]).each do |mod|
     require_evidence("module #{mod['id']}", mod)
@@ -278,12 +279,12 @@ def lint_architecture(arch, standard_blocks)
     to = relation["to"]
     @errors << "architecture relation #{relation_id} has unknown from node #{from}" unless known_nodes.include?(from)
     @errors << "architecture relation #{relation_id} has unknown to node #{to}" unless known_nodes.include?(to)
-    if %w[architecture-v0.3 architecture-v0.4].include?(schema_version)
+    if %w[architecture-v0.3 architecture-v0.4 architecture-v0.5].include?(schema_version)
       @errors << "architecture relation #{relation_id} missing kind" unless relation["kind"]
       Array(relation["carries"]).each do |carry|
         @errors << "architecture relation #{relation_id} carries unknown representation #{carry}" unless rep_ids.include?(untyped_ref(carry, "representations"))
       end
-      if schema_version == "architecture-v0.4"
+      if CURRENT_ARCHITECTURE_SCHEMA_VERSIONS.include?(schema_version)
         carried = Set.new(Array(relation["carries"]))
         from_rep = value_sites_by_ref.dig(from, "representation_ref")
         to_rep = value_sites_by_ref.dig(to, "representation_ref")
@@ -303,7 +304,7 @@ def lint_architecture(arch, standard_blocks)
   Array(arch["block_instances"]).each do |instance|
     require_evidence("block instance #{instance['id']}", instance)
   end
-  if schema_version == "architecture-v0.4"
+  if CURRENT_ARCHITECTURE_SCHEMA_VERSIONS.include?(schema_version)
     require_evidence("training_inference", arch["training_inference"])
     require_evidence("reference_configuration", arch["reference_configuration"]) if arch["reference_configuration"]
 
@@ -343,14 +344,14 @@ def lint_architecture(arch, standard_blocks)
     end
   end
 
-  unless schema_version == "architecture-v0.4"
+  unless CURRENT_ARCHITECTURE_SCHEMA_VERSIONS.include?(schema_version)
     Hash(arch["state_semantics"]).each_key do |rep_id|
       valid_state_ref = rep_ids.include?(rep_id) || value_site_ids.include?(rep_id) ||
                         (rep_id.start_with?("value_sites.") && value_site_ids.include?(untyped_ref(rep_id, "value_sites")))
       @errors << "state_semantics references unknown representation/value site #{rep_id}" unless valid_state_ref
     end
   end
-  if schema_version == "architecture-v0.4"
+  if CURRENT_ARCHITECTURE_SCHEMA_VERSIONS.include?(schema_version)
     Hash(arch["state_semantics"]).each do |group_id, semantics|
       require_evidence("state_semantics #{group_id}", semantics)
     end
@@ -361,7 +362,7 @@ def lint_architecture(arch, standard_blocks)
     @errors << "conditioning #{conditioning['id']} references missing standard block #{ref}" if ref && !standard_blocks.key?(ref)
     source = conditioning["source"]
     target = conditioning["target"]
-    unless schema_version == "architecture-v0.4"
+    unless CURRENT_ARCHITECTURE_SCHEMA_VERSIONS.include?(schema_version)
       if source && !rep_ids.include?(source) && !source.include?(".")
         @errors << "conditioning #{conditioning['id']} has unknown source #{source}"
       end
@@ -391,7 +392,7 @@ def lint_architecture(arch, standard_blocks)
   Array(arch["scale_transitions"]).each do |transition|
     ref = transition["standard_block_ref"]
     @errors << "scale transition #{transition['id']} references missing standard block #{ref}" if ref && !standard_blocks.key?(ref)
-    unless schema_version == "architecture-v0.4"
+    unless CURRENT_ARCHITECTURE_SCHEMA_VERSIONS.include?(schema_version)
       %w[source target index_map].each do |field|
         value = transition[field]
         next unless value
@@ -470,8 +471,8 @@ def lint_board_lanes(board)
 end
 
 def lint_projected_view(view, arch)
-  unless %w[architecture-v0.3 architecture-v0.4].include?(arch["schema_version"])
-    @errors << "visualization-v0.4 requires architecture-v0.3 or architecture-v0.4"
+  unless %w[architecture-v0.3 architecture-v0.4 architecture-v0.5].include?(arch["schema_version"])
+    @errors << "visualization-v0.4 requires architecture-v0.3, architecture-v0.4, or architecture-v0.5"
     return
   end
 
@@ -600,7 +601,7 @@ def lint_view(view, arch, module_ids, rep_ids, relations_by_id)
     lint_projected_view(view, arch)
     return
   end
-  if %w[architecture-v0.3 architecture-v0.4].include?(arch["schema_version"])
+  if %w[architecture-v0.3 architecture-v0.4 architecture-v0.5].include?(arch["schema_version"])
     @errors << "#{arch['schema_version']} requires visualization-v0.4, got #{schema_version.inspect}"
     return
   end
@@ -789,7 +790,7 @@ def lint_standard_blocks(standard_blocks)
     slot_ids = block["slot_ids"]
     @errors << "standard block #{ref} has no input/output slots" if slot_ids.empty?
     document = block["document"]
-    next unless document["schema_version"] == "standard-block-v0.2"
+    next unless %w[standard-block-v0.2 standard-block-v0.3].include?(document["schema_version"])
 
     StandardBlockContract.definition_errors(document).each do |diagnostic|
       @errors << "standard block #{ref} [#{diagnostic.code}] #{diagnostic.path}: #{diagnostic.message}"

@@ -17,7 +17,7 @@ class SourceProjectionIntegrationTest < Minitest::Test
       architecture = load_yaml(source_set.fetch("architecture"))
       view = load_yaml(source_set.fetch("view"))
 
-      assert_equal "architecture-v0.4", architecture.fetch("schema_version"), source_set.fetch("id")
+      assert_equal "architecture-v0.5", architecture.fetch("schema_version"), source_set.fetch("id")
       assert_equal "visualization-v0.4", view.fetch("schema_version"), source_set.fetch("id")
       assert_compiled_interfaces(source_set.fetch("id"), architecture)
 
@@ -83,7 +83,7 @@ class SourceProjectionIntegrationTest < Minitest::Test
   def assert_compiled_interfaces(source_set_id, architecture)
     manifest = load_manifest(source_set_id)
     compiled = manifest.fetch("architecture")
-    assert_equal "architecture-manifest-v0.4", manifest.fetch("schemaVersion")
+    assert_equal "architecture-manifest-v0.5", manifest.fetch("schemaVersion")
     assert_equal architecture.fetch("family"), compiled.fetch("family")
     assert_equal architecture.fetch("task_modes"), compiled.fetch("taskModes")
     assert_equal architecture.fetch("open_questions"), compiled.fetch("openQuestions")

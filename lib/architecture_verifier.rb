@@ -267,7 +267,7 @@ module ArchitectureVerifier
       end
       Array(source_set["standard_blocks"]).each_with_index do |file, index|
         document = documents["standard_block_#{index}"]
-        next unless document && document["schema_version"] == "standard-block-v0.2"
+        next unless document && %w[standard-block-v0.2 standard-block-v0.3].include?(document["schema_version"])
 
         StandardBlockContract.definition_errors(document).each do |item|
           diagnostics << diagnostic(

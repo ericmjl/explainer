@@ -1,10 +1,10 @@
 export const manifest = {
-  "schemaVersion": "architecture-manifest-v0.4",
+  "schemaVersion": "architecture-manifest-v0.5",
   "build": {
-    "generator": "architecture-manifest-builder-v0.4.6",
+    "generator": "architecture-manifest-builder-v0.5.0",
     "inputDigests": {
       "references/bibliography.yaml": "abe9226586bfb64261c81b7756b7275c48a3a172a9a18b5f91f7acfd3145e374",
-      "architectures/generic-feature-refinement.yaml": "60b45e458ee2037560fc3011507148f3f236d19d8957b9d1826fa7b5a2e0cc0e",
+      "architectures/generic-feature-refinement.yaml": "856e34131dc78dd2454df9b0dc3ad3d0adff67c5a7f9dee5809cacf311722d68",
       "views/generic-semantic-zoom.view.yaml": "2212d81c8217db03c68fa7d59f44dc36e55052503d8d503b3386bded040b5714",
       "pseudocode/generic-feature-refinement.yaml": "7020e10be441c1d161e8113b54937fd89c303ef55f198fd2432bc69243e55696",
       "standard_blocks/pair-biased-attention.yaml": "9cd25cca99e46326432232d92a00d84d82b3e59d028aff4e47d73aa31bac9381",
@@ -13,7 +13,7 @@ export const manifest = {
     }
   },
   "architecture": {
-    "schemaVersion": "architecture-v0.4",
+    "schemaVersion": "architecture-v0.5",
     "id": "generic_feature_refinement",
     "name": "Generic Feature Refinement Pipeline",
     "family": "transformer",

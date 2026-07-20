@@ -65,7 +65,7 @@ class ArchitectureReviewTest < Minitest::Test
     assert_includes workspace.source_sets.map { |item| item.fetch("id") }, "genie3"
     snapshot = workspace.source_snapshot("genie3")
     assert_equal "genie3", snapshot.dig("source_set", "id")
-    assert_equal "architecture-v0.4", snapshot.dig("architecture", "schema_version")
+    assert_equal "architecture-v0.5", snapshot.dig("architecture", "schema_version")
     assert_equal "visualization-v0.4", snapshot.dig("view", "schema_version")
   end
 
