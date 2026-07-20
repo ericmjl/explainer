@@ -1755,6 +1755,12 @@ function onCanvasKeyDown(event) {
       state.userMovedViewport = false;
       fitToContent({ readable: false });
       break;
+    case "board-enter":
+      if (!enterSelectedBoard()) return;
+      break;
+    case "board-exit":
+      if (!exitToParentBoard()) return;
+      break;
     case "nav-parent":
       navigateAlong(NAV_DIRECTIONS.PARENT);
       break;
@@ -1772,6 +1778,26 @@ function currentBoardSelectionNodeId() {
   if (!selection || selection.kind !== "node") return null;
   if (selection.boardId !== currentBoard().id) return null;
   return selection.occurrenceId;
+}
+
+function enterSelectedBoard() {
+  if (state.isTransitioning) return false;
+  const id = currentBoardSelectionNodeId();
+  const node = id && visibleNodes(currentBoard()).find((candidate) => candidate.id === id);
+  const targetBoard = node && targetBoardForNode(node);
+  if (!targetBoard) return false;
+  closeNavMenu();
+  hideCanvasTooltip();
+  clearConnectivityHighlights();
+  pushBoard(targetBoard.id, node.id);
+  return true;
+}
+
+function exitToParentBoard() {
+  if (state.isTransitioning || state.boardStack.length <= 1) return false;
+  closeNavMenu();
+  popToBoard(state.boardStack.length - 2);
+  return true;
 }
 
 function navigateAlong(direction) {

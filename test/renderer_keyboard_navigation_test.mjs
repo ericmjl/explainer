@@ -57,8 +57,13 @@ test("resolveKeyAction maps j/k to parent/child navigation", () => {
   assert.equal(resolveKeyAction(keyEvent({ key: "k" })), "nav-child");
 });
 
+test("resolveKeyAction maps Enter/Escape to semantic board traversal", () => {
+  assert.equal(resolveKeyAction(keyEvent({ key: "Enter" })), "board-enter");
+  assert.equal(resolveKeyAction(keyEvent({ key: "Escape" })), "board-exit");
+});
+
 test("resolveKeyAction ignores unrelated keys", () => {
-  for (const key of ["a", " ", "Enter", "Tab", "1", "/", "ArrowLeft"]) {
+  for (const key of ["a", " ", "Tab", "1", "/", "ArrowLeft"]) {
     assert.equal(resolveKeyAction(keyEvent({ key })), null, `unexpected action for key ${key}`);
   }
 });

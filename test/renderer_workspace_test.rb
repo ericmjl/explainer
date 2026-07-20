@@ -175,6 +175,20 @@ class RendererWorkspaceTest < Minitest::Test
     assert_includes navigate, "centerOnNode(first.id);"
   end
 
+  def test_enter_and_escape_traverse_semantic_board_levels
+    renderer = read("renderer/architecture/renderer.js")
+    dispatch = function_source(renderer, "onCanvasKeyDown", "currentBoardSelectionNodeId")
+    enter = function_source(renderer, "enterSelectedBoard", "exitToParentBoard")
+    exit_board = function_source(renderer, "exitToParentBoard", "navigateAlong")
+
+    assert_includes dispatch, 'case "board-enter"'
+    assert_includes dispatch, 'case "board-exit"'
+    assert_includes enter, "targetBoardForNode(node)"
+    assert_includes enter, "pushBoard(targetBoard.id, node.id);"
+    assert_includes exit_board, "state.boardStack.length <= 1"
+    assert_includes exit_board, "popToBoard(state.boardStack.length - 2);"
+  end
+
   def test_drilldown_uses_a_compact_accessible_magnifying_button
     renderer = read("renderer/architecture/renderer.js")
     css = read("styles.css")

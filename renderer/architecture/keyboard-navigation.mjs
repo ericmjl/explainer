@@ -9,6 +9,8 @@
 //   Z      -> "zoom-out"    Zoom out / fit the whole board
 //   j      -> "nav-parent"  Move up the graph to a parent of the selection
 //   k      -> "nav-child"   Move down the graph to a child of the selection
+//   Enter  -> "board-enter" Drill into the selected block's detail board
+//   Escape -> "board-exit"  Return to the current board's parent
 //
 // When a disambiguation menu is open (menuOpen=true), the same j/k plus arrow
 // keys move the highlight, Enter confirms, and Escape cancels.
@@ -51,6 +53,8 @@ export function resolveKeyAction(event, { menuOpen = false } = {}) {
   if (key === "z" && !event.shiftKey) return "zoom-in";
   if (key === "j") return "nav-parent";
   if (key === "k") return "nav-child";
+  if (key === "Enter") return "board-enter";
+  if (key === "Escape") return "board-exit";
   return null;
 }
 
