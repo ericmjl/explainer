@@ -7,7 +7,7 @@ export const manifest = {
       "architectures/genie2.yaml": "d5fbf1c1a91ef74dcef47388855e83b7e5571deb7d63a5eb2657177355c2f96a",
       "views/genie2-semantic-zoom.view.yaml": "8b8fe70a2866cad0051913e38e4d2a5b0fef68b0aeb14127c4d27eb36d353158",
       "pseudocode/genie2.yaml": "b78ca953f8ebed98a688501d7485e3b2e79fb50b2e9434d876012c1ee4289bd0",
-      "standard_blocks/invariant-point-attention.yaml": "a88d3bd473e6bbfeb6846085f7d5091e6e8b0e33fbbd8292af4d578df22b2c27"
+      "standard_blocks/invariant-point-attention.yaml": "d185138554938b05509aeb1789cfd2a0275d561991bca4dfd22605ad40cc847b"
     }
   },
   "architecture": {
@@ -1625,7 +1625,7 @@ export const manifest = {
             "id": "aggregate_pair_values",
             "templateFactRef": "standard_blocks.invariant_point_attention.steps.aggregate_pair_values",
             "instanceFactRef": "block_instances.structure_ipa.steps.aggregate_pair_values",
-            "label": "Aggregate pair values",
+            "label": "Attention-weighted pair-value aggregation",
             "operation": "pair_value_aggregation",
             "code": "pair_value_context = weighted_sum(attention, pair_context)",
             "inputs": [
@@ -1681,7 +1681,7 @@ export const manifest = {
             "id": "project_ipa_delta",
             "templateFactRef": "standard_blocks.invariant_point_attention.steps.project_ipa_delta",
             "instanceFactRef": "block_instances.structure_ipa.steps.project_ipa_delta",
-            "label": "Fuse IPA outputs",
+            "label": "Concatenate + project",
             "operation": "output_projection",
             "code": "ipa_delta = output_projection(concat(scalar_context, local_point_context, pair_value_context))",
             "inputs": [
@@ -4775,7 +4775,7 @@ export const manifest = {
       "schemaVersion": "standard-block-v0.2",
       "name": "Invariant Point Attention",
       "sourceYaml": "../../standard_blocks/invariant-point-attention.yaml",
-      "description": "Combine scalar attention, pair bias, and frame-aware point-distance logits, then aggregate scalar, point, and pair values into a residual-normalized single-state update.",
+      "description": "Combine scalar attention, pair bias, and frame-aware point-distance logits, then aggregate scalar and point values alongside attention-weighted pair values into a residual-normalized single-state update.",
       "math": [
         {
           "id": "project_scalar_terms",
@@ -5398,7 +5398,7 @@ export const manifest = {
         },
         {
           "id": "aggregate_pair_values",
-          "label": "Aggregate pair values",
+          "label": "Attention-weighted pair-value aggregation",
           "operation": "pair_value_aggregation",
           "inputs": [
             "values.attention_weights",
@@ -5428,7 +5428,7 @@ export const manifest = {
         },
         {
           "id": "project_ipa_delta",
-          "label": "Fuse IPA outputs",
+          "label": "Concatenate + project",
           "operation": "output_projection",
           "inputs": [
             "values.scalar_context",
@@ -5495,11 +5495,12 @@ export const manifest = {
       ],
       "visualTemplate": {
         "grid": {
-          "columns": 12,
-          "rows": 10,
+          "columns": 14,
+          "rows": 9,
           "column_sizing": "content",
+          "row_sizing": "content",
           "col_gap": 20,
-          "row_gap": 28
+          "row_gap": 40
         },
         "nodes": [
           {
@@ -5537,8 +5538,8 @@ export const manifest = {
           {
             "id": "updated_single_state",
             "ref": "ports.updated_single_state",
-            "col": 12,
-            "row": 10,
+            "col": 14,
+            "row": 8,
             "prominence": "secondary",
             "treatment": "compact"
           },
@@ -5673,7 +5674,7 @@ export const manifest = {
           {
             "id": "aggregate_scalar_values",
             "ref": "steps.aggregate_scalar_values",
-            "col": 7,
+            "col": 9,
             "row": 7,
             "prominence": "primary",
             "treatment": "compact"
@@ -5681,7 +5682,7 @@ export const manifest = {
           {
             "id": "scalar_context",
             "ref": "values.scalar_context",
-            "col": 8,
+            "col": 10,
             "row": 7,
             "prominence": "context",
             "treatment": "compact"
@@ -5689,7 +5690,7 @@ export const manifest = {
           {
             "id": "aggregate_pair_values",
             "ref": "steps.aggregate_pair_values",
-            "col": 7,
+            "col": 9,
             "row": 8,
             "prominence": "primary",
             "treatment": "compact"
@@ -5697,7 +5698,7 @@ export const manifest = {
           {
             "id": "pair_value_context",
             "ref": "values.pair_value_context",
-            "col": 8,
+            "col": 10,
             "row": 8,
             "prominence": "context",
             "treatment": "compact"
@@ -5737,24 +5738,24 @@ export const manifest = {
           {
             "id": "project_ipa_delta",
             "ref": "steps.project_ipa_delta",
-            "col": 9,
-            "row": 10,
+            "col": 11,
+            "row": 8,
             "prominence": "primary",
             "treatment": "compact"
           },
           {
             "id": "ipa_delta",
             "ref": "values.ipa_delta",
-            "col": 10,
-            "row": 10,
+            "col": 12,
+            "row": 8,
             "prominence": "context",
             "treatment": "compact"
           },
           {
             "id": "residual_norm",
             "ref": "steps.residual_norm",
-            "col": 11,
-            "row": 10,
+            "col": 13,
+            "row": 8,
             "prominence": "primary",
             "treatment": "compact"
           }
@@ -5790,7 +5791,7 @@ export const manifest = {
           {
             "id": "value_extraction",
             "label": "Extract values and update state",
-            "description": "Reuse the shared attention weights for scalar, point, and pair values, return points to the local frame, fuse the contexts, and apply the residual wrapper.",
+            "description": "Reuse the shared attention weights for scalar, point, and pair values, return points to the local frame, align the three final contexts, concatenate and project them, and apply the residual wrapper.",
             "node_refs": [
               "steps.aggregate_scalar_values",
               "values.scalar_context",
@@ -5812,7 +5813,7 @@ export const manifest = {
         "generic_definition": "Full IPA anatomy is reusable vocabulary; each architecture instance must separately prove its core and wrapper variant.",
         "usage_requires": [
           "Evidence for scalar, point-distance, and pair logit terms.",
-          "Evidence for scalar, point, and pair-value aggregation.",
+          "Evidence for scalar and point aggregation plus attention-weighted pair-value aggregation.",
           "Evidence for the residual/dropout/normalization wrapper when full_ipa_residual_norm is selected."
         ]
       }
@@ -9509,11 +9510,12 @@ export const manifest = {
         "expansion_depth": 0,
         "block_instance_ref": "block_instances.structure_ipa",
         "grid": {
-          "columns": 12,
-          "rows": 10,
+          "columns": 14,
+          "rows": 9,
           "column_sizing": "content",
+          "row_sizing": "content",
           "col_gap": 20,
-          "row_gap": 28
+          "row_gap": 40
         },
         "nodes": [
           {
@@ -9602,8 +9604,8 @@ export const manifest = {
           {
             "id": "updated_single_state",
             "label": "IPA-updated single state",
-            "col": 12,
-            "row": 10,
+            "col": 14,
+            "row": 8,
             "prominence": "secondary",
             "treatment": "compact",
             "standard_block_ref": "standard_blocks/invariant-point-attention.yaml",
@@ -9911,7 +9913,7 @@ export const manifest = {
           {
             "id": "aggregate_scalar_values",
             "label": "Aggregate scalar values",
-            "col": 7,
+            "col": 9,
             "row": 7,
             "prominence": "primary",
             "treatment": "compact",
@@ -9929,7 +9931,7 @@ export const manifest = {
           {
             "id": "scalar_context",
             "label": "scalar context",
-            "col": 8,
+            "col": 10,
             "row": 7,
             "prominence": "context",
             "treatment": "compact",
@@ -9946,8 +9948,8 @@ export const manifest = {
           },
           {
             "id": "aggregate_pair_values",
-            "label": "Aggregate pair values",
-            "col": 7,
+            "label": "Attention-weighted pair-value aggregation",
+            "col": 9,
             "row": 8,
             "prominence": "primary",
             "treatment": "compact",
@@ -9965,7 +9967,7 @@ export const manifest = {
           {
             "id": "pair_value_context",
             "label": "pair-value context",
-            "col": 8,
+            "col": 10,
             "row": 8,
             "prominence": "context",
             "treatment": "compact",
@@ -10054,9 +10056,9 @@ export const manifest = {
           },
           {
             "id": "project_ipa_delta",
-            "label": "Fuse IPA outputs",
-            "col": 9,
-            "row": 10,
+            "label": "Concatenate + project",
+            "col": 11,
+            "row": 8,
             "prominence": "primary",
             "treatment": "compact",
             "standard_block_ref": "standard_blocks/invariant-point-attention.yaml",
@@ -10073,8 +10075,8 @@ export const manifest = {
           {
             "id": "ipa_delta",
             "label": "IPA delta",
-            "col": 10,
-            "row": 10,
+            "col": 12,
+            "row": 8,
             "prominence": "context",
             "treatment": "compact",
             "standard_block_ref": "standard_blocks/invariant-point-attention.yaml",
@@ -10091,8 +10093,8 @@ export const manifest = {
           {
             "id": "residual_norm",
             "label": "Residual, dropout, and norm",
-            "col": 11,
-            "row": 10,
+            "col": 13,
+            "row": 8,
             "prominence": "primary",
             "treatment": "compact",
             "standard_block_ref": "standard_blocks/invariant-point-attention.yaml",
@@ -10755,7 +10757,7 @@ export const manifest = {
             "instance_fact_ref": "block_instances.structure_ipa.steps.aggregate_pair_values",
             "template_data_ref": "values.attention_weights",
             "connection": {
-              "title": "Aggregate pair values",
+              "title": "Attention-weighted pair-value aggregation",
               "role": "reusable step input",
               "inside": "pair_value_context = weighted_sum(attention, pair_context)"
             }
@@ -10780,7 +10782,7 @@ export const manifest = {
             "instance_fact_ref": "block_instances.structure_ipa.steps.aggregate_pair_values",
             "template_data_ref": "ports.pair_context",
             "connection": {
-              "title": "Aggregate pair values",
+              "title": "Attention-weighted pair-value aggregation",
               "role": "reusable step input",
               "inside": "pair_value_context = weighted_sum(attention, pair_context)"
             }
@@ -10801,7 +10803,7 @@ export const manifest = {
             "instance_fact_ref": "block_instances.structure_ipa.steps.aggregate_pair_values",
             "template_data_ref": "values.pair_value_context",
             "connection": {
-              "title": "Aggregate pair values",
+              "title": "Attention-weighted pair-value aggregation",
               "role": "reusable step output",
               "inside": "pair_value_context = weighted_sum(attention, pair_context)"
             }
@@ -10822,7 +10824,7 @@ export const manifest = {
             "instance_fact_ref": "block_instances.structure_ipa.steps.project_ipa_delta",
             "template_data_ref": "values.scalar_context",
             "connection": {
-              "title": "Fuse IPA outputs",
+              "title": "Concatenate + project",
               "role": "reusable step input",
               "inside": "ipa_delta = output_projection(concat(scalar_context, local_point_context, pair_value_context))"
             }
@@ -10843,7 +10845,7 @@ export const manifest = {
             "instance_fact_ref": "block_instances.structure_ipa.steps.project_ipa_delta",
             "template_data_ref": "values.local_point_context",
             "connection": {
-              "title": "Fuse IPA outputs",
+              "title": "Concatenate + project",
               "role": "reusable step input",
               "inside": "ipa_delta = output_projection(concat(scalar_context, local_point_context, pair_value_context))"
             }
@@ -10864,7 +10866,7 @@ export const manifest = {
             "instance_fact_ref": "block_instances.structure_ipa.steps.project_ipa_delta",
             "template_data_ref": "values.pair_value_context",
             "connection": {
-              "title": "Fuse IPA outputs",
+              "title": "Concatenate + project",
               "role": "reusable step input",
               "inside": "ipa_delta = output_projection(concat(scalar_context, local_point_context, pair_value_context))"
             }
@@ -10885,7 +10887,7 @@ export const manifest = {
             "instance_fact_ref": "block_instances.structure_ipa.steps.project_ipa_delta",
             "template_data_ref": "values.ipa_delta",
             "connection": {
-              "title": "Fuse IPA outputs",
+              "title": "Concatenate + project",
               "role": "reusable step output",
               "inside": "ipa_delta = output_projection(concat(scalar_context, local_point_context, pair_value_context))"
             }
@@ -10992,7 +10994,7 @@ export const manifest = {
           {
             "id": "value_extraction",
             "label": "Extract values and update state",
-            "description": "Reuse the shared attention weights for scalar, point, and pair values, return points to the local frame, fuse the contexts, and apply the residual wrapper.",
+            "description": "Reuse the shared attention weights for scalar, point, and pair values, return points to the local frame, align the three final contexts, concatenate and project them, and apply the residual wrapper.",
             "order": 2,
             "node_ids": [
               "aggregate_scalar_values",
@@ -11717,7 +11719,7 @@ export const manifest = {
             "id": "aggregate_pair_values",
             "templateFactRef": "standard_blocks.invariant_point_attention.steps.aggregate_pair_values",
             "instanceFactRef": "block_instances.structure_ipa.steps.aggregate_pair_values",
-            "label": "Aggregate pair values",
+            "label": "Attention-weighted pair-value aggregation",
             "operation": "pair_value_aggregation",
             "code": "pair_value_context = weighted_sum(attention, pair_context)",
             "inputs": [
@@ -11773,7 +11775,7 @@ export const manifest = {
             "id": "project_ipa_delta",
             "templateFactRef": "standard_blocks.invariant_point_attention.steps.project_ipa_delta",
             "instanceFactRef": "block_instances.structure_ipa.steps.project_ipa_delta",
-            "label": "Fuse IPA outputs",
+            "label": "Concatenate + project",
             "operation": "output_projection",
             "code": "ipa_delta = output_projection(concat(scalar_context, local_point_context, pair_value_context))",
             "inputs": [

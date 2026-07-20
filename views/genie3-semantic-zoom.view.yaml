@@ -1140,7 +1140,7 @@ boards:
   - id: genie3_reduced_pair_attention_internals
     kind: standard_block_instance
     title: Genie 3 Reduced Pair Attention Internals
-    summary: This reduced variant keeps scalar attention, pair-logit bias, and pair-value aggregation, while omitting frame-aware point terms and applying the latent-block wrapper.
+    summary: This reduced variant keeps scalar attention, pair-logit bias, and attention-weighted pair-value aggregation, while omitting frame-aware point terms and applying the latent-block wrapper.
     parent: latent_transformer
     subject_ref: modules.pair_biased_attention_update
     expansion_depth: 0

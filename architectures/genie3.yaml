@@ -166,9 +166,10 @@ state_semantics:
       - value_sites.pair_after_triangle_updates
       - value_sites.pair_after_transition
       - value_sites.refined_pair_features
-    lifecycle: transformed_within_denoiser
+    lifecycle: refined_across_five_latent_transformer_blocks_then_held_fixed_and_reused_by_ipa_across_eight_structure_layers
     notes:
       - The global-row/column state entering one latent block is z_i and the pair transition writes z_(i+1); only the fifth write becomes the globals-removed mature pair output.
+      - The final pair representation is held fixed and reused by IPA across all eight structure layers.
     evidence:
       status: confirmed_from_code
       refs:
@@ -211,7 +212,7 @@ conditioning:
           locator: V1PairFeatureNet.forward
   - id: pair_biases_single_attention
     relation_ref: relations.pair_with_global_tokens_bias_attention
-    mode: pair_bias_and_value_injection
+    mode: pair_bias_and_attention_weighted_pair_value_aggregation
     updates_source: false
     evidence:
       status: confirmed_from_code
@@ -937,10 +938,12 @@ modules:
   - id: pair_biased_attention_update
     parent_ref: modules.latent_transformer
     decomposition: { status: leaf }
-    label: Pair-Biased Single Attention
+    label: Pair-Biased Single Attention (Reduced IPA)
     kind: attention
-    mechanisms: [pair_biased_attention, pair_value_injection]
-    role: update single features using pair-biased self-attention with pair-derived value injection and no frame geometry
+    mechanisms:
+    - pair_biased_attention
+    - attention_weighted_pair_value_aggregation
+    role: update single features using pair-biased self-attention and attention-weighted pair-value aggregation, with no frame geometry
     scale: token
     attention:
       pattern: full
@@ -1286,7 +1289,7 @@ block_instances:
     variant: pair_values_residual_norm_transition
     use_scope: whole_module
     conformance: reduced
-    difference_summary: Genie 3 removes frame-aware point terms, keeps pair-logit bias and pair-value aggregation, then adds residual normalization, a single transition, and final masking.
+    difference_summary: Genie 3 removes frame-aware point terms, keeps pair-logit bias and attention-weighted pair-value aggregation, then adds residual normalization, a single transition, and final masking.
     port_bindings:
       - port_ref: ports.single_state
         relation_refs: [relations.single_with_global_tokens_enters_attention]
@@ -1300,7 +1303,7 @@ block_instances:
         - source_ref: genie3_ipa_code
           role: implementation_evidence
           locator: ReducedInvariantPointAttention.forward
-          note: Reduced IPA implements scalar attention with pair bias and pair-value aggregation while omitting frame-aware point terms.
+          note: Reduced IPA implements scalar attention with pair bias and attention-weighted pair-value aggregation while omitting frame-aware point terms.
         - source_ref: genie3_latent_transformer_code
           role: wrapper_evidence
           locator: LatentTransformerBlock.forward
@@ -1328,7 +1331,7 @@ block_instances:
         - source_ref: genie3_ipa_code
           role: implementation_evidence
           locator: InvariantPointAttention.forward
-          note: Full IPA implements scalar, point, pair-bias, and pair-value attention terms.
+          note: Full IPA implements scalar and point attention, pair bias, and attention-weighted pair-value aggregation.
         - source_ref: genie3_structure_code
           role: wrapper_evidence
           locator: StructureLayer.forward
@@ -1531,7 +1534,7 @@ relations:
     to: modules.pair_biased_attention_update
     kind: conditioning
     carries: [representations.pair_features]
-    operation: bias_attention_and_inject_pair_values
+    operation: bias_attention_and_aggregate_pair_values
     evidence: *latent_relation_evidence
   - id: pair_attention_produces_single_state
     from: modules.pair_biased_attention_update
