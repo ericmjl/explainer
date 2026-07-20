@@ -143,6 +143,28 @@ class RendererWorkspaceTest < Minitest::Test
     refute_match(/function (?:showNodePeek|showRepPeek|repTooltipHtml|showHoverPanel|hideHoverPanel)\b/, renderer)
   end
 
+  def test_selected_nodes_have_a_distinct_persistent_locator
+    renderer = read("renderer/architecture/renderer.js")
+    css = read("styles.css")
+
+    assert_includes renderer, 'classList.add("is-focused", "is-selected-node")'
+    assert_includes renderer, 'classList.remove("is-focused", "is-selected-node")'
+    assert_includes css, ".arch-node.is-selected-node"
+    assert_includes css, ".arch-rep.is-selected-node"
+    assert_includes css, "outline: 3px solid"
+    assert_includes css, "@keyframes architecture-selection-arrival"
+  end
+
+  def test_keyboard_zoom_uses_one_incremental_step_toward_the_selection
+    renderer = read("renderer/architecture/renderer.js")
+    zoom = function_source(renderer, "zoomToSelection", "questionBreadcrumbs")
+
+    assert_includes renderer, "nextKeyboardZoomScale"
+    assert_includes zoom, "viewport.scale = nextKeyboardZoomScale("
+    assert_includes zoom, "viewport.x = availableW / 2 - box.cx * viewport.scale"
+    refute_includes zoom, "const fill = 0.7"
+  end
+
   def test_drilldown_uses_a_compact_accessible_magnifying_button
     renderer = read("renderer/architecture/renderer.js")
     css = read("styles.css")

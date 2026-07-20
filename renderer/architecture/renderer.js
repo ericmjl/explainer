@@ -90,8 +90,10 @@ import {
 } from "./semantic-pseudocode.mjs";
 import { pinchViewportBetween } from "./board-surface.mjs";
 import {
+  KEYBOARD_ZOOM_STEP,
   NAV_DIRECTIONS,
   neighborsOf,
+  nextKeyboardZoomScale,
   nextMenuIndex,
   resolveKeyAction,
 } from "./keyboard-navigation.mjs";
@@ -1890,14 +1892,14 @@ function centerOnNode(id) {
   applyViewport();
 }
 
-// Zoom so the currently selected node fills most of the viewport. Falls back
-// to a plain center zoom when nothing is selected. Never shrinks the view.
+// Move one zoom step toward the currently selected node. Repeated keypresses
+// progressively reveal more detail without a single press filling the board.
 function zoomToSelection() {
   const id = currentBoardSelectionNodeId();
   const box = id && nodeBox(id);
   if (!box) {
     state.userMovedViewport = true;
-    zoomAtCanvasCenter(1.18);
+    zoomAtCanvasCenter(KEYBOARD_ZOOM_STEP);
     return;
   }
   const canvasRect = elements.canvas.getBoundingClientRect();
@@ -1906,13 +1908,11 @@ function zoomToSelection() {
     elements.moduleLayer.offsetLeft,
     elements.moduleLayer.offsetTop,
   );
-  const fill = 0.7;
-  const targetScale = Math.min(
-    (availableW * fill) / Math.max(1, box.width),
-    (availableH * fill) / Math.max(1, box.height),
+  viewport.scale = nextKeyboardZoomScale(
+    viewport.scale,
+    viewport.minScale,
     viewport.maxScale,
   );
-  viewport.scale = clamp(Math.max(targetScale, viewport.scale), viewport.minScale, viewport.maxScale);
   viewport.x = availableW / 2 - box.cx * viewport.scale;
   viewport.y = availableH / 2 - box.cy * viewport.scale;
   state.userMovedViewport = true;
@@ -3870,7 +3870,9 @@ function repFocusHtml(node, rep) {
 function focusRepresentation(node, rep) {
   setSelection({ kind: "node", node });
   clearActiveNodes();
-  elements.moduleLayer.querySelector(`[data-node-id="${node.id}"]`)?.classList.add("is-focused");
+  elements.moduleLayer
+    .querySelector(`[data-node-id="${node.id}"]`)
+    ?.classList.add("is-focused", "is-selected-node");
   elements.focusTitle.textContent = node.label || rep?.id || node.id;
   setFocusBody(repFocusHtml(node, rep), { selected: true });
 }
@@ -4522,7 +4524,7 @@ function restoreSelectionVisuals() {
   if (state.selection.kind === "node") {
     elements.moduleLayer
       .querySelector(`[data-node-id="${state.selection.occurrenceId}"]`)
-      ?.classList.add("is-focused");
+      ?.classList.add("is-focused", "is-selected-node");
     return;
   }
   const edgeIndex = (state.displayEdges || []).findIndex(
@@ -5289,7 +5291,9 @@ function resetFocusedDetail() {
 function focusModule(module, node) {
   setSelection(node ? { kind: "node", node } : null);
   clearActiveNodes();
-  elements.moduleLayer.querySelector(`[data-module-id="${module.id}"]`)?.classList.add("is-focused");
+  elements.moduleLayer
+    .querySelector(`[data-module-id="${module.id}"]`)
+    ?.classList.add("is-focused", "is-selected-node");
   elements.focusTitle.textContent = module.label;
 
   const blockHtml = renderStandardBlocks(module);
@@ -5309,7 +5313,9 @@ function focusModule(module, node) {
 function focusOperation(node) {
   setSelection({ kind: "node", node });
   clearActiveNodes();
-  elements.moduleLayer.querySelector(`[data-node-id="${node.id}"]`)?.classList.add("is-focused");
+  elements.moduleLayer
+    .querySelector(`[data-node-id="${node.id}"]`)
+    ?.classList.add("is-focused", "is-selected-node");
   elements.focusTitle.textContent = node.label || node.id;
   setFocusBody(`
     <div class="focus-section">
@@ -5328,7 +5334,7 @@ function focusOperation(node) {
 
 function clearActiveNodes() {
   elements.moduleLayer.querySelectorAll(".arch-node, .arch-rep").forEach((node) => {
-    node.classList.remove("is-focused");
+    node.classList.remove("is-focused", "is-selected-node");
   });
   elements.edgeLayer.querySelectorAll("[data-edge-index]").forEach((edge) => {
     edge.classList.remove("is-selected");

@@ -17,6 +17,7 @@
 // keep working as the user expects.
 
 export const NAV_DIRECTIONS = Object.freeze({ PARENT: "parent", CHILD: "child" });
+export const KEYBOARD_ZOOM_STEP = 1.18;
 
 const TEXT_INPUT_TAGS = new Set(["INPUT", "TEXTAREA", "SELECT"]);
 
@@ -51,6 +52,17 @@ export function resolveKeyAction(event, { menuOpen = false } = {}) {
   if (key === "j") return "nav-parent";
   if (key === "k") return "nav-child";
   return null;
+}
+
+// Keyboard zoom is intentionally incremental. A single keypress should move
+// one readable step rather than resizing the selected node to fill the board.
+export function nextKeyboardZoomScale(
+  currentScale,
+  minScale,
+  maxScale,
+  step = KEYBOARD_ZOOM_STEP,
+) {
+  return Math.min(maxScale, Math.max(minScale, currentScale * step));
 }
 
 // Ordered list of visible neighbor ids in the requested direction. Parents are

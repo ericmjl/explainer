@@ -2,8 +2,10 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import {
+  KEYBOARD_ZOOM_STEP,
   NAV_DIRECTIONS,
   neighborsOf,
+  nextKeyboardZoomScale,
   nextMenuIndex,
   resolveKeyAction,
 } from "../renderer/architecture/keyboard-navigation.mjs";
@@ -75,6 +77,13 @@ test("resolveKeyAction suppresses zoom/navigation keys while the menu is open", 
   const menu = { menuOpen: true };
   assert.equal(resolveKeyAction(keyEvent({ key: "z" }), menu), null);
   assert.equal(resolveKeyAction(keyEvent({ key: "Z", shiftKey: true }), menu), null);
+});
+
+test("keyboard zoom advances one gradual step and clamps to viewport bounds", () => {
+  assert.equal(KEYBOARD_ZOOM_STEP, 1.18);
+  assert.equal(nextKeyboardZoomScale(1, 0.25, 4), 1.18);
+  assert.equal(nextKeyboardZoomScale(2, 0.25, 2.1), 2.1);
+  assert.equal(nextKeyboardZoomScale(0.2, 0.25, 4), 0.25);
 });
 
 test("neighborsOf returns empty list for missing id or edges", () => {

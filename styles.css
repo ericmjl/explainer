@@ -2029,6 +2029,7 @@ code {
 
 .arch-node,
 .arch-rep {
+  --selection-color: var(--accent);
   position: relative;
   z-index: 4;
   align-self: center;
@@ -3646,6 +3647,7 @@ code {
 
 .arch-rep {
   --glyph-color: var(--accent);
+  --selection-color: var(--glyph-color);
   position: relative;
   display: flex;
   flex-direction: column;
@@ -3706,6 +3708,33 @@ code {
   letter-spacing: 0.035em;
   line-height: 1;
   text-transform: uppercase;
+}
+
+.arch-node.is-selected-node,
+.arch-rep.is-selected-node {
+  z-index: 7;
+  outline: 3px solid color-mix(in srgb, var(--selection-color) 84%, var(--ink));
+  outline-offset: 4px;
+  box-shadow:
+    0 0 0 8px color-mix(in srgb, var(--selection-color) 18%, transparent),
+    var(--node-shadow);
+}
+
+@keyframes architecture-selection-arrival {
+  from {
+    outline-offset: 11px;
+  }
+
+  to {
+    outline-offset: 4px;
+  }
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .arch-node.is-selected-node,
+  .arch-rep.is-selected-node {
+    animation: architecture-selection-arrival 180ms ease-out;
+  }
 }
 
 .arch-rep.scale-item,

@@ -98,6 +98,7 @@ class PagesBuildTest < Minitest::Test
     assert_includes html, "../../styles.css?v=#{build_id}"
     assert_includes renderer, "./manifest-index.js?v=#{build_id}"
     assert_includes renderer, "./board-surface.mjs?v=#{build_id}"
+    assert_includes renderer, "./keyboard-navigation.mjs?v=#{build_id}"
     assert_includes renderer, "./${activeManifestEntry.file}?v=#{build_id}"
     assert_includes landing, "./renderer/architecture/manifest-index.js?v=#{build_id}"
     refute_includes landing, "await import"
