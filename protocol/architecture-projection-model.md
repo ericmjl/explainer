@@ -4,13 +4,13 @@ Status: **current implemented semantic-projection contract**.
 
 Current contracts:
 
-- `architecture-v0.4`
+- `architecture-v0.5`
 - `visualization-v0.4`
-- `architecture-manifest-v0.4`
+- `architecture-manifest-v0.5`
 
-All registered source sets use architecture-v0.4 and visualization-v0.4. The
+All registered source sets use architecture-v0.5 and visualization-v0.4. The
 shared Ruby projector is called by both the manifest builder and linter, and
-the audience renderer consumes architecture-manifest-v0.4 projected boards.
+the audience renderer consumes architecture-manifest-v0.5 projected boards.
 The v0.2/v0.3 authored-board adapter remains only for compatibility with old
 manifests.
 
@@ -720,14 +720,14 @@ lib/architecture_projection.rb
   emit normalized projected graph
 
 lib/architecture_ownership.rb
-  enforce architecture-v0.4 one-owner rules
+  enforce architecture-v0.5 one-owner rules
 
 lib/architecture_coverage.rb
   validate decomposition closure
   compile breadth scopes and depth frontiers
 
 renderer/architecture/build-manifest.rb
-  compile deterministic architecture-manifest-v0.4
+  compile deterministic architecture-manifest-v0.5
   include projected boards
 
 scripts/lint_sources.rb
@@ -762,7 +762,7 @@ authored label, tone, and connection prose.
   invent missing architectural semantics. This variant is emitted only by the
   temporary v0.2/v0.3 adapter and is forbidden for visualization-v0.4.
 
-Current architecture-manifest-v0.4 files emit only `origin: canonical`. Old
+Current architecture-manifest-v0.5 files emit only `origin: canonical`. Old
 architecture-manifest-v0.2 files remain readable through the browser's narrow
 authored-board/elision adapter; they are not rewritten into the reserved
 `legacy_authored` variant. For current projected boards, the browser consumes
@@ -780,8 +780,8 @@ Compatibility during migration is explicit:
 | v0.4 | v0.4 | Current contract; accepted through derived projection and one-owner validation |
 | v0.2 | v0.4 | Rejected because hierarchy/value-site projection semantics are unavailable |
 
-The current architecture-v0.4/visualization-v0.4 combination emits
-architecture-manifest-v0.4 canonical edges. Architecture-v0.3 remains readable
+The current architecture-v0.5/visualization-v0.4 combination emits
+architecture-manifest-v0.5 canonical edges. Architecture-v0.3 remains readable
 by the projector for fixtures and migration. The v0.2/v0.3 combination remains
 on architecture-manifest-v0.2 and is
 read through the browser's narrow legacy adapter. This does not make

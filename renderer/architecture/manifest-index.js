@@ -35,27 +35,27 @@ export const comparisonIndex = {
   "compilerVersion": "architecture-comparison-compiler-v0.1",
   "sourceYaml": "../../comparisons/index.yaml",
   "build": {
-    "generator": "architecture-manifest-builder-v0.4.6",
+    "generator": "architecture-manifest-builder-v0.5.0",
     "inputDigests": {
       "comparisons/index.yaml": "54059100527b7b47f0096e90227ce5668a3d2693e0b48c8af971a200feed97e4",
-      "comparisons/genie3-reduced-vs-full-ipa.yaml": "f50a344fe475f37743d0b6de214468f31d5d75c9f9bdcf92bda229b07a771efc",
+      "comparisons/genie3-reduced-vs-full-ipa.yaml": "85eed3b6f228c693e494bd93a606829f383b1c41e4a05425eafd911f5d7c5d1b",
       "references/bibliography.yaml": "abe9226586bfb64261c81b7756b7275c48a3a172a9a18b5f91f7acfd3145e374",
-      "architectures/generic-feature-refinement.yaml": "60b45e458ee2037560fc3011507148f3f236d19d8957b9d1826fa7b5a2e0cc0e",
+      "architectures/generic-feature-refinement.yaml": "856e34131dc78dd2454df9b0dc3ad3d0adff67c5a7f9dee5809cacf311722d68",
       "views/generic-semantic-zoom.view.yaml": "2212d81c8217db03c68fa7d59f44dc36e55052503d8d503b3386bded040b5714",
       "standard_blocks/pair-biased-attention.yaml": "9cd25cca99e46326432232d92a00d84d82b3e59d028aff4e47d73aa31bac9381",
       "standard_blocks/per-item-adaln-conditioning.yaml": "544bca1c4d238825bfe6e389fe0409e64b27726b54f737e86021a0dc078987f9",
       "standard_blocks/additive-conditioning.yaml": "5638ead7cbb2df6729e58393703d3e35b6e480b3ba42c657312dc6581bb032f7",
-      "architectures/diffusion-transformer.yaml": "5d7c09d2a97999cd526241976db9881acc2499d98abbe3624520562a53510aad",
+      "architectures/diffusion-transformer.yaml": "62b1a3f47c1b0891d242c49ca269a5f1e856672fbd080a07e7eebf718a8a8965",
       "views/dit-semantic-zoom.view.yaml": "ebca6fefd29f612792b8957db940cc3237132140722d52b76999194823dbc5eb",
       "standard_blocks/adaln-zero-conditioning.yaml": "33cd9afbe3b6867c4ce328c25d41a33210a5e387a195a93b19bc8696ee9e0b32",
       "standard_blocks/sinusoidal-timestep-embedding.yaml": "8cb2d467fe967e9a83da657ef85940406be89836de502d24cb7f557152763039",
-      "architectures/alphafold2.yaml": "23c41cc0dacde426b7981272401e113f6d713b1868844135d9a2dab5bb6f00bc",
+      "architectures/alphafold2.yaml": "a754a17dc83303c7dff50f6925771b01dc51d237dae382476b8bf87fbead77fe",
       "views/alphafold2-semantic-zoom.view.yaml": "6b317c6d224a7e3b8416839247c0c12d6b9e0cd34d859475f4529a939d51fe8e",
-      "architectures/genie2.yaml": "d5fbf1c1a91ef74dcef47388855e83b7e5571deb7d63a5eb2657177355c2f96a",
-      "views/genie2-semantic-zoom.view.yaml": "8b8fe70a2866cad0051913e38e4d2a5b0fef68b0aeb14127c4d27eb36d353158",
-      "standard_blocks/invariant-point-attention.yaml": "d185138554938b05509aeb1789cfd2a0275d561991bca4dfd22605ad40cc847b",
-      "architectures/genie3.yaml": "e239d3e5c38a40a9821f0579a4c54e61fe2c892fc1665a6ef383bd5b676cbb37",
-      "views/genie3-semantic-zoom.view.yaml": "bf6279698c1f377ec8e5fd1176d53bfd8825d6044fd442ab00af9cb515e1b4ce"
+      "architectures/genie2.yaml": "dc70626daca21c212b372e601a3a064ee1a1ea01e226b955b21e00e4c308bdb0",
+      "views/genie2-semantic-zoom.view.yaml": "e5ed5c07d6c8bc3215aa09b1e2ca261c2861a1dc19bdf8c3968d69c23e28b0d2",
+      "standard_blocks/invariant-point-attention.yaml": "a5c02021172a36135808767943f20309424cc956240bf956ed156d1c380bb7b5",
+      "architectures/genie3.yaml": "313447c6bd218b67ba3a5cdda312b9b229a56068d59033333ac5cbac757e051c",
+      "views/genie3-semantic-zoom.view.yaml": "df225112f3b15c3d3049eeb8e14d8cf1b162a22bd2af9ccac3418dd4f33cf06c"
     }
   },
   "items": [
@@ -66,7 +66,7 @@ export const comparisonIndex = {
       "title": "Genie 3 Reduced Attention vs Full Frame-Aware IPA",
       "status": "review",
       "question": "What does Genie 3's reduced latent attention retain, change, and remove relative to full frame-aware IPA?",
-      "summary": "Both paths use scalar attention, pair-logit bias, attention-weighted pair-value aggregation, and a residual-normalized single-state update. Full IPA additionally forms frame-aware point logits and point outputs; the reduced latent path omits that geometry and adds its latent-block transition and final mask.",
+      "summary": "Both attention cores use scalar attention, pair-logit bias, and attention-weighted pair-value aggregation. Full IPA additionally forms frame-aware point logits and point outputs; the reduced latent block omits that geometry and owns a residual-normalized transition wrapper that sits outside full IPA in the structure decoder.",
       "subjects": {
         "primary": {
           "label": "Reduced latent attention",
@@ -91,8 +91,8 @@ export const comparisonIndex = {
           "kind": "block_instance",
           "standardBlockId": "invariant_point_attention",
           "standardBlockRef": "standard_blocks/invariant-point-attention.yaml",
-          "variant": "full_ipa_residual_norm",
-          "variantLabel": "Full IPA + residual normalization",
+          "variant": "full_ipa",
+          "variantLabel": "Full frame-aware IPA",
           "conformance": "exact"
         }
       },
@@ -108,8 +108,7 @@ export const comparisonIndex = {
             "alignments.logit_mask_and_softmax",
             "alignments.scalar_value_aggregation",
             "alignments.pair_value_aggregation",
-            "alignments.output_fusion",
-            "alignments.residual_normalization"
+            "alignments.output_fusion"
           ]
         },
         {
@@ -122,9 +121,10 @@ export const comparisonIndex = {
         },
         {
           "id": "reduced_only",
-          "label": "Reduced wrapper only",
-          "description": "Latent-block wrapper behavior added after the reduced attention update.",
+          "label": "Reduced instance wrapper only",
+          "description": "Wrapper behavior owned by the reduced latent block but kept outside the full IPA module boundary.",
           "alignmentRefs": [
+            "alignments.residual_normalization",
             "alignments.latent_transition_and_output_mask"
           ]
         }
@@ -484,10 +484,10 @@ export const comparisonIndex = {
         },
         {
           "id": "residual_normalization",
-          "groupRef": "groups.shared",
+          "groupRef": "groups.reduced_only",
           "label": "Residual, dropout, and normalization",
-          "relationship": "analogous",
-          "explanation": "Each architecture wrapper adds the attention delta back to the incoming single state and normalizes the result.",
+          "relationship": "primary_only",
+          "explanation": "The reduced block instance owns its residual wrapper. Genie 3's structure decoder performs the analogous operation in StructureLayer after the full IPA module returns, so it is intentionally outside the full IPA standard-block instance.",
           "primaryFacts": [
             {
               "factRef": "block_instances.latent_reduced_pair_attention.steps.residual_norm",
@@ -501,16 +501,7 @@ export const comparisonIndex = {
             }
           ],
           "counterpartFacts": [
-            {
-              "factRef": "block_instances.structure_ipa.steps.residual_norm",
-              "kind": "step",
-              "label": "Residual, dropout, and norm",
-              "nodeIds": [
-                "residual_norm"
-              ],
-              "templateFactRef": "standard_blocks.invariant_point_attention.steps.residual_norm",
-              "blockInstanceRef": "block_instances.structure_ipa"
-            }
+
           ],
           "evidence": {
             "status": "confirmed_from_code",
@@ -691,8 +682,8 @@ export const comparisonIndex = {
           }
         },
         {
-          "id": "wrappers_are_not_identical",
-          "statement": "Both uses apply residual normalization, but only the reduced latent wrapper includes the selected transition-and-final-mask step.",
+          "id": "wrapper_scope_differs",
+          "statement": "The reduced latent block owns residual normalization and its transition-and-mask wrapper, whereas the structure decoder keeps its residual and transition operations outside the full IPA module boundary.",
           "alignmentRefs": [
             "alignments.residual_normalization",
             "alignments.latent_transition_and_output_mask"

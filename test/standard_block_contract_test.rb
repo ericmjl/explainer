@@ -15,7 +15,7 @@ class StandardBlockContractTest < Minitest::Test
     @blocks = { @block_path => @block }
   end
 
-  def test_current_v02_definitions_and_instances_validate
+  def test_current_v02_and_v03_definitions_and_instances_validate
     %w[
       standard_blocks/pair-biased-attention.yaml
       standard_blocks/invariant-point-attention.yaml
@@ -28,6 +28,77 @@ class StandardBlockContractTest < Minitest::Test
       blocks_by_path: @blocks,
       registered_blocks: [@block_path],
     )
+  end
+
+  def test_v03_instance_requires_every_explicit_shape_parameter_binding
+    block = load_yaml("standard_blocks/invariant-point-attention.yaml")
+    architecture = load_yaml("architectures/genie3.yaml")
+    instance = architecture.fetch("block_instances").find { |candidate| candidate.fetch("id") == "structure_ipa" }
+    instance.fetch("parameter_bindings").reject! do |binding|
+      binding.fetch("parameter_ref") == "parameters.p_v"
+    end
+
+    diagnostics = StandardBlockContract.instance_errors(
+      architecture,
+      blocks_by_path: {
+        "standard_blocks/pair-biased-attention.yaml" => load_yaml("standard_blocks/pair-biased-attention.yaml"),
+        "standard_blocks/invariant-point-attention.yaml" => block,
+      },
+      registered_blocks: %w[
+        standard_blocks/pair-biased-attention.yaml
+        standard_blocks/invariant-point-attention.yaml
+      ],
+    )
+
+    assert_code diagnostics, "missing_shape_parameter_binding"
+  end
+
+  def test_v03_rejects_unknown_parameters_and_shape_rule_axis_mismatches
+    block = load_yaml("standard_blocks/invariant-point-attention.yaml")
+    architecture = load_yaml("architectures/genie3.yaml")
+    instance = architecture.fetch("block_instances").find { |candidate| candidate.fetch("id") == "structure_ipa" }
+    instance.fetch("parameter_bindings") << {
+      "parameter_ref" => "parameters.not_declared",
+      "value" => 7,
+    }
+    attention = block.fetch("values").find { |value| value.fetch("id") == "attention_weights" }
+    attention.fetch("shape_contract").fetch("axes")[1]["id"] = "query_token"
+
+    diagnostics = StandardBlockContract.instance_errors(
+      architecture,
+      blocks_by_path: {
+        "standard_blocks/pair-biased-attention.yaml" => load_yaml("standard_blocks/pair-biased-attention.yaml"),
+        "standard_blocks/invariant-point-attention.yaml" => block,
+      },
+      registered_blocks: %w[
+        standard_blocks/pair-biased-attention.yaml
+        standard_blocks/invariant-point-attention.yaml
+      ],
+    )
+
+    assert_code diagnostics, "unknown_shape_parameter_binding"
+    assert_code diagnostics, "shape_rule_mismatch"
+  end
+
+  def test_v03_rejects_an_incompatible_concrete_port_shape
+    block = load_yaml("standard_blocks/invariant-point-attention.yaml")
+    architecture = load_yaml("architectures/genie3.yaml")
+    output = architecture.fetch("relations").find { |relation| relation.fetch("id") == "ipa_produces_delta" }
+    output["carries"] = ["representations.pair_features"]
+
+    diagnostics = StandardBlockContract.instance_errors(
+      architecture,
+      blocks_by_path: {
+        "standard_blocks/pair-biased-attention.yaml" => load_yaml("standard_blocks/pair-biased-attention.yaml"),
+        "standard_blocks/invariant-point-attention.yaml" => block,
+      },
+      registered_blocks: %w[
+        standard_blocks/pair-biased-attention.yaml
+        standard_blocks/invariant-point-attention.yaml
+      ],
+    )
+
+    assert_code diagnostics, "shape_boundary_mismatch"
   end
 
   def test_definition_rejects_dangling_steps_variants_and_visual_refs

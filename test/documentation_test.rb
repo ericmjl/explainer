@@ -58,8 +58,8 @@ class DocumentationTest < Minitest::Test
     architecture = File.read(File.join(ROOT, "protocol/architecture-language.md"))
     visualization = File.read(File.join(ROOT, "protocol/visualization-language.md"))
 
-    assert_includes architecture, "schema_version: architecture-v0.4"
-    refute_match(/schema_version: architecture-v0\.[123]/, architecture)
+    assert_includes architecture, "schema_version: architecture-v0.5"
+    refute_match(/schema_version: architecture-v0\.[1234]/, architecture)
     assert_includes visualization, "schema_version: visualization-v0.4"
     refute_match(/schema_version: visualization-v0\.[123]/, visualization)
     refute_includes visualization, "view_only: true"
@@ -69,6 +69,7 @@ class DocumentationTest < Minitest::Test
   def test_executable_source_schemas_are_valid_json
     %w[
       architecture-v0.4.schema.json
+      architecture-v0.5.schema.json
       architecture-edit-v0.1.schema.json
       architecture-edit-v0.2.schema.json
       visualization-v0.4.schema.json
@@ -76,6 +77,7 @@ class DocumentationTest < Minitest::Test
       architecture-comparison-v0.1.schema.json
       comparison-registry-v0.1.schema.json
       standard-block-v0.2.schema.json
+      standard-block-v0.3.schema.json
       pseudocode-v0.2.schema.json
     ].each do |name|
       schema = JsonSchemaSubset.load(File.join(ROOT, "schemas", name))

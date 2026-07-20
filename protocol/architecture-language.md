@@ -19,7 +19,7 @@ Related contracts:
 ## Top-Level Shape
 
 ```yaml
-schema_version: architecture-v0.4
+schema_version: architecture-v0.5
 id: stable_architecture_id
 name: Human Readable Name
 family: transformer
@@ -293,8 +293,17 @@ Optional module fields include `mechanisms`, `repeats`, `depth`, `attention`,
 
 `block_instances` binds one versioned standard-block template to a concrete
 module through canonical relations. The instance owns the selected `variant`,
-`use_scope`, `conformance`, method-specific difference summary, and evidence.
-It never copies relation endpoints or representation facts.
+`use_scope`, `conformance`, method-specific difference summary, optional
+`parameter_bindings`, and evidence. It never copies relation endpoints or
+representation facts.
+
+Architecture-v0.5 adds parameter bindings for `standard-block-v0.3` symbolic
+shape contracts. A binding names `parameters.<id>` and supplies either an
+explicit positive value or, preferably, a
+`reference_configuration.<field>` whose evidence is owned by the architecture.
+Boundary-solvable parameters such as batch/token axes and input channel widths
+remain absent from the instance; the compiler unifies them from the
+representations carried by `port_bindings`.
 
 Use `conformance: exact` only when every non-control relation incident on the
 subject is bound and the selected variant covers the full module boundary.
@@ -477,14 +486,14 @@ open_questions:
 The Ruby compiler stack validates and derives the browser manifest:
 
 ```text
-architecture-v0.4 YAML
+architecture-v0.5 YAML
   -> duplicate-key rejection
   -> executable JSON Schema validation
   -> evidence and typed-reference validation
   -> ownership validation
   -> decomposition coverage validation/compilation
   -> semantic board projection
-  -> architecture-manifest-v0.4 JavaScript
+  -> architecture-manifest-v0.5 JavaScript
 ```
 
 Generated convenience fields include value-site producer/consumer indexes,
@@ -498,4 +507,4 @@ The manifest builder first runs the full repository linter and supports
 
 Legacy architecture-v0.1/v0.2/v0.3 compatibility and migration behavior are
 documented in `protocol/architecture-projection-model.md`; new sources use
-architecture-v0.4.
+architecture-v0.5.

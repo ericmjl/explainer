@@ -62,8 +62,8 @@ module ArchitectureProjection
     private
 
     def validate_architecture!
-      unless %w[architecture-v0.3 architecture-v0.4].include?(@architecture["schema_version"])
-        fail_projection("unsupported_architecture", "expected architecture-v0.3 or architecture-v0.4")
+      unless %w[architecture-v0.3 architecture-v0.4 architecture-v0.5].include?(@architecture["schema_version"])
+        fail_projection("unsupported_architecture", "expected architecture-v0.3, architecture-v0.4, or architecture-v0.5")
       end
 
       @modules = index_objects(@architecture["modules"], "modules")

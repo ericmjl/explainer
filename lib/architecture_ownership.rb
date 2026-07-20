@@ -1,6 +1,6 @@
 # frozen_string_literal: true
 
-# Enforce architecture-v0.4's durable-source ownership rules. The semantic
+# Enforce the current architecture language's durable-source ownership rules. The semantic
 # projector validates the canonical graph; this validator prevents secondary
 # sections from re-authoring facts owned by that graph.
 module ArchitectureOwnership
@@ -16,7 +16,7 @@ module ArchitectureOwnership
   module_function
 
   def errors(architecture)
-    return [] unless architecture["schema_version"] == "architecture-v0.4"
+    return [] unless %w[architecture-v0.4 architecture-v0.5].include?(architecture["schema_version"])
 
     errors = []
     relations = index(architecture["relations"], "relations")

@@ -1,9 +1,18 @@
-schema_version: standard-block-v0.2
+schema_version: standard-block-v0.3
 id: invariant_point_attention
 name: Invariant Point Attention
 kind: attention
 status: review
-description: Combine scalar attention, pair bias, and frame-aware point-distance logits, then aggregate scalar and point values alongside attention-weighted pair values into a residual-normalized single-state update.
+description: Combine scalar attention, pair bias, and frame-aware point-distance logits, then aggregate scalar, point, and attention-weighted pair values into a projected IPA update.
+parameters:
+  - { id: b, notation: B, kind: batch, resolution: boundary, role: leading batch axes }
+  - { id: n, notation: N, kind: sequence, resolution: boundary, role: number of residue or atom tokens }
+  - { id: c_s, notation: C_s, kind: channel, resolution: boundary, role: single-state channel width }
+  - { id: c_z, notation: C_z, kind: channel, resolution: boundary, role: pair-context channel width }
+  - { id: c_hidden, notation: C_h, kind: channel, resolution: instance, role: per-head scalar query/key/value width }
+  - { id: h, notation: H, kind: heads, resolution: instance, role: number of attention heads }
+  - { id: p_q, notation: P_q, kind: points, resolution: instance, role: query and key points per head }
+  - { id: p_v, notation: P_v, kind: points, resolution: instance, role: value points per head }
 ports:
   - id: single_state
     label: single state
@@ -14,6 +23,12 @@ ports:
     relation_kinds: [data_flow, state_update]
     glyph: single
     notation: s
+    shape_contract:
+      kind: tensor
+      axes:
+        - { id: batch, dimension: b }
+        - { id: query_token, dimension: n }
+        - { id: single_channel, dimension: c_s }
   - id: pair_context
     label: pair context
     direction: conditioning
@@ -23,6 +38,13 @@ ports:
     relation_kinds: [conditioning, data_flow]
     glyph: pair
     notation: z
+    shape_contract:
+      kind: tensor
+      axes:
+        - { id: batch, dimension: b }
+        - { id: query_token, dimension: n }
+        - { id: key_token, dimension: n }
+        - { id: pair_channel, dimension: c_z }
   - id: frames
     label: current frames
     direction: conditioning
@@ -32,6 +54,11 @@ ports:
     relation_kinds: [conditioning, data_flow]
     glyph: frames
     notation: T
+    shape_contract:
+      kind: frames
+      axes:
+        - { id: batch, dimension: b }
+        - { id: query_token, dimension: n }
   - id: mask
     label: valid-item mask
     direction: conditioning
@@ -41,19 +68,30 @@ ports:
     relation_kinds: [conditioning, control]
     glyph: vector
     notation: m
-  - id: updated_single_state
-    label: IPA-updated single state
+    shape_contract:
+      kind: tensor
+      axes:
+        - { id: batch, dimension: b }
+        - { id: query_token, dimension: n }
+  - id: ipa_delta
+    label: IPA update
     direction: output
     kind: representation
     required: true
     cardinality: one
-    relation_kinds: [data_flow, state_update]
+    relation_kinds: [data_flow]
     glyph: single
-    notation: s_ipa
+    notation: delta_s
+    shape_contract:
+      kind: tensor
+      axes:
+        - { id: batch, dimension: b }
+        - { id: query_token, dimension: n }
+        - { id: single_channel, dimension: c_s }
 variants:
-  - id: full_ipa_residual_norm
-    label: Full IPA + residual normalization
-    description: Full scalar, point, and pair aggregation followed by the StructureLayer residual, dropout, and LayerNorm wrapper.
+  - id: full_ipa
+    label: Full frame-aware IPA
+    description: Full scalar, point-distance, pair-bias, scalar-value, point-value, and pair-value attention ending at the projected IPA update.
     step_refs:
       - steps.project_scalar_terms
       - steps.project_local_points
@@ -68,26 +106,166 @@ variants:
       - steps.return_points_to_local_frame
       - steps.aggregate_pair_values
       - steps.project_ipa_delta
-      - steps.residual_norm
-default_variant: full_ipa_residual_norm
+default_variant: full_ipa
 values:
-  - { id: scalar_terms, label: scalar Q/K/V, kind: representation, glyph: single, notation: qkv_s }
-  - { id: local_points, label: local Q/K/V points, kind: geometry, glyph: coordinates, notation: qkv_p }
-  - { id: global_points, label: global Q/K/V points, kind: geometry, glyph: coordinates, notation: T_qkv_p }
-  - { id: scalar_logits, label: scalar logits, kind: logit, glyph: pair, notation: l_s }
-  - { id: point_logits, label: point-distance logits, kind: logit, glyph: pair, notation: l_p }
-  - { id: pair_bias, label: pair bias, kind: logit, glyph: pair, notation: b_z }
-  - { id: combined_logits, label: combined masked logits, kind: logit, glyph: pair, notation: l }
-  - { id: attention_weights, label: attention weights, kind: weight, glyph: pair, notation: a }
-  - { id: scalar_context, label: scalar context, kind: representation, glyph: single, notation: o_s }
-  - { id: global_point_context, label: global point context, kind: geometry, glyph: coordinates, notation: o_p_global }
-  - { id: local_point_context, label: local points + norms, kind: geometry, glyph: coordinates, notation: o_p_local }
-  - { id: pair_value_context, label: pair-value context, kind: representation, glyph: single, notation: o_z }
-  - { id: ipa_delta, label: IPA delta, kind: representation, glyph: single, notation: delta_s }
+  - id: scalar_terms
+    label: scalar Q/K/V
+    kind: representation
+    glyph: single
+    notation: qkv_s
+    shape_contract:
+      kind: tuple
+      fields:
+        - id: q
+          shape:
+            kind: tensor
+            axes:
+              - { id: batch, dimension: b }
+              - { id: query_token, dimension: n }
+              - { id: head, dimension: h }
+              - { id: hidden_channel, dimension: c_hidden }
+        - id: k
+          shape:
+            kind: tensor
+            axes:
+              - { id: batch, dimension: b }
+              - { id: key_token, dimension: n }
+              - { id: head, dimension: h }
+              - { id: hidden_channel, dimension: c_hidden }
+        - id: v
+          shape:
+            kind: tensor
+            axes:
+              - { id: batch, dimension: b }
+              - { id: key_token, dimension: n }
+              - { id: head, dimension: h }
+              - { id: value_channel, dimension: c_hidden }
+  - id: local_points
+    label: local Q/K/V points
+    kind: geometry
+    glyph: coordinates
+    notation: qkv_p
+    shape_contract: &point_tuple_shape
+      kind: tuple
+      fields:
+        - id: q
+          shape:
+            kind: tensor
+            axes:
+              - { id: batch, dimension: b }
+              - { id: query_token, dimension: n }
+              - { id: head, dimension: h }
+              - { id: query_point, dimension: p_q }
+              - { id: coordinate, dimension: 3 }
+        - id: k
+          shape:
+            kind: tensor
+            axes:
+              - { id: batch, dimension: b }
+              - { id: key_token, dimension: n }
+              - { id: head, dimension: h }
+              - { id: query_point, dimension: p_q }
+              - { id: coordinate, dimension: 3 }
+        - id: v
+          shape:
+            kind: tensor
+            axes:
+              - { id: batch, dimension: b }
+              - { id: key_token, dimension: n }
+              - { id: head, dimension: h }
+              - { id: value_point, dimension: p_v }
+              - { id: coordinate, dimension: 3 }
+  - id: global_points
+    label: global Q/K/V points
+    kind: geometry
+    glyph: coordinates
+    notation: T_qkv_p
+    shape_contract: *point_tuple_shape
+  - &attention_tensor
+    id: scalar_logits
+    label: scalar logits
+    kind: logit
+    glyph: pair
+    notation: l_s
+    shape_contract:
+      kind: tensor
+      axes:
+        - { id: batch, dimension: b }
+        - { id: head, dimension: h }
+        - { id: query_token, dimension: n }
+        - { id: key_token, dimension: n }
+  - <<: *attention_tensor
+    id: point_logits
+    label: point-distance logits
+    notation: l_p
+  - <<: *attention_tensor
+    id: pair_bias
+    label: pair bias
+    notation: b_z
+  - <<: *attention_tensor
+    id: combined_logits
+    label: combined masked logits
+    notation: l
+  - <<: *attention_tensor
+    id: attention_weights
+    label: attention weights
+    kind: weight
+    notation: a
+  - id: scalar_context
+    label: scalar context
+    kind: representation
+    glyph: single
+    notation: o_s
+    shape_contract:
+      kind: tensor
+      axes:
+        - { id: batch, dimension: b }
+        - { id: query_token, dimension: n }
+        - { id: head, dimension: h }
+        - { id: value_channel, dimension: c_hidden }
+  - id: global_point_context
+    label: global point context
+    kind: geometry
+    glyph: coordinates
+    notation: o_p_global
+    shape_contract:
+      kind: tensor
+      axes:
+        - { id: batch, dimension: b }
+        - { id: query_token, dimension: n }
+        - { id: head, dimension: h }
+        - { id: value_point, dimension: p_v }
+        - { id: coordinate, dimension: 3 }
+  - id: local_point_context
+    label: local points + norms
+    kind: geometry
+    glyph: coordinates
+    notation: o_p_local
+    shape_contract:
+      kind: tensor
+      axes:
+        - { id: batch, dimension: b }
+        - { id: query_token, dimension: n }
+        - { id: head, dimension: h }
+        - { id: value_point, dimension: p_v }
+        - { id: point_feature, dimension: 4 }
+  - id: pair_value_context
+    label: pair-value context
+    kind: representation
+    glyph: single
+    notation: o_z
+    shape_contract:
+      kind: tensor
+      axes:
+        - { id: batch, dimension: b }
+        - { id: query_token, dimension: n }
+        - { id: head, dimension: h }
+        - { id: pair_channel, dimension: c_z }
 steps:
   - id: project_scalar_terms
     label: Project scalar Q/K/V
     operation: scalar_qkv_projection
+    shape_rule: scalar_qkv_projection
     inputs: [ports.single_state]
     outputs: [values.scalar_terms]
     code: "q_s, k_s, v_s = project_scalar_qkv(single_state)"
@@ -99,6 +277,7 @@ steps:
   - id: project_local_points
     label: Project local Q/K/V points
     operation: point_qkv_projection
+    shape_rule: point_qkv_projection
     inputs: [ports.single_state]
     outputs: [values.local_points]
     code: "q_p_local, k_p_local, v_p_local = project_point_qkv(single_state)"
@@ -110,6 +289,7 @@ steps:
   - id: transform_points_to_global
     label: Express points in global frame
     operation: rigid_apply
+    shape_rule: rigid_apply
     inputs: [values.local_points, ports.frames]
     outputs: [values.global_points]
     code: "q_p_global, k_p_global, v_p_global = frames.apply(q_p_local, k_p_local, v_p_local)"
@@ -124,6 +304,7 @@ steps:
   - id: scalar_attention_logits
     label: Form scalar logits
     operation: attention_logits
+    shape_rule: attention_logits
     inputs: [values.scalar_terms]
     outputs: [values.scalar_logits]
     code: "scalar_logits = dot(q_s, k_s) * scalar_scale"
@@ -134,6 +315,7 @@ steps:
   - id: point_distance_logits
     label: Form point-distance logits
     operation: invariant_point_distance
+    shape_rule: point_distance_logits
     inputs: [values.global_points]
     outputs: [values.point_logits]
     code: "point_logits = -0.5 * point_weight * squared_distance(q_p_global, k_p_global)"
@@ -144,6 +326,7 @@ steps:
   - id: project_pair_bias
     label: Project pair bias
     operation: pair_bias_projection
+    shape_rule: pair_bias_projection
     inputs: [ports.pair_context]
     outputs: [values.pair_bias]
     code: "pair_bias = linear_b(pair_context)"
@@ -153,6 +336,7 @@ steps:
   - id: combine_and_mask_logits
     label: Combine logits and apply mask
     operation: ipa_logit_composition
+    shape_rule: logit_composition
     inputs: [values.scalar_logits, values.point_logits, values.pair_bias, ports.mask]
     outputs: [values.combined_logits]
     code: "combined_logits = apply_mask(scalar_logits + point_logits + pair_bias, mask)"
@@ -165,6 +349,7 @@ steps:
   - id: softmax_attention
     label: Normalize over keys
     operation: softmax
+    shape_rule: softmax
     inputs: [values.combined_logits]
     outputs: [values.attention_weights]
     code: "attention = softmax(combined_logits, dim=keys)"
@@ -174,6 +359,7 @@ steps:
   - id: aggregate_scalar_values
     label: Aggregate scalar values
     operation: weighted_sum
+    shape_rule: weighted_sum
     inputs: [values.attention_weights, values.scalar_terms]
     outputs: [values.scalar_context]
     code: "scalar_context = weighted_sum(attention, v_s)"
@@ -184,6 +370,7 @@ steps:
   - id: aggregate_global_points
     label: Aggregate value points
     operation: weighted_point_sum
+    shape_rule: weighted_point_sum
     inputs: [values.attention_weights, values.global_points]
     outputs: [values.global_point_context]
     code: "global_point_context = weighted_sum(attention, v_p_global)"
@@ -194,6 +381,7 @@ steps:
   - id: return_points_to_local_frame
     label: Return points to query frame
     operation: rigid_inverse_apply
+    shape_rule: rigid_inverse_apply
     inputs: [values.global_point_context, ports.frames]
     outputs: [values.local_point_context]
     code: "local_point_context = concat(frames.invert_apply(global_point_context), point_norms(global_point_context))"
@@ -204,6 +392,7 @@ steps:
   - id: aggregate_pair_values
     label: Attention-weighted pair-value aggregation
     operation: pair_value_aggregation
+    shape_rule: pair_value_aggregation
     inputs: [values.attention_weights, ports.pair_context]
     outputs: [values.pair_value_context]
     code: "pair_value_context = weighted_sum(attention, pair_context)"
@@ -214,27 +403,18 @@ steps:
   - id: project_ipa_delta
     label: Concatenate + project
     operation: output_projection
+    shape_rule: output_projection
     inputs: [values.scalar_context, values.local_point_context, values.pair_value_context]
-    outputs: [values.ipa_delta]
+    outputs: [ports.ipa_delta]
     code: "ipa_delta = output_projection(concat(scalar_context, local_point_context, pair_value_context))"
     code_bindings:
-      - { lexeme: ipa_delta, ref: values.ipa_delta, access: write }
+      - { lexeme: ipa_delta, ref: ports.ipa_delta, access: write }
       - { lexeme: scalar_context, ref: values.scalar_context, access: read }
       - { lexeme: local_point_context, ref: values.local_point_context, access: read }
       - { lexeme: pair_value_context, ref: values.pair_value_context, access: read }
-  - id: residual_norm
-    label: Residual, dropout, and norm
-    operation: residual_normalization
-    inputs: [ports.single_state, values.ipa_delta]
-    outputs: [ports.updated_single_state]
-    code: "updated_single_state = layer_norm(single_state + dropout(ipa_delta))"
-    code_bindings:
-      - { lexeme: updated_single_state, ref: ports.updated_single_state, access: write }
-      - { lexeme: single_state, ref: ports.single_state, access: read }
-      - { lexeme: ipa_delta, ref: values.ipa_delta, access: read }
 visual_template:
   grid:
-    columns: 14
+    columns: 12
     rows: 9
     column_sizing: content
     row_sizing: content
@@ -245,7 +425,7 @@ visual_template:
     - { id: pair_context, ref: ports.pair_context, col: 1, row: 3, prominence: secondary, treatment: compact }
     - { id: frames, ref: ports.frames, col: 1, row: 4, prominence: secondary, treatment: compact }
     - { id: mask, ref: ports.mask, col: 4, row: 4, prominence: context, treatment: chip }
-    - { id: updated_single_state, ref: ports.updated_single_state, col: 14, row: 8, prominence: secondary, treatment: compact }
+    - { id: ipa_delta, ref: ports.ipa_delta, col: 12, row: 8, prominence: secondary, treatment: compact }
     - { id: project_scalar_terms, ref: steps.project_scalar_terms, col: 2, row: 1, prominence: primary, treatment: compact }
     - { id: scalar_terms, ref: values.scalar_terms, col: 3, row: 1, prominence: context, treatment: compact }
     - { id: scalar_attention_logits, ref: steps.scalar_attention_logits, col: 4, row: 1, prominence: primary, treatment: compact }
@@ -271,8 +451,6 @@ visual_template:
     - { id: return_points_to_local_frame, ref: steps.return_points_to_local_frame, col: 9, row: 9, prominence: primary, treatment: compact }
     - { id: local_point_context, ref: values.local_point_context, col: 10, row: 9, prominence: context, treatment: compact }
     - { id: project_ipa_delta, ref: steps.project_ipa_delta, col: 11, row: 8, prominence: primary, treatment: compact }
-    - { id: ipa_delta, ref: values.ipa_delta, col: 12, row: 8, prominence: context, treatment: compact }
-    - { id: residual_norm, ref: steps.residual_norm, col: 13, row: 8, prominence: primary, treatment: compact }
   segments:
     - id: attention_weights
       label: Compute attention weights
@@ -299,8 +477,8 @@ visual_template:
         - steps.softmax_attention
         - values.attention_weights
     - id: value_extraction
-      label: Extract values and update state
-      description: Reuse the shared attention weights for scalar, point, and pair values, return points to the local frame, align the three final contexts, concatenate and project them, and apply the residual wrapper.
+      label: Extract and fuse values
+      description: Reuse the shared attention weights for scalar, point, and pair values, return points to the local frame, align the three final contexts, then concatenate and project them into the IPA update.
       node_refs:
         - steps.aggregate_scalar_values
         - values.scalar_context
@@ -311,12 +489,10 @@ visual_template:
         - steps.aggregate_pair_values
         - values.pair_value_context
         - steps.project_ipa_delta
-        - values.ipa_delta
-        - steps.residual_norm
-        - ports.updated_single_state
+        - ports.ipa_delta
 evidence_policy:
-  generic_definition: Full IPA anatomy is reusable vocabulary; each architecture instance must separately prove its core and wrapper variant.
+  generic_definition: Full IPA anatomy is reusable vocabulary ending at the projected attention update; residual addition, dropout, and normalization belong to the surrounding architecture layer.
   usage_requires:
     - Evidence for scalar, point-distance, and pair logit terms.
     - Evidence for scalar and point aggregation plus attention-weighted pair-value aggregation.
-    - Evidence for the residual/dropout/normalization wrapper when full_ipa_residual_norm is selected.
+    - Evidence that the output projection returns the IPA update before any architecture-owned residual wrapper.

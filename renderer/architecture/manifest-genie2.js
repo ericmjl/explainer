@@ -1,17 +1,17 @@
 export const manifest = {
-  "schemaVersion": "architecture-manifest-v0.4",
+  "schemaVersion": "architecture-manifest-v0.5",
   "build": {
-    "generator": "architecture-manifest-builder-v0.4.6",
+    "generator": "architecture-manifest-builder-v0.5.0",
     "inputDigests": {
       "references/bibliography.yaml": "abe9226586bfb64261c81b7756b7275c48a3a172a9a18b5f91f7acfd3145e374",
-      "architectures/genie2.yaml": "d5fbf1c1a91ef74dcef47388855e83b7e5571deb7d63a5eb2657177355c2f96a",
-      "views/genie2-semantic-zoom.view.yaml": "8b8fe70a2866cad0051913e38e4d2a5b0fef68b0aeb14127c4d27eb36d353158",
+      "architectures/genie2.yaml": "dc70626daca21c212b372e601a3a064ee1a1ea01e226b955b21e00e4c308bdb0",
+      "views/genie2-semantic-zoom.view.yaml": "e5ed5c07d6c8bc3215aa09b1e2ca261c2861a1dc19bdf8c3968d69c23e28b0d2",
       "pseudocode/genie2.yaml": "b78ca953f8ebed98a688501d7485e3b2e79fb50b2e9434d876012c1ee4289bd0",
-      "standard_blocks/invariant-point-attention.yaml": "d185138554938b05509aeb1789cfd2a0275d561991bca4dfd22605ad40cc847b"
+      "standard_blocks/invariant-point-attention.yaml": "a5c02021172a36135808767943f20309424cc956240bf956ed156d1c380bb7b5"
     }
   },
   "architecture": {
-    "schemaVersion": "architecture-v0.4",
+    "schemaVersion": "architecture-v0.5",
     "id": "genie2",
     "name": "Genie 2 Protein Backbone Diffusion",
     "family": "protein_structure_diffusion",
@@ -30,7 +30,10 @@ export const manifest = {
       "triangular_attention": false,
       "structure_layers": 8,
       "structure_recycles": 1,
+      "ipa_hidden_feature_dimension": 16,
       "ipa_heads": 12,
+      "ipa_query_key_points": 4,
+      "ipa_value_points": 8,
       "evidence": {
         "status": "confirmed_from_code",
         "refs": [
@@ -187,9 +190,10 @@ export const manifest = {
         "modules.equivariant_structure_decoder": {
           "status": "complete",
           "depth": 3,
-          "immediateModuleCount": 3,
+          "immediateModuleCount": 4,
           "immediateModuleRefs": [
             "modules.invariant_point_attention",
+            "modules.ipa_residual_norm",
             "modules.structure_transition",
             "modules.backbone_update"
           ]
@@ -260,6 +264,14 @@ export const manifest = {
 
           ]
         },
+        "modules.ipa_residual_norm": {
+          "status": "leaf",
+          "depth": 4,
+          "immediateModuleCount": 0,
+          "immediateModuleRefs": [
+
+          ]
+        },
         "modules.structure_transition": {
           "status": "leaf",
           "depth": 4,
@@ -278,11 +290,11 @@ export const manifest = {
         }
       },
       "summary": {
-        "scopeCount": 22,
+        "scopeCount": 23,
         "expandedScopeCount": 6,
         "completeExpandedScopeCount": 6,
         "partialScopeCount": 0,
-        "leafFrontierCount": 16,
+        "leafFrontierCount": 17,
         "opaqueFrontierCount": 0,
         "partialFrontierCount": 0,
         "maximumAuthoredDepth": 5
@@ -734,7 +746,7 @@ export const manifest = {
         "mechanisms": [
           "invariant_point_attention"
         ],
-        "role": "update the single state using single features, pair features, and query/key/value points expressed in current residue frames",
+        "role": "produce an additive single-state update using single features, pair features, and query/key/value points expressed in current residue frames",
         "scale": "residue",
         "attention": {
           "pattern": "full",
@@ -759,6 +771,32 @@ export const manifest = {
         }
       },
       {
+        "id": "ipa_residual_norm",
+        "parent_ref": "modules.equivariant_structure_decoder",
+        "decomposition": {
+          "status": "leaf"
+        },
+        "label": "IPA Residual + Norm",
+        "kind": "normalization",
+        "mechanisms": [
+          "residual_connection",
+          "dropout",
+          "layer_normalization"
+        ],
+        "role": "add the IPA update to the incoming single state, then apply dropout and LayerNorm",
+        "scale": "residue",
+        "evidence": {
+          "status": "confirmed_from_code",
+          "refs": [
+            {
+              "source_ref": "genie2_structure_code",
+              "role": "implementation_evidence",
+              "locator": "StructureNet and StructureLayer"
+            }
+          ]
+        }
+      },
+      {
         "id": "structure_transition",
         "parent_ref": "modules.equivariant_structure_decoder",
         "decomposition": {
@@ -766,7 +804,7 @@ export const manifest = {
         },
         "label": "Structure Transition",
         "kind": "feed_forward",
-        "role": "normalize and transform the IPA-updated per-residue single state",
+        "role": "apply a three-layer per-residue MLP residually, then apply dropout and LayerNorm",
         "scale": "residue",
         "evidence": {
           "status": "confirmed_from_code",
@@ -811,9 +849,9 @@ export const manifest = {
         "standardBlockRef": "standard_blocks/invariant-point-attention.yaml",
         "standardBlockName": "Invariant Point Attention",
         "subjectRef": "modules.invariant_point_attention",
-        "variant": "full_ipa_residual_norm",
-        "variantLabel": "Full IPA + residual normalization",
-        "variantDescription": "Full scalar, point, and pair aggregation followed by the StructureLayer residual, dropout, and LayerNorm wrapper.",
+        "variant": "full_ipa",
+        "variantLabel": "Full frame-aware IPA",
+        "variantDescription": "Full scalar, point-distance, pair-bias, scalar-value, point-value, and pair-value attention ending at the projected IPA update.",
         "useScope": "whole_module",
         "conformance": "exact",
         "evidence": {
@@ -824,14 +862,56 @@ export const manifest = {
               "role": "implementation_evidence",
               "locator": "InvariantPointAttention.forward",
               "note": "The IPA module implements scalar, point, pair-bias, and pair-value attention terms."
-            },
-            {
-              "source_ref": "genie2_structure_code",
-              "role": "wrapper_evidence",
-              "locator": "StructureLayer.forward",
-              "note": "The structure layer applies the residual, dropout, and LayerNorm wrapper represented by this variant."
             }
           ]
+        },
+        "shapeParameters": {
+          "c_hidden": 16,
+          "h": 12,
+          "p_q": 4,
+          "p_v": 8,
+          "b": "B",
+          "n": "N",
+          "c_s": 384,
+          "c_z": 128
+        },
+        "shapeParameterSources": {
+          "c_hidden": {
+            "kind": "configuration",
+            "ref": "reference_configuration.ipa_hidden_feature_dimension"
+          },
+          "h": {
+            "kind": "configuration",
+            "ref": "reference_configuration.ipa_heads"
+          },
+          "p_q": {
+            "kind": "configuration",
+            "ref": "reference_configuration.ipa_query_key_points"
+          },
+          "p_v": {
+            "kind": "configuration",
+            "ref": "reference_configuration.ipa_value_points"
+          },
+          "b": {
+            "kind": "boundary",
+            "portRef": "ports.single_state",
+            "representationRef": "representations.single_features"
+          },
+          "n": {
+            "kind": "boundary",
+            "portRef": "ports.single_state",
+            "representationRef": "representations.single_features"
+          },
+          "c_s": {
+            "kind": "boundary",
+            "portRef": "ports.single_state",
+            "representationRef": "representations.single_features"
+          },
+          "c_z": {
+            "kind": "boundary",
+            "portRef": "ports.pair_context",
+            "representationRef": "representations.pair_features"
+          }
         },
         "portBindings": [
           {
@@ -908,17 +988,17 @@ export const manifest = {
             ]
           },
           {
-            "portRef": "ports.updated_single_state",
+            "portRef": "ports.ipa_delta",
             "relationRefs": [
-              "relations.ipa_produces_updated_single_state"
+              "relations.ipa_produces_delta"
             ],
             "relations": [
               {
-                "relationRef": "relations.ipa_produces_updated_single_state",
+                "relationRef": "relations.ipa_produces_delta",
                 "from": "modules.invariant_point_attention",
-                "to": "value_sites.single_after_ipa",
-                "kind": "state_update",
-                "operation": "residual_attention_update",
+                "to": "value_sites.ipa_delta",
+                "kind": "data_flow",
+                "operation": "project_ipa_delta",
                 "carries": [
                   "representations.single_features"
                 ]
@@ -1690,15 +1770,15 @@ export const manifest = {
               "values.pair_value_context"
             ],
             "outputs": [
-              "values.ipa_delta"
+              "ports.ipa_delta"
             ],
             "codeBindings": [
               {
                 "lexeme": "ipa_delta",
                 "access": "write",
-                "localRef": "values.ipa_delta",
-                "templateFactRef": "standard_blocks.invariant_point_attention.values.ipa_delta",
-                "instanceFactRef": "block_instances.structure_ipa.values.ipa_delta",
+                "localRef": "ports.ipa_delta",
+                "templateFactRef": "standard_blocks.invariant_point_attention.ports.ipa_delta",
+                "instanceFactRef": "block_instances.structure_ipa.ports.ipa_delta",
                 "occurrences": [
                   {
                     "start": 0,
@@ -1742,62 +1822,6 @@ export const manifest = {
                   {
                     "start": 74,
                     "end": 92
-                  }
-                ]
-              }
-            ]
-          },
-          {
-            "id": "residual_norm",
-            "templateFactRef": "standard_blocks.invariant_point_attention.steps.residual_norm",
-            "instanceFactRef": "block_instances.structure_ipa.steps.residual_norm",
-            "label": "Residual, dropout, and norm",
-            "operation": "residual_normalization",
-            "code": "updated_single_state = layer_norm(single_state + dropout(ipa_delta))",
-            "inputs": [
-              "ports.single_state",
-              "values.ipa_delta"
-            ],
-            "outputs": [
-              "ports.updated_single_state"
-            ],
-            "codeBindings": [
-              {
-                "lexeme": "updated_single_state",
-                "access": "write",
-                "localRef": "ports.updated_single_state",
-                "templateFactRef": "standard_blocks.invariant_point_attention.ports.updated_single_state",
-                "instanceFactRef": "block_instances.structure_ipa.ports.updated_single_state",
-                "occurrences": [
-                  {
-                    "start": 0,
-                    "end": 20
-                  }
-                ]
-              },
-              {
-                "lexeme": "single_state",
-                "access": "read",
-                "localRef": "ports.single_state",
-                "templateFactRef": "standard_blocks.invariant_point_attention.ports.single_state",
-                "instanceFactRef": "block_instances.structure_ipa.ports.single_state",
-                "occurrences": [
-                  {
-                    "start": 34,
-                    "end": 46
-                  }
-                ]
-              },
-              {
-                "lexeme": "ipa_delta",
-                "access": "read",
-                "localRef": "values.ipa_delta",
-                "templateFactRef": "standard_blocks.invariant_point_attention.values.ipa_delta",
-                "instanceFactRef": "block_instances.structure_ipa.values.ipa_delta",
-                "occurrences": [
-                  {
-                    "start": 57,
-                    "end": 66
                   }
                 ]
               }
@@ -2223,6 +2247,22 @@ export const manifest = {
         }
       },
       {
+        "id": "ipa_delta",
+        "representation_ref": "representations.single_features",
+        "scope_ref": "modules.equivariant_structure_decoder",
+        "role": "invariant_point_attention_update",
+        "evidence": {
+          "status": "confirmed_from_code",
+          "refs": [
+            {
+              "source_ref": "genie2_ipa_code",
+              "role": "implementation_evidence",
+              "locator": "InvariantPointAttention.forward"
+            }
+          ]
+        }
+      },
+      {
         "id": "single_after_ipa",
         "representation_ref": "representations.single_features",
         "scope_ref": "modules.equivariant_structure_decoder",
@@ -2459,14 +2499,16 @@ export const manifest = {
         ],
         "outgoingRelationRefs": [
           "relations.single_features_feed_pair_feature_net",
-          "relations.single_features_enter_ipa"
+          "relations.single_features_enter_ipa",
+          "relations.single_features_skip_to_ipa_residual_norm"
         ],
         "producerRefs": [
           "modules.single_feature_net"
         ],
         "consumerRefs": [
           "modules.pair_feature_net",
-          "modules.invariant_point_attention"
+          "modules.invariant_point_attention",
+          "modules.ipa_residual_norm"
         ]
       },
       "initial_pair_features": {
@@ -2525,15 +2567,29 @@ export const manifest = {
           "modules.invariant_point_attention"
         ]
       },
+      "ipa_delta": {
+        "incomingRelationRefs": [
+          "relations.ipa_produces_delta"
+        ],
+        "outgoingRelationRefs": [
+          "relations.ipa_delta_enters_residual_norm"
+        ],
+        "producerRefs": [
+          "modules.invariant_point_attention"
+        ],
+        "consumerRefs": [
+          "modules.ipa_residual_norm"
+        ]
+      },
       "single_after_ipa": {
         "incomingRelationRefs": [
-          "relations.ipa_produces_updated_single_state"
+          "relations.ipa_residual_norm_produces_updated_single_state"
         ],
         "outgoingRelationRefs": [
           "relations.ipa_state_enters_structure_transition"
         ],
         "producerRefs": [
-          "modules.invariant_point_attention"
+          "modules.ipa_residual_norm"
         ],
         "consumerRefs": [
           "modules.structure_transition"
@@ -2663,6 +2719,7 @@ export const manifest = {
           "repeats": 8,
           "reruns": [
             "modules.invariant_point_attention",
+            "modules.ipa_residual_norm",
             "modules.structure_transition",
             "modules.backbone_update"
           ],
@@ -3727,14 +3784,74 @@ export const manifest = {
         }
       },
       {
-        "id": "ipa_produces_updated_single_state",
+        "id": "ipa_produces_delta",
         "from": "modules.invariant_point_attention",
+        "to": "value_sites.ipa_delta",
+        "kind": "data_flow",
+        "carries": [
+          "representations.single_features"
+        ],
+        "operation": "project_ipa_delta",
+        "evidence": {
+          "status": "confirmed_from_code",
+          "refs": [
+            {
+              "source_ref": "genie2_structure_code",
+              "role": "implementation_evidence",
+              "locator": "StructureLayer.forward"
+            }
+          ]
+        }
+      },
+      {
+        "id": "ipa_delta_enters_residual_norm",
+        "from": "value_sites.ipa_delta",
+        "to": "modules.ipa_residual_norm",
+        "kind": "data_flow",
+        "carries": [
+          "representations.single_features"
+        ],
+        "operation": "supply_ipa_delta",
+        "evidence": {
+          "status": "confirmed_from_code",
+          "refs": [
+            {
+              "source_ref": "genie2_structure_code",
+              "role": "implementation_evidence",
+              "locator": "StructureLayer.forward"
+            }
+          ]
+        }
+      },
+      {
+        "id": "single_features_skip_to_ipa_residual_norm",
+        "from": "value_sites.single_features",
+        "to": "modules.ipa_residual_norm",
+        "kind": "skip",
+        "carries": [
+          "representations.single_features"
+        ],
+        "operation": "preserve_residual_state",
+        "evidence": {
+          "status": "confirmed_from_code",
+          "refs": [
+            {
+              "source_ref": "genie2_structure_code",
+              "role": "implementation_evidence",
+              "locator": "StructureLayer.forward"
+            }
+          ]
+        }
+      },
+      {
+        "id": "ipa_residual_norm_produces_updated_single_state",
+        "from": "modules.ipa_residual_norm",
         "to": "value_sites.single_after_ipa",
         "kind": "state_update",
         "carries": [
           "representations.single_features"
         ],
-        "operation": "residual_attention_update",
+        "operation": "residual_dropout_layer_norm",
         "evidence": {
           "status": "confirmed_from_code",
           "refs": [
@@ -4772,10 +4889,10 @@ export const manifest = {
   "standardBlocks": {
     "invariant_point_attention": {
       "id": "invariant_point_attention",
-      "schemaVersion": "standard-block-v0.2",
+      "schemaVersion": "standard-block-v0.3",
       "name": "Invariant Point Attention",
       "sourceYaml": "../../standard_blocks/invariant-point-attention.yaml",
-      "description": "Combine scalar attention, pair bias, and frame-aware point-distance logits, then aggregate scalar and point values alongside attention-weighted pair values into a residual-normalized single-state update.",
+      "description": "Combine scalar attention, pair bias, and frame-aware point-distance logits, then aggregate scalar, point, and attention-weighted pair values into a projected IPA update.",
       "math": [
         {
           "id": "project_scalar_terms",
@@ -4841,15 +4958,68 @@ export const manifest = {
           "id": "project_ipa_delta",
           "text": "ipa_delta = output_projection(concat(scalar_context, local_point_context, pair_value_context))",
           "operation": "output_projection"
-        },
-        {
-          "id": "residual_norm",
-          "text": "updated_single_state = layer_norm(single_state + dropout(ipa_delta))",
-          "operation": "residual_normalization"
         }
       ],
       "kind": "attention",
       "status": "review",
+      "parameters": [
+        {
+          "id": "b",
+          "notation": "B",
+          "kind": "batch",
+          "resolution": "boundary",
+          "role": "leading batch axes"
+        },
+        {
+          "id": "n",
+          "notation": "N",
+          "kind": "sequence",
+          "resolution": "boundary",
+          "role": "number of residue or atom tokens"
+        },
+        {
+          "id": "c_s",
+          "notation": "C_s",
+          "kind": "channel",
+          "resolution": "boundary",
+          "role": "single-state channel width"
+        },
+        {
+          "id": "c_z",
+          "notation": "C_z",
+          "kind": "channel",
+          "resolution": "boundary",
+          "role": "pair-context channel width"
+        },
+        {
+          "id": "c_hidden",
+          "notation": "C_h",
+          "kind": "channel",
+          "resolution": "instance",
+          "role": "per-head scalar query/key/value width"
+        },
+        {
+          "id": "h",
+          "notation": "H",
+          "kind": "heads",
+          "resolution": "instance",
+          "role": "number of attention heads"
+        },
+        {
+          "id": "p_q",
+          "notation": "P_q",
+          "kind": "points",
+          "resolution": "instance",
+          "role": "query and key points per head"
+        },
+        {
+          "id": "p_v",
+          "notation": "P_v",
+          "kind": "points",
+          "resolution": "instance",
+          "role": "value points per head"
+        }
+      ],
       "ports": [
         {
           "id": "single_state",
@@ -4863,7 +5033,24 @@ export const manifest = {
             "state_update"
           ],
           "glyph": "single",
-          "notation": "s"
+          "notation": "s",
+          "shape_contract": {
+            "kind": "tensor",
+            "axes": [
+              {
+                "id": "batch",
+                "dimension": "b"
+              },
+              {
+                "id": "query_token",
+                "dimension": "n"
+              },
+              {
+                "id": "single_channel",
+                "dimension": "c_s"
+              }
+            ]
+          }
         },
         {
           "id": "pair_context",
@@ -4877,7 +5064,28 @@ export const manifest = {
             "data_flow"
           ],
           "glyph": "pair",
-          "notation": "z"
+          "notation": "z",
+          "shape_contract": {
+            "kind": "tensor",
+            "axes": [
+              {
+                "id": "batch",
+                "dimension": "b"
+              },
+              {
+                "id": "query_token",
+                "dimension": "n"
+              },
+              {
+                "id": "key_token",
+                "dimension": "n"
+              },
+              {
+                "id": "pair_channel",
+                "dimension": "c_z"
+              }
+            ]
+          }
         },
         {
           "id": "frames",
@@ -4891,7 +5099,20 @@ export const manifest = {
             "data_flow"
           ],
           "glyph": "frames",
-          "notation": "T"
+          "notation": "T",
+          "shape_contract": {
+            "kind": "frames",
+            "axes": [
+              {
+                "id": "batch",
+                "dimension": "b"
+              },
+              {
+                "id": "query_token",
+                "dimension": "n"
+              }
+            ]
+          }
         },
         {
           "id": "mask",
@@ -4905,28 +5126,57 @@ export const manifest = {
             "control"
           ],
           "glyph": "vector",
-          "notation": "m"
+          "notation": "m",
+          "shape_contract": {
+            "kind": "tensor",
+            "axes": [
+              {
+                "id": "batch",
+                "dimension": "b"
+              },
+              {
+                "id": "query_token",
+                "dimension": "n"
+              }
+            ]
+          }
         },
         {
-          "id": "updated_single_state",
-          "label": "IPA-updated single state",
+          "id": "ipa_delta",
+          "label": "IPA update",
           "direction": "output",
           "kind": "representation",
           "required": true,
           "cardinality": "one",
           "relation_kinds": [
-            "data_flow",
-            "state_update"
+            "data_flow"
           ],
           "glyph": "single",
-          "notation": "s_ipa"
+          "notation": "delta_s",
+          "shape_contract": {
+            "kind": "tensor",
+            "axes": [
+              {
+                "id": "batch",
+                "dimension": "b"
+              },
+              {
+                "id": "query_token",
+                "dimension": "n"
+              },
+              {
+                "id": "single_channel",
+                "dimension": "c_s"
+              }
+            ]
+          }
         }
       ],
       "variants": [
         {
-          "id": "full_ipa_residual_norm",
-          "label": "Full IPA + residual normalization",
-          "description": "Full scalar, point, and pair aggregation followed by the StructureLayer residual, dropout, and LayerNorm wrapper.",
+          "id": "full_ipa",
+          "label": "Full frame-aware IPA",
+          "description": "Full scalar, point-distance, pair-bias, scalar-value, point-value, and pair-value attention ending at the projected IPA update.",
           "step_refs": [
             "steps.project_scalar_terms",
             "steps.project_local_points",
@@ -4940,103 +5190,547 @@ export const manifest = {
             "steps.aggregate_global_points",
             "steps.return_points_to_local_frame",
             "steps.aggregate_pair_values",
-            "steps.project_ipa_delta",
-            "steps.residual_norm"
+            "steps.project_ipa_delta"
           ]
         }
       ],
-      "defaultVariant": "full_ipa_residual_norm",
+      "defaultVariant": "full_ipa",
       "values": [
         {
           "id": "scalar_terms",
           "label": "scalar Q/K/V",
           "kind": "representation",
           "glyph": "single",
-          "notation": "qkv_s"
+          "notation": "qkv_s",
+          "shape_contract": {
+            "kind": "tuple",
+            "fields": [
+              {
+                "id": "q",
+                "shape": {
+                  "kind": "tensor",
+                  "axes": [
+                    {
+                      "id": "batch",
+                      "dimension": "b"
+                    },
+                    {
+                      "id": "query_token",
+                      "dimension": "n"
+                    },
+                    {
+                      "id": "head",
+                      "dimension": "h"
+                    },
+                    {
+                      "id": "hidden_channel",
+                      "dimension": "c_hidden"
+                    }
+                  ]
+                }
+              },
+              {
+                "id": "k",
+                "shape": {
+                  "kind": "tensor",
+                  "axes": [
+                    {
+                      "id": "batch",
+                      "dimension": "b"
+                    },
+                    {
+                      "id": "key_token",
+                      "dimension": "n"
+                    },
+                    {
+                      "id": "head",
+                      "dimension": "h"
+                    },
+                    {
+                      "id": "hidden_channel",
+                      "dimension": "c_hidden"
+                    }
+                  ]
+                }
+              },
+              {
+                "id": "v",
+                "shape": {
+                  "kind": "tensor",
+                  "axes": [
+                    {
+                      "id": "batch",
+                      "dimension": "b"
+                    },
+                    {
+                      "id": "key_token",
+                      "dimension": "n"
+                    },
+                    {
+                      "id": "head",
+                      "dimension": "h"
+                    },
+                    {
+                      "id": "value_channel",
+                      "dimension": "c_hidden"
+                    }
+                  ]
+                }
+              }
+            ]
+          }
         },
         {
           "id": "local_points",
           "label": "local Q/K/V points",
           "kind": "geometry",
           "glyph": "coordinates",
-          "notation": "qkv_p"
+          "notation": "qkv_p",
+          "shape_contract": {
+            "kind": "tuple",
+            "fields": [
+              {
+                "id": "q",
+                "shape": {
+                  "kind": "tensor",
+                  "axes": [
+                    {
+                      "id": "batch",
+                      "dimension": "b"
+                    },
+                    {
+                      "id": "query_token",
+                      "dimension": "n"
+                    },
+                    {
+                      "id": "head",
+                      "dimension": "h"
+                    },
+                    {
+                      "id": "query_point",
+                      "dimension": "p_q"
+                    },
+                    {
+                      "id": "coordinate",
+                      "dimension": 3
+                    }
+                  ]
+                }
+              },
+              {
+                "id": "k",
+                "shape": {
+                  "kind": "tensor",
+                  "axes": [
+                    {
+                      "id": "batch",
+                      "dimension": "b"
+                    },
+                    {
+                      "id": "key_token",
+                      "dimension": "n"
+                    },
+                    {
+                      "id": "head",
+                      "dimension": "h"
+                    },
+                    {
+                      "id": "query_point",
+                      "dimension": "p_q"
+                    },
+                    {
+                      "id": "coordinate",
+                      "dimension": 3
+                    }
+                  ]
+                }
+              },
+              {
+                "id": "v",
+                "shape": {
+                  "kind": "tensor",
+                  "axes": [
+                    {
+                      "id": "batch",
+                      "dimension": "b"
+                    },
+                    {
+                      "id": "key_token",
+                      "dimension": "n"
+                    },
+                    {
+                      "id": "head",
+                      "dimension": "h"
+                    },
+                    {
+                      "id": "value_point",
+                      "dimension": "p_v"
+                    },
+                    {
+                      "id": "coordinate",
+                      "dimension": 3
+                    }
+                  ]
+                }
+              }
+            ]
+          }
         },
         {
           "id": "global_points",
           "label": "global Q/K/V points",
           "kind": "geometry",
           "glyph": "coordinates",
-          "notation": "T_qkv_p"
+          "notation": "T_qkv_p",
+          "shape_contract": {
+            "kind": "tuple",
+            "fields": [
+              {
+                "id": "q",
+                "shape": {
+                  "kind": "tensor",
+                  "axes": [
+                    {
+                      "id": "batch",
+                      "dimension": "b"
+                    },
+                    {
+                      "id": "query_token",
+                      "dimension": "n"
+                    },
+                    {
+                      "id": "head",
+                      "dimension": "h"
+                    },
+                    {
+                      "id": "query_point",
+                      "dimension": "p_q"
+                    },
+                    {
+                      "id": "coordinate",
+                      "dimension": 3
+                    }
+                  ]
+                }
+              },
+              {
+                "id": "k",
+                "shape": {
+                  "kind": "tensor",
+                  "axes": [
+                    {
+                      "id": "batch",
+                      "dimension": "b"
+                    },
+                    {
+                      "id": "key_token",
+                      "dimension": "n"
+                    },
+                    {
+                      "id": "head",
+                      "dimension": "h"
+                    },
+                    {
+                      "id": "query_point",
+                      "dimension": "p_q"
+                    },
+                    {
+                      "id": "coordinate",
+                      "dimension": 3
+                    }
+                  ]
+                }
+              },
+              {
+                "id": "v",
+                "shape": {
+                  "kind": "tensor",
+                  "axes": [
+                    {
+                      "id": "batch",
+                      "dimension": "b"
+                    },
+                    {
+                      "id": "key_token",
+                      "dimension": "n"
+                    },
+                    {
+                      "id": "head",
+                      "dimension": "h"
+                    },
+                    {
+                      "id": "value_point",
+                      "dimension": "p_v"
+                    },
+                    {
+                      "id": "coordinate",
+                      "dimension": 3
+                    }
+                  ]
+                }
+              }
+            ]
+          }
         },
         {
           "id": "scalar_logits",
           "label": "scalar logits",
           "kind": "logit",
           "glyph": "pair",
-          "notation": "l_s"
+          "notation": "l_s",
+          "shape_contract": {
+            "kind": "tensor",
+            "axes": [
+              {
+                "id": "batch",
+                "dimension": "b"
+              },
+              {
+                "id": "head",
+                "dimension": "h"
+              },
+              {
+                "id": "query_token",
+                "dimension": "n"
+              },
+              {
+                "id": "key_token",
+                "dimension": "n"
+              }
+            ]
+          }
         },
         {
           "id": "point_logits",
           "label": "point-distance logits",
           "kind": "logit",
           "glyph": "pair",
-          "notation": "l_p"
+          "notation": "l_p",
+          "shape_contract": {
+            "kind": "tensor",
+            "axes": [
+              {
+                "id": "batch",
+                "dimension": "b"
+              },
+              {
+                "id": "head",
+                "dimension": "h"
+              },
+              {
+                "id": "query_token",
+                "dimension": "n"
+              },
+              {
+                "id": "key_token",
+                "dimension": "n"
+              }
+            ]
+          }
         },
         {
           "id": "pair_bias",
           "label": "pair bias",
           "kind": "logit",
           "glyph": "pair",
-          "notation": "b_z"
+          "notation": "b_z",
+          "shape_contract": {
+            "kind": "tensor",
+            "axes": [
+              {
+                "id": "batch",
+                "dimension": "b"
+              },
+              {
+                "id": "head",
+                "dimension": "h"
+              },
+              {
+                "id": "query_token",
+                "dimension": "n"
+              },
+              {
+                "id": "key_token",
+                "dimension": "n"
+              }
+            ]
+          }
         },
         {
           "id": "combined_logits",
           "label": "combined masked logits",
           "kind": "logit",
           "glyph": "pair",
-          "notation": "l"
+          "notation": "l",
+          "shape_contract": {
+            "kind": "tensor",
+            "axes": [
+              {
+                "id": "batch",
+                "dimension": "b"
+              },
+              {
+                "id": "head",
+                "dimension": "h"
+              },
+              {
+                "id": "query_token",
+                "dimension": "n"
+              },
+              {
+                "id": "key_token",
+                "dimension": "n"
+              }
+            ]
+          }
         },
         {
           "id": "attention_weights",
           "label": "attention weights",
           "kind": "weight",
           "glyph": "pair",
-          "notation": "a"
+          "notation": "a",
+          "shape_contract": {
+            "kind": "tensor",
+            "axes": [
+              {
+                "id": "batch",
+                "dimension": "b"
+              },
+              {
+                "id": "head",
+                "dimension": "h"
+              },
+              {
+                "id": "query_token",
+                "dimension": "n"
+              },
+              {
+                "id": "key_token",
+                "dimension": "n"
+              }
+            ]
+          }
         },
         {
           "id": "scalar_context",
           "label": "scalar context",
           "kind": "representation",
           "glyph": "single",
-          "notation": "o_s"
+          "notation": "o_s",
+          "shape_contract": {
+            "kind": "tensor",
+            "axes": [
+              {
+                "id": "batch",
+                "dimension": "b"
+              },
+              {
+                "id": "query_token",
+                "dimension": "n"
+              },
+              {
+                "id": "head",
+                "dimension": "h"
+              },
+              {
+                "id": "value_channel",
+                "dimension": "c_hidden"
+              }
+            ]
+          }
         },
         {
           "id": "global_point_context",
           "label": "global point context",
           "kind": "geometry",
           "glyph": "coordinates",
-          "notation": "o_p_global"
+          "notation": "o_p_global",
+          "shape_contract": {
+            "kind": "tensor",
+            "axes": [
+              {
+                "id": "batch",
+                "dimension": "b"
+              },
+              {
+                "id": "query_token",
+                "dimension": "n"
+              },
+              {
+                "id": "head",
+                "dimension": "h"
+              },
+              {
+                "id": "value_point",
+                "dimension": "p_v"
+              },
+              {
+                "id": "coordinate",
+                "dimension": 3
+              }
+            ]
+          }
         },
         {
           "id": "local_point_context",
           "label": "local points + norms",
           "kind": "geometry",
           "glyph": "coordinates",
-          "notation": "o_p_local"
+          "notation": "o_p_local",
+          "shape_contract": {
+            "kind": "tensor",
+            "axes": [
+              {
+                "id": "batch",
+                "dimension": "b"
+              },
+              {
+                "id": "query_token",
+                "dimension": "n"
+              },
+              {
+                "id": "head",
+                "dimension": "h"
+              },
+              {
+                "id": "value_point",
+                "dimension": "p_v"
+              },
+              {
+                "id": "point_feature",
+                "dimension": 4
+              }
+            ]
+          }
         },
         {
           "id": "pair_value_context",
           "label": "pair-value context",
           "kind": "representation",
           "glyph": "single",
-          "notation": "o_z"
-        },
-        {
-          "id": "ipa_delta",
-          "label": "IPA delta",
-          "kind": "representation",
-          "glyph": "single",
-          "notation": "delta_s"
+          "notation": "o_z",
+          "shape_contract": {
+            "kind": "tensor",
+            "axes": [
+              {
+                "id": "batch",
+                "dimension": "b"
+              },
+              {
+                "id": "query_token",
+                "dimension": "n"
+              },
+              {
+                "id": "head",
+                "dimension": "h"
+              },
+              {
+                "id": "pair_channel",
+                "dimension": "c_z"
+              }
+            ]
+          }
         }
       ],
       "steps": [
@@ -5044,6 +5738,7 @@ export const manifest = {
           "id": "project_scalar_terms",
           "label": "Project scalar Q/K/V",
           "operation": "scalar_qkv_projection",
+          "shape_rule": "scalar_qkv_projection",
           "inputs": [
             "ports.single_state"
           ],
@@ -5078,6 +5773,7 @@ export const manifest = {
           "id": "project_local_points",
           "label": "Project local Q/K/V points",
           "operation": "point_qkv_projection",
+          "shape_rule": "point_qkv_projection",
           "inputs": [
             "ports.single_state"
           ],
@@ -5112,6 +5808,7 @@ export const manifest = {
           "id": "transform_points_to_global",
           "label": "Express points in global frame",
           "operation": "rigid_apply",
+          "shape_rule": "rigid_apply",
           "inputs": [
             "values.local_points",
             "ports.frames"
@@ -5162,6 +5859,7 @@ export const manifest = {
           "id": "scalar_attention_logits",
           "label": "Form scalar logits",
           "operation": "attention_logits",
+          "shape_rule": "attention_logits",
           "inputs": [
             "values.scalar_terms"
           ],
@@ -5191,6 +5889,7 @@ export const manifest = {
           "id": "point_distance_logits",
           "label": "Form point-distance logits",
           "operation": "invariant_point_distance",
+          "shape_rule": "point_distance_logits",
           "inputs": [
             "values.global_points"
           ],
@@ -5220,6 +5919,7 @@ export const manifest = {
           "id": "project_pair_bias",
           "label": "Project pair bias",
           "operation": "pair_bias_projection",
+          "shape_rule": "pair_bias_projection",
           "inputs": [
             "ports.pair_context"
           ],
@@ -5244,6 +5944,7 @@ export const manifest = {
           "id": "combine_and_mask_logits",
           "label": "Combine logits and apply mask",
           "operation": "ipa_logit_composition",
+          "shape_rule": "logit_composition",
           "inputs": [
             "values.scalar_logits",
             "values.point_logits",
@@ -5286,6 +5987,7 @@ export const manifest = {
           "id": "softmax_attention",
           "label": "Normalize over keys",
           "operation": "softmax",
+          "shape_rule": "softmax",
           "inputs": [
             "values.combined_logits"
           ],
@@ -5310,6 +6012,7 @@ export const manifest = {
           "id": "aggregate_scalar_values",
           "label": "Aggregate scalar values",
           "operation": "weighted_sum",
+          "shape_rule": "weighted_sum",
           "inputs": [
             "values.attention_weights",
             "values.scalar_terms"
@@ -5340,6 +6043,7 @@ export const manifest = {
           "id": "aggregate_global_points",
           "label": "Aggregate value points",
           "operation": "weighted_point_sum",
+          "shape_rule": "weighted_point_sum",
           "inputs": [
             "values.attention_weights",
             "values.global_points"
@@ -5370,6 +6074,7 @@ export const manifest = {
           "id": "return_points_to_local_frame",
           "label": "Return points to query frame",
           "operation": "rigid_inverse_apply",
+          "shape_rule": "rigid_inverse_apply",
           "inputs": [
             "values.global_point_context",
             "ports.frames"
@@ -5400,6 +6105,7 @@ export const manifest = {
           "id": "aggregate_pair_values",
           "label": "Attention-weighted pair-value aggregation",
           "operation": "pair_value_aggregation",
+          "shape_rule": "pair_value_aggregation",
           "inputs": [
             "values.attention_weights",
             "ports.pair_context"
@@ -5430,19 +6136,20 @@ export const manifest = {
           "id": "project_ipa_delta",
           "label": "Concatenate + project",
           "operation": "output_projection",
+          "shape_rule": "output_projection",
           "inputs": [
             "values.scalar_context",
             "values.local_point_context",
             "values.pair_value_context"
           ],
           "outputs": [
-            "values.ipa_delta"
+            "ports.ipa_delta"
           ],
           "code": "ipa_delta = output_projection(concat(scalar_context, local_point_context, pair_value_context))",
           "code_bindings": [
             {
               "lexeme": "ipa_delta",
-              "ref": "values.ipa_delta",
+              "ref": "ports.ipa_delta",
               "access": "write"
             },
             {
@@ -5461,41 +6168,11 @@ export const manifest = {
               "access": "read"
             }
           ]
-        },
-        {
-          "id": "residual_norm",
-          "label": "Residual, dropout, and norm",
-          "operation": "residual_normalization",
-          "inputs": [
-            "ports.single_state",
-            "values.ipa_delta"
-          ],
-          "outputs": [
-            "ports.updated_single_state"
-          ],
-          "code": "updated_single_state = layer_norm(single_state + dropout(ipa_delta))",
-          "code_bindings": [
-            {
-              "lexeme": "updated_single_state",
-              "ref": "ports.updated_single_state",
-              "access": "write"
-            },
-            {
-              "lexeme": "single_state",
-              "ref": "ports.single_state",
-              "access": "read"
-            },
-            {
-              "lexeme": "ipa_delta",
-              "ref": "values.ipa_delta",
-              "access": "read"
-            }
-          ]
         }
       ],
       "visualTemplate": {
         "grid": {
-          "columns": 14,
+          "columns": 12,
           "rows": 9,
           "column_sizing": "content",
           "row_sizing": "content",
@@ -5536,9 +6213,9 @@ export const manifest = {
             "treatment": "chip"
           },
           {
-            "id": "updated_single_state",
-            "ref": "ports.updated_single_state",
-            "col": 14,
+            "id": "ipa_delta",
+            "ref": "ports.ipa_delta",
+            "col": 12,
             "row": 8,
             "prominence": "secondary",
             "treatment": "compact"
@@ -5742,22 +6419,6 @@ export const manifest = {
             "row": 8,
             "prominence": "primary",
             "treatment": "compact"
-          },
-          {
-            "id": "ipa_delta",
-            "ref": "values.ipa_delta",
-            "col": 12,
-            "row": 8,
-            "prominence": "context",
-            "treatment": "compact"
-          },
-          {
-            "id": "residual_norm",
-            "ref": "steps.residual_norm",
-            "col": 13,
-            "row": 8,
-            "prominence": "primary",
-            "treatment": "compact"
           }
         ],
         "segments": [
@@ -5790,8 +6451,8 @@ export const manifest = {
           },
           {
             "id": "value_extraction",
-            "label": "Extract values and update state",
-            "description": "Reuse the shared attention weights for scalar, point, and pair values, return points to the local frame, align the three final contexts, concatenate and project them, and apply the residual wrapper.",
+            "label": "Extract and fuse values",
+            "description": "Reuse the shared attention weights for scalar, point, and pair values, return points to the local frame, align the three final contexts, then concatenate and project them into the IPA update.",
             "node_refs": [
               "steps.aggregate_scalar_values",
               "values.scalar_context",
@@ -5802,19 +6463,17 @@ export const manifest = {
               "steps.aggregate_pair_values",
               "values.pair_value_context",
               "steps.project_ipa_delta",
-              "values.ipa_delta",
-              "steps.residual_norm",
-              "ports.updated_single_state"
+              "ports.ipa_delta"
             ]
           }
         ]
       },
       "evidencePolicy": {
-        "generic_definition": "Full IPA anatomy is reusable vocabulary; each architecture instance must separately prove its core and wrapper variant.",
+        "generic_definition": "Full IPA anatomy is reusable vocabulary ending at the projected attention update; residual addition, dropout, and normalization belong to the surrounding architecture layer.",
         "usage_requires": [
           "Evidence for scalar, point-distance, and pair logit terms.",
           "Evidence for scalar and point aggregation plus attention-weighted pair-value aggregation.",
-          "Evidence for the residual/dropout/normalization wrapper when full_ipa_residual_norm is selected."
+          "Evidence that the output projection returns the IPA update before any architecture-owned residual wrapper."
         ]
       }
     }
@@ -6306,6 +6965,10 @@ export const manifest = {
             "reason": "Residue-mask use inside IPA belongs to the structure-decoder detail rather than the task overview."
           },
           {
+            "ref": "modules.ipa_residual_norm",
+            "reason": "The IPA residual wrapper belongs to the same structure-decoder detail as the attention core."
+          },
+          {
             "ref": "modules.frenet_frame_builder",
             "reason": "Frenet construction is expanded inside the sampling loop; the task overview keeps one feature-to-sampler connection."
           }
@@ -6569,6 +7232,7 @@ export const manifest = {
           "modules.feature_builder": "visible",
           "modules.frenet_frame_builder": "excluded",
           "modules.invariant_point_attention": "excluded",
+          "modules.ipa_residual_norm": "excluded",
           "modules.noise_readout": "collapsed:modules.reverse_diffusion_sampler",
           "modules.pair_feature_net": "excluded",
           "modules.pair_transition": "collapsed:modules.reverse_diffusion_sampler",
@@ -6769,6 +7433,10 @@ export const manifest = {
           {
             "ref": "modules.invariant_point_attention",
             "reason": "Frame-point conditioning and residue masking are internal to the structure decoder and are expanded on its child board."
+          },
+          {
+            "ref": "modules.ipa_residual_norm",
+            "reason": "Residual addition and normalization are internal to the structure decoder and are expanded on its child board."
           },
           {
             "ref": "modules.backbone_update",
@@ -7462,6 +8130,7 @@ export const manifest = {
           "modules.denoiser": "visible",
           "modules.frenet_frame_builder": "visible",
           "modules.invariant_point_attention": "excluded",
+          "modules.ipa_residual_norm": "excluded",
           "modules.noise_readout": "collapsed:modules.denoiser",
           "modules.pair_feature_net": "excluded",
           "modules.pair_transition": "collapsed:modules.denoiser",
@@ -8014,6 +8683,30 @@ export const manifest = {
             }
           },
           {
+            "id": "projection_efa7671b42db",
+            "from": "invariant_feature_encoder",
+            "to": "equivariant_structure_decoder",
+            "projection": "boundary",
+            "origin": "canonical",
+            "kind": "skip",
+            "relation_path": [
+              "relations.single_features_skip_to_ipa_residual_norm"
+            ],
+            "provenance_hops": [
+              {
+                "relation_ref": "relations.single_features_skip_to_ipa_residual_norm"
+              }
+            ],
+            "hidden_refs": [
+
+            ],
+            "carries": [
+              "representations.single_features"
+            ],
+            "presentation": {
+            }
+          },
+          {
             "id": "projection_920cff6f5a3a",
             "from": "noise_readout",
             "to": "predicted_noise",
@@ -8111,6 +8804,7 @@ export const manifest = {
           "modules.frenet_frame_builder": "excluded",
           "modules.invariant_feature_encoder": "visible",
           "modules.invariant_point_attention": "collapsed:modules.equivariant_structure_decoder",
+          "modules.ipa_residual_norm": "collapsed:modules.equivariant_structure_decoder",
           "modules.noise_readout": "visible",
           "modules.pair_feature_net": "collapsed:modules.invariant_feature_encoder",
           "modules.pair_transition": "collapsed:modules.invariant_feature_encoder",
@@ -8121,6 +8815,7 @@ export const manifest = {
           "value_sites.current_frames": "visible",
           "value_sites.feature_bundle": "visible",
           "value_sites.initial_pair_features": "collapsed:modules.invariant_feature_encoder",
+          "value_sites.ipa_delta": "collapsed:modules.equivariant_structure_decoder",
           "value_sites.pair_after_incoming": "collapsed:modules.invariant_feature_encoder",
           "value_sites.pair_after_outgoing": "collapsed:modules.invariant_feature_encoder",
           "value_sites.predicted_noise": "visible",
@@ -8251,6 +8946,10 @@ export const manifest = {
           {
             "ref": "modules.invariant_point_attention",
             "reason": "The invariant encoder board stops at the single and refined-pair outputs; IPA is expanded on the sibling structure-decoder board."
+          },
+          {
+            "ref": "modules.ipa_residual_norm",
+            "reason": "The invariant encoder board stops before the structure layer's IPA residual wrapper."
           }
         ],
         "edge_overrides": [
@@ -8636,6 +9335,7 @@ export const manifest = {
         "classifications": {
           "modules.frenet_frame_builder": "excluded",
           "modules.invariant_point_attention": "excluded",
+          "modules.ipa_residual_norm": "excluded",
           "modules.pair_feature_net": "visible",
           "modules.pair_transform_stack": "visible",
           "modules.pair_transition": "collapsed:modules.pair_transform_stack",
@@ -8971,12 +9671,12 @@ export const manifest = {
       {
         "id": "structure_decoder",
         "title": "One Equivariant Structure Layer (Repeated ×8)",
-        "summary": "IPA combines single, pair, and current-frame information; a residue-wise transition updates the latent state; a learned six-parameter rigid increment is composed into every residue frame.",
+        "summary": "IPA combines single, pair, and current-frame information into an additive update. The structure layer adds it to the incoming state, applies dropout and LayerNorm, runs a residual transition, and composes a learned six-parameter rigid increment into every residue frame.",
         "parent": "denoiser_forward",
         "subject_ref": "modules.equivariant_structure_decoder",
         "expansion_depth": 1,
         "grid": {
-          "columns": 7,
+          "columns": 9,
           "rows": 6,
           "column_sizing": "content",
           "col_gap": 46
@@ -9038,6 +9738,26 @@ export const manifest = {
             "board_ref": "genie2_ipa_internals"
           },
           {
+            "id": "ipa_delta",
+            "ref": "value_sites.ipa_delta",
+            "label": "IPA update",
+            "notation": "delta_s",
+            "prominence": "context",
+            "treatment": "compact",
+            "density": "compact",
+            "col": 4,
+            "row": 3
+          },
+          {
+            "id": "ipa_residual_norm",
+            "ref": "modules.ipa_residual_norm",
+            "prominence": "primary",
+            "treatment": "compact",
+            "density": "compact",
+            "col": 5,
+            "row": 3
+          },
+          {
             "id": "single_after_ipa",
             "ref": "value_sites.single_after_ipa",
             "label": "attention-updated single state",
@@ -9045,7 +9765,7 @@ export const manifest = {
             "prominence": "secondary",
             "treatment": "compact",
             "density": "compact",
-            "col": 4,
+            "col": 6,
             "row": 3
           },
           {
@@ -9054,7 +9774,7 @@ export const manifest = {
             "prominence": "primary",
             "treatment": "compact",
             "density": "compact",
-            "col": 5,
+            "col": 7,
             "row": 3
           },
           {
@@ -9065,7 +9785,7 @@ export const manifest = {
             "prominence": "secondary",
             "treatment": "compact",
             "density": "compact",
-            "col": 6,
+            "col": 8,
             "row": 3
           },
           {
@@ -9073,7 +9793,7 @@ export const manifest = {
             "ref": "modules.backbone_update",
             "prominence": "primary",
             "treatment": "block",
-            "col": 6,
+            "col": 8,
             "row": 5
           },
           {
@@ -9084,7 +9804,7 @@ export const manifest = {
             "prominence": "secondary",
             "treatment": "compact",
             "density": "compact",
-            "col": 7,
+            "col": 9,
             "row": 5
           }
         ],
@@ -9132,13 +9852,38 @@ export const manifest = {
           },
           {
             "match": {
-              "relation_ref": "relations.ipa_produces_updated_single_state"
+              "relation_ref": "relations.ipa_produces_delta"
             },
-            "label": "residual + norm",
+            "label": "delta_s only",
             "connection": {
-              "title": "IPA-updated state",
-              "role": "geometric attention output",
-              "inside": "IPA is added to the incoming single state, followed by dropout and layer normalization."
+              "title": "Projected IPA update",
+              "role": "attention branch output",
+              "inside": "IPA concatenates its scalar, pair, and local point contexts and projects them to an additive update; it does not add the incoming state itself."
+            }
+          },
+          {
+            "match": {
+              "relation_ref": "relations.single_features_skip_to_ipa_residual_norm"
+            },
+            "label": "preserve s",
+            "tone": "skip",
+            "route_side": "top",
+            "route_clearance": 36,
+            "connection": {
+              "title": "IPA residual path",
+              "role": "preserved single state",
+              "inside": "The incoming single state bypasses IPA and meets its projected update in the surrounding StructureLayer wrapper."
+            }
+          },
+          {
+            "match": {
+              "relation_ref": "relations.ipa_residual_norm_produces_updated_single_state"
+            },
+            "label": "add + dropout + norm",
+            "connection": {
+              "title": "Attention-updated state",
+              "role": "structure-layer wrapper output",
+              "inside": "StructureLayer adds the IPA update to the preserved state, applies dropout to the sum, and then applies LayerNorm."
             }
           },
           {
@@ -9149,7 +9894,7 @@ export const manifest = {
             "connection": {
               "title": "Structure transition",
               "role": "latent channel update",
-              "inside": "A transition network mixes channels independently at each residue before frame regression."
+              "inside": "A three-layer MLP mixes channels independently at each residue, adds its result back to the input, then applies dropout and LayerNorm before frame regression."
             }
           },
           {
@@ -9310,18 +10055,18 @@ export const manifest = {
             }
           },
           {
-            "id": "projection_a5d4bbb29495",
+            "id": "projection_bcdb9aa0d2dc",
             "from": "invariant_point_attention",
-            "to": "single_after_ipa",
+            "to": "ipa_delta",
             "projection": "direct",
             "origin": "canonical",
-            "kind": "state_update",
+            "kind": "data_flow",
             "relation_path": [
-              "relations.ipa_produces_updated_single_state"
+              "relations.ipa_produces_delta"
             ],
             "provenance_hops": [
               {
-                "relation_ref": "relations.ipa_produces_updated_single_state"
+                "relation_ref": "relations.ipa_produces_delta"
               }
             ],
             "hidden_refs": [
@@ -9331,11 +10076,65 @@ export const manifest = {
               "representations.single_features"
             ],
             "presentation": {
-              "label": "residual + norm",
+              "label": "delta_s only",
               "connection": {
-                "title": "IPA-updated state",
-                "role": "geometric attention output",
-                "inside": "IPA is added to the incoming single state, followed by dropout and layer normalization."
+                "title": "Projected IPA update",
+                "role": "attention branch output",
+                "inside": "IPA concatenates its scalar, pair, and local point contexts and projects them to an additive update; it does not add the incoming state itself."
+              }
+            }
+          },
+          {
+            "id": "projection_261a83332398",
+            "from": "ipa_delta",
+            "to": "ipa_residual_norm",
+            "projection": "direct",
+            "origin": "canonical",
+            "kind": "data_flow",
+            "relation_path": [
+              "relations.ipa_delta_enters_residual_norm"
+            ],
+            "provenance_hops": [
+              {
+                "relation_ref": "relations.ipa_delta_enters_residual_norm"
+              }
+            ],
+            "hidden_refs": [
+
+            ],
+            "carries": [
+              "representations.single_features"
+            ],
+            "presentation": {
+            }
+          },
+          {
+            "id": "projection_ce41232b0bb0",
+            "from": "ipa_residual_norm",
+            "to": "single_after_ipa",
+            "projection": "direct",
+            "origin": "canonical",
+            "kind": "state_update",
+            "relation_path": [
+              "relations.ipa_residual_norm_produces_updated_single_state"
+            ],
+            "provenance_hops": [
+              {
+                "relation_ref": "relations.ipa_residual_norm_produces_updated_single_state"
+              }
+            ],
+            "hidden_refs": [
+
+            ],
+            "carries": [
+              "representations.single_features"
+            ],
+            "presentation": {
+              "label": "add + dropout + norm",
+              "connection": {
+                "title": "Attention-updated state",
+                "role": "structure-layer wrapper output",
+                "inside": "StructureLayer adds the IPA update to the preserved state, applies dropout to the sum, and then applies LayerNorm."
               }
             }
           },
@@ -9455,6 +10254,39 @@ export const manifest = {
             }
           },
           {
+            "id": "projection_0e67c87cf764",
+            "from": "single_features",
+            "to": "ipa_residual_norm",
+            "projection": "direct",
+            "origin": "canonical",
+            "kind": "skip",
+            "relation_path": [
+              "relations.single_features_skip_to_ipa_residual_norm"
+            ],
+            "provenance_hops": [
+              {
+                "relation_ref": "relations.single_features_skip_to_ipa_residual_norm"
+              }
+            ],
+            "hidden_refs": [
+
+            ],
+            "carries": [
+              "representations.single_features"
+            ],
+            "presentation": {
+              "label": "preserve s",
+              "tone": "skip",
+              "route_side": "top",
+              "route_clearance": 36,
+              "connection": {
+                "title": "IPA residual path",
+                "role": "preserved single state",
+                "inside": "The incoming single state bypasses IPA and meets its projected update in the surrounding StructureLayer wrapper."
+              }
+            }
+          },
+          {
             "id": "projection_63b2834adefb",
             "from": "structure_transition",
             "to": "single_after_transition",
@@ -9480,7 +10312,7 @@ export const manifest = {
               "connection": {
                 "title": "Structure transition",
                 "role": "latent channel update",
-                "inside": "A transition network mixes channels independently at each residue before frame regression."
+                "inside": "A three-layer MLP mixes channels independently at each residue, adds its result back to the input, then applies dropout and LayerNorm before frame regression."
               }
             }
           }
@@ -9489,9 +10321,11 @@ export const manifest = {
           "modules.backbone_update": "visible",
           "modules.frenet_frame_builder": "excluded",
           "modules.invariant_point_attention": "visible",
+          "modules.ipa_residual_norm": "visible",
           "modules.structure_transition": "visible",
           "value_sites.current_frames": "visible",
           "value_sites.feature_bundle": "visible",
+          "value_sites.ipa_delta": "visible",
           "value_sites.refined_pair_features": "visible",
           "value_sites.single_after_ipa": "visible",
           "value_sites.single_after_transition": "visible",
@@ -9504,13 +10338,13 @@ export const manifest = {
         "id": "genie2_ipa_internals",
         "kind": "standard_block_instance",
         "title": "Genie 2 Invariant Point Attention Internals",
-        "summary": "Full IPA combines scalar, pair, and frame-aware point terms, then the structure-layer wrapper applies residual dropout and LayerNorm.",
+        "summary": "Full IPA combines scalar, pair, and frame-aware point terms, aggregates their values, and ends at the projected additive update. Residual addition, dropout, and LayerNorm are shown on the parent structure-decoder board.",
         "parent": "structure_decoder",
         "subject_ref": "modules.invariant_point_attention",
         "expansion_depth": 0,
         "block_instance_ref": "block_instances.structure_ipa",
         "grid": {
-          "columns": 14,
+          "columns": 12,
           "rows": 9,
           "column_sizing": "content",
           "row_sizing": "content",
@@ -9533,6 +10367,25 @@ export const manifest = {
             "kind": "representation",
             "rep_ref": "single_features",
             "shape": "B x N x 384",
+            "resolved_shape": {
+              "kind": "tensor",
+              "axes": [
+                {
+                  "id": "batch",
+                  "dimension": "B"
+                },
+                {
+                  "id": "query_token",
+                  "dimension": "N"
+                },
+                {
+                  "id": "single_channel",
+                  "dimension": 384
+                }
+              ],
+              "label": "B x N x 384"
+            },
+            "shape_status": "resolved",
             "scale": "residue",
             "glyph": "single",
             "flow_family": "single",
@@ -9554,6 +10407,29 @@ export const manifest = {
             "kind": "representation",
             "rep_ref": "pair_features",
             "shape": "B x N x N x 128",
+            "resolved_shape": {
+              "kind": "tensor",
+              "axes": [
+                {
+                  "id": "batch",
+                  "dimension": "B"
+                },
+                {
+                  "id": "query_token",
+                  "dimension": "N"
+                },
+                {
+                  "id": "key_token",
+                  "dimension": "N"
+                },
+                {
+                  "id": "pair_channel",
+                  "dimension": 128
+                }
+              ],
+              "label": "B x N x N x 128"
+            },
+            "shape_status": "resolved",
             "scale": "pair",
             "glyph": "pair",
             "flow_family": "pair",
@@ -9574,7 +10450,22 @@ export const manifest = {
             "instance_fact_ref": "block_instances.structure_ipa.ports.frames",
             "kind": "representation",
             "rep_ref": "residue_frames",
-            "shape": "B x N x (3 x 3 + 3)",
+            "shape": "B x N",
+            "resolved_shape": {
+              "kind": "frames",
+              "axes": [
+                {
+                  "id": "batch",
+                  "dimension": "B"
+                },
+                {
+                  "id": "query_token",
+                  "dimension": "N"
+                }
+              ],
+              "label": "B x N"
+            },
+            "shape_status": "resolved",
             "scale": "residue",
             "glyph": "frames",
             "flow_family": "frame",
@@ -9595,32 +10486,66 @@ export const manifest = {
             "instance_fact_ref": "block_instances.structure_ipa.ports.mask",
             "kind": "representation",
             "rep_ref": "feature_bundle",
-            "shape": "B x N fields + B x N x N masks",
+            "shape": "B x N",
+            "resolved_shape": {
+              "kind": "tensor",
+              "axes": [
+                {
+                  "id": "batch",
+                  "dimension": "B"
+                },
+                {
+                  "id": "query_token",
+                  "dimension": "N"
+                }
+              ],
+              "label": "B x N"
+            },
+            "shape_status": "resolved",
             "scale": "mixed",
             "glyph": "vector",
             "notation": "m",
             "port_ref": "ports.mask"
           },
           {
-            "id": "updated_single_state",
-            "label": "IPA-updated single state",
-            "col": 14,
+            "id": "ipa_delta",
+            "label": "IPA update",
+            "col": 12,
             "row": 8,
             "prominence": "secondary",
             "treatment": "compact",
             "standard_block_ref": "standard_blocks/invariant-point-attention.yaml",
             "standard_block_id": "invariant_point_attention",
             "block_instance_ref": "block_instances.structure_ipa",
-            "template_fact_ref": "standard_blocks.invariant_point_attention.ports.updated_single_state",
-            "instance_fact_ref": "block_instances.structure_ipa.ports.updated_single_state",
+            "template_fact_ref": "standard_blocks.invariant_point_attention.ports.ipa_delta",
+            "instance_fact_ref": "block_instances.structure_ipa.ports.ipa_delta",
             "kind": "representation",
             "rep_ref": "single_features",
             "shape": "B x N x 384",
+            "resolved_shape": {
+              "kind": "tensor",
+              "axes": [
+                {
+                  "id": "batch",
+                  "dimension": "B"
+                },
+                {
+                  "id": "query_token",
+                  "dimension": "N"
+                },
+                {
+                  "id": "single_channel",
+                  "dimension": 384
+                }
+              ],
+              "label": "B x N x 384"
+            },
+            "shape_status": "resolved",
             "scale": "residue",
             "glyph": "single",
             "flow_family": "single",
-            "notation": "s_ipa",
-            "port_ref": "ports.updated_single_state"
+            "notation": "delta_s",
+            "port_ref": "ports.ipa_delta"
           },
           {
             "id": "project_scalar_terms",
@@ -9653,6 +10578,89 @@ export const manifest = {
             "template_fact_ref": "standard_blocks.invariant_point_attention.values.scalar_terms",
             "instance_fact_ref": "block_instances.structure_ipa.values.scalar_terms",
             "kind": "representation",
+            "shape": "q: B x N x 12 x 16; k: B x N x 12 x 16; v: B x N x 12 x 16",
+            "resolved_shape": {
+              "kind": "tuple",
+              "fields": [
+                {
+                  "id": "q",
+                  "shape": {
+                    "kind": "tensor",
+                    "axes": [
+                      {
+                        "id": "batch",
+                        "dimension": "B"
+                      },
+                      {
+                        "id": "query_token",
+                        "dimension": "N"
+                      },
+                      {
+                        "id": "head",
+                        "dimension": 12
+                      },
+                      {
+                        "id": "hidden_channel",
+                        "dimension": 16
+                      }
+                    ],
+                    "label": "B x N x 12 x 16"
+                  }
+                },
+                {
+                  "id": "k",
+                  "shape": {
+                    "kind": "tensor",
+                    "axes": [
+                      {
+                        "id": "batch",
+                        "dimension": "B"
+                      },
+                      {
+                        "id": "key_token",
+                        "dimension": "N"
+                      },
+                      {
+                        "id": "head",
+                        "dimension": 12
+                      },
+                      {
+                        "id": "hidden_channel",
+                        "dimension": 16
+                      }
+                    ],
+                    "label": "B x N x 12 x 16"
+                  }
+                },
+                {
+                  "id": "v",
+                  "shape": {
+                    "kind": "tensor",
+                    "axes": [
+                      {
+                        "id": "batch",
+                        "dimension": "B"
+                      },
+                      {
+                        "id": "key_token",
+                        "dimension": "N"
+                      },
+                      {
+                        "id": "head",
+                        "dimension": 12
+                      },
+                      {
+                        "id": "value_channel",
+                        "dimension": 16
+                      }
+                    ],
+                    "label": "B x N x 12 x 16"
+                  }
+                }
+              ],
+              "label": "q: B x N x 12 x 16; k: B x N x 12 x 16; v: B x N x 12 x 16"
+            },
+            "shape_status": "resolved",
             "scale": "item",
             "glyph": "single",
             "flow_family": "single",
@@ -9689,6 +10697,30 @@ export const manifest = {
             "template_fact_ref": "standard_blocks.invariant_point_attention.values.scalar_logits",
             "instance_fact_ref": "block_instances.structure_ipa.values.scalar_logits",
             "kind": "representation",
+            "shape": "B x 12 x N x N",
+            "resolved_shape": {
+              "kind": "tensor",
+              "axes": [
+                {
+                  "id": "batch",
+                  "dimension": "B"
+                },
+                {
+                  "id": "head",
+                  "dimension": 12
+                },
+                {
+                  "id": "query_token",
+                  "dimension": "N"
+                },
+                {
+                  "id": "key_token",
+                  "dimension": "N"
+                }
+              ],
+              "label": "B x 12 x N x N"
+            },
+            "shape_status": "resolved",
             "scale": "item",
             "glyph": "pair",
             "flow_family": "pair",
@@ -9725,6 +10757,101 @@ export const manifest = {
             "template_fact_ref": "standard_blocks.invariant_point_attention.values.local_points",
             "instance_fact_ref": "block_instances.structure_ipa.values.local_points",
             "kind": "representation",
+            "shape": "q: B x N x 12 x 4 x 3; k: B x N x 12 x 4 x 3; v: B x N x 12 x 8 x 3",
+            "resolved_shape": {
+              "kind": "tuple",
+              "fields": [
+                {
+                  "id": "q",
+                  "shape": {
+                    "kind": "tensor",
+                    "axes": [
+                      {
+                        "id": "batch",
+                        "dimension": "B"
+                      },
+                      {
+                        "id": "query_token",
+                        "dimension": "N"
+                      },
+                      {
+                        "id": "head",
+                        "dimension": 12
+                      },
+                      {
+                        "id": "query_point",
+                        "dimension": 4
+                      },
+                      {
+                        "id": "coordinate",
+                        "dimension": 3
+                      }
+                    ],
+                    "label": "B x N x 12 x 4 x 3"
+                  }
+                },
+                {
+                  "id": "k",
+                  "shape": {
+                    "kind": "tensor",
+                    "axes": [
+                      {
+                        "id": "batch",
+                        "dimension": "B"
+                      },
+                      {
+                        "id": "key_token",
+                        "dimension": "N"
+                      },
+                      {
+                        "id": "head",
+                        "dimension": 12
+                      },
+                      {
+                        "id": "query_point",
+                        "dimension": 4
+                      },
+                      {
+                        "id": "coordinate",
+                        "dimension": 3
+                      }
+                    ],
+                    "label": "B x N x 12 x 4 x 3"
+                  }
+                },
+                {
+                  "id": "v",
+                  "shape": {
+                    "kind": "tensor",
+                    "axes": [
+                      {
+                        "id": "batch",
+                        "dimension": "B"
+                      },
+                      {
+                        "id": "key_token",
+                        "dimension": "N"
+                      },
+                      {
+                        "id": "head",
+                        "dimension": 12
+                      },
+                      {
+                        "id": "value_point",
+                        "dimension": 8
+                      },
+                      {
+                        "id": "coordinate",
+                        "dimension": 3
+                      }
+                    ],
+                    "label": "B x N x 12 x 8 x 3"
+                  }
+                }
+              ],
+              "label": "q: B x N x 12 x 4 x 3; k: B x N x 12 x 4 x 3; v: B x N x 12 x 8 x 3"
+            },
+            "shape_status": "resolved",
             "scale": "item",
             "glyph": "coordinates",
             "flow_family": "coordinate",
@@ -9761,6 +10888,101 @@ export const manifest = {
             "template_fact_ref": "standard_blocks.invariant_point_attention.values.global_points",
             "instance_fact_ref": "block_instances.structure_ipa.values.global_points",
             "kind": "representation",
+            "shape": "q: B x N x 12 x 4 x 3; k: B x N x 12 x 4 x 3; v: B x N x 12 x 8 x 3",
+            "resolved_shape": {
+              "kind": "tuple",
+              "fields": [
+                {
+                  "id": "q",
+                  "shape": {
+                    "kind": "tensor",
+                    "axes": [
+                      {
+                        "id": "batch",
+                        "dimension": "B"
+                      },
+                      {
+                        "id": "query_token",
+                        "dimension": "N"
+                      },
+                      {
+                        "id": "head",
+                        "dimension": 12
+                      },
+                      {
+                        "id": "query_point",
+                        "dimension": 4
+                      },
+                      {
+                        "id": "coordinate",
+                        "dimension": 3
+                      }
+                    ],
+                    "label": "B x N x 12 x 4 x 3"
+                  }
+                },
+                {
+                  "id": "k",
+                  "shape": {
+                    "kind": "tensor",
+                    "axes": [
+                      {
+                        "id": "batch",
+                        "dimension": "B"
+                      },
+                      {
+                        "id": "key_token",
+                        "dimension": "N"
+                      },
+                      {
+                        "id": "head",
+                        "dimension": 12
+                      },
+                      {
+                        "id": "query_point",
+                        "dimension": 4
+                      },
+                      {
+                        "id": "coordinate",
+                        "dimension": 3
+                      }
+                    ],
+                    "label": "B x N x 12 x 4 x 3"
+                  }
+                },
+                {
+                  "id": "v",
+                  "shape": {
+                    "kind": "tensor",
+                    "axes": [
+                      {
+                        "id": "batch",
+                        "dimension": "B"
+                      },
+                      {
+                        "id": "key_token",
+                        "dimension": "N"
+                      },
+                      {
+                        "id": "head",
+                        "dimension": 12
+                      },
+                      {
+                        "id": "value_point",
+                        "dimension": 8
+                      },
+                      {
+                        "id": "coordinate",
+                        "dimension": 3
+                      }
+                    ],
+                    "label": "B x N x 12 x 8 x 3"
+                  }
+                }
+              ],
+              "label": "q: B x N x 12 x 4 x 3; k: B x N x 12 x 4 x 3; v: B x N x 12 x 8 x 3"
+            },
+            "shape_status": "resolved",
             "scale": "item",
             "glyph": "coordinates",
             "flow_family": "coordinate",
@@ -9797,6 +11019,30 @@ export const manifest = {
             "template_fact_ref": "standard_blocks.invariant_point_attention.values.point_logits",
             "instance_fact_ref": "block_instances.structure_ipa.values.point_logits",
             "kind": "representation",
+            "shape": "B x 12 x N x N",
+            "resolved_shape": {
+              "kind": "tensor",
+              "axes": [
+                {
+                  "id": "batch",
+                  "dimension": "B"
+                },
+                {
+                  "id": "head",
+                  "dimension": 12
+                },
+                {
+                  "id": "query_token",
+                  "dimension": "N"
+                },
+                {
+                  "id": "key_token",
+                  "dimension": "N"
+                }
+              ],
+              "label": "B x 12 x N x N"
+            },
+            "shape_status": "resolved",
             "scale": "item",
             "glyph": "pair",
             "flow_family": "pair",
@@ -9833,6 +11079,30 @@ export const manifest = {
             "template_fact_ref": "standard_blocks.invariant_point_attention.values.pair_bias",
             "instance_fact_ref": "block_instances.structure_ipa.values.pair_bias",
             "kind": "representation",
+            "shape": "B x 12 x N x N",
+            "resolved_shape": {
+              "kind": "tensor",
+              "axes": [
+                {
+                  "id": "batch",
+                  "dimension": "B"
+                },
+                {
+                  "id": "head",
+                  "dimension": 12
+                },
+                {
+                  "id": "query_token",
+                  "dimension": "N"
+                },
+                {
+                  "id": "key_token",
+                  "dimension": "N"
+                }
+              ],
+              "label": "B x 12 x N x N"
+            },
+            "shape_status": "resolved",
             "scale": "item",
             "glyph": "pair",
             "flow_family": "pair",
@@ -9869,6 +11139,30 @@ export const manifest = {
             "template_fact_ref": "standard_blocks.invariant_point_attention.values.combined_logits",
             "instance_fact_ref": "block_instances.structure_ipa.values.combined_logits",
             "kind": "representation",
+            "shape": "B x 12 x N x N",
+            "resolved_shape": {
+              "kind": "tensor",
+              "axes": [
+                {
+                  "id": "batch",
+                  "dimension": "B"
+                },
+                {
+                  "id": "head",
+                  "dimension": 12
+                },
+                {
+                  "id": "query_token",
+                  "dimension": "N"
+                },
+                {
+                  "id": "key_token",
+                  "dimension": "N"
+                }
+              ],
+              "label": "B x 12 x N x N"
+            },
+            "shape_status": "resolved",
             "scale": "item",
             "glyph": "pair",
             "flow_family": "pair",
@@ -9905,6 +11199,30 @@ export const manifest = {
             "template_fact_ref": "standard_blocks.invariant_point_attention.values.attention_weights",
             "instance_fact_ref": "block_instances.structure_ipa.values.attention_weights",
             "kind": "representation",
+            "shape": "B x 12 x N x N",
+            "resolved_shape": {
+              "kind": "tensor",
+              "axes": [
+                {
+                  "id": "batch",
+                  "dimension": "B"
+                },
+                {
+                  "id": "head",
+                  "dimension": 12
+                },
+                {
+                  "id": "query_token",
+                  "dimension": "N"
+                },
+                {
+                  "id": "key_token",
+                  "dimension": "N"
+                }
+              ],
+              "label": "B x 12 x N x N"
+            },
+            "shape_status": "resolved",
             "scale": "item",
             "glyph": "pair",
             "flow_family": "pair",
@@ -9941,6 +11259,30 @@ export const manifest = {
             "template_fact_ref": "standard_blocks.invariant_point_attention.values.scalar_context",
             "instance_fact_ref": "block_instances.structure_ipa.values.scalar_context",
             "kind": "representation",
+            "shape": "B x N x 12 x 16",
+            "resolved_shape": {
+              "kind": "tensor",
+              "axes": [
+                {
+                  "id": "batch",
+                  "dimension": "B"
+                },
+                {
+                  "id": "query_token",
+                  "dimension": "N"
+                },
+                {
+                  "id": "head",
+                  "dimension": 12
+                },
+                {
+                  "id": "value_channel",
+                  "dimension": 16
+                }
+              ],
+              "label": "B x N x 12 x 16"
+            },
+            "shape_status": "resolved",
             "scale": "item",
             "glyph": "single",
             "flow_family": "single",
@@ -9977,6 +11319,30 @@ export const manifest = {
             "template_fact_ref": "standard_blocks.invariant_point_attention.values.pair_value_context",
             "instance_fact_ref": "block_instances.structure_ipa.values.pair_value_context",
             "kind": "representation",
+            "shape": "B x N x 12 x 128",
+            "resolved_shape": {
+              "kind": "tensor",
+              "axes": [
+                {
+                  "id": "batch",
+                  "dimension": "B"
+                },
+                {
+                  "id": "query_token",
+                  "dimension": "N"
+                },
+                {
+                  "id": "head",
+                  "dimension": 12
+                },
+                {
+                  "id": "pair_channel",
+                  "dimension": 128
+                }
+              ],
+              "label": "B x N x 12 x 128"
+            },
+            "shape_status": "resolved",
             "scale": "item",
             "glyph": "single",
             "flow_family": "single",
@@ -10013,6 +11379,34 @@ export const manifest = {
             "template_fact_ref": "standard_blocks.invariant_point_attention.values.global_point_context",
             "instance_fact_ref": "block_instances.structure_ipa.values.global_point_context",
             "kind": "representation",
+            "shape": "B x N x 12 x 8 x 3",
+            "resolved_shape": {
+              "kind": "tensor",
+              "axes": [
+                {
+                  "id": "batch",
+                  "dimension": "B"
+                },
+                {
+                  "id": "query_token",
+                  "dimension": "N"
+                },
+                {
+                  "id": "head",
+                  "dimension": 12
+                },
+                {
+                  "id": "value_point",
+                  "dimension": 8
+                },
+                {
+                  "id": "coordinate",
+                  "dimension": 3
+                }
+              ],
+              "label": "B x N x 12 x 8 x 3"
+            },
+            "shape_status": "resolved",
             "scale": "item",
             "glyph": "coordinates",
             "flow_family": "coordinate",
@@ -10049,6 +11443,34 @@ export const manifest = {
             "template_fact_ref": "standard_blocks.invariant_point_attention.values.local_point_context",
             "instance_fact_ref": "block_instances.structure_ipa.values.local_point_context",
             "kind": "representation",
+            "shape": "B x N x 12 x 8 x 4",
+            "resolved_shape": {
+              "kind": "tensor",
+              "axes": [
+                {
+                  "id": "batch",
+                  "dimension": "B"
+                },
+                {
+                  "id": "query_token",
+                  "dimension": "N"
+                },
+                {
+                  "id": "head",
+                  "dimension": 12
+                },
+                {
+                  "id": "value_point",
+                  "dimension": 8
+                },
+                {
+                  "id": "point_feature",
+                  "dimension": 4
+                }
+              ],
+              "label": "B x N x 12 x 8 x 4"
+            },
+            "shape_status": "resolved",
             "scale": "item",
             "glyph": "coordinates",
             "flow_family": "coordinate",
@@ -10071,42 +11493,6 @@ export const manifest = {
             "detail": "output_projection",
             "code": "ipa_delta = output_projection(concat(scalar_context, local_point_context, pair_value_context))",
             "operation": "output_projection"
-          },
-          {
-            "id": "ipa_delta",
-            "label": "IPA delta",
-            "col": 12,
-            "row": 8,
-            "prominence": "context",
-            "treatment": "compact",
-            "standard_block_ref": "standard_blocks/invariant-point-attention.yaml",
-            "standard_block_id": "invariant_point_attention",
-            "block_instance_ref": "block_instances.structure_ipa",
-            "template_fact_ref": "standard_blocks.invariant_point_attention.values.ipa_delta",
-            "instance_fact_ref": "block_instances.structure_ipa.values.ipa_delta",
-            "kind": "representation",
-            "scale": "item",
-            "glyph": "single",
-            "flow_family": "single",
-            "notation": "delta_s"
-          },
-          {
-            "id": "residual_norm",
-            "label": "Residual, dropout, and norm",
-            "col": 13,
-            "row": 8,
-            "prominence": "primary",
-            "treatment": "compact",
-            "standard_block_ref": "standard_blocks/invariant-point-attention.yaml",
-            "standard_block_id": "invariant_point_attention",
-            "block_instance_ref": "block_instances.structure_ipa",
-            "template_fact_ref": "standard_blocks.invariant_point_attention.steps.residual_norm",
-            "instance_fact_ref": "block_instances.structure_ipa.steps.residual_norm",
-            "kind": "operation",
-            "scale": "operation",
-            "detail": "residual_normalization",
-            "code": "updated_single_state = layer_norm(single_state + dropout(ipa_delta))",
-            "operation": "residual_normalization"
           }
         ],
         "edges": [
@@ -10877,88 +12263,22 @@ export const manifest = {
             "to": "ipa_delta",
             "kind": "data_flow",
             "carries": [
-
+              "representations.single_features"
             ],
-            "grounding": "standard_block_template",
+            "relation_path": [
+              "relations.ipa_produces_delta"
+            ],
+            "grounding": "canonical_relation_path",
             "standard_block_ref": "standard_blocks/invariant-point-attention.yaml",
             "standard_block_id": "invariant_point_attention",
             "block_instance_ref": "block_instances.structure_ipa",
             "template_fact_ref": "standard_blocks.invariant_point_attention.steps.project_ipa_delta",
             "instance_fact_ref": "block_instances.structure_ipa.steps.project_ipa_delta",
-            "template_data_ref": "values.ipa_delta",
+            "template_data_ref": "ports.ipa_delta",
             "connection": {
               "title": "Concatenate + project",
               "role": "reusable step output",
               "inside": "ipa_delta = output_projection(concat(scalar_context, local_point_context, pair_value_context))"
-            }
-          },
-          {
-            "id": "structure_ipa__residual_norm__input_1",
-            "from": "single_state",
-            "to": "residual_norm",
-            "kind": "data_flow",
-            "carries": [
-              "representations.single_features"
-            ],
-            "relation_path": [
-              "relations.single_features_enter_ipa"
-            ],
-            "grounding": "canonical_relation_path",
-            "standard_block_ref": "standard_blocks/invariant-point-attention.yaml",
-            "standard_block_id": "invariant_point_attention",
-            "block_instance_ref": "block_instances.structure_ipa",
-            "template_fact_ref": "standard_blocks.invariant_point_attention.steps.residual_norm",
-            "instance_fact_ref": "block_instances.structure_ipa.steps.residual_norm",
-            "template_data_ref": "ports.single_state",
-            "connection": {
-              "title": "Residual, dropout, and norm",
-              "role": "reusable step input",
-              "inside": "updated_single_state = layer_norm(single_state + dropout(ipa_delta))"
-            }
-          },
-          {
-            "id": "structure_ipa__residual_norm__input_2",
-            "from": "ipa_delta",
-            "to": "residual_norm",
-            "kind": "data_flow",
-            "carries": [
-
-            ],
-            "grounding": "standard_block_template",
-            "standard_block_ref": "standard_blocks/invariant-point-attention.yaml",
-            "standard_block_id": "invariant_point_attention",
-            "block_instance_ref": "block_instances.structure_ipa",
-            "template_fact_ref": "standard_blocks.invariant_point_attention.steps.residual_norm",
-            "instance_fact_ref": "block_instances.structure_ipa.steps.residual_norm",
-            "template_data_ref": "values.ipa_delta",
-            "connection": {
-              "title": "Residual, dropout, and norm",
-              "role": "reusable step input",
-              "inside": "updated_single_state = layer_norm(single_state + dropout(ipa_delta))"
-            }
-          },
-          {
-            "id": "structure_ipa__residual_norm__output_1",
-            "from": "residual_norm",
-            "to": "updated_single_state",
-            "kind": "state_update",
-            "carries": [
-              "representations.single_features"
-            ],
-            "relation_path": [
-              "relations.ipa_produces_updated_single_state"
-            ],
-            "grounding": "canonical_relation_path",
-            "standard_block_ref": "standard_blocks/invariant-point-attention.yaml",
-            "standard_block_id": "invariant_point_attention",
-            "block_instance_ref": "block_instances.structure_ipa",
-            "template_fact_ref": "standard_blocks.invariant_point_attention.steps.residual_norm",
-            "instance_fact_ref": "block_instances.structure_ipa.steps.residual_norm",
-            "template_data_ref": "ports.updated_single_state",
-            "connection": {
-              "title": "Residual, dropout, and norm",
-              "role": "reusable step output",
-              "inside": "updated_single_state = layer_norm(single_state + dropout(ipa_delta))"
             }
           }
         ],
@@ -10993,8 +12313,8 @@ export const manifest = {
           },
           {
             "id": "value_extraction",
-            "label": "Extract values and update state",
-            "description": "Reuse the shared attention weights for scalar, point, and pair values, return points to the local frame, align the three final contexts, concatenate and project them, and apply the residual wrapper.",
+            "label": "Extract and fuse values",
+            "description": "Reuse the shared attention weights for scalar, point, and pair values, return points to the local frame, align the three final contexts, then concatenate and project them into the IPA update.",
             "order": 2,
             "node_ids": [
               "aggregate_scalar_values",
@@ -11006,9 +12326,7 @@ export const manifest = {
               "aggregate_pair_values",
               "pair_value_context",
               "project_ipa_delta",
-              "ipa_delta",
-              "residual_norm",
-              "updated_single_state"
+              "ipa_delta"
             ]
           }
         ],
@@ -11016,10 +12334,58 @@ export const manifest = {
         "standardBlockRef": "standard_blocks/invariant-point-attention.yaml",
         "standardBlockId": "invariant_point_attention",
         "blockInstanceRef": "block_instances.structure_ipa",
-        "variant": "full_ipa_residual_norm",
-        "variantLabel": "Full IPA + residual normalization",
+        "variant": "full_ipa",
+        "variantLabel": "Full frame-aware IPA",
         "useScope": "whole_module",
         "conformance": "exact",
+        "shapeParameters": {
+          "c_hidden": 16,
+          "h": 12,
+          "p_q": 4,
+          "p_v": 8,
+          "b": "B",
+          "n": "N",
+          "c_s": 384,
+          "c_z": 128
+        },
+        "shapeParameterSources": {
+          "c_hidden": {
+            "kind": "configuration",
+            "ref": "reference_configuration.ipa_hidden_feature_dimension"
+          },
+          "h": {
+            "kind": "configuration",
+            "ref": "reference_configuration.ipa_heads"
+          },
+          "p_q": {
+            "kind": "configuration",
+            "ref": "reference_configuration.ipa_query_key_points"
+          },
+          "p_v": {
+            "kind": "configuration",
+            "ref": "reference_configuration.ipa_value_points"
+          },
+          "b": {
+            "kind": "boundary",
+            "portRef": "ports.single_state",
+            "representationRef": "representations.single_features"
+          },
+          "n": {
+            "kind": "boundary",
+            "portRef": "ports.single_state",
+            "representationRef": "representations.single_features"
+          },
+          "c_s": {
+            "kind": "boundary",
+            "portRef": "ports.single_state",
+            "representationRef": "representations.single_features"
+          },
+          "c_z": {
+            "kind": "boundary",
+            "portRef": "ports.pair_context",
+            "representationRef": "representations.pair_features"
+          }
+        },
         "pseudocode": [
           {
             "id": "project_scalar_terms",
@@ -11784,15 +13150,15 @@ export const manifest = {
               "values.pair_value_context"
             ],
             "outputs": [
-              "values.ipa_delta"
+              "ports.ipa_delta"
             ],
             "codeBindings": [
               {
                 "lexeme": "ipa_delta",
                 "access": "write",
-                "localRef": "values.ipa_delta",
-                "templateFactRef": "standard_blocks.invariant_point_attention.values.ipa_delta",
-                "instanceFactRef": "block_instances.structure_ipa.values.ipa_delta",
+                "localRef": "ports.ipa_delta",
+                "templateFactRef": "standard_blocks.invariant_point_attention.ports.ipa_delta",
+                "instanceFactRef": "block_instances.structure_ipa.ports.ipa_delta",
                 "occurrences": [
                   {
                     "start": 0,
@@ -11836,62 +13202,6 @@ export const manifest = {
                   {
                     "start": 74,
                     "end": 92
-                  }
-                ]
-              }
-            ]
-          },
-          {
-            "id": "residual_norm",
-            "templateFactRef": "standard_blocks.invariant_point_attention.steps.residual_norm",
-            "instanceFactRef": "block_instances.structure_ipa.steps.residual_norm",
-            "label": "Residual, dropout, and norm",
-            "operation": "residual_normalization",
-            "code": "updated_single_state = layer_norm(single_state + dropout(ipa_delta))",
-            "inputs": [
-              "ports.single_state",
-              "values.ipa_delta"
-            ],
-            "outputs": [
-              "ports.updated_single_state"
-            ],
-            "codeBindings": [
-              {
-                "lexeme": "updated_single_state",
-                "access": "write",
-                "localRef": "ports.updated_single_state",
-                "templateFactRef": "standard_blocks.invariant_point_attention.ports.updated_single_state",
-                "instanceFactRef": "block_instances.structure_ipa.ports.updated_single_state",
-                "occurrences": [
-                  {
-                    "start": 0,
-                    "end": 20
-                  }
-                ]
-              },
-              {
-                "lexeme": "single_state",
-                "access": "read",
-                "localRef": "ports.single_state",
-                "templateFactRef": "standard_blocks.invariant_point_attention.ports.single_state",
-                "instanceFactRef": "block_instances.structure_ipa.ports.single_state",
-                "occurrences": [
-                  {
-                    "start": 34,
-                    "end": 46
-                  }
-                ]
-              },
-              {
-                "lexeme": "ipa_delta",
-                "access": "read",
-                "localRef": "values.ipa_delta",
-                "templateFactRef": "standard_blocks.invariant_point_attention.values.ipa_delta",
-                "instanceFactRef": "block_instances.structure_ipa.values.ipa_delta",
-                "occurrences": [
-                  {
-                    "start": 57,
-                    "end": 66
                   }
                 ]
               }

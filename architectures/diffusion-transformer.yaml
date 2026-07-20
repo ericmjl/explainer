@@ -1,4 +1,4 @@
-schema_version: architecture-v0.4
+schema_version: architecture-v0.5
 id: diffusion_transformer
 name: Diffusion Transformer (DiT)
 family: transformer

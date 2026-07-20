@@ -17,7 +17,7 @@ retain their original meaning.
 The plan is an instruction artifact, not a second architecture source. The
 durable facts remain in `architectures/*.yaml` and `views/*.view.yaml`; a plan
 is accepted only when applying all of its operations produces sources that
-pass the normal architecture-v0.4 and visualization-v0.4 compiler pipeline.
+pass the normal architecture-v0.5 and visualization-v0.4 compiler pipeline.
 
 Related contracts:
 
@@ -159,13 +159,13 @@ matching the visualization-v0.4 node contract.
 
 ### `add_module`
 
-Appends one canonical architecture-v0.4 module to `modules`. The payload is
+Appends one canonical architecture-v0.5 module to `modules`. The payload is
 the complete module object under `module:`. Duplicate IDs fail; the operation
 does not merge with an existing module.
 
 ### `add_representation`
 
-Appends one complete architecture-v0.4 representation under
+Appends one complete architecture-v0.5 representation under
 `representation:`. Its ID must be new and its shape, scale, semantic role,
 carried meaning, and evidence must be explicit.
 
@@ -377,7 +377,7 @@ unmatched overrides, and disconnected root flow fail the entire transaction.
 
 ## Evidence Rules
 
-The operation envelope does not weaken architecture-v0.4 evidence rules.
+The operation envelope does not weaken architecture-v0.5 evidence rules.
 Payloads for `add_module`, `add_representation`, `add_value_site`, and
 `add_relation` are validated against their canonical architecture
 definitions, including required `evidence.status` and `evidence.refs`.
@@ -429,7 +429,7 @@ then follows the normal fail-closed path:
 architecture-edit-v0.1 or architecture-edit-v0.2 plan schema
   -> canonical payload validation
   -> source-set and SHA-256 preconditions
-  -> staged architecture-v0.4 and visualization-v0.4 sources
+  -> staged architecture-v0.5 and visualization-v0.4 sources
   -> evidence, typed-reference, ownership, and coverage checks
   -> semantic board projection
   -> deterministic manifest generation
@@ -484,7 +484,7 @@ For an existing registry `source_set`, an agent should:
 7. Report any architectural facts that could not be represented by v0.2
    operations instead of silently editing around the compiler.
 
-Creating or changing a `standard-block-v0.2` template, architecture
+Creating or changing a `standard-block-v0.3` template, architecture
 `block_instances` entry, or reusable-board stub is currently one such
 unsupported cross-source edit. Author that bounded declarative change through
 the normal source-first workflow, then run the full source-set verifier. Do not

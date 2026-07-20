@@ -1,10 +1,10 @@
 export const manifest = {
-  "schemaVersion": "architecture-manifest-v0.4",
+  "schemaVersion": "architecture-manifest-v0.5",
   "build": {
-    "generator": "architecture-manifest-builder-v0.4.6",
+    "generator": "architecture-manifest-builder-v0.5.0",
     "inputDigests": {
       "references/bibliography.yaml": "abe9226586bfb64261c81b7756b7275c48a3a172a9a18b5f91f7acfd3145e374",
-      "architectures/diffusion-transformer.yaml": "5d7c09d2a97999cd526241976db9881acc2499d98abbe3624520562a53510aad",
+      "architectures/diffusion-transformer.yaml": "62b1a3f47c1b0891d242c49ca269a5f1e856672fbd080a07e7eebf718a8a8965",
       "views/dit-semantic-zoom.view.yaml": "ebca6fefd29f612792b8957db940cc3237132140722d52b76999194823dbc5eb",
       "pseudocode/diffusion-transformer.yaml": "c30de43fb5cb70827e520b7f60c410d348de1c10d72646ab68e6b4a2d6064c65",
       "standard_blocks/adaln-zero-conditioning.yaml": "33cd9afbe3b6867c4ce328c25d41a33210a5e387a195a93b19bc8696ee9e0b32",
@@ -13,7 +13,7 @@ export const manifest = {
     }
   },
   "architecture": {
-    "schemaVersion": "architecture-v0.4",
+    "schemaVersion": "architecture-v0.5",
     "id": "diffusion_transformer",
     "name": "Diffusion Transformer (DiT)",
     "family": "transformer",

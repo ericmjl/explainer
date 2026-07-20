@@ -1,4 +1,4 @@
-schema_version: architecture-v0.4
+schema_version: architecture-v0.5
 id: genie3
 name: Genie 3 Atom-Aware Protein Diffusion
 family: protein_structure_diffusion
@@ -18,7 +18,10 @@ reference_configuration:
   latent_transformer_blocks: 5
   global_tokens: 10
   structure_layers: 8
+  ipa_hidden_feature_dimension: 16
   ipa_heads: 12
+  ipa_query_key_points: 4
+  ipa_value_points: 8
   evidence:
     status: confirmed_from_code
     refs:
@@ -87,6 +90,7 @@ execution:
       repeats: 8
       reruns:
         - modules.invariant_point_attention
+        - modules.ipa_residual_norm
         - modules.structure_transition
         - modules.frame_update
       cached:
@@ -716,6 +720,16 @@ value_sites:
     scope_ref: modules.structure_decoder
     role: structure_layer_frame_read
     evidence: *structure_evidence
+  - id: ipa_delta
+    representation_ref: representations.single_features
+    scope_ref: modules.structure_decoder
+    role: invariant_point_attention_update
+    evidence:
+      status: confirmed_from_code
+      refs:
+        - source_ref: genie3_ipa_code
+          role: implementation_evidence
+          locator: InvariantPointAttention.forward
   - id: single_after_ipa
     representation_ref: representations.single_features
     scope_ref: modules.structure_decoder
@@ -986,7 +1000,7 @@ modules:
     label: Invariant Point Attention
     kind: attention
     mechanisms: [invariant_point_attention]
-    role: update the decoder single state using pair bias and points expressed in the current token frames
+    role: produce an additive single-state update using pair bias and points expressed in the current token frames
     scale: token
     attention:
       pattern: full
@@ -997,12 +1011,21 @@ modules:
       pair_bias_source: refined_pair_features
       positional_encoding: { kind: rigid_frame_points }
     evidence: *structure_evidence
+  - id: ipa_residual_norm
+    parent_ref: modules.structure_decoder
+    decomposition: { status: leaf }
+    label: IPA Residual + Norm
+    kind: normalization
+    mechanisms: [residual_connection, dropout, layer_normalization]
+    role: add the IPA update to the incoming decoder single state, then apply dropout and LayerNorm
+    scale: token
+    evidence: *structure_evidence
   - id: structure_transition
     parent_ref: modules.structure_decoder
     decomposition: { status: leaf }
     label: Structure Transition
     kind: feed_forward
-    role: normalize and transform the IPA-updated single state
+    role: apply a three-layer per-token MLP residually, then apply dropout and LayerNorm
     scale: token
     evidence: *structure_evidence
   - id: frame_update
@@ -1311,7 +1334,7 @@ block_instances:
   - id: structure_ipa
     block_ref: standard_blocks/invariant-point-attention.yaml
     subject_ref: modules.invariant_point_attention
-    variant: full_ipa_residual_norm
+    variant: full_ipa
     use_scope: whole_module
     conformance: exact
     port_bindings:
@@ -1323,8 +1346,13 @@ block_instances:
         relation_refs: [relations.decoder_frames_condition_ipa]
       - port_ref: ports.mask
         relation_refs: [relations.token_structure_frame_mask_masks_ipa]
-      - port_ref: ports.updated_single_state
-        relation_refs: [relations.ipa_produces_updated_single_state]
+      - port_ref: ports.ipa_delta
+        relation_refs: [relations.ipa_produces_delta]
+    parameter_bindings:
+      - { parameter_ref: parameters.c_hidden, configuration_ref: reference_configuration.ipa_hidden_feature_dimension }
+      - { parameter_ref: parameters.h, configuration_ref: reference_configuration.ipa_heads }
+      - { parameter_ref: parameters.p_q, configuration_ref: reference_configuration.ipa_query_key_points }
+      - { parameter_ref: parameters.p_v, configuration_ref: reference_configuration.ipa_value_points }
     evidence:
       status: confirmed_from_code
       refs:
@@ -1332,10 +1360,6 @@ block_instances:
           role: implementation_evidence
           locator: InvariantPointAttention.forward
           note: Full IPA implements scalar and point attention, pair bias, and attention-weighted pair-value aggregation.
-        - source_ref: genie3_structure_code
-          role: wrapper_evidence
-          locator: StructureLayer.forward
-          note: The structure layer applies the residual, dropout, and LayerNorm wrapper represented by this variant.
 relations:
   - id: design_request_enters_feature_builder
     from: value_sites.design_request
@@ -1690,12 +1714,33 @@ relations:
     - representations.token_structure_frame_mask
     operation: mask_invalid_token_frames
     evidence: *structure_relation_evidence
-  - id: ipa_produces_updated_single_state
+  - id: ipa_produces_delta
     from: modules.invariant_point_attention
+    to: value_sites.ipa_delta
+    kind: data_flow
+    carries: [representations.single_features]
+    operation: project_ipa_delta
+    evidence: *structure_relation_evidence
+  - id: ipa_delta_enters_residual_norm
+    from: value_sites.ipa_delta
+    to: modules.ipa_residual_norm
+    kind: data_flow
+    carries: [representations.single_features]
+    operation: supply_ipa_delta
+    evidence: *structure_relation_evidence
+  - id: decoder_single_state_skips_to_ipa_residual_norm
+    from: value_sites.decoder_single_state
+    to: modules.ipa_residual_norm
+    kind: skip
+    carries: [representations.single_features]
+    operation: preserve_residual_state
+    evidence: *structure_relation_evidence
+  - id: ipa_residual_norm_produces_updated_single_state
+    from: modules.ipa_residual_norm
     to: value_sites.single_after_ipa
     kind: state_update
     carries: [representations.single_features]
-    operation: residual_attention_update
+    operation: residual_dropout_layer_norm
     evidence: *structure_relation_evidence
   - id: ipa_state_enters_structure_transition
     from: value_sites.single_after_ipa

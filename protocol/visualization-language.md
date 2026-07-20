@@ -3,7 +3,7 @@
 Status: **current implemented contract**.
 
 A visualization source defines curated semantic-zoom boards over one
-architecture-v0.4 graph. It owns selection, layout, navigation, visibility
+architecture-v0.5 graph. It owns selection, layout, navigation, visibility
 decisions, and presentation. Canonical modules, values, relations, semantics,
 and evidence remain owned by the architecture source.
 
@@ -537,7 +537,7 @@ The Ruby projector validates subject scope, relative depth, exact occurrence
 binding, visibility accounting, elision ambiguity, exclusions, drilldown
 compatibility, presentation-only overrides, and root boundary reachability.
 It emits canonical projected edges with ordered relation provenance into
-`architecture-manifest-v0.4`.
+`architecture-manifest-v0.5`.
 
 Before projection, JSON Schema validation also enforces grid and field types,
 presentation enums, edge-override shape, and the absence of authored v0.4

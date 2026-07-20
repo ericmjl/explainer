@@ -4,7 +4,7 @@ require_relative "json_schema_subset"
 
 # Structural and canonical-payload validation for architecture-edit plans.
 # Each plan version owns its operation envelope, while added architecture facts
-# are checked against architecture-v0.4's existing definitions so the
+# are checked against the current architecture schema's definitions so the
 # contracts cannot drift independently.
 module ArchitectureEditContract
   ROOT = File.expand_path("..", __dir__)
@@ -18,7 +18,7 @@ module ArchitectureEditContract
   }.freeze
   # Kept for callers that imported the original constant directly.
   EDIT_SCHEMA = EDIT_SCHEMAS.fetch("architecture-edit-v0.1")
-  ARCHITECTURE_SCHEMA = JsonSchemaSubset.load(File.join(ROOT, "schemas/architecture-v0.4.schema.json"))
+  ARCHITECTURE_SCHEMA = JsonSchemaSubset.load(File.join(ROOT, "schemas/architecture-v0.5.schema.json"))
 
   ADD_PAYLOADS = {
     "add_module" => ["module", "module"],

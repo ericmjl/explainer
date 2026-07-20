@@ -67,6 +67,42 @@ class StandardBlockCompilerTest < Minitest::Test
     refute_equal genie2_relations, genie3_relations
   end
 
+  def test_v03_ipa_resolves_symbolic_internal_shapes_without_changing_template_layout
+    path = "standard_blocks/invariant-point-attention.yaml"
+    architecture = load_yaml("architectures/genie3.yaml")
+    block = load_yaml(path)
+    instance = catalog_for(path, "standard_blocks/pair-biased-attention.yaml").compile_instances(
+      architecture,
+      registered_blocks: [path, "standard_blocks/pair-biased-attention.yaml"],
+    ).find { |candidate| candidate.fetch("id") == "structure_ipa" }
+
+    assert_equal({
+      "c_hidden" => 16,
+      "h" => 12,
+      "p_q" => 4,
+      "p_v" => 8,
+      "b" => "B",
+      "n" => "N",
+      "c_s" => 384,
+      "c_z" => 128,
+    }, instance.fetch("shapeParameters"))
+
+    nodes = instance.dig("scene", "nodes").to_h { |node| [node.fetch("id"), node] }
+    assert_equal "B x 12 x N x N", nodes.dig("attention_weights", "shape")
+    assert_equal "B x N x 12 x 8 x 3", nodes.dig("global_point_context", "shape")
+    assert_equal "B x N x 12 x 8 x 4", nodes.dig("local_point_context", "shape")
+    assert_equal "B x N x 12 x 128", nodes.dig("pair_value_context", "shape")
+    assert_equal "B x N x 384", nodes.dig("ipa_delta", "shape")
+    assert nodes.values.select { |node| node["kind"] == "representation" }
+      .all? { |node| node["shape_status"] == "resolved" }
+
+    authored_cells = block.dig("visual_template", "nodes").to_h do |node|
+      [node.fetch("id"), [node.fetch("col"), node.fetch("row")]]
+    end
+    compiled_cells = nodes.transform_values { |node| [node.fetch("col"), node.fetch("row")] }
+    assert_equal authored_cells, compiled_cells
+  end
+
   def test_reusable_board_stub_compiles_to_a_template_grounded_detail_scene
     architecture = load_yaml("architectures/genie2.yaml")
     view = load_yaml("views/genie2-semantic-zoom.view.yaml")
@@ -80,7 +116,7 @@ class StandardBlockCompilerTest < Minitest::Test
 
     assert_equal "standard_block_template", board.fetch("projectionMode")
     assert_equal "block_instances.structure_ipa", board.fetch("blockInstanceRef")
-    assert_equal "full_ipa_residual_norm", board.fetch("variant")
+    assert_equal "full_ipa", board.fetch("variant")
     refute_empty board.fetch("nodes")
     refute_empty board.fetch("edges")
     cells = board.fetch("nodes").map { |node| [node.fetch("col"), node.fetch("row")] }

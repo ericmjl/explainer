@@ -1,4 +1,4 @@
-schema_version: architecture-v0.4
+schema_version: architecture-v0.5
 id: generic_feature_refinement
 name: Generic Feature Refinement Pipeline
 family: transformer

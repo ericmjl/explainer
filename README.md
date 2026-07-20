@@ -59,6 +59,10 @@ repository metadata. Do not serve the repository root as a public site.
   for a follow-up question.
 - Pan and zoom with a mouse, trackpad, or direct-touch pinch gesture.
 
+Use the board toolbar's **Copy link** button to share an exact component. A
+static deployment preserves links such as
+`?arch=genie3&board=latent_transformer&node=pair_biased_attention_update`.
+
 ## Repository map
 
 | Path | Purpose |

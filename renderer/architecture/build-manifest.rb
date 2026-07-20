@@ -18,7 +18,7 @@ require_relative "../../lib/strict_yaml"
 
 ROOT = File.expand_path("../..", __dir__)
 REGISTRY = "architectures/index.yaml"
-GENERATOR_VERSION = "architecture-manifest-builder-v0.4.6"
+GENERATOR_VERSION = "architecture-manifest-builder-v0.5.0"
 options = {
   check: false,
   output_dir: File.join(ROOT, "renderer/architecture"),
@@ -245,10 +245,11 @@ def standard_block_manifest(paths, blocks_by_path)
         }.compact
       end,
     }
-    if block["schema_version"] == "standard-block-v0.2"
-      summary.merge!(
+    if %w[standard-block-v0.2 standard-block-v0.3].include?(block["schema_version"])
+      summary.merge!({
         "kind" => block.fetch("kind"),
         "status" => block.fetch("status"),
+        "parameters" => block["parameters"],
         "ports" => block.fetch("ports"),
         "variants" => block.fetch("variants"),
         "defaultVariant" => block.fetch("default_variant"),
@@ -256,7 +257,7 @@ def standard_block_manifest(paths, blocks_by_path)
         "steps" => block.fetch("steps"),
         "visualTemplate" => block.fetch("visual_template"),
         "evidencePolicy" => block.fetch("evidence_policy"),
-      )
+      }.compact)
     end
     acc[block.fetch("id")] = summary
   end
@@ -264,7 +265,7 @@ end
 
 def build_manifest(config, bibliography, bibliography_path)
   architecture = load_yaml(config.fetch("architecture"))
-  SourceContract.validate!(architecture) if architecture["schema_version"] == "architecture-v0.4"
+  SourceContract.validate!(architecture) if %w[architecture-v0.4 architecture-v0.5].include?(architecture["schema_version"])
   ArchitectureOwnership.validate!(architecture)
   ArchitectureCoverage.validate!(architecture)
   pseudocode = load_yaml(config.fetch("pseudocode"))
@@ -285,14 +286,14 @@ def build_manifest(config, bibliography, bibliography_path)
     registered_blocks: config.fetch("standard_blocks"),
   )
   block_instance_summaries = block_instances.map { |instance| instance.reject { |key, _value| key == "scene" } }
-  projected_architecture_versions = %w[architecture-v0.3 architecture-v0.4]
+  projected_architecture_versions = %w[architecture-v0.3 architecture-v0.4 architecture-v0.5]
   derived_projection = projected_architecture_versions.include?(architecture["schema_version"]) &&
                        semantic_zoom["schema_version"] == "visualization-v0.4"
   if projected_architecture_versions.include?(architecture["schema_version"]) && !derived_projection
     raise "#{architecture.fetch('schema_version')} requires visualization-v0.4 for #{config.fetch('id')}"
   end
   if semantic_zoom["schema_version"] == "visualization-v0.4" && !derived_projection
-    raise "visualization-v0.4 requires architecture-v0.3 or architecture-v0.4 for #{config.fetch('id')}"
+    raise "visualization-v0.4 requires architecture-v0.3, architecture-v0.4, or architecture-v0.5 for #{config.fetch('id')}"
   end
   compiled_view_boards = block_catalog.compile_boards(
     architecture,
@@ -310,15 +311,16 @@ def build_manifest(config, bibliography, bibliography_path)
   else
     compiled_view_boards.map { |board| board.merge("projectionMode" => "authored") }
   end
-  one_owner_contract = architecture["schema_version"] == "architecture-v0.4"
+  one_owner_contract = %w[architecture-v0.4 architecture-v0.5].include?(architecture["schema_version"])
   value_site_interfaces = one_owner_contract ? compile_value_site_interfaces(architecture) : {}
   state_semantics_by_site = one_owner_contract ? compile_state_semantics_by_site(architecture) : {}
   conditioning = one_owner_contract ? compile_conditioning(architecture) : (architecture["conditioning"] || [])
   scale_transitions = one_owner_contract ? compile_scale_transitions(architecture) : (architecture["scale_transitions"] || [])
 
   {
-    "schemaVersion" => architecture["schema_version"] == "architecture-v0.4" ? "architecture-manifest-v0.4" :
-      (derived_projection ? "architecture-manifest-v0.3" : "architecture-manifest-v0.2"),
+    "schemaVersion" => architecture["schema_version"] == "architecture-v0.5" ? "architecture-manifest-v0.5" :
+      (architecture["schema_version"] == "architecture-v0.4" ? "architecture-manifest-v0.4" :
+        (derived_projection ? "architecture-manifest-v0.3" : "architecture-manifest-v0.2")),
     "build" => {
       "generator" => GENERATOR_VERSION,
       "inputDigests" => input_digests([

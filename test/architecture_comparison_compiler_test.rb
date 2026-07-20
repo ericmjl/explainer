@@ -66,7 +66,7 @@ class ArchitectureComparisonCompilerTest < Minitest::Test
     assert_equal ["alignments.frame_aware_point_path"], full_only.fetch("alignmentRefs")
     assert_equal "pair_values_residual_norm_transition", compiled.dig("subjects", "primary", "variant")
     assert_equal "reduced", compiled.dig("subjects", "primary", "conformance")
-    assert_equal "full_ipa_residual_norm", compiled.dig("subjects", "counterpart", "variant")
+    assert_equal "full_ipa", compiled.dig("subjects", "counterpart", "variant")
     assert_equal "exact", compiled.dig("subjects", "counterpart", "conformance")
   end
 
