@@ -40,6 +40,7 @@ class RendererWorkspaceTest < Minitest::Test
     css = read("styles.css")
 
     assert_includes renderer, "function renderRepresentationFieldTable(rep)"
+    assert_includes renderer, "function representationFieldLegendMarkup(groups)"
     assert_includes renderer, "Feature bundle contents"
     assert_includes renderer, 'card.classList.add("has-field-table")'
     assert_includes renderer, 'kind === "scalar" || kind === "dictionary"'
@@ -123,14 +124,16 @@ class RendererWorkspaceTest < Minitest::Test
     block = function_source(renderer, "renderBlockNode", "placeNode")
 
     assert_includes representation, 'card.addEventListener("pointerenter"'
-    assert_includes representation, "beginConnectivityHighlight(pointerHighlightKey, node.id)"
+    assert_includes representation,
+      "beginConnectivityHighlight(pointerHighlightKey, node.id, { dimUnrelated: true })"
     assert_includes representation, "endConnectivityHighlight(pointerHighlightKey)"
     assert_includes representation, 'card.addEventListener("focus"'
     assert_includes representation, "beginConnectivityHighlight(focusHighlightKey, node.id)"
     assert_includes representation, "focusRepresentation(node, rep)"
 
     assert_includes block, 'card.addEventListener("mouseenter"'
-    assert_includes block, "beginConnectivityHighlight(pointerHighlightKey, node.id)"
+    assert_includes block,
+      "beginConnectivityHighlight(pointerHighlightKey, node.id, { dimUnrelated: true })"
     assert_includes block, "endConnectivityHighlight(pointerHighlightKey)"
     assert_includes block, 'card.addEventListener("focusin"'
     assert_includes block, "beginConnectivityHighlight(focusHighlightKey, node.id)"
@@ -143,6 +146,23 @@ class RendererWorkspaceTest < Minitest::Test
     refute_match(/function (?:showNodePeek|showRepPeek|repTooltipHtml|showHoverPanel|hideHoverPanel)\b/, renderer)
   end
 
+  def test_inspector_has_a_persistent_accessible_collapse_control
+    html = read("renderer/architecture/index.html")
+    renderer = read("renderer/architecture/renderer.js")
+    css = read("styles.css")
+
+    assert_includes html, 'id="focusCollapse"'
+    assert_includes html, 'aria-controls="focusPanelPages"'
+    assert_includes html, 'aria-expanded="true"'
+    assert_includes html, 'id="focusPanelPages" class="focus-panel-pages"'
+    assert_includes renderer, "function ensureInspectorCollapse()"
+    assert_includes renderer, "function setInspectorCollapsed(collapsed"
+    assert_includes renderer, 'window.sessionStorage.getItem(INSPECTOR_COLLAPSED_STORAGE_KEY)'
+    assert_includes renderer, 'classList.toggle("is-inspector-collapsed"'
+    assert_includes css, ".renderer-page.is-inspector-collapsed .renderer-grid"
+    assert_includes css, ".renderer-page.is-inspector-collapsed .focus-panel-header"
+  end
+
   def test_selected_nodes_have_a_distinct_persistent_locator
     renderer = read("renderer/architecture/renderer.js")
     css = read("styles.css")
@@ -153,6 +173,7 @@ class RendererWorkspaceTest < Minitest::Test
     assert_includes css, ".arch-rep.is-selected-node"
     assert_includes css, "outline: 3px solid"
     assert_includes css, "@keyframes architecture-selection-arrival"
+    assert_match(/\.arch-node\.is-selected-node,[^{]+\{[^}]*z-index:\s*7/m, css)
   end
 
   def test_keyboard_zoom_uses_one_incremental_step_toward_the_selection

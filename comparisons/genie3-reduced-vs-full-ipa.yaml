@@ -3,7 +3,7 @@ id: genie3_reduced_vs_full_ipa
 title: Genie 3 Reduced Attention vs Full Frame-Aware IPA
 status: review
 question: What does Genie 3's reduced latent attention retain, change, and remove relative to full frame-aware IPA?
-summary: Both paths use scalar attention, pair-logit bias, pair-value aggregation, and a residual-normalized single-state update. Full IPA additionally forms frame-aware point logits and point outputs; the reduced latent path omits that geometry and adds its latent-block transition and final mask.
+summary: Both paths use scalar attention, pair-logit bias, attention-weighted pair-value aggregation, and a residual-normalized single-state update. Full IPA additionally forms frame-aware point logits and point outputs; the reduced latent path omits that geometry and adds its latent-block transition and final mask.
 subjects:
   primary:
     label: Reduced latent attention
@@ -89,7 +89,7 @@ alignments:
     evidence: *both_attention_evidence
   - id: pair_value_aggregation
     group_ref: groups.shared
-    label: Aggregate pair values
+    label: Attention-weighted pair-value aggregation
     relationship: equivalent
     primary_refs:
       - block_instances.latent_reduced_pair_attention.steps.aggregate_pair_values

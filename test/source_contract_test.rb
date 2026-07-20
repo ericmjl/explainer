@@ -265,13 +265,26 @@ class SourceContractTest < Minitest::Test
     architecture = load_yaml("architectures/genie3.yaml")
     view = load_yaml("views/genie3-semantic-zoom.view.yaml")
     representations = architecture.fetch("representations").to_h { |item| [item.fetch("id"), item] }
+    feature_bundle = representations.fetch("feature_bundle")
+    feature_groups = feature_bundle.fetch("field_groups")
+    feature_groups_by_id = feature_groups.to_h { |group| [group.fetch("id"), group] }
     structure_board = view.fetch("boards").find { |item| item.fetch("id") == "structure_decoder" }
     feature_dictionary = structure_board.fetch("nodes").find { |node| node.fetch("id") == "feature_bundle" }
     frame_mask = structure_board.fetch("nodes").find { |node| node.fetch("id") == "token_structure_frame_mask" }
     ipa_instance = architecture.fetch("block_instances").find { |item| item.fetch("id") == "structure_ipa" }
     mask_binding = ipa_instance.fetch("port_bindings").find { |item| item.fetch("port_ref") == "ports.mask" }
 
-    assert_equal "dictionary", representations.fetch("sample_feature_dictionary").fetch("glyph")
+    sample_dictionary = representations.fetch("sample_feature_dictionary")
+    assert_equal "dictionary", sample_dictionary.fetch("glyph")
+    assert_equal "heterogeneous fields sharing an N atom-token prefix", sample_dictionary.fetch("shape")
+    refute_match(/\bA\b|atom fields/, sample_dictionary.fetch("shape"))
+    assert_equal "heterogeneous fields sharing a B x N atom-token prefix", feature_bundle.fetch("shape")
+    assert_equal ["token"], feature_groups.map { |group| group.fetch("axis") }.uniq
+    assert_equal 25, feature_groups.sum { |group| group.fetch("fields").length }
+    assert_equal "B x N x 37", feature_groups_by_id.fetch("atom_type").fetch("shape")
+    assert_equal "B x N x 4", feature_groups_by_id.fetch("atom_element").fetch("shape")
+    assert_equal "B x N", feature_groups_by_id.fetch("atom_validity").fetch("shape")
+    assert_equal "B x N x 3", feature_groups_by_id.fetch("atom_coordinates").fetch("shape")
     assert_equal "value_sites.feature_bundle", feature_dictionary.fetch("ref")
     refute feature_dictionary.key?("glyph")
     refute feature_dictionary.key?("notation")

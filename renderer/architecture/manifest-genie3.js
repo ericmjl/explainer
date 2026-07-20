@@ -4,11 +4,11 @@ export const manifest = {
     "generator": "architecture-manifest-builder-v0.4.6",
     "inputDigests": {
       "references/bibliography.yaml": "abe9226586bfb64261c81b7756b7275c48a3a172a9a18b5f91f7acfd3145e374",
-      "architectures/genie3.yaml": "30ed727051173ad7eb3f1381ae53b67e0bc12ade2727ab2421f4b0e728daec4d",
-      "views/genie3-semantic-zoom.view.yaml": "423a685b4a6699dece123336da699c3b3dc905ab9450b2c7dbad37c7135b5622",
+      "architectures/genie3.yaml": "e239d3e5c38a40a9821f0579a4c54e61fe2c892fc1665a6ef383bd5b676cbb37",
+      "views/genie3-semantic-zoom.view.yaml": "bf6279698c1f377ec8e5fd1176d53bfd8825d6044fd442ab00af9cb515e1b4ce",
       "pseudocode/genie3.yaml": "822369fcf368f6fc2cf07c70a810d408a122d4cc1bad4f33ef2fbbf6b848d09c",
-      "standard_blocks/pair-biased-attention.yaml": "88379fcd3ad641e38da23ce3b5a9ccef84344149d9c8fac51792ad63cb9da7dc",
-      "standard_blocks/invariant-point-attention.yaml": "a88d3bd473e6bbfeb6846085f7d5091e6e8b0e33fbbd8292af4d578df22b2c27"
+      "standard_blocks/pair-biased-attention.yaml": "9cd25cca99e46326432232d92a00d84d82b3e59d028aff4e47d73aa31bac9381",
+      "standard_blocks/invariant-point-attention.yaml": "d185138554938b05509aeb1789cfd2a0275d561991bca4dfd22605ad40cc847b"
     }
   },
   "architecture": {
@@ -953,13 +953,13 @@ export const manifest = {
         "decomposition": {
           "status": "leaf"
         },
-        "label": "Pair-Biased Single Attention",
+        "label": "Pair-Biased Single Attention (Reduced IPA)",
         "kind": "attention",
         "mechanisms": [
           "pair_biased_attention",
-          "pair_value_injection"
+          "attention_weighted_pair_value_aggregation"
         ],
-        "role": "update single features using pair-biased self-attention with pair-derived value injection and no frame geometry",
+        "role": "update single features using pair-biased self-attention and attention-weighted pair-value aggregation, with no frame geometry",
         "scale": "token",
         "attention": {
           "pattern": "full",
@@ -1538,10 +1538,10 @@ export const manifest = {
         "subjectRef": "modules.pair_biased_attention_update",
         "variant": "pair_values_residual_norm_transition",
         "variantLabel": "Reduced pair attention + wrapper",
-        "variantDescription": "A reduced IPA-style path adds pair bias, aggregates pair values, then applies residual normalization, a transition, and output masking.",
+        "variantDescription": "A reduced IPA-style path adds pair bias and attention-weighted pair-value aggregation, then applies residual normalization, a transition, and output masking.",
         "useScope": "whole_module",
         "conformance": "reduced",
-        "differenceSummary": "Genie 3 removes frame-aware point terms, keeps pair-logit bias and pair-value aggregation, then adds residual normalization, a single transition, and final masking.",
+        "differenceSummary": "Genie 3 removes frame-aware point terms, keeps pair-logit bias and attention-weighted pair-value aggregation, then adds residual normalization, a single transition, and final masking.",
         "evidence": {
           "status": "confirmed_from_code",
           "refs": [
@@ -1549,7 +1549,7 @@ export const manifest = {
               "source_ref": "genie3_ipa_code",
               "role": "implementation_evidence",
               "locator": "ReducedInvariantPointAttention.forward",
-              "note": "Reduced IPA implements scalar attention with pair bias and pair-value aggregation while omitting frame-aware point terms."
+              "note": "Reduced IPA implements scalar attention with pair bias and attention-weighted pair-value aggregation while omitting frame-aware point terms."
             },
             {
               "source_ref": "genie3_latent_transformer_code",
@@ -1589,7 +1589,7 @@ export const manifest = {
                 "from": "value_sites.pair_with_global_tokens",
                 "to": "modules.pair_biased_attention_update",
                 "kind": "conditioning",
-                "operation": "bias_attention_and_inject_pair_values",
+                "operation": "bias_attention_and_aggregate_pair_values",
                 "carries": [
                   "representations.pair_features"
                 ]
@@ -1731,7 +1731,7 @@ export const manifest = {
             "id": "aggregate_pair_values",
             "templateFactRef": "standard_blocks.pair_biased_attention.steps.aggregate_pair_values",
             "instanceFactRef": "block_instances.latent_reduced_pair_attention.steps.aggregate_pair_values",
-            "label": "Aggregate pair values",
+            "label": "Attention-weighted pair-value aggregation",
             "operation": "pair_value_aggregation",
             "code": "pair_context_out = einsum(attention, pair_context)",
             "tex": "o^z_{ih} = sum_j a_{ijh} z_{ij}",
@@ -1808,7 +1808,7 @@ export const manifest = {
               "source_ref": "genie3_ipa_code",
               "role": "implementation_evidence",
               "locator": "InvariantPointAttention.forward",
-              "note": "Full IPA implements scalar, point, pair-bias, and pair-value attention terms."
+              "note": "Full IPA implements scalar and point attention, pair bias, and attention-weighted pair-value aggregation."
             },
             {
               "source_ref": "genie3_structure_code",
@@ -2609,7 +2609,7 @@ export const manifest = {
             "id": "aggregate_pair_values",
             "templateFactRef": "standard_blocks.invariant_point_attention.steps.aggregate_pair_values",
             "instanceFactRef": "block_instances.structure_ipa.steps.aggregate_pair_values",
-            "label": "Aggregate pair values",
+            "label": "Attention-weighted pair-value aggregation",
             "operation": "pair_value_aggregation",
             "code": "pair_value_context = weighted_sum(attention, pair_context)",
             "inputs": [
@@ -2665,7 +2665,7 @@ export const manifest = {
             "id": "project_ipa_delta",
             "templateFactRef": "standard_blocks.invariant_point_attention.steps.project_ipa_delta",
             "instanceFactRef": "block_instances.structure_ipa.steps.project_ipa_delta",
-            "label": "Fuse IPA outputs",
+            "label": "Concatenate + project",
             "operation": "output_projection",
             "code": "ipa_delta = output_projection(concat(scalar_context, local_point_context, pair_value_context))",
             "inputs": [
@@ -2814,10 +2814,11 @@ export const manifest = {
       {
         "id": "feature_bundle",
         "scale": "mixed",
-        "semantic_role": "model-ready dictionary of token- and atom-indexed metadata, known values, and task-dependent conditioning masks",
-        "shape": "B x N token fields + B x A atom fields",
+        "semantic_role": "model-ready dictionary of residue metadata, atom identity and coordinates, frame construction, and task conditioning aligned to one padded atom-token axis",
+        "shape": "heterogeneous fields sharing a B x N atom-token prefix",
         "carries": [
-          "token, residue, chain, entity, and atom identities",
+          "one aligned row per C-alpha or side-chain heavy-atom token",
+          "residue, chain, entity, and atom identities",
           "known residue types and coordinates plus atomization and validity masks",
           "conditioning group, sequence, structure, frame, and interface masks"
         ],
@@ -2852,8 +2853,8 @@ export const manifest = {
               "entity_id",
               "is_atomized"
             ],
-            "semantic_role": "Defines which padded token slots are active, maps them to residues and chains, and marks tokens created by partial atomization.",
-            "task_behavior": "Present for every task; the selected featurizer determines the token count, chain layout, and atomization flags.",
+            "semantic_role": "Defines which padded atom-token slots are active, maps them to residues and chains, and marks tokens created by partial atomization.",
+            "task_behavior": "Present for every task; the selected featurizer determines the atom-token count, chain layout, and atomization flags.",
             "evidence": {
               "status": "confirmed_from_code",
               "refs": [
@@ -2874,12 +2875,12 @@ export const manifest = {
             "id": "residue_identity",
             "label": "Known residue identity",
             "axis": "token",
-            "shape": "B x N x residue type",
+            "shape": "B x N x 20",
             "fields": [
               "gt_restype"
             ],
-            "semantic_role": "Carries the one-hot amino-acid identity available at each token position.",
-            "task_behavior": "Unknown design positions are zeroed; conditioned motif or target residues retain known identities.",
+            "semantic_role": "Carries the one-hot amino-acid identity aligned to every atom-token belonging to that residue.",
+            "task_behavior": "Unknown design positions are zeroed; conditioned motif or target atom-tokens repeat their known residue identity.",
             "evidence": {
               "status": "confirmed_from_code",
               "refs": [
@@ -2897,18 +2898,93 @@ export const manifest = {
             }
           },
           {
-            "id": "atom_identity_and_coordinates",
-            "label": "Atom identity and coordinates",
-            "axis": "atom",
-            "shape": "B x A, with categorical or xyz trailing dimensions",
+            "id": "atom_type",
+            "label": "Atom type",
+            "axis": "token",
+            "shape": "B x N x 37",
             "fields": [
-              "atom_type",
-              "atom_symbol",
-              "gt_atom_mask",
+              "atom_type"
+            ],
+            "semantic_role": "Identifies which atom37 name each C-alpha or side-chain heavy-atom token represents.",
+            "task_behavior": "Every residue contributes a C-alpha token; selected known residues contribute additional Atom14-ordered side-chain heavy-atom tokens.",
+            "evidence": {
+              "status": "confirmed_from_code",
+              "refs": [
+                {
+                  "source_ref": "genie3_feature_code",
+                  "role": "implementation_evidence",
+                  "locator": "create_np_features_from_chain, batchify_np_features, and prepare_tensor_features"
+                },
+                {
+                  "source_ref": "genie3_feature_schema_code",
+                  "role": "schema_evidence",
+                  "locator": "FEATURES, FEATURE_LEVEL, and FEATURE_DTYPE"
+                }
+              ]
+            }
+          },
+          {
+            "id": "atom_element",
+            "label": "Atom element",
+            "axis": "token",
+            "shape": "B x N x 4",
+            "fields": [
+              "atom_symbol"
+            ],
+            "semantic_role": "Encodes the N, C, O, or S element associated with each atom-token.",
+            "task_behavior": "The element follows the C-alpha or side-chain atom selected for that token.",
+            "evidence": {
+              "status": "confirmed_from_code",
+              "refs": [
+                {
+                  "source_ref": "genie3_feature_code",
+                  "role": "implementation_evidence",
+                  "locator": "create_np_features_from_chain, batchify_np_features, and prepare_tensor_features"
+                },
+                {
+                  "source_ref": "genie3_feature_schema_code",
+                  "role": "schema_evidence",
+                  "locator": "FEATURES, FEATURE_LEVEL, and FEATURE_DTYPE"
+                }
+              ]
+            }
+          },
+          {
+            "id": "atom_validity",
+            "label": "Atom validity",
+            "axis": "token",
+            "shape": "B x N",
+            "fields": [
+              "gt_atom_mask"
+            ],
+            "semantic_role": "Marks whether a ground-truth coordinate is available for each aligned atom-token.",
+            "task_behavior": "Unknown or unavailable positions are masked even though their token slots remain part of the padded layout.",
+            "evidence": {
+              "status": "confirmed_from_code",
+              "refs": [
+                {
+                  "source_ref": "genie3_feature_code",
+                  "role": "implementation_evidence",
+                  "locator": "create_np_features_from_chain, batchify_np_features, and prepare_tensor_features"
+                },
+                {
+                  "source_ref": "genie3_feature_schema_code",
+                  "role": "schema_evidence",
+                  "locator": "FEATURES, FEATURE_LEVEL, and FEATURE_DTYPE"
+                }
+              ]
+            }
+          },
+          {
+            "id": "atom_coordinates",
+            "label": "Atom coordinates",
+            "axis": "token",
+            "shape": "B x N x 3",
+            "fields": [
               "gt_atom_positions"
             ],
-            "semantic_role": "Describes each atom row, whether it is valid, and its available three-dimensional coordinate.",
-            "task_behavior": "Every residue contributes a C-alpha row; selected known residues may contribute additional Atom14 side-chain heavy-atom rows.",
+            "semantic_role": "Stores one xyz coordinate for every aligned C-alpha or side-chain heavy-atom token.",
+            "task_behavior": "Conditioned coordinates are populated when supplied; unknown design coordinates begin as zero placeholders before diffusion initialization.",
             "evidence": {
               "status": "confirmed_from_code",
               "refs": [
@@ -2939,7 +3015,7 @@ export const manifest = {
               "token_frame_lindex_adj",
               "token_frame_rindex_adj"
             ],
-            "semantic_role": "Identifies structurally valid tokens and their neighboring token indices for local-frame construction.",
+            "semantic_role": "Identifies structurally valid atom-tokens and their neighboring token indices for local-frame construction.",
             "task_behavior": "Indices exist in every task; validity masks determine where current or conditioned frames may actually be used.",
             "evidence": {
               "status": "confirmed_from_code",
@@ -2969,7 +3045,7 @@ export const manifest = {
               "cond_struct_frame_mask",
               "cond_interface_mask"
             ],
-            "semantic_role": "States which token identities, coordinates, frames, motif groups, and target-interface positions are exposed to the model.",
+            "semantic_role": "States which atom-token identities, coordinates, frames, motif groups, and target-interface positions are exposed to the model.",
             "task_behavior": "Disabled for unconditional generation, set on known motif positions for scaffolding, and set on target or interface positions for binder design.",
             "evidence": {
               "status": "confirmed_from_code",
@@ -2995,7 +3071,7 @@ export const manifest = {
             "fields": [
               "plddt"
             ],
-            "semantic_role": "Preserves per-token confidence supplied by an input structure when that field is available.",
+            "semantic_role": "Repeats the input structure confidence across the atom-tokens belonging to each sourced residue.",
             "task_behavior": "Relevant to structure-sourced motif and target examples; it is not created by the length-only unconditional path.",
             "evidence": {
               "status": "confirmed_from_code",
@@ -3215,11 +3291,12 @@ export const manifest = {
       {
         "id": "sample_feature_dictionary",
         "scale": "mixed",
-        "semantic_role": "one source-specific unbatched dictionary of token- and atom-indexed features",
-        "shape": "N token fields + A atom fields",
+        "semantic_role": "one source-specific unbatched dictionary whose residue, atom, coordinate, frame, and conditioning fields align to one atom-token axis",
+        "shape": "heterogeneous fields sharing an N atom-token prefix",
         "glyph": "dictionary",
         "carries": [
-          "task-specific token and atom layout",
+          "one aligned row per C-alpha or side-chain heavy-atom token",
+          "task-specific atom-token layout and identities",
           "known sequence and coordinate values",
           "sequence, structure, frame, motif-group, and interface conditioning masks"
         ],
@@ -4538,9 +4615,10 @@ export const manifest = {
           "value_sites.pair_after_transition",
           "value_sites.refined_pair_features"
         ],
-        "lifecycle": "transformed_within_denoiser",
+        "lifecycle": "refined_across_five_latent_transformer_blocks_then_held_fixed_and_reused_by_ipa_across_eight_structure_layers",
         "notes": [
-          "The global-row/column state entering one latent block is z_i and the pair transition writes z_(i+1); only the fifth write becomes the globals-removed mature pair output."
+          "The global-row/column state entering one latent block is z_i and the pair transition writes z_(i+1); only the fifth write becomes the globals-removed mature pair output.",
+          "The final pair representation is held fixed and reused by IPA across all eight structure layers."
         ],
         "evidence": {
           "status": "confirmed_from_code",
@@ -4956,9 +5034,10 @@ export const manifest = {
           "value_sites.pair_after_transition",
           "value_sites.refined_pair_features"
         ],
-        "lifecycle": "transformed_within_denoiser",
+        "lifecycle": "refined_across_five_latent_transformer_blocks_then_held_fixed_and_reused_by_ipa_across_eight_structure_layers",
         "notes": [
-          "The global-row/column state entering one latent block is z_i and the pair transition writes z_(i+1); only the fifth write becomes the globals-removed mature pair output."
+          "The global-row/column state entering one latent block is z_i and the pair transition writes z_(i+1); only the fifth write becomes the globals-removed mature pair output.",
+          "The final pair representation is held fixed and reused by IPA across all eight structure layers."
         ],
         "evidence": {
           "status": "confirmed_from_code",
@@ -4982,9 +5061,10 @@ export const manifest = {
           "value_sites.pair_after_transition",
           "value_sites.refined_pair_features"
         ],
-        "lifecycle": "transformed_within_denoiser",
+        "lifecycle": "refined_across_five_latent_transformer_blocks_then_held_fixed_and_reused_by_ipa_across_eight_structure_layers",
         "notes": [
-          "The global-row/column state entering one latent block is z_i and the pair transition writes z_(i+1); only the fifth write becomes the globals-removed mature pair output."
+          "The global-row/column state entering one latent block is z_i and the pair transition writes z_(i+1); only the fifth write becomes the globals-removed mature pair output.",
+          "The final pair representation is held fixed and reused by IPA across all eight structure layers."
         ],
         "evidence": {
           "status": "confirmed_from_code",
@@ -5008,9 +5088,10 @@ export const manifest = {
           "value_sites.pair_after_transition",
           "value_sites.refined_pair_features"
         ],
-        "lifecycle": "transformed_within_denoiser",
+        "lifecycle": "refined_across_five_latent_transformer_blocks_then_held_fixed_and_reused_by_ipa_across_eight_structure_layers",
         "notes": [
-          "The global-row/column state entering one latent block is z_i and the pair transition writes z_(i+1); only the fifth write becomes the globals-removed mature pair output."
+          "The global-row/column state entering one latent block is z_i and the pair transition writes z_(i+1); only the fifth write becomes the globals-removed mature pair output.",
+          "The final pair representation is held fixed and reused by IPA across all eight structure layers."
         ],
         "evidence": {
           "status": "confirmed_from_code",
@@ -5034,9 +5115,10 @@ export const manifest = {
           "value_sites.pair_after_transition",
           "value_sites.refined_pair_features"
         ],
-        "lifecycle": "transformed_within_denoiser",
+        "lifecycle": "refined_across_five_latent_transformer_blocks_then_held_fixed_and_reused_by_ipa_across_eight_structure_layers",
         "notes": [
-          "The global-row/column state entering one latent block is z_i and the pair transition writes z_(i+1); only the fifth write becomes the globals-removed mature pair output."
+          "The global-row/column state entering one latent block is z_i and the pair transition writes z_(i+1); only the fifth write becomes the globals-removed mature pair output.",
+          "The final pair representation is held fixed and reused by IPA across all eight structure layers."
         ],
         "evidence": {
           "status": "confirmed_from_code",
@@ -5060,9 +5142,10 @@ export const manifest = {
           "value_sites.pair_after_transition",
           "value_sites.refined_pair_features"
         ],
-        "lifecycle": "transformed_within_denoiser",
+        "lifecycle": "refined_across_five_latent_transformer_blocks_then_held_fixed_and_reused_by_ipa_across_eight_structure_layers",
         "notes": [
-          "The global-row/column state entering one latent block is z_i and the pair transition writes z_(i+1); only the fifth write becomes the globals-removed mature pair output."
+          "The global-row/column state entering one latent block is z_i and the pair transition writes z_(i+1); only the fifth write becomes the globals-removed mature pair output.",
+          "The final pair representation is held fixed and reused by IPA across all eight structure layers."
         ],
         "evidence": {
           "status": "confirmed_from_code",
@@ -5086,9 +5169,10 @@ export const manifest = {
           "value_sites.pair_after_transition",
           "value_sites.refined_pair_features"
         ],
-        "lifecycle": "transformed_within_denoiser",
+        "lifecycle": "refined_across_five_latent_transformer_blocks_then_held_fixed_and_reused_by_ipa_across_eight_structure_layers",
         "notes": [
-          "The global-row/column state entering one latent block is z_i and the pair transition writes z_(i+1); only the fifth write becomes the globals-removed mature pair output."
+          "The global-row/column state entering one latent block is z_i and the pair transition writes z_(i+1); only the fifth write becomes the globals-removed mature pair output.",
+          "The final pair representation is held fixed and reused by IPA across all eight structure layers."
         ],
         "evidence": {
           "status": "confirmed_from_code",
@@ -5164,7 +5248,7 @@ export const manifest = {
       {
         "id": "pair_biases_single_attention",
         "relation_ref": "relations.pair_with_global_tokens_bias_attention",
-        "mode": "pair_bias_and_value_injection",
+        "mode": "pair_bias_and_attention_weighted_pair_value_aggregation",
         "updates_source": false,
         "evidence": {
           "status": "confirmed_from_code",
@@ -5790,7 +5874,7 @@ export const manifest = {
         "carries": [
           "representations.pair_features"
         ],
-        "operation": "bias_attention_and_inject_pair_values",
+        "operation": "bias_attention_and_aggregate_pair_values",
         "evidence": {
           "status": "confirmed_from_code",
           "refs": [
@@ -7899,7 +7983,7 @@ export const manifest = {
       "schemaVersion": "standard-block-v0.2",
       "name": "Pair-Biased Attention",
       "sourceYaml": "../../standard_blocks/pair-biased-attention.yaml",
-      "description": "Update a single/token stream with self-attention whose logits are conditioned by a pair representation, optionally aggregating pair values and applying an architecture wrapper.",
+      "description": "Update a single/token stream with self-attention whose logits are conditioned by a pair representation, optionally adding attention-weighted pair-value aggregation and an architecture wrapper.",
       "math": [
         {
           "id": "project_qkv",
@@ -8007,7 +8091,7 @@ export const manifest = {
           ],
           "glyph": "pair",
           "notation": "z",
-          "role": "read-only pair representation used for logit bias and optional pair values"
+          "role": "read-only pair representation used for logit bias and optional attention-weighted pair-value aggregation"
         },
         {
           "id": "attention_mask",
@@ -8058,7 +8142,7 @@ export const manifest = {
         {
           "id": "pair_values_residual_norm_transition",
           "label": "Reduced pair attention + wrapper",
-          "description": "A reduced IPA-style path adds pair bias, aggregates pair values, then applies residual normalization, a transition, and output masking.",
+          "description": "A reduced IPA-style path adds pair bias and attention-weighted pair-value aggregation, then applies residual normalization, a transition, and output masking.",
           "step_refs": [
             "steps.project_qkv",
             "steps.scalar_logits",
@@ -8276,7 +8360,7 @@ export const manifest = {
         },
         {
           "id": "aggregate_pair_values",
-          "label": "Aggregate pair values",
+          "label": "Attention-weighted pair-value aggregation",
           "operation": "pair_value_aggregation",
           "inputs": [
             "values.attention_weights",
@@ -8587,7 +8671,7 @@ export const manifest = {
         "generic_definition": "The template is reusable algorithm vocabulary, not evidence that a method uses every variant.",
         "usage_requires": [
           "Evidence for the pair projection and addition to attention logits.",
-          "Evidence for pair-value aggregation and wrapper operations when the reduced variant is selected."
+          "Evidence for attention-weighted pair-value aggregation and wrapper operations when the reduced variant is selected."
         ]
       }
     },
@@ -8596,7 +8680,7 @@ export const manifest = {
       "schemaVersion": "standard-block-v0.2",
       "name": "Invariant Point Attention",
       "sourceYaml": "../../standard_blocks/invariant-point-attention.yaml",
-      "description": "Combine scalar attention, pair bias, and frame-aware point-distance logits, then aggregate scalar, point, and pair values into a residual-normalized single-state update.",
+      "description": "Combine scalar attention, pair bias, and frame-aware point-distance logits, then aggregate scalar and point values alongside attention-weighted pair values into a residual-normalized single-state update.",
       "math": [
         {
           "id": "project_scalar_terms",
@@ -9219,7 +9303,7 @@ export const manifest = {
         },
         {
           "id": "aggregate_pair_values",
-          "label": "Aggregate pair values",
+          "label": "Attention-weighted pair-value aggregation",
           "operation": "pair_value_aggregation",
           "inputs": [
             "values.attention_weights",
@@ -9249,7 +9333,7 @@ export const manifest = {
         },
         {
           "id": "project_ipa_delta",
-          "label": "Fuse IPA outputs",
+          "label": "Concatenate + project",
           "operation": "output_projection",
           "inputs": [
             "values.scalar_context",
@@ -9316,11 +9400,12 @@ export const manifest = {
       ],
       "visualTemplate": {
         "grid": {
-          "columns": 12,
-          "rows": 10,
+          "columns": 14,
+          "rows": 9,
           "column_sizing": "content",
+          "row_sizing": "content",
           "col_gap": 20,
-          "row_gap": 28
+          "row_gap": 40
         },
         "nodes": [
           {
@@ -9358,8 +9443,8 @@ export const manifest = {
           {
             "id": "updated_single_state",
             "ref": "ports.updated_single_state",
-            "col": 12,
-            "row": 10,
+            "col": 14,
+            "row": 8,
             "prominence": "secondary",
             "treatment": "compact"
           },
@@ -9494,7 +9579,7 @@ export const manifest = {
           {
             "id": "aggregate_scalar_values",
             "ref": "steps.aggregate_scalar_values",
-            "col": 7,
+            "col": 9,
             "row": 7,
             "prominence": "primary",
             "treatment": "compact"
@@ -9502,7 +9587,7 @@ export const manifest = {
           {
             "id": "scalar_context",
             "ref": "values.scalar_context",
-            "col": 8,
+            "col": 10,
             "row": 7,
             "prominence": "context",
             "treatment": "compact"
@@ -9510,7 +9595,7 @@ export const manifest = {
           {
             "id": "aggregate_pair_values",
             "ref": "steps.aggregate_pair_values",
-            "col": 7,
+            "col": 9,
             "row": 8,
             "prominence": "primary",
             "treatment": "compact"
@@ -9518,7 +9603,7 @@ export const manifest = {
           {
             "id": "pair_value_context",
             "ref": "values.pair_value_context",
-            "col": 8,
+            "col": 10,
             "row": 8,
             "prominence": "context",
             "treatment": "compact"
@@ -9558,24 +9643,24 @@ export const manifest = {
           {
             "id": "project_ipa_delta",
             "ref": "steps.project_ipa_delta",
-            "col": 9,
-            "row": 10,
+            "col": 11,
+            "row": 8,
             "prominence": "primary",
             "treatment": "compact"
           },
           {
             "id": "ipa_delta",
             "ref": "values.ipa_delta",
-            "col": 10,
-            "row": 10,
+            "col": 12,
+            "row": 8,
             "prominence": "context",
             "treatment": "compact"
           },
           {
             "id": "residual_norm",
             "ref": "steps.residual_norm",
-            "col": 11,
-            "row": 10,
+            "col": 13,
+            "row": 8,
             "prominence": "primary",
             "treatment": "compact"
           }
@@ -9611,7 +9696,7 @@ export const manifest = {
           {
             "id": "value_extraction",
             "label": "Extract values and update state",
-            "description": "Reuse the shared attention weights for scalar, point, and pair values, return points to the local frame, fuse the contexts, and apply the residual wrapper.",
+            "description": "Reuse the shared attention weights for scalar, point, and pair values, return points to the local frame, align the three final contexts, concatenate and project them, and apply the residual wrapper.",
             "node_refs": [
               "steps.aggregate_scalar_values",
               "values.scalar_context",
@@ -9633,7 +9718,7 @@ export const manifest = {
         "generic_definition": "Full IPA anatomy is reusable vocabulary; each architecture instance must separately prove its core and wrapper variant.",
         "usage_requires": [
           "Evidence for scalar, point-distance, and pair logit terms.",
-          "Evidence for scalar, point, and pair-value aggregation.",
+          "Evidence for scalar and point aggregation plus attention-weighted pair-value aggregation.",
           "Evidence for the residual/dropout/normalization wrapper when full_ipa_residual_norm is selected."
         ]
       }
@@ -9738,7 +9823,7 @@ export const manifest = {
           "id": "feature_bundle",
           "name": "features",
           "type": "input",
-          "shape": "B x N token fields + B x A atom fields",
+          "shape": "heterogeneous fields sharing a B x N atom-token prefix",
           "representationRef": "representations.feature_bundle",
           "scale": "mixed",
           "glyph": "dictionary",
@@ -15594,7 +15679,7 @@ export const manifest = {
         "id": "genie3_reduced_pair_attention_internals",
         "kind": "standard_block_instance",
         "title": "Genie 3 Reduced Pair Attention Internals",
-        "summary": "This reduced variant keeps scalar attention, pair-logit bias, and pair-value aggregation, while omitting frame-aware point terms and applying the latent-block wrapper.",
+        "summary": "This reduced variant keeps scalar attention, pair-logit bias, and attention-weighted pair-value aggregation, while omitting frame-aware point terms and applying the latent-block wrapper.",
         "parent": "latent_transformer",
         "subject_ref": "modules.pair_biased_attention_update",
         "expansion_depth": 0,
@@ -15632,7 +15717,7 @@ export const manifest = {
           {
             "id": "pair_context",
             "label": "pair context",
-            "role": "read-only pair representation used for logit bias and optional pair values",
+            "role": "read-only pair representation used for logit bias and optional attention-weighted pair-value aggregation",
             "col": 1,
             "row": 5,
             "prominence": "secondary",
@@ -15991,7 +16076,7 @@ export const manifest = {
           },
           {
             "id": "aggregate_pair_values",
-            "label": "Aggregate pair values",
+            "label": "Attention-weighted pair-value aggregation",
             "col": 6,
             "row": 5,
             "prominence": "primary",
@@ -16561,7 +16646,7 @@ export const manifest = {
             "instance_fact_ref": "block_instances.latent_reduced_pair_attention.steps.aggregate_pair_values",
             "template_data_ref": "values.attention_weights",
             "connection": {
-              "title": "Aggregate pair values",
+              "title": "Attention-weighted pair-value aggregation",
               "role": "reusable step input",
               "inside": "pair_context_out = einsum(attention, pair_context)"
             }
@@ -16586,7 +16671,7 @@ export const manifest = {
             "instance_fact_ref": "block_instances.latent_reduced_pair_attention.steps.aggregate_pair_values",
             "template_data_ref": "ports.pair_context",
             "connection": {
-              "title": "Aggregate pair values",
+              "title": "Attention-weighted pair-value aggregation",
               "role": "reusable step input",
               "inside": "pair_context_out = einsum(attention, pair_context)"
             }
@@ -16607,7 +16692,7 @@ export const manifest = {
             "instance_fact_ref": "block_instances.latent_reduced_pair_attention.steps.aggregate_pair_values",
             "template_data_ref": "values.pair_value_context",
             "connection": {
-              "title": "Aggregate pair values",
+              "title": "Attention-weighted pair-value aggregation",
               "role": "reusable step output",
               "inside": "pair_context_out = einsum(attention, pair_context)"
             }
@@ -16816,7 +16901,7 @@ export const manifest = {
         "variantLabel": "Reduced pair attention + wrapper",
         "useScope": "whole_module",
         "conformance": "reduced",
-        "differenceSummary": "Genie 3 removes frame-aware point terms, keeps pair-logit bias and pair-value aggregation, then adds residual normalization, a single transition, and final masking.",
+        "differenceSummary": "Genie 3 removes frame-aware point terms, keeps pair-logit bias and attention-weighted pair-value aggregation, then adds residual normalization, a single transition, and final masking.",
         "pseudocode": [
           {
             "id": "project_qkv",
@@ -16933,7 +17018,7 @@ export const manifest = {
             "id": "aggregate_pair_values",
             "templateFactRef": "standard_blocks.pair_biased_attention.steps.aggregate_pair_values",
             "instanceFactRef": "block_instances.latent_reduced_pair_attention.steps.aggregate_pair_values",
-            "label": "Aggregate pair values",
+            "label": "Attention-weighted pair-value aggregation",
             "operation": "pair_value_aggregation",
             "code": "pair_context_out = einsum(attention, pair_context)",
             "tex": "o^z_{ih} = sum_j a_{ijh} z_{ij}",
@@ -17002,11 +17087,12 @@ export const manifest = {
         "expansion_depth": 0,
         "block_instance_ref": "block_instances.structure_ipa",
         "grid": {
-          "columns": 12,
-          "rows": 10,
+          "columns": 14,
+          "rows": 9,
           "column_sizing": "content",
+          "row_sizing": "content",
           "col_gap": 20,
-          "row_gap": 28
+          "row_gap": 40
         },
         "nodes": [
           {
@@ -17095,8 +17181,8 @@ export const manifest = {
           {
             "id": "updated_single_state",
             "label": "IPA-updated single state",
-            "col": 12,
-            "row": 10,
+            "col": 14,
+            "row": 8,
             "prominence": "secondary",
             "treatment": "compact",
             "standard_block_ref": "standard_blocks/invariant-point-attention.yaml",
@@ -17404,7 +17490,7 @@ export const manifest = {
           {
             "id": "aggregate_scalar_values",
             "label": "Aggregate scalar values",
-            "col": 7,
+            "col": 9,
             "row": 7,
             "prominence": "primary",
             "treatment": "compact",
@@ -17422,7 +17508,7 @@ export const manifest = {
           {
             "id": "scalar_context",
             "label": "scalar context",
-            "col": 8,
+            "col": 10,
             "row": 7,
             "prominence": "context",
             "treatment": "compact",
@@ -17439,8 +17525,8 @@ export const manifest = {
           },
           {
             "id": "aggregate_pair_values",
-            "label": "Aggregate pair values",
-            "col": 7,
+            "label": "Attention-weighted pair-value aggregation",
+            "col": 9,
             "row": 8,
             "prominence": "primary",
             "treatment": "compact",
@@ -17458,7 +17544,7 @@ export const manifest = {
           {
             "id": "pair_value_context",
             "label": "pair-value context",
-            "col": 8,
+            "col": 10,
             "row": 8,
             "prominence": "context",
             "treatment": "compact",
@@ -17547,9 +17633,9 @@ export const manifest = {
           },
           {
             "id": "project_ipa_delta",
-            "label": "Fuse IPA outputs",
-            "col": 9,
-            "row": 10,
+            "label": "Concatenate + project",
+            "col": 11,
+            "row": 8,
             "prominence": "primary",
             "treatment": "compact",
             "standard_block_ref": "standard_blocks/invariant-point-attention.yaml",
@@ -17566,8 +17652,8 @@ export const manifest = {
           {
             "id": "ipa_delta",
             "label": "IPA delta",
-            "col": 10,
-            "row": 10,
+            "col": 12,
+            "row": 8,
             "prominence": "context",
             "treatment": "compact",
             "standard_block_ref": "standard_blocks/invariant-point-attention.yaml",
@@ -17584,8 +17670,8 @@ export const manifest = {
           {
             "id": "residual_norm",
             "label": "Residual, dropout, and norm",
-            "col": 11,
-            "row": 10,
+            "col": 13,
+            "row": 8,
             "prominence": "primary",
             "treatment": "compact",
             "standard_block_ref": "standard_blocks/invariant-point-attention.yaml",
@@ -18248,7 +18334,7 @@ export const manifest = {
             "instance_fact_ref": "block_instances.structure_ipa.steps.aggregate_pair_values",
             "template_data_ref": "values.attention_weights",
             "connection": {
-              "title": "Aggregate pair values",
+              "title": "Attention-weighted pair-value aggregation",
               "role": "reusable step input",
               "inside": "pair_value_context = weighted_sum(attention, pair_context)"
             }
@@ -18273,7 +18359,7 @@ export const manifest = {
             "instance_fact_ref": "block_instances.structure_ipa.steps.aggregate_pair_values",
             "template_data_ref": "ports.pair_context",
             "connection": {
-              "title": "Aggregate pair values",
+              "title": "Attention-weighted pair-value aggregation",
               "role": "reusable step input",
               "inside": "pair_value_context = weighted_sum(attention, pair_context)"
             }
@@ -18294,7 +18380,7 @@ export const manifest = {
             "instance_fact_ref": "block_instances.structure_ipa.steps.aggregate_pair_values",
             "template_data_ref": "values.pair_value_context",
             "connection": {
-              "title": "Aggregate pair values",
+              "title": "Attention-weighted pair-value aggregation",
               "role": "reusable step output",
               "inside": "pair_value_context = weighted_sum(attention, pair_context)"
             }
@@ -18315,7 +18401,7 @@ export const manifest = {
             "instance_fact_ref": "block_instances.structure_ipa.steps.project_ipa_delta",
             "template_data_ref": "values.scalar_context",
             "connection": {
-              "title": "Fuse IPA outputs",
+              "title": "Concatenate + project",
               "role": "reusable step input",
               "inside": "ipa_delta = output_projection(concat(scalar_context, local_point_context, pair_value_context))"
             }
@@ -18336,7 +18422,7 @@ export const manifest = {
             "instance_fact_ref": "block_instances.structure_ipa.steps.project_ipa_delta",
             "template_data_ref": "values.local_point_context",
             "connection": {
-              "title": "Fuse IPA outputs",
+              "title": "Concatenate + project",
               "role": "reusable step input",
               "inside": "ipa_delta = output_projection(concat(scalar_context, local_point_context, pair_value_context))"
             }
@@ -18357,7 +18443,7 @@ export const manifest = {
             "instance_fact_ref": "block_instances.structure_ipa.steps.project_ipa_delta",
             "template_data_ref": "values.pair_value_context",
             "connection": {
-              "title": "Fuse IPA outputs",
+              "title": "Concatenate + project",
               "role": "reusable step input",
               "inside": "ipa_delta = output_projection(concat(scalar_context, local_point_context, pair_value_context))"
             }
@@ -18378,7 +18464,7 @@ export const manifest = {
             "instance_fact_ref": "block_instances.structure_ipa.steps.project_ipa_delta",
             "template_data_ref": "values.ipa_delta",
             "connection": {
-              "title": "Fuse IPA outputs",
+              "title": "Concatenate + project",
               "role": "reusable step output",
               "inside": "ipa_delta = output_projection(concat(scalar_context, local_point_context, pair_value_context))"
             }
@@ -18485,7 +18571,7 @@ export const manifest = {
           {
             "id": "value_extraction",
             "label": "Extract values and update state",
-            "description": "Reuse the shared attention weights for scalar, point, and pair values, return points to the local frame, fuse the contexts, and apply the residual wrapper.",
+            "description": "Reuse the shared attention weights for scalar, point, and pair values, return points to the local frame, align the three final contexts, concatenate and project them, and apply the residual wrapper.",
             "order": 2,
             "node_ids": [
               "aggregate_scalar_values",
@@ -19210,7 +19296,7 @@ export const manifest = {
             "id": "aggregate_pair_values",
             "templateFactRef": "standard_blocks.invariant_point_attention.steps.aggregate_pair_values",
             "instanceFactRef": "block_instances.structure_ipa.steps.aggregate_pair_values",
-            "label": "Aggregate pair values",
+            "label": "Attention-weighted pair-value aggregation",
             "operation": "pair_value_aggregation",
             "code": "pair_value_context = weighted_sum(attention, pair_context)",
             "inputs": [
@@ -19266,7 +19352,7 @@ export const manifest = {
             "id": "project_ipa_delta",
             "templateFactRef": "standard_blocks.invariant_point_attention.steps.project_ipa_delta",
             "instanceFactRef": "block_instances.structure_ipa.steps.project_ipa_delta",
-            "label": "Fuse IPA outputs",
+            "label": "Concatenate + project",
             "operation": "output_projection",
             "code": "ipa_delta = output_projection(concat(scalar_context, local_point_context, pair_value_context))",
             "inputs": [
@@ -19566,7 +19652,7 @@ export const manifest = {
             "connection": {
               "title": "Model-ready feature batch",
               "role": "shared model interface",
-              "inside": "The assembler pads token and atom fields to common lengths, stacks samples, and prepares the typed tensors consumed by sampling."
+              "inside": "The assembler pads the shared atom-token axis, stacks samples into a batch, and prepares the typed tensors consumed by sampling."
             }
           }
         ],
@@ -19598,7 +19684,7 @@ export const manifest = {
               "connection": {
                 "title": "Model-ready feature batch",
                 "role": "shared model interface",
-                "inside": "The assembler pads token and atom fields to common lengths, stacks samples, and prepares the typed tensors consumed by sampling."
+                "inside": "The assembler pads the shared atom-token axis, stacks samples into a batch, and prepares the typed tensors consumed by sampling."
               }
             }
           },

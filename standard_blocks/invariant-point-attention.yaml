@@ -3,7 +3,7 @@ id: invariant_point_attention
 name: Invariant Point Attention
 kind: attention
 status: review
-description: Combine scalar attention, pair bias, and frame-aware point-distance logits, then aggregate scalar, point, and pair values into a residual-normalized single-state update.
+description: Combine scalar attention, pair bias, and frame-aware point-distance logits, then aggregate scalar and point values alongside attention-weighted pair values into a residual-normalized single-state update.
 ports:
   - id: single_state
     label: single state
@@ -202,7 +202,7 @@ steps:
       - { lexeme: frames, ref: ports.frames, access: read }
       - { lexeme: global_point_context, ref: values.global_point_context, access: read }
   - id: aggregate_pair_values
-    label: Aggregate pair values
+    label: Attention-weighted pair-value aggregation
     operation: pair_value_aggregation
     inputs: [values.attention_weights, ports.pair_context]
     outputs: [values.pair_value_context]
@@ -212,7 +212,7 @@ steps:
       - { lexeme: attention, ref: values.attention_weights, access: read }
       - { lexeme: pair_context, ref: ports.pair_context, access: read }
   - id: project_ipa_delta
-    label: Fuse IPA outputs
+    label: Concatenate + project
     operation: output_projection
     inputs: [values.scalar_context, values.local_point_context, values.pair_value_context]
     outputs: [values.ipa_delta]
@@ -234,17 +234,18 @@ steps:
       - { lexeme: ipa_delta, ref: values.ipa_delta, access: read }
 visual_template:
   grid:
-    columns: 12
-    rows: 10
+    columns: 14
+    rows: 9
     column_sizing: content
+    row_sizing: content
     col_gap: 20
-    row_gap: 28
+    row_gap: 40
   nodes:
     - { id: single_state, ref: ports.single_state, col: 1, row: 1, prominence: secondary, treatment: compact }
     - { id: pair_context, ref: ports.pair_context, col: 1, row: 3, prominence: secondary, treatment: compact }
     - { id: frames, ref: ports.frames, col: 1, row: 4, prominence: secondary, treatment: compact }
     - { id: mask, ref: ports.mask, col: 4, row: 4, prominence: context, treatment: chip }
-    - { id: updated_single_state, ref: ports.updated_single_state, col: 12, row: 10, prominence: secondary, treatment: compact }
+    - { id: updated_single_state, ref: ports.updated_single_state, col: 14, row: 8, prominence: secondary, treatment: compact }
     - { id: project_scalar_terms, ref: steps.project_scalar_terms, col: 2, row: 1, prominence: primary, treatment: compact }
     - { id: scalar_terms, ref: values.scalar_terms, col: 3, row: 1, prominence: context, treatment: compact }
     - { id: scalar_attention_logits, ref: steps.scalar_attention_logits, col: 4, row: 1, prominence: primary, treatment: compact }
@@ -261,17 +262,17 @@ visual_template:
     - { id: combined_logits, ref: values.combined_logits, col: 7, row: 4, prominence: context, treatment: compact }
     - { id: softmax_attention, ref: steps.softmax_attention, col: 6, row: 5, prominence: primary, treatment: compact }
     - { id: attention_weights, ref: values.attention_weights, col: 7, row: 5, prominence: context, treatment: compact }
-    - { id: aggregate_scalar_values, ref: steps.aggregate_scalar_values, col: 7, row: 7, prominence: primary, treatment: compact }
-    - { id: scalar_context, ref: values.scalar_context, col: 8, row: 7, prominence: context, treatment: compact }
-    - { id: aggregate_pair_values, ref: steps.aggregate_pair_values, col: 7, row: 8, prominence: primary, treatment: compact }
-    - { id: pair_value_context, ref: values.pair_value_context, col: 8, row: 8, prominence: context, treatment: compact }
+    - { id: aggregate_scalar_values, ref: steps.aggregate_scalar_values, col: 9, row: 7, prominence: primary, treatment: compact }
+    - { id: scalar_context, ref: values.scalar_context, col: 10, row: 7, prominence: context, treatment: compact }
+    - { id: aggregate_pair_values, ref: steps.aggregate_pair_values, col: 9, row: 8, prominence: primary, treatment: compact }
+    - { id: pair_value_context, ref: values.pair_value_context, col: 10, row: 8, prominence: context, treatment: compact }
     - { id: aggregate_global_points, ref: steps.aggregate_global_points, col: 7, row: 9, prominence: primary, treatment: compact }
     - { id: global_point_context, ref: values.global_point_context, col: 8, row: 9, prominence: context, treatment: compact }
     - { id: return_points_to_local_frame, ref: steps.return_points_to_local_frame, col: 9, row: 9, prominence: primary, treatment: compact }
     - { id: local_point_context, ref: values.local_point_context, col: 10, row: 9, prominence: context, treatment: compact }
-    - { id: project_ipa_delta, ref: steps.project_ipa_delta, col: 9, row: 10, prominence: primary, treatment: compact }
-    - { id: ipa_delta, ref: values.ipa_delta, col: 10, row: 10, prominence: context, treatment: compact }
-    - { id: residual_norm, ref: steps.residual_norm, col: 11, row: 10, prominence: primary, treatment: compact }
+    - { id: project_ipa_delta, ref: steps.project_ipa_delta, col: 11, row: 8, prominence: primary, treatment: compact }
+    - { id: ipa_delta, ref: values.ipa_delta, col: 12, row: 8, prominence: context, treatment: compact }
+    - { id: residual_norm, ref: steps.residual_norm, col: 13, row: 8, prominence: primary, treatment: compact }
   segments:
     - id: attention_weights
       label: Compute attention weights
@@ -299,7 +300,7 @@ visual_template:
         - values.attention_weights
     - id: value_extraction
       label: Extract values and update state
-      description: Reuse the shared attention weights for scalar, point, and pair values, return points to the local frame, fuse the contexts, and apply the residual wrapper.
+      description: Reuse the shared attention weights for scalar, point, and pair values, return points to the local frame, align the three final contexts, concatenate and project them, and apply the residual wrapper.
       node_refs:
         - steps.aggregate_scalar_values
         - values.scalar_context
@@ -317,5 +318,5 @@ evidence_policy:
   generic_definition: Full IPA anatomy is reusable vocabulary; each architecture instance must separately prove its core and wrapper variant.
   usage_requires:
     - Evidence for scalar, point-distance, and pair logit terms.
-    - Evidence for scalar, point, and pair-value aggregation.
+    - Evidence for scalar and point aggregation plus attention-weighted pair-value aggregation.
     - Evidence for the residual/dropout/normalization wrapper when full_ipa_residual_norm is selected.

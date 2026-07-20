@@ -38,11 +38,11 @@ export const comparisonIndex = {
     "generator": "architecture-manifest-builder-v0.4.6",
     "inputDigests": {
       "comparisons/index.yaml": "54059100527b7b47f0096e90227ce5668a3d2693e0b48c8af971a200feed97e4",
-      "comparisons/genie3-reduced-vs-full-ipa.yaml": "4b7a986fb8a30349e8f3117f43e09be7f26eaa15a489929ad0b7addcb3fcbfc9",
+      "comparisons/genie3-reduced-vs-full-ipa.yaml": "f50a344fe475f37743d0b6de214468f31d5d75c9f9bdcf92bda229b07a771efc",
       "references/bibliography.yaml": "abe9226586bfb64261c81b7756b7275c48a3a172a9a18b5f91f7acfd3145e374",
       "architectures/generic-feature-refinement.yaml": "60b45e458ee2037560fc3011507148f3f236d19d8957b9d1826fa7b5a2e0cc0e",
       "views/generic-semantic-zoom.view.yaml": "2212d81c8217db03c68fa7d59f44dc36e55052503d8d503b3386bded040b5714",
-      "standard_blocks/pair-biased-attention.yaml": "88379fcd3ad641e38da23ce3b5a9ccef84344149d9c8fac51792ad63cb9da7dc",
+      "standard_blocks/pair-biased-attention.yaml": "9cd25cca99e46326432232d92a00d84d82b3e59d028aff4e47d73aa31bac9381",
       "standard_blocks/per-item-adaln-conditioning.yaml": "544bca1c4d238825bfe6e389fe0409e64b27726b54f737e86021a0dc078987f9",
       "standard_blocks/additive-conditioning.yaml": "5638ead7cbb2df6729e58393703d3e35b6e480b3ba42c657312dc6581bb032f7",
       "architectures/diffusion-transformer.yaml": "5d7c09d2a97999cd526241976db9881acc2499d98abbe3624520562a53510aad",
@@ -53,9 +53,9 @@ export const comparisonIndex = {
       "views/alphafold2-semantic-zoom.view.yaml": "6b317c6d224a7e3b8416839247c0c12d6b9e0cd34d859475f4529a939d51fe8e",
       "architectures/genie2.yaml": "d5fbf1c1a91ef74dcef47388855e83b7e5571deb7d63a5eb2657177355c2f96a",
       "views/genie2-semantic-zoom.view.yaml": "8b8fe70a2866cad0051913e38e4d2a5b0fef68b0aeb14127c4d27eb36d353158",
-      "standard_blocks/invariant-point-attention.yaml": "a88d3bd473e6bbfeb6846085f7d5091e6e8b0e33fbbd8292af4d578df22b2c27",
-      "architectures/genie3.yaml": "30ed727051173ad7eb3f1381ae53b67e0bc12ade2727ab2421f4b0e728daec4d",
-      "views/genie3-semantic-zoom.view.yaml": "423a685b4a6699dece123336da699c3b3dc905ab9450b2c7dbad37c7135b5622"
+      "standard_blocks/invariant-point-attention.yaml": "d185138554938b05509aeb1789cfd2a0275d561991bca4dfd22605ad40cc847b",
+      "architectures/genie3.yaml": "e239d3e5c38a40a9821f0579a4c54e61fe2c892fc1665a6ef383bd5b676cbb37",
+      "views/genie3-semantic-zoom.view.yaml": "bf6279698c1f377ec8e5fd1176d53bfd8825d6044fd442ab00af9cb515e1b4ce"
     }
   },
   "items": [
@@ -66,7 +66,7 @@ export const comparisonIndex = {
       "title": "Genie 3 Reduced Attention vs Full Frame-Aware IPA",
       "status": "review",
       "question": "What does Genie 3's reduced latent attention retain, change, and remove relative to full frame-aware IPA?",
-      "summary": "Both paths use scalar attention, pair-logit bias, pair-value aggregation, and a residual-normalized single-state update. Full IPA additionally forms frame-aware point logits and point outputs; the reduced latent path omits that geometry and adds its latent-block transition and final mask.",
+      "summary": "Both paths use scalar attention, pair-logit bias, attention-weighted pair-value aggregation, and a residual-normalized single-state update. Full IPA additionally forms frame-aware point logits and point outputs; the reduced latent path omits that geometry and adds its latent-block transition and final mask.",
       "subjects": {
         "primary": {
           "label": "Reduced latent attention",
@@ -80,7 +80,7 @@ export const comparisonIndex = {
           "variant": "pair_values_residual_norm_transition",
           "variantLabel": "Reduced pair attention + wrapper",
           "conformance": "reduced",
-          "differenceSummary": "Genie 3 removes frame-aware point terms, keeps pair-logit bias and pair-value aggregation, then adds residual normalization, a single transition, and final masking."
+          "differenceSummary": "Genie 3 removes frame-aware point terms, keeps pair-logit bias and attention-weighted pair-value aggregation, then adds residual normalization, a single transition, and final masking."
         },
         "counterpart": {
           "label": "Full frame-aware IPA",
@@ -393,14 +393,14 @@ export const comparisonIndex = {
         {
           "id": "pair_value_aggregation",
           "groupRef": "groups.shared",
-          "label": "Aggregate pair values",
+          "label": "Attention-weighted pair-value aggregation",
           "relationship": "equivalent",
           "explanation": "Both paths use the same attention weights to aggregate the pair representation as an output value stream, not only as a logit bias.",
           "primaryFacts": [
             {
               "factRef": "block_instances.latent_reduced_pair_attention.steps.aggregate_pair_values",
               "kind": "step",
-              "label": "Aggregate pair values",
+              "label": "Attention-weighted pair-value aggregation",
               "nodeIds": [
                 "aggregate_pair_values"
               ],
@@ -412,7 +412,7 @@ export const comparisonIndex = {
             {
               "factRef": "block_instances.structure_ipa.steps.aggregate_pair_values",
               "kind": "step",
-              "label": "Aggregate pair values",
+              "label": "Attention-weighted pair-value aggregation",
               "nodeIds": [
                 "aggregate_pair_values"
               ],
@@ -458,7 +458,7 @@ export const comparisonIndex = {
             {
               "factRef": "block_instances.structure_ipa.steps.project_ipa_delta",
               "kind": "step",
-              "label": "Fuse IPA outputs",
+              "label": "Concatenate + project",
               "nodeIds": [
                 "project_ipa_delta"
               ],

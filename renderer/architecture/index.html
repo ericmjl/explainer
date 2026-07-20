@@ -184,9 +184,22 @@
                 hidden
               ><span aria-hidden="true">?</span><span>Ask / copy</span></button>
               <button id="focusReset" class="focus-reset" type="button" hidden>Clear</button>
+              <button
+                id="focusCollapse"
+                class="focus-collapse"
+                type="button"
+                aria-controls="focusPanelPages"
+                aria-expanded="true"
+                aria-label="Collapse details panel"
+                title="Collapse details panel"
+              >
+                <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                  <path d="m9 5 7 7-7 7"></path>
+                </svg>
+              </button>
             </div>
           </div>
-          <div class="focus-panel-pages">
+          <div id="focusPanelPages" class="focus-panel-pages">
             <section class="focus-page-section focus-detail-section" aria-labelledby="focusDetailHeading">
               <div class="focus-page-heading">
                 <h3 id="focusDetailHeading">Details</h3>

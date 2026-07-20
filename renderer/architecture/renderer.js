@@ -183,6 +183,8 @@ const elements = {
   focusCompare: document.getElementById("focusCompare"),
   focusQuestion: document.getElementById("focusQuestion"),
   focusReset: document.getElementById("focusReset"),
+  focusCollapse: document.getElementById("focusCollapse"),
+  focusPanelPages: document.getElementById("focusPanelPages"),
   focusBody: document.getElementById("focusBody"),
   semanticTraceBody: document.getElementById("semanticTraceBody"),
   semanticTraceCount: document.getElementById("semanticTraceCount"),
@@ -272,6 +274,7 @@ const state = {
   modelMapDirty: true,
   isTransitioning: false,
   userMovedViewport: false,
+  inspectorCollapsed: false,
 };
 
 const viewport = {
@@ -296,6 +299,7 @@ function render() {
   renderPageChrome();
   ensureBoardChrome();
   ensureQuestionMenu();
+  ensureInspectorCollapse();
   ensureKeyboardNavigation();
   elements.focusReset.addEventListener("click", resetFocusedDetail);
   elements.focusCompare?.addEventListener("click", onFocusCompareClick);
@@ -311,6 +315,49 @@ function render() {
     canonicalize: true,
     announceIssues: true,
   });
+}
+
+const INSPECTOR_COLLAPSED_STORAGE_KEY = "explainer-inspector-collapsed";
+
+function storedInspectorCollapsed() {
+  try {
+    return window.sessionStorage.getItem(INSPECTOR_COLLAPSED_STORAGE_KEY) === "true";
+  } catch (_error) {
+    return false;
+  }
+}
+
+function persistInspectorCollapsed(collapsed) {
+  try {
+    window.sessionStorage.setItem(INSPECTOR_COLLAPSED_STORAGE_KEY, String(collapsed));
+  } catch (_error) {
+    // Storage can be unavailable in strict privacy contexts. The control
+    // remains fully functional for the current page.
+  }
+}
+
+function ensureInspectorCollapse() {
+  const button = elements.focusCollapse;
+  if (!button || button.dataset.ready) return;
+  button.dataset.ready = "true";
+  button.addEventListener("click", () => {
+    setInspectorCollapsed(!state.inspectorCollapsed);
+  });
+  setInspectorCollapsed(storedInspectorCollapsed(), { persist: false, refresh: false });
+}
+
+function setInspectorCollapsed(collapsed, { persist = true, refresh = true } = {}) {
+  state.inspectorCollapsed = Boolean(collapsed);
+  document.body.classList.toggle("is-inspector-collapsed", state.inspectorCollapsed);
+  elements.focusPanel.classList.toggle("is-collapsed", state.inspectorCollapsed);
+  if (elements.focusPanelPages) elements.focusPanelPages.hidden = state.inspectorCollapsed;
+  const label = state.inspectorCollapsed ? "Expand details panel" : "Collapse details panel";
+  elements.focusCollapse.setAttribute("aria-expanded", String(!state.inspectorCollapsed));
+  elements.focusCollapse.setAttribute("aria-label", label);
+  elements.focusCollapse.title = label;
+  if (state.inspectorCollapsed) closeQuestionMenu({ restoreFocus: false });
+  if (persist) persistInspectorCollapsed(state.inspectorCollapsed);
+  if (refresh) window.requestAnimationFrame(refreshResponsiveGeometry);
 }
 
 function renderPageChrome() {
@@ -3799,7 +3846,7 @@ function renderRepresentationNode(node) {
   const pointerHighlightKey = `pointer:representation:${node.id}`;
   const focusHighlightKey = `focus:representation:${node.id}`;
   card.addEventListener("pointerenter", () => {
-    beginConnectivityHighlight(pointerHighlightKey, node.id);
+    beginConnectivityHighlight(pointerHighlightKey, node.id, { dimUnrelated: true });
   });
   card.addEventListener("pointerleave", () => {
     endConnectivityHighlight(pointerHighlightKey);
@@ -3842,6 +3889,14 @@ function readableRefs(refs) {
   return (refs || []).map((ref) => humanizeRef(ref)).join(", ");
 }
 
+function representationFieldLegendMarkup(groups) {
+  const axes = new Set(groups.map((group) => group.axis));
+  const definitions = ["<code>B</code> batch"];
+  if (axes.has("token")) definitions.push("<code>N</code> padded token axis");
+  if (axes.has("atom")) definitions.push("<code>A</code> padded atom axis");
+  return definitions.join(" · ");
+}
+
 function renderRepresentationFieldTable(rep) {
   const groups = Array.isArray(rep?.field_groups) ? rep.field_groups : [];
   if (!groups.length) return "";
@@ -3868,7 +3923,7 @@ function renderRepresentationFieldTable(rep) {
   return `
     <section class="representation-field-section">
       <h3>Feature bundle contents</h3>
-      <p class="representation-field-legend"><code>B</code> batch · <code>N</code> padded token axis · <code>A</code> padded atom axis</p>
+      <p class="representation-field-legend">${representationFieldLegendMarkup(groups)}</p>
       <div class="representation-field-table-wrap">
         <table class="representation-field-table">
           <caption class="sr-only">Fields grouped by axis, shape, and purpose</caption>
@@ -3981,7 +4036,7 @@ function renderBlockNode(node) {
   const pointerHighlightKey = `pointer:node:${node.id}`;
   const focusHighlightKey = `focus:node:${node.id}`;
   card.addEventListener("mouseenter", () => {
-    beginConnectivityHighlight(pointerHighlightKey, node.id);
+    beginConnectivityHighlight(pointerHighlightKey, node.id, { dimUnrelated: true });
   });
   card.addEventListener("mouseleave", () => {
     endConnectivityHighlight(pointerHighlightKey);

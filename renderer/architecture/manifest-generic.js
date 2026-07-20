@@ -7,7 +7,7 @@ export const manifest = {
       "architectures/generic-feature-refinement.yaml": "60b45e458ee2037560fc3011507148f3f236d19d8957b9d1826fa7b5a2e0cc0e",
       "views/generic-semantic-zoom.view.yaml": "2212d81c8217db03c68fa7d59f44dc36e55052503d8d503b3386bded040b5714",
       "pseudocode/generic-feature-refinement.yaml": "7020e10be441c1d161e8113b54937fd89c303ef55f198fd2432bc69243e55696",
-      "standard_blocks/pair-biased-attention.yaml": "88379fcd3ad641e38da23ce3b5a9ccef84344149d9c8fac51792ad63cb9da7dc",
+      "standard_blocks/pair-biased-attention.yaml": "9cd25cca99e46326432232d92a00d84d82b3e59d028aff4e47d73aa31bac9381",
       "standard_blocks/per-item-adaln-conditioning.yaml": "544bca1c4d238825bfe6e389fe0409e64b27726b54f737e86021a0dc078987f9",
       "standard_blocks/additive-conditioning.yaml": "5638ead7cbb2df6729e58393703d3e35b6e480b3ba42c657312dc6581bb032f7"
     }
@@ -2481,7 +2481,7 @@ export const manifest = {
       "schemaVersion": "standard-block-v0.2",
       "name": "Pair-Biased Attention",
       "sourceYaml": "../../standard_blocks/pair-biased-attention.yaml",
-      "description": "Update a single/token stream with self-attention whose logits are conditioned by a pair representation, optionally aggregating pair values and applying an architecture wrapper.",
+      "description": "Update a single/token stream with self-attention whose logits are conditioned by a pair representation, optionally adding attention-weighted pair-value aggregation and an architecture wrapper.",
       "math": [
         {
           "id": "project_qkv",
@@ -2589,7 +2589,7 @@ export const manifest = {
           ],
           "glyph": "pair",
           "notation": "z",
-          "role": "read-only pair representation used for logit bias and optional pair values"
+          "role": "read-only pair representation used for logit bias and optional attention-weighted pair-value aggregation"
         },
         {
           "id": "attention_mask",
@@ -2640,7 +2640,7 @@ export const manifest = {
         {
           "id": "pair_values_residual_norm_transition",
           "label": "Reduced pair attention + wrapper",
-          "description": "A reduced IPA-style path adds pair bias, aggregates pair values, then applies residual normalization, a transition, and output masking.",
+          "description": "A reduced IPA-style path adds pair bias and attention-weighted pair-value aggregation, then applies residual normalization, a transition, and output masking.",
           "step_refs": [
             "steps.project_qkv",
             "steps.scalar_logits",
@@ -2858,7 +2858,7 @@ export const manifest = {
         },
         {
           "id": "aggregate_pair_values",
-          "label": "Aggregate pair values",
+          "label": "Attention-weighted pair-value aggregation",
           "operation": "pair_value_aggregation",
           "inputs": [
             "values.attention_weights",
@@ -3169,7 +3169,7 @@ export const manifest = {
         "generic_definition": "The template is reusable algorithm vocabulary, not evidence that a method uses every variant.",
         "usage_requires": [
           "Evidence for the pair projection and addition to attention logits.",
-          "Evidence for pair-value aggregation and wrapper operations when the reduced variant is selected."
+          "Evidence for attention-weighted pair-value aggregation and wrapper operations when the reduced variant is selected."
         ]
       }
     },
@@ -4979,7 +4979,7 @@ export const manifest = {
           {
             "id": "pair_context",
             "label": "pair context",
-            "role": "read-only pair representation used for logit bias and optional pair values",
+            "role": "read-only pair representation used for logit bias and optional attention-weighted pair-value aggregation",
             "col": 1,
             "row": 5,
             "prominence": "secondary",

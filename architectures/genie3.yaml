@@ -166,9 +166,10 @@ state_semantics:
       - value_sites.pair_after_triangle_updates
       - value_sites.pair_after_transition
       - value_sites.refined_pair_features
-    lifecycle: transformed_within_denoiser
+    lifecycle: refined_across_five_latent_transformer_blocks_then_held_fixed_and_reused_by_ipa_across_eight_structure_layers
     notes:
       - The global-row/column state entering one latent block is z_i and the pair transition writes z_(i+1); only the fifth write becomes the globals-removed mature pair output.
+      - The final pair representation is held fixed and reused by IPA across all eight structure layers.
     evidence:
       status: confirmed_from_code
       refs:
@@ -211,7 +212,7 @@ conditioning:
           locator: V1PairFeatureNet.forward
   - id: pair_biases_single_attention
     relation_ref: relations.pair_with_global_tokens_bias_attention
-    mode: pair_bias_and_value_injection
+    mode: pair_bias_and_attention_weighted_pair_value_aggregation
     updates_source: false
     evidence:
       status: confirmed_from_code
@@ -314,10 +315,11 @@ representations:
           locator: create_np_features_from_length, create_np_features_from_motif_config, and create_np_features_from_target_config
   - id: feature_bundle
     scale: mixed
-    semantic_role: model-ready dictionary of token- and atom-indexed metadata, known values, and task-dependent conditioning masks
-    shape: B x N token fields + B x A atom fields
+    semantic_role: model-ready dictionary of residue metadata, atom identity and coordinates, frame construction, and task conditioning aligned to one padded atom-token axis
+    shape: heterogeneous fields sharing a B x N atom-token prefix
     carries:
-    - token, residue, chain, entity, and atom identities
+    - one aligned row per C-alpha or side-chain heavy-atom token
+    - residue, chain, entity, and atom identities
     - known residue types and coordinates plus atomization and validity masks
     - conditioning group, sequence, structure, frame, and interface masks
     evidence: &feature_evidence
@@ -331,54 +333,103 @@ representations:
           locator: FEATURES, FEATURE_LEVEL, and FEATURE_DTYPE
     glyph: dictionary
     field_groups:
-      - id: layout_and_identity
-        label: Layout and identity
-        axis: token
-        shape: B x N
-        fields: [token_mask, token_index, residue_index, asym_id, sym_id, entity_id, is_atomized]
-        semantic_role: Defines which padded token slots are active, maps them to residues and chains, and marks tokens created by partial atomization.
-        task_behavior: Present for every task; the selected featurizer determines the token count, chain layout, and atomization flags.
-        evidence: *feature_evidence
-      - id: residue_identity
-        label: Known residue identity
-        axis: token
-        shape: B x N x residue type
-        fields: [gt_restype]
-        semantic_role: Carries the one-hot amino-acid identity available at each token position.
-        task_behavior: Unknown design positions are zeroed; conditioned motif or target residues retain known identities.
-        evidence: *feature_evidence
-      - id: atom_identity_and_coordinates
-        label: Atom identity and coordinates
-        axis: atom
-        shape: B x A, with categorical or xyz trailing dimensions
-        fields: [atom_type, atom_symbol, gt_atom_mask, gt_atom_positions]
-        semantic_role: Describes each atom row, whether it is valid, and its available three-dimensional coordinate.
-        task_behavior: Every residue contributes a C-alpha row; selected known residues may contribute additional Atom14 side-chain heavy-atom rows.
-        evidence: *feature_evidence
-      - id: frame_construction
-        label: Frame construction
-        axis: token
-        shape: B x N
-        fields: [token_struct_mask, token_struct_frame_mask, token_frame_lindex, token_frame_rindex, token_frame_cindex_adj, token_frame_lindex_adj, token_frame_rindex_adj]
-        semantic_role: Identifies structurally valid tokens and their neighboring token indices for local-frame construction.
-        task_behavior: Indices exist in every task; validity masks determine where current or conditioned frames may actually be used.
-        evidence: *feature_evidence
-      - id: task_conditioning
-        label: Task conditioning
-        axis: token
-        shape: B x N
-        fields: [cond_seq_mask, cond_group, cond_struct_mask, cond_struct_frame_mask, cond_interface_mask]
-        semantic_role: States which token identities, coordinates, frames, motif groups, and target-interface positions are exposed to the model.
-        task_behavior: Disabled for unconditional generation, set on known motif positions for scaffolding, and set on target or interface positions for binder design.
-        evidence: *feature_evidence
-      - id: source_confidence
-        label: Source confidence
-        axis: token
-        shape: B x N
-        fields: [plddt]
-        semantic_role: Preserves per-token confidence supplied by an input structure when that field is available.
-        task_behavior: Relevant to structure-sourced motif and target examples; it is not created by the length-only unconditional path.
-        evidence: *feature_evidence
+    - id: layout_and_identity
+      label: Layout and identity
+      axis: token
+      shape: B x N
+      fields:
+      - token_mask
+      - token_index
+      - residue_index
+      - asym_id
+      - sym_id
+      - entity_id
+      - is_atomized
+      semantic_role: Defines which padded atom-token slots are active, maps them to residues and chains, and marks tokens created by partial atomization.
+      task_behavior: Present for every task; the selected featurizer determines the atom-token count, chain layout, and atomization flags.
+      evidence: *feature_evidence
+    - id: residue_identity
+      label: Known residue identity
+      axis: token
+      shape: B x N x 20
+      fields:
+      - gt_restype
+      semantic_role: Carries the one-hot amino-acid identity aligned to every atom-token belonging to that residue.
+      task_behavior: Unknown design positions are zeroed; conditioned motif or target atom-tokens repeat their known residue identity.
+      evidence: *feature_evidence
+    - id: atom_type
+      label: Atom type
+      axis: token
+      shape: B x N x 37
+      fields:
+      - atom_type
+      semantic_role: Identifies which atom37 name each C-alpha or side-chain heavy-atom token represents.
+      task_behavior: Every residue contributes a C-alpha token; selected known residues contribute additional Atom14-ordered side-chain heavy-atom tokens.
+      evidence: *feature_evidence
+    - id: atom_element
+      label: Atom element
+      axis: token
+      shape: B x N x 4
+      fields:
+      - atom_symbol
+      semantic_role: Encodes the N, C, O, or S element associated with each atom-token.
+      task_behavior: The element follows the C-alpha or side-chain atom selected for that token.
+      evidence: *feature_evidence
+    - id: atom_validity
+      label: Atom validity
+      axis: token
+      shape: B x N
+      fields:
+      - gt_atom_mask
+      semantic_role: Marks whether a ground-truth coordinate is available for each aligned atom-token.
+      task_behavior: Unknown or unavailable positions are masked even though their token slots remain part of the padded layout.
+      evidence: *feature_evidence
+    - id: atom_coordinates
+      label: Atom coordinates
+      axis: token
+      shape: B x N x 3
+      fields:
+      - gt_atom_positions
+      semantic_role: Stores one xyz coordinate for every aligned C-alpha or side-chain heavy-atom token.
+      task_behavior: Conditioned coordinates are populated when supplied; unknown design coordinates begin as zero placeholders before diffusion initialization.
+      evidence: *feature_evidence
+    - id: frame_construction
+      label: Frame construction
+      axis: token
+      shape: B x N
+      fields:
+      - token_struct_mask
+      - token_struct_frame_mask
+      - token_frame_lindex
+      - token_frame_rindex
+      - token_frame_cindex_adj
+      - token_frame_lindex_adj
+      - token_frame_rindex_adj
+      semantic_role: Identifies structurally valid atom-tokens and their neighboring token indices for local-frame construction.
+      task_behavior: Indices exist in every task; validity masks determine where current or conditioned frames may actually be used.
+      evidence: *feature_evidence
+    - id: task_conditioning
+      label: Task conditioning
+      axis: token
+      shape: B x N
+      fields:
+      - cond_seq_mask
+      - cond_group
+      - cond_struct_mask
+      - cond_struct_frame_mask
+      - cond_interface_mask
+      semantic_role: States which atom-token identities, coordinates, frames, motif groups, and target-interface positions are exposed to the model.
+      task_behavior: Disabled for unconditional generation, set on known motif positions for scaffolding, and set on target or interface positions for binder design.
+      evidence: *feature_evidence
+    - id: source_confidence
+      label: Source confidence
+      axis: token
+      shape: B x N
+      fields:
+      - plddt
+      semantic_role: Repeats the input structure confidence across the atom-tokens belonging to each sourced residue.
+      task_behavior: Relevant to structure-sourced motif and target examples; it is not created by the length-only unconditional path.
+      evidence: *feature_evidence
   - id: token_coordinates
     scale: token
     semantic_role: point-cloud diffusion state over C-alpha and optionally atomized heavy-atom tokens
@@ -494,11 +545,12 @@ representations:
           locator: PostProcessor.save
   - id: sample_feature_dictionary
     scale: mixed
-    semantic_role: one source-specific unbatched dictionary of token- and atom-indexed features
-    shape: N token fields + A atom fields
+    semantic_role: one source-specific unbatched dictionary whose residue, atom, coordinate, frame, and conditioning fields align to one atom-token axis
+    shape: heterogeneous fields sharing an N atom-token prefix
     glyph: dictionary
     carries:
-    - task-specific token and atom layout
+    - one aligned row per C-alpha or side-chain heavy-atom token
+    - task-specific atom-token layout and identities
     - known sequence and coordinate values
     - sequence, structure, frame, motif-group, and interface conditioning masks
     evidence:
@@ -886,10 +938,12 @@ modules:
   - id: pair_biased_attention_update
     parent_ref: modules.latent_transformer
     decomposition: { status: leaf }
-    label: Pair-Biased Single Attention
+    label: Pair-Biased Single Attention (Reduced IPA)
     kind: attention
-    mechanisms: [pair_biased_attention, pair_value_injection]
-    role: update single features using pair-biased self-attention with pair-derived value injection and no frame geometry
+    mechanisms:
+    - pair_biased_attention
+    - attention_weighted_pair_value_aggregation
+    role: update single features using pair-biased self-attention and attention-weighted pair-value aggregation, with no frame geometry
     scale: token
     attention:
       pattern: full
@@ -1235,7 +1289,7 @@ block_instances:
     variant: pair_values_residual_norm_transition
     use_scope: whole_module
     conformance: reduced
-    difference_summary: Genie 3 removes frame-aware point terms, keeps pair-logit bias and pair-value aggregation, then adds residual normalization, a single transition, and final masking.
+    difference_summary: Genie 3 removes frame-aware point terms, keeps pair-logit bias and attention-weighted pair-value aggregation, then adds residual normalization, a single transition, and final masking.
     port_bindings:
       - port_ref: ports.single_state
         relation_refs: [relations.single_with_global_tokens_enters_attention]
@@ -1249,7 +1303,7 @@ block_instances:
         - source_ref: genie3_ipa_code
           role: implementation_evidence
           locator: ReducedInvariantPointAttention.forward
-          note: Reduced IPA implements scalar attention with pair bias and pair-value aggregation while omitting frame-aware point terms.
+          note: Reduced IPA implements scalar attention with pair bias and attention-weighted pair-value aggregation while omitting frame-aware point terms.
         - source_ref: genie3_latent_transformer_code
           role: wrapper_evidence
           locator: LatentTransformerBlock.forward
@@ -1277,7 +1331,7 @@ block_instances:
         - source_ref: genie3_ipa_code
           role: implementation_evidence
           locator: InvariantPointAttention.forward
-          note: Full IPA implements scalar, point, pair-bias, and pair-value attention terms.
+          note: Full IPA implements scalar and point attention, pair bias, and attention-weighted pair-value aggregation.
         - source_ref: genie3_structure_code
           role: wrapper_evidence
           locator: StructureLayer.forward
@@ -1480,7 +1534,7 @@ relations:
     to: modules.pair_biased_attention_update
     kind: conditioning
     carries: [representations.pair_features]
-    operation: bias_attention_and_inject_pair_values
+    operation: bias_attention_and_aggregate_pair_values
     evidence: *latent_relation_evidence
   - id: pair_attention_produces_single_state
     from: modules.pair_biased_attention_update

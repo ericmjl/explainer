@@ -183,6 +183,13 @@ their shared token or atom axis and explain their common purpose; do not copy
 the same field into multiple groups. Give a named mapping of heterogeneous
 tensors `glyph: dictionary`, so the board does not imply that it is one tensor.
 
+`axis` describes the actual leading dimension consumed by the model, not a
+generic loader or padding category. When atom attributes are aligned one-to-one
+with atom-valued tokens, keep those groups on `axis: token` and use `N` in their
+shapes. Reserve `axis: atom` and `A` for an independently sized atom collection.
+The browser derives its axis legend from the axes that the representation
+actually declares.
+
 ```yaml
 field_groups:
   - id: task_conditioning

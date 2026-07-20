@@ -336,6 +336,7 @@ class RendererSemanticPseudocodeBrowserTest < Minitest::Test
     verify_dictionary_field_selection(browser, base)
     verify_published_reference_panel(browser, base)
     verify_grouped_inspector_and_stable_status(browser, base)
+    verify_inspector_collapse(browser, base)
     verify_math_symbols_and_theme(browser, base)
     verify_touch_pinch_zoom(browser, base)
     verify_mobile_board_trace(browser, base)
@@ -448,6 +449,38 @@ class RendererSemanticPseudocodeBrowserTest < Minitest::Test
     refute graph_result["unrelatedStillMuted"],
       "the semantic spotlight should clear when focus returns to the board"
 
+    browser.execute(<<~JS)
+      const node = document.querySelector('[data-node-id="attention_weights"]');
+      node.dispatchEvent(new PointerEvent('pointerenter'));
+      return true;
+    JS
+    pointer_result = wait_for(browser, "the board-hover connectivity spotlight") do
+      browser.execute(<<~JS)
+        const node = document.querySelector('[data-node-id="attention_weights"]');
+        const unrelated = document.querySelector('[data-node-id="project_scalar_terms"]');
+        const result = {
+          focusedOpacity: Number(getComputedStyle(node).opacity),
+          unrelatedOpacity: Number(getComputedStyle(unrelated).opacity),
+          unrelatedMuted: unrelated.classList.contains('is-connectivity-muted'),
+        };
+        return result.unrelatedMuted && result.unrelatedOpacity <= 0.25 ? result : null;
+      JS
+    end
+    restored_after_leave = wait_for(browser, "the board after pointer leave") do
+      browser.execute(<<~JS)
+        const node = document.querySelector('[data-node-id="attention_weights"]');
+        const unrelated = document.querySelector('[data-node-id="project_scalar_terms"]');
+        node.dispatchEvent(new PointerEvent('pointerleave'));
+        return !unrelated.classList.contains('is-connectivity-muted');
+      JS
+    end
+    assert pointer_result["unrelatedMuted"],
+      "hovering a board component should fade unrelated components"
+    assert_operator pointer_result["focusedOpacity"], :>, pointer_result["unrelatedOpacity"]
+    assert_operator pointer_result["unrelatedOpacity"], :<=, 0.25
+    assert restored_after_leave,
+      "leaving the board component should restore the broader board context"
+
     clicked_url = browser.execute(<<~JS)
       const line = [...document.querySelectorAll('.semantic-trace-line')]
         .find((item) => item.textContent.includes('attention = softmax'));
@@ -463,11 +496,21 @@ class RendererSemanticPseudocodeBrowserTest < Minitest::Test
     browser.refresh
     restored = wait_for(browser, "the shared IPA node selection after reload") do
       browser.execute(<<~JS)
-        return document.querySelector('[data-node-id="attention_weights"]')
-          ?.classList.contains('is-focused') || false;
+        const node = document.querySelector('[data-node-id="attention_weights"]');
+        if (!node?.classList.contains('is-focused') || !node.classList.contains('is-selected-node')) {
+          return null;
+        }
+        const style = getComputedStyle(node);
+        return {
+          outlineWidth: Number.parseFloat(style.outlineWidth),
+          outlineStyle: style.outlineStyle,
+          zIndex: Number.parseInt(style.zIndex, 10),
+        };
       JS
     end
-    assert restored
+    assert_operator restored["outlineWidth"], :>=, 3
+    refute_equal "none", restored["outlineStyle"]
+    assert_operator restored["zIndex"], :>=, 7
   end
 
   def verify_high_level_call_drilldown(browser, base)
@@ -535,6 +578,7 @@ class RendererSemanticPseudocodeBrowserTest < Minitest::Test
             .map((item) => item.textContent),
           axes: [...table.querySelectorAll('.representation-field-shape i')]
             .map((item) => item.textContent),
+          legend: document.querySelector('.representation-field-legend')?.textContent || '',
           text: table.textContent.replace(/\s+/g, ' ').trim(),
         };
       JS
@@ -545,13 +589,17 @@ class RendererSemanticPseudocodeBrowserTest < Minitest::Test
       "a heterogeneous dictionary must not display one tensor shape"
     assert_includes feature_table["preview"], "token_mask: tensor"
     assert_equal "feature dictionary", feature_table["meaning"]
-    assert_equal 6, feature_table["rows"]
+    assert_equal 9, feature_table["rows"]
     assert_includes feature_table["keys"], "token_mask"
     assert_includes feature_table["keys"], "gt_atom_positions"
     assert_includes feature_table["keys"], "cond_interface_mask"
     assert_includes feature_table["keys"], "plddt"
-    assert_includes feature_table["axes"], "token"
-    assert_includes feature_table["axes"], "atom"
+    assert_equal ["token"], feature_table["axes"].uniq
+    assert_includes feature_table["legend"], "N padded token axis"
+    refute_includes feature_table["legend"], "A padded atom axis"
+    assert_includes feature_table["text"], "B x N x 37"
+    assert_includes feature_table["text"], "B x N x 4"
+    assert_includes feature_table["text"], "B x N x 3"
     assert_includes feature_table["text"], "Disabled for unconditional generation"
 
     opened = browser.execute(<<~JS)
@@ -702,12 +750,14 @@ class RendererSemanticPseudocodeBrowserTest < Minitest::Test
         const pair = document.querySelector('[data-node-id="refined_pair_features"]');
         const frames = document.querySelector('[data-node-id="decoder_frames"]');
         if (!dictionary || !mask || !extract || !conditioning || !single || !pair || !frames) return null;
+        const maskSymbol = mask.querySelector('.tensor-symbol')?.textContent || '';
+        if (maskSymbol !== 'M') return null;
         return {
           dictionaryGlyph: dictionary.classList.contains('tensor-dictionary'),
           dictionaryMeaning: dictionary.querySelector('.tensor-meaning')?.textContent || '',
           maskGlyph: mask.classList.contains('tensor-vector'),
           maskMeaning: mask.querySelector('.tensor-meaning')?.textContent || '',
-          maskSymbol: mask.querySelector('.tensor-symbol')?.textContent || '',
+          maskSymbol,
           dictionaryMaskGap: mask.offsetLeft - (dictionary.offsetLeft + dictionary.offsetWidth),
           singlePairGap: pair.offsetTop - (single.offsetTop + single.offsetHeight),
           pairFrameGap: frames.offsetTop - (pair.offsetTop + pair.offsetHeight),
@@ -812,6 +862,80 @@ class RendererSemanticPseudocodeBrowserTest < Minitest::Test
     assert_includes layout["statusText"], "not visible at the current board level"
     assert_operator layout["lineShift"], :<=, 0.5,
       "hover guidance must not move the line under the pointer"
+  end
+
+  def verify_inspector_collapse(browser, base)
+    browser.set_window(width: 1440, height: 1000)
+    browser.navigate("#{base}?arch=genie3")
+    initial = wait_for(browser, "the collapsible architecture inspector") do
+      browser.execute(<<~JS)
+        const canvas = document.querySelector('#architectureCanvas');
+        const panel = document.querySelector('#workspaceInspector');
+        const button = document.querySelector('#focusCollapse');
+        const pages = document.querySelector('#focusPanelPages');
+        if (
+          !canvas || !panel || !button || !pages
+          || document.body.dataset.rendererReady !== 'true'
+          || button.dataset.ready !== 'true'
+        ) return null;
+        return {
+          canvasWidth: canvas.getBoundingClientRect().width,
+          panelWidth: panel.getBoundingClientRect().width,
+          expanded: button.getAttribute('aria-expanded'),
+          ready: button.dataset.ready || null,
+        };
+      JS
+    end
+    assert_equal "true", initial["expanded"]
+    assert_equal "true", initial["ready"]
+
+    collapsed = browser.execute(<<~JS)
+        const canvas = document.querySelector('#architectureCanvas');
+        const panel = document.querySelector('#workspaceInspector');
+        const button = document.querySelector('#focusCollapse');
+        const pages = document.querySelector('#focusPanelPages');
+        button.click();
+        const result = {
+          bodyClass: document.body.classList.contains('is-inspector-collapsed'),
+          canvasWidth: canvas.getBoundingClientRect().width,
+          panelWidth: panel.getBoundingClientRect().width,
+          pagesHidden: pages.hidden,
+          expanded: button.getAttribute('aria-expanded'),
+          stored: sessionStorage.getItem('explainer-inspector-collapsed'),
+        };
+        return result;
+    JS
+    assert collapsed["bodyClass"]
+    assert collapsed["pagesHidden"]
+    assert_operator collapsed["panelWidth"], :<=, 50
+    assert_equal "false", collapsed["expanded"]
+    assert_equal "true", collapsed["stored"]
+    assert_operator collapsed["canvasWidth"], :>, initial["canvasWidth"]
+    assert_operator collapsed["panelWidth"], :<, initial["panelWidth"]
+
+    browser.refresh
+    persisted = wait_for(browser, "the session-persisted collapsed inspector") do
+      browser.execute(<<~JS)
+        const button = document.querySelector('#focusCollapse');
+        const pages = document.querySelector('#focusPanelPages');
+        return document.body.classList.contains('is-inspector-collapsed')
+          && pages?.hidden
+          && button?.getAttribute('aria-expanded') === 'false';
+      JS
+    end
+    assert persisted
+
+    browser.execute("document.querySelector('#focusCollapse').click(); return true;")
+    expanded = wait_for(browser, "the reopened architecture inspector") do
+      browser.execute(<<~JS)
+        const button = document.querySelector('#focusCollapse');
+        const pages = document.querySelector('#focusPanelPages');
+        return !document.body.classList.contains('is-inspector-collapsed')
+          && !pages?.hidden
+          && button?.getAttribute('aria-expanded') === 'true';
+      JS
+    end
+    assert expanded
   end
 
   def verify_math_symbols_and_theme(browser, base)
