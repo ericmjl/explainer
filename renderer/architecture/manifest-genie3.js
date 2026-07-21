@@ -5,7 +5,7 @@ export const manifest = {
     "inputDigests": {
       "references/bibliography.yaml": "abe9226586bfb64261c81b7756b7275c48a3a172a9a18b5f91f7acfd3145e374",
       "architectures/genie3.yaml": "313447c6bd218b67ba3a5cdda312b9b229a56068d59033333ac5cbac757e051c",
-      "views/genie3-semantic-zoom.view.yaml": "df225112f3b15c3d3049eeb8e14d8cf1b162a22bd2af9ccac3418dd4f33cf06c",
+      "views/genie3-semantic-zoom.view.yaml": "32cc547f46338f828b3f6c1edfc95fdf02d622d567ced4cf1642d3c13eccea29",
       "pseudocode/genie3.yaml": "822369fcf368f6fc2cf07c70a810d408a122d4cc1bad4f33ef2fbbf6b848d09c",
       "standard_blocks/pair-biased-attention.yaml": "9cd25cca99e46326432232d92a00d84d82b3e59d028aff4e47d73aa31bac9381",
       "standard_blocks/invariant-point-attention.yaml": "a5c02021172a36135808767943f20309424cc956240bf956ed156d1c380bb7b5"
@@ -15720,7 +15720,7 @@ export const manifest = {
           "column_sizing": "content",
           "col_gap": 32,
           "row_sizing": "content",
-          "row_gap": 28
+          "row_gap": 52
         },
         "regions": [
           {
@@ -15755,7 +15755,7 @@ export const manifest = {
             "prominence": "context",
             "treatment": "chip",
             "density": "micro",
-            "col": 1,
+            "col": 2,
             "row": 1
           },
           {
@@ -15767,7 +15767,7 @@ export const manifest = {
             "treatment": "chip",
             "density": "micro",
             "glyph": "vector",
-            "col": 2,
+            "col": 3,
             "row": 1
           },
           {

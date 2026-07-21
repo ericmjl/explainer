@@ -28,6 +28,8 @@ import {
   edgeIsRepresentedByRepeatRegion,
   executionLoopForRef,
   repeatRegionBounds,
+  repeatRegionDisplay,
+  repeatRegionHeaderPlacement,
   repeatRegions,
   representedIterationRelationRefs,
 } from "./repeat-regions.mjs";
@@ -4594,20 +4596,31 @@ function renderBoardRegions(board) {
     enclosure.style.width = `${Math.round(bounds.width)}px`;
     enclosure.style.height = `${Math.round(bounds.height)}px`;
 
+    const display = repeatRegionDisplay(region, loop);
     const header = document.createElement("div");
     header.className = "repeat-region-header";
     const label = document.createElement("span");
     label.className = "repeat-region-label";
-    label.textContent = region.label || "repeated block";
+    label.textContent = display.label;
     header.appendChild(label);
-    if (loop?.repeats) {
+    if (display.count) {
       const count = document.createElement("span");
       count.className = "repeat-region-count";
-      count.textContent = `repeat ×${loop.repeats}`;
+      count.textContent = display.count;
       header.appendChild(count);
     }
     enclosure.appendChild(header);
     elements.regionLayer.appendChild(enclosure);
+
+    const placement = repeatRegionHeaderPlacement(
+      bounds,
+      { width: header.offsetWidth, height: header.offsetHeight },
+      [...(state.edgeRoutes?.values() || [])],
+      state.edgeAnnotationBoxes || [],
+    );
+    header.style.left = `${Math.round(placement.left)}px`;
+    header.style.top = `${Math.round(placement.top)}px`;
+    header.dataset.placement = placement.side;
   }
 }
 
