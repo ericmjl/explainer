@@ -38,11 +38,11 @@ export const comparisonIndex = {
     "generator": "architecture-manifest-builder-v0.5.0",
     "inputDigests": {
       "comparisons/index.yaml": "54059100527b7b47f0096e90227ce5668a3d2693e0b48c8af971a200feed97e4",
-      "comparisons/genie3-reduced-vs-full-ipa.yaml": "85eed3b6f228c693e494bd93a606829f383b1c41e4a05425eafd911f5d7c5d1b",
-      "references/bibliography.yaml": "abe9226586bfb64261c81b7756b7275c48a3a172a9a18b5f91f7acfd3145e374",
+      "comparisons/genie3-reduced-vs-full-ipa.yaml": "402bf54881eeb6b38d20b3049f839fbd1bdbfc35812e17909a7e63d9794dd4ba",
+      "references/bibliography.yaml": "aa83264d6b5cce1245347f404a9d13daa41d4b6782fd94f1458397f312843b9f",
       "architectures/generic-feature-refinement.yaml": "856e34131dc78dd2454df9b0dc3ad3d0adff67c5a7f9dee5809cacf311722d68",
       "views/generic-semantic-zoom.view.yaml": "2212d81c8217db03c68fa7d59f44dc36e55052503d8d503b3386bded040b5714",
-      "standard_blocks/pair-biased-attention.yaml": "9cd25cca99e46326432232d92a00d84d82b3e59d028aff4e47d73aa31bac9381",
+      "standard_blocks/pair-biased-attention.yaml": "3c6be1ec47623fa320eb6eace772216f41014d4bf14765b8ff52b1602cf26fb7",
       "standard_blocks/per-item-adaln-conditioning.yaml": "544bca1c4d238825bfe6e389fe0409e64b27726b54f737e86021a0dc078987f9",
       "standard_blocks/additive-conditioning.yaml": "5638ead7cbb2df6729e58393703d3e35b6e480b3ba42c657312dc6581bb032f7",
       "architectures/diffusion-transformer.yaml": "62b1a3f47c1b0891d242c49ca269a5f1e856672fbd080a07e7eebf718a8a8965",
@@ -54,8 +54,9 @@ export const comparisonIndex = {
       "architectures/genie2.yaml": "dc70626daca21c212b372e601a3a064ee1a1ea01e226b955b21e00e4c308bdb0",
       "views/genie2-semantic-zoom.view.yaml": "e5ed5c07d6c8bc3215aa09b1e2ca261c2861a1dc19bdf8c3968d69c23e28b0d2",
       "standard_blocks/invariant-point-attention.yaml": "a5c02021172a36135808767943f20309424cc956240bf956ed156d1c380bb7b5",
-      "architectures/genie3.yaml": "313447c6bd218b67ba3a5cdda312b9b229a56068d59033333ac5cbac757e051c",
-      "views/genie3-semantic-zoom.view.yaml": "32cc547f46338f828b3f6c1edfc95fdf02d622d567ced4cf1642d3c13eccea29"
+      "architectures/genie3.yaml": "9f6b978940bdcb1547f1484b2f261e1def12375f556d7cf151fe74ddb6358735",
+      "views/genie3-semantic-zoom.view.yaml": "2c3d2e6fad18e180f51548b75d4cbee898cfcb667cc931763f28a773798f4775",
+      "standard_blocks/structure-transition.yaml": "2708baf8035a8e77ab3e3da3bf2f067225757a813743efb90c72ac0f0c77b723"
     }
   },
   "items": [
@@ -66,7 +67,7 @@ export const comparisonIndex = {
       "title": "Genie 3 Reduced Attention vs Full Frame-Aware IPA",
       "status": "review",
       "question": "What does Genie 3's reduced latent attention retain, change, and remove relative to full frame-aware IPA?",
-      "summary": "Both attention cores use scalar attention, pair-logit bias, and attention-weighted pair-value aggregation. Full IPA additionally forms frame-aware point logits and point outputs; the reduced latent block omits that geometry and owns a residual-normalized transition wrapper that sits outside full IPA in the structure decoder.",
+      "summary": "Both attention cores use scalar attention, pair-logit bias, and attention-weighted pair-value aggregation, and both end at a projected single-state delta. Full IPA additionally forms frame-aware point logits and point outputs; the reduced latent attention omits that geometry.",
       "subjects": {
         "primary": {
           "label": "Reduced latent attention",
@@ -77,10 +78,10 @@ export const comparisonIndex = {
           "kind": "block_instance",
           "standardBlockId": "pair_biased_attention",
           "standardBlockRef": "standard_blocks/pair-biased-attention.yaml",
-          "variant": "pair_values_residual_norm_transition",
-          "variantLabel": "Reduced pair attention + wrapper",
+          "variant": "pair_values_attention_delta",
+          "variantLabel": "Reduced pair attention delta",
           "conformance": "reduced",
-          "differenceSummary": "Genie 3 removes frame-aware point terms, keeps pair-logit bias and attention-weighted pair-value aggregation, then adds residual normalization, a single transition, and final masking."
+          "differenceSummary": "Genie 3 removes frame-aware point terms and keeps pair-logit bias plus attention-weighted pair-value aggregation. The residual add, normalization, transition, and final masking are modeled as the surrounding latent-block wrapper."
         },
         "counterpart": {
           "label": "Full frame-aware IPA",
@@ -117,15 +118,6 @@ export const comparisonIndex = {
           "description": "Frame-aware point operations present only in the full structure-decoder IPA path.",
           "alignmentRefs": [
             "alignments.frame_aware_point_path"
-          ]
-        },
-        {
-          "id": "reduced_only",
-          "label": "Reduced instance wrapper only",
-          "description": "Wrapper behavior owned by the reduced latent block but kept outside the full IPA module boundary.",
-          "alignmentRefs": [
-            "alignments.residual_normalization",
-            "alignments.latent_transition_and_output_mask"
           ]
         }
       ],
@@ -483,43 +475,6 @@ export const comparisonIndex = {
           }
         },
         {
-          "id": "residual_normalization",
-          "groupRef": "groups.reduced_only",
-          "label": "Residual, dropout, and normalization",
-          "relationship": "primary_only",
-          "explanation": "The reduced block instance owns its residual wrapper. Genie 3's structure decoder performs the analogous operation in StructureLayer after the full IPA module returns, so it is intentionally outside the full IPA standard-block instance.",
-          "primaryFacts": [
-            {
-              "factRef": "block_instances.latent_reduced_pair_attention.steps.residual_norm",
-              "kind": "step",
-              "label": "Residual, dropout, and norm",
-              "nodeIds": [
-                "residual_norm"
-              ],
-              "templateFactRef": "standard_blocks.pair_biased_attention.steps.residual_norm",
-              "blockInstanceRef": "block_instances.latent_reduced_pair_attention"
-            }
-          ],
-          "counterpartFacts": [
-
-          ],
-          "evidence": {
-            "status": "confirmed_from_code",
-            "refs": [
-              {
-                "source_ref": "genie3_latent_transformer_code",
-                "role": "primary_wrapper_evidence",
-                "locator": "LatentTransformerBlock.forward"
-              },
-              {
-                "source_ref": "genie3_structure_code",
-                "role": "counterpart_wrapper_evidence",
-                "locator": "StructureLayer.forward"
-              }
-            ]
-          }
-        },
-        {
           "id": "frame_aware_point_path",
           "groupRef": "groups.full_only",
           "label": "Frame-aware point attention",
@@ -595,43 +550,6 @@ export const comparisonIndex = {
               }
             ]
           }
-        },
-        {
-          "id": "latent_transition_and_output_mask",
-          "groupRef": "groups.reduced_only",
-          "label": "Latent transition and final output mask",
-          "relationship": "primary_only",
-          "explanation": "The reduced latent block follows residual normalization with its transition MLP and reapplies the token mask; that wrapper step is not part of the selected full IPA variant.",
-          "primaryFacts": [
-            {
-              "factRef": "block_instances.latent_reduced_pair_attention.steps.transition_and_mask",
-              "kind": "step",
-              "label": "Transition and mask",
-              "nodeIds": [
-                "transition_and_mask"
-              ],
-              "templateFactRef": "standard_blocks.pair_biased_attention.steps.transition_and_mask",
-              "blockInstanceRef": "block_instances.latent_reduced_pair_attention"
-            }
-          ],
-          "counterpartFacts": [
-
-          ],
-          "evidence": {
-            "status": "confirmed_from_code",
-            "refs": [
-              {
-                "source_ref": "genie3_latent_transformer_code",
-                "role": "primary_wrapper_evidence",
-                "locator": "LatentTransformerBlock.forward"
-              },
-              {
-                "source_ref": "genie3_structure_code",
-                "role": "counterpart_wrapper_evidence",
-                "locator": "StructureLayer.forward"
-              }
-            ]
-          }
         }
       ],
       "findings": [
@@ -677,29 +595,6 @@ export const comparisonIndex = {
                 "source_ref": "genie3_ipa_code",
                 "role": "counterpart_implementation_evidence",
                 "locator": "InvariantPointAttention.forward"
-              }
-            ]
-          }
-        },
-        {
-          "id": "wrapper_scope_differs",
-          "statement": "The reduced latent block owns residual normalization and its transition-and-mask wrapper, whereas the structure decoder keeps its residual and transition operations outside the full IPA module boundary.",
-          "alignmentRefs": [
-            "alignments.residual_normalization",
-            "alignments.latent_transition_and_output_mask"
-          ],
-          "evidence": {
-            "status": "confirmed_from_code",
-            "refs": [
-              {
-                "source_ref": "genie3_latent_transformer_code",
-                "role": "primary_wrapper_evidence",
-                "locator": "LatentTransformerBlock.forward"
-              },
-              {
-                "source_ref": "genie3_structure_code",
-                "role": "counterpart_wrapper_evidence",
-                "locator": "StructureLayer.forward"
               }
             ]
           }

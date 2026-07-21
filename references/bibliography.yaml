@@ -379,6 +379,15 @@ sources:
     path: src/genie3/generation/model/module/invariant_point_attention.py
     url: https://github.com/aqlaboratory/genie3/blob/d77ae5ac04212ff1e8b29b585859a3244c614804/src/genie3/generation/model/module/invariant_point_attention.py
 
+  - id: genie3_transition_code
+    kind: code
+    title: Genie 3 transition modules
+    organization: AQLaboratory
+    repository: aqlaboratory/genie3
+    revision: d77ae5ac04212ff1e8b29b585859a3244c614804
+    path: src/genie3/generation/model/module/transition.py
+    url: https://github.com/aqlaboratory/genie3/blob/d77ae5ac04212ff1e8b29b585859a3244c614804/src/genie3/generation/model/module/transition.py
+
   - id: genie3_sequence_code
     kind: code
     title: Genie 3 optional sequence head

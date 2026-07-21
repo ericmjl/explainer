@@ -34,13 +34,16 @@ class StandardBlockCompilerTest < Minitest::Test
     catalog = catalog_for(
       "standard_blocks/pair-biased-attention.yaml",
       "standard_blocks/invariant-point-attention.yaml",
+      "standard_blocks/structure-transition.yaml",
     )
     instances = catalog.compile_instances(architecture, registered_blocks: catalog.blocks_by_path.keys)
     reduced = instances.find { |instance| instance.fetch("id") == "latent_reduced_pair_attention" }
     step_ids = reduced.fetch("pseudocode").map { |step| step.fetch("id") }
 
     assert_includes step_ids, "aggregate_pair_values"
-    assert_includes step_ids, "transition_and_mask"
+    assert_includes step_ids, "project_reduced_output"
+    refute_includes step_ids, "transition_and_mask"
+    assert reduced.dig("scene", "nodes").any? { |node| node["id"] == "attention_delta" }
     refute_includes step_ids, "project_attention_output"
     assert_equal "reduced", reduced.fetch("conformance")
     assert_match(/removes frame-aware point terms/i, reduced.fetch("differenceSummary"))
@@ -48,7 +51,11 @@ class StandardBlockCompilerTest < Minitest::Test
 
   def test_same_ipa_template_compiles_for_genie2_and_genie3_boundaries
     path = "standard_blocks/invariant-point-attention.yaml"
-    catalog = catalog_for(path, "standard_blocks/pair-biased-attention.yaml")
+    catalog = catalog_for(
+      path,
+      "standard_blocks/pair-biased-attention.yaml",
+      "standard_blocks/structure-transition.yaml",
+    )
     compiled = %w[genie2 genie3].to_h do |id|
       architecture = load_yaml("architectures/#{id}.yaml")
       instance = catalog.compile_instances(architecture, registered_blocks: catalog.blocks_by_path.keys)
@@ -71,9 +78,17 @@ class StandardBlockCompilerTest < Minitest::Test
     path = "standard_blocks/invariant-point-attention.yaml"
     architecture = load_yaml("architectures/genie3.yaml")
     block = load_yaml(path)
-    instance = catalog_for(path, "standard_blocks/pair-biased-attention.yaml").compile_instances(
+    instance = catalog_for(
+      path,
+      "standard_blocks/pair-biased-attention.yaml",
+      "standard_blocks/structure-transition.yaml",
+    ).compile_instances(
       architecture,
-      registered_blocks: [path, "standard_blocks/pair-biased-attention.yaml"],
+      registered_blocks: [
+        path,
+        "standard_blocks/pair-biased-attention.yaml",
+        "standard_blocks/structure-transition.yaml",
+      ],
     ).find { |candidate| candidate.fetch("id") == "structure_ipa" }
 
     assert_equal({
@@ -101,6 +116,36 @@ class StandardBlockCompilerTest < Minitest::Test
     end
     compiled_cells = nodes.transform_values { |node| [node.fetch("col"), node.fetch("row")] }
     assert_equal authored_cells, compiled_cells
+  end
+
+  def test_v03_structure_transition_resolves_symbolic_single_shapes
+    path = "standard_blocks/structure-transition.yaml"
+    architecture = load_yaml("architectures/genie3.yaml")
+    instance = catalog_for(
+      path,
+      "standard_blocks/pair-biased-attention.yaml",
+      "standard_blocks/invariant-point-attention.yaml",
+    ).compile_instances(
+      architecture,
+      registered_blocks: [
+        path,
+        "standard_blocks/pair-biased-attention.yaml",
+        "standard_blocks/invariant-point-attention.yaml",
+      ],
+    ).find { |candidate| candidate.fetch("id") == "structure_transition" }
+
+    assert_equal({
+      "num_layers" => 1,
+      "b" => "B",
+      "n" => "N",
+      "c_s" => 384,
+    }, instance.fetch("shapeParameters"))
+
+    nodes = instance.dig("scene", "nodes").to_h { |node| [node.fetch("id"), node] }
+    %w[single_state hidden_1 hidden_2 transition_delta residual_single updated_single_state].each do |id|
+      assert_equal "B x N x 384", nodes.dig(id, "shape")
+      assert_equal "resolved", nodes.dig(id, "shape_status")
+    end
   end
 
   def test_reusable_board_stub_compiles_to_a_template_grounded_detail_scene

@@ -3,7 +3,7 @@ id: pair_biased_attention
 name: Pair-Biased Attention
 kind: attention
 status: review
-description: Update a single/token stream with self-attention whose logits are conditioned by a pair representation, optionally adding attention-weighted pair-value aggregation and an architecture wrapper.
+description: Form a single/token attention update with self-attention whose logits are conditioned by a pair representation, optionally adding attention-weighted pair-value aggregation.
 ports:
   - id: single_state
     label: single state
@@ -39,12 +39,22 @@ ports:
     label: updated single state
     direction: output
     kind: representation
-    required: true
+    required: false
     cardinality: one
     relation_kinds: [data_flow, state_update]
     glyph: single
     notation: s'
-    role: attention-updated single/token stream
+    role: attention-updated single/token stream for variants that include the residual boundary
+  - id: attention_delta
+    label: attention delta
+    direction: output
+    kind: representation
+    required: false
+    cardinality: one
+    relation_kinds: [data_flow, state_update]
+    glyph: single
+    notation: Δs
+    role: projected attention update before any architecture-owned residual wrapper
 variants:
   - id: logit_bias_only
     label: Pair-logit bias
@@ -57,9 +67,9 @@ variants:
       - steps.softmax_attention_unmasked
       - steps.aggregate_scalar_values
       - steps.project_attention_output
-  - id: pair_values_residual_norm_transition
-    label: Reduced pair attention + wrapper
-    description: A reduced IPA-style path adds pair bias and attention-weighted pair-value aggregation, then applies residual normalization, a transition, and output masking.
+  - id: pair_values_attention_delta
+    label: Reduced pair attention delta
+    description: A reduced IPA-style path adds pair bias and attention-weighted pair-value aggregation, then projects the concatenated contexts into an attention delta.
     step_refs:
       - steps.project_qkv
       - steps.scalar_logits
@@ -70,8 +80,6 @@ variants:
       - steps.aggregate_scalar_values
       - steps.aggregate_pair_values
       - steps.project_reduced_output
-      - steps.residual_norm
-      - steps.transition_and_mask
 default_variant: logit_bias_only
 values:
   - id: queries
@@ -124,16 +132,6 @@ values:
     kind: representation
     glyph: single
     notation: o_z
-  - id: attention_delta
-    label: attention delta
-    kind: representation
-    glyph: single
-    notation: delta_s
-  - id: normalized_single
-    label: residual-normalized state
-    kind: representation
-    glyph: single
-    notation: s_norm
 steps:
   - id: project_qkv
     label: Project Q, K, and V
@@ -210,59 +208,80 @@ steps:
     label: Fuse scalar and pair contexts
     operation: output_projection
     inputs: [values.scalar_context, values.pair_value_context]
-    outputs: [values.attention_delta]
+    outputs: [ports.attention_delta]
     code: "attention_delta = output_projection(concat(scalar_context, pair_context_out))"
-  - id: residual_norm
-    label: Residual, dropout, and norm
-    operation: residual_normalization
-    inputs: [ports.single_state, values.attention_delta]
-    outputs: [values.normalized_single]
-    code: "normalized_single = layer_norm(single_state + dropout(attention_delta))"
-  - id: transition_and_mask
-    label: Transition and mask
-    operation: transition_mask
-    inputs: [values.normalized_single, ports.attention_mask]
-    outputs: [ports.updated_single_state]
-    code: "updated_single_state = transition(normalized_single) * attention_mask"
 visual_template:
   grid:
-    columns: 9
-    rows: 6
+    columns: 13
+    rows: 7
     column_sizing: content
-    col_gap: 28
-    row_gap: 24
+    row_sizing: content
+    col_gap: 22
+    row_gap: 34
   nodes:
     - { id: single_state, ref: ports.single_state, col: 1, row: 2, prominence: secondary, treatment: compact }
     - { id: pair_context, ref: ports.pair_context, col: 1, row: 5, prominence: secondary, treatment: compact }
-    - { id: attention_mask, ref: ports.attention_mask, col: 3, row: 6, prominence: context, treatment: chip }
-    - { id: updated_single_state, ref: ports.updated_single_state, col: 9, row: 2, prominence: secondary, treatment: compact }
+    - { id: attention_mask, ref: ports.attention_mask, col: 5, row: 6, prominence: context, treatment: chip }
+    - { id: updated_single_state, ref: ports.updated_single_state, col: 13, row: 3, prominence: secondary, treatment: compact }
+    - { id: attention_delta, ref: ports.attention_delta, col: 13, row: 4, prominence: secondary, treatment: compact }
     - { id: project_qkv, ref: steps.project_qkv, col: 2, row: 2, prominence: primary, treatment: compact }
     - { id: queries, ref: values.queries, col: 3, row: 1, prominence: context, treatment: chip }
     - { id: keys, ref: values.keys, col: 3, row: 2, prominence: context, treatment: chip }
-    - { id: scalar_values, ref: values.scalar_values, col: 3, row: 3, prominence: context, treatment: chip }
+    - { id: scalar_values, ref: values.scalar_values, col: 3, row: 4, prominence: context, treatment: chip }
     - { id: scalar_logits_step, ref: steps.scalar_logits, col: 4, row: 2, prominence: primary, treatment: compact }
     - { id: scalar_logits, ref: values.scalar_logits, col: 5, row: 2, prominence: context, treatment: compact }
     - { id: project_pair_bias, ref: steps.project_pair_bias, col: 3, row: 5, prominence: primary, treatment: compact }
     - { id: pair_bias, ref: values.pair_bias, col: 5, row: 5, prominence: context, treatment: compact }
     - { id: combine_logits, ref: steps.combine_logits, col: 6, row: 3, prominence: primary, treatment: compact }
     - { id: biased_logits, ref: values.biased_logits, col: 7, row: 3, prominence: context, treatment: compact }
-    - { id: apply_attention_mask, ref: steps.apply_attention_mask, col: 5, row: 6, prominence: secondary, treatment: compact }
+    - { id: apply_attention_mask, ref: steps.apply_attention_mask, col: 6, row: 6, prominence: secondary, treatment: compact }
     - { id: masked_logits, ref: values.masked_logits, col: 7, row: 6, prominence: context, treatment: compact }
     - { id: softmax_attention_unmasked, ref: steps.softmax_attention_unmasked, col: 8, row: 3, prominence: primary, treatment: compact }
     - { id: softmax_attention_masked, ref: steps.softmax_attention_masked, col: 8, row: 6, prominence: primary, treatment: compact }
-    - { id: attention_weights, ref: values.attention_weights, col: 9, row: 3, prominence: context, treatment: compact }
-    - { id: aggregate_scalar_values, ref: steps.aggregate_scalar_values, col: 6, row: 1, prominence: primary, treatment: compact }
-    - { id: scalar_context, ref: values.scalar_context, col: 7, row: 1, prominence: context, treatment: compact }
-    - { id: aggregate_pair_values, ref: steps.aggregate_pair_values, col: 6, row: 5, prominence: primary, treatment: compact }
-    - { id: pair_value_context, ref: values.pair_value_context, col: 7, row: 5, prominence: context, treatment: compact }
-    - { id: project_attention_output, ref: steps.project_attention_output, col: 8, row: 1, prominence: primary, treatment: compact }
-    - { id: project_reduced_output, ref: steps.project_reduced_output, col: 8, row: 5, prominence: primary, treatment: compact }
-    - { id: attention_delta, ref: values.attention_delta, col: 9, row: 5, prominence: context, treatment: compact }
-    - { id: residual_norm, ref: steps.residual_norm, col: 7, row: 4, prominence: primary, treatment: compact }
-    - { id: normalized_single, ref: values.normalized_single, col: 8, row: 4, prominence: context, treatment: compact }
-    - { id: transition_and_mask, ref: steps.transition_and_mask, col: 9, row: 4, prominence: primary, treatment: compact }
+    - { id: attention_weights, ref: values.attention_weights, col: 9, row: 4, prominence: context, treatment: compact }
+    - { id: aggregate_scalar_values, ref: steps.aggregate_scalar_values, col: 10, row: 3, prominence: primary, treatment: compact }
+    - { id: scalar_context, ref: values.scalar_context, col: 11, row: 3, prominence: context, treatment: compact }
+    - { id: aggregate_pair_values, ref: steps.aggregate_pair_values, col: 10, row: 5, prominence: primary, treatment: compact }
+    - { id: pair_value_context, ref: values.pair_value_context, col: 11, row: 5, prominence: context, treatment: compact }
+    - { id: project_attention_output, ref: steps.project_attention_output, col: 12, row: 3, prominence: primary, treatment: compact }
+    - { id: project_reduced_output, ref: steps.project_reduced_output, col: 12, row: 4, prominence: primary, treatment: compact }
+  segments:
+    - id: attention_weights
+      label: Compute attention weights
+      description: Project Q/K/V from the single stream, add the pair-derived logit bias, apply the validity mask when present, and normalize over keys.
+      node_refs:
+        - ports.single_state
+        - ports.pair_context
+        - ports.attention_mask
+        - steps.project_qkv
+        - values.queries
+        - values.keys
+        - steps.scalar_logits
+        - values.scalar_logits
+        - steps.project_pair_bias
+        - values.pair_bias
+        - steps.combine_logits
+        - values.biased_logits
+        - steps.apply_attention_mask
+        - values.masked_logits
+        - steps.softmax_attention_unmasked
+        - steps.softmax_attention_masked
+        - values.attention_weights
+    - id: value_aggregation
+      label: Aggregate values
+      description: Reuse the same attention weights to aggregate ordinary scalar values and, in the reduced IPA-style variant, attention-weighted pair values.
+      node_refs:
+        - values.scalar_values
+        - steps.aggregate_scalar_values
+        - values.scalar_context
+        - steps.aggregate_pair_values
+        - values.pair_value_context
+        - steps.project_attention_output
+        - steps.project_reduced_output
+        - ports.updated_single_state
+        - ports.attention_delta
 evidence_policy:
-  generic_definition: The template is reusable algorithm vocabulary, not evidence that a method uses every variant.
+  generic_definition: The template is reusable attention-core vocabulary; residual addition, dropout, normalization, transition, and masking belong to the surrounding architecture unless a variant explicitly includes that boundary.
   usage_requires:
     - Evidence for the pair projection and addition to attention logits.
-    - Evidence for attention-weighted pair-value aggregation and wrapper operations when the reduced variant is selected.
+    - Evidence for attention-weighted pair-value aggregation when the reduced variant is selected.

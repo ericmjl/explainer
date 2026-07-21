@@ -786,7 +786,7 @@ boards:
     subject_ref: modules.latent_transformer
     expansion_depth: 1
     grid:
-      columns: 11
+      columns: 15
       rows: 4
       column_sizing: content
       col_gap: 24
@@ -799,6 +799,10 @@ boards:
           - single_with_global_tokens
           - pair_with_global_tokens
           - pair_biased_attention_update
+          - single_attention_delta
+          - latent_single_residual_norm
+          - single_after_attention_residual_norm
+          - latent_single_transition
           - single_after_pair_attention
           - single_to_pair_update
           - pair_after_single_update
@@ -862,6 +866,41 @@ boards:
         col: 4
         row: 2
         board_ref: genie3_reduced_pair_attention_internals
+      - id: single_attention_delta
+        ref: value_sites.single_attention_delta
+        label: attention delta
+        notation: Δs
+        prominence: context
+        treatment: compact
+        density: compact
+        col: 5
+        row: 2
+      - id: latent_single_residual_norm
+        ref: modules.latent_single_residual_norm
+        label: residual + norm
+        prominence: primary
+        treatment: compact
+        density: compact
+        col: 6
+        row: 2
+      - id: single_after_attention_residual_norm
+        ref: value_sites.single_after_attention_residual_norm
+        label: residual-normalized singles
+        notation: s_norm
+        prominence: context
+        treatment: compact
+        density: compact
+        col: 7
+        row: 2
+      - id: latent_single_transition
+        ref: modules.latent_single_transition
+        label: structure transition
+        prominence: primary
+        treatment: compact
+        density: compact
+        col: 8
+        row: 2
+        board_ref: genie3_latent_structure_transition_internals
       - id: single_after_pair_attention
         ref: value_sites.single_after_pair_attention
         label: next-block singles
@@ -869,14 +908,14 @@ boards:
         prominence: secondary
         treatment: compact
         density: compact
-        col: 5
+        col: 9
         row: 2
       - id: single_to_pair_update
         ref: modules.single_to_pair_update
         prominence: primary
         treatment: compact
         density: compact
-        col: 5
+        col: 9
         row: 4
       - id: pair_after_single_update
         ref: value_sites.pair_after_single_update
@@ -886,14 +925,14 @@ boards:
         treatment: compact
         density: compact
         glyph: pair
-        col: 6
+        col: 10
         row: 4
       - id: triangle_multiplication_stack
         ref: modules.triangle_multiplication_stack
         prominence: secondary
         treatment: compact
         density: compact
-        col: 7
+        col: 11
         row: 4
       - id: pair_after_triangle_updates
         ref: value_sites.pair_after_triangle_updates
@@ -903,14 +942,14 @@ boards:
         treatment: compact
         density: compact
         glyph: pair
-        col: 8
+        col: 12
         row: 4
       - id: pair_transition
         ref: modules.pair_transition
         prominence: secondary
         treatment: compact
         density: compact
-        col: 9
+        col: 13
         row: 4
       - id: pair_after_transition
         ref: value_sites.pair_after_transition
@@ -920,7 +959,7 @@ boards:
         treatment: compact
         density: compact
         glyph: pair
-        col: 10
+        col: 14
         row: 4
       - id: refined_single_features
         ref: value_sites.refined_single_features
@@ -929,7 +968,7 @@ boards:
         prominence: context
         treatment: compact
         density: compact
-        col: 11
+        col: 15
         row: 2
       - id: refined_pair_features
         ref: value_sites.refined_pair_features
@@ -939,7 +978,7 @@ boards:
         treatment: compact
         density: compact
         glyph: pair
-        col: 11
+        col: 15
         row: 4
     edge_overrides:
       - match: { relation_ref: relations.pair_with_global_tokens_bias_attention }
@@ -948,7 +987,25 @@ boards:
         connection:
           title: Pairs update singles
           role: pair-to-single communication
-          inside: Pair features bias self-attention and also contribute projected values to the single residual stream.
+          inside: Pair features bias self-attention and also contribute attention-weighted pair values to the projected Δs update.
+      - match: { relation_ref: relations.pair_attention_produces_single_delta }
+        label: Δs
+        connection:
+          title: Reduced IPA emits a delta
+          role: attention update
+          inside: The reduced attention core returns only the projected attention update; it does not apply the residual wrapper itself.
+      - match: { relation_ref: relations.latent_single_residual_norm_produces_single_state }
+        label: residual + norm
+        connection:
+          title: Residual wrapper
+          role: latent single-state update
+          inside: The parent latent block adds Δs to the incoming single state, then applies dropout and LayerNorm before the transition.
+      - match: { relation_ref: relations.latent_single_transition_produces_single_state }
+        label: transition + mask
+        connection:
+          title: Structure transition
+          role: latent single-state feed-forward update
+          inside: The same StructureTransition block used in the structure decoder runs on the residual-normalized singles; the latent path then reapplies the token mask.
       - match: { relation_ref: relations.single_after_pair_attention_enters_single_to_pair_update }
         label: outer product
         connection:
@@ -1081,6 +1138,7 @@ boards:
         density: compact
         col: 7
         row: 3
+        board_ref: genie3_structure_transition_internals
       - id: single_after_transition
         ref: value_sites.single_after_transition
         label: transitioned singles
@@ -1205,6 +1263,24 @@ boards:
     subject_ref: modules.invariant_point_attention
     expansion_depth: 0
     block_instance_ref: block_instances.structure_ipa
+
+  - id: genie3_structure_transition_internals
+    kind: standard_block_instance
+    title: Genie 3 Structure Transition Internals
+    summary: One structure-transition layer applies three same-width linear projections with ReLU between them, adds the result residually to the incoming single state, then applies dropout and LayerNorm.
+    parent: structure_decoder
+    subject_ref: modules.structure_transition
+    expansion_depth: 0
+    block_instance_ref: block_instances.structure_transition
+
+  - id: genie3_latent_structure_transition_internals
+    kind: standard_block_instance
+    title: Genie 3 Latent Structure Transition Internals
+    summary: The latent transformer reuses the same StructureTransition implementation after reduced-IPA residual dropout and LayerNorm; the surrounding latent path then masks padded tokens.
+    parent: latent_transformer
+    subject_ref: modules.latent_single_transition
+    expansion_depth: 0
+    block_instance_ref: block_instances.latent_structure_transition
   - id: task_featurization
     title: Task Featurization
     summary: Exactly one configured task source selects the unconditional, motif, or target path for a run. Unknown designed regions stay C-alpha tokens; Atom14 selectively expands known motif or target-interface residues before all paths converge on one model-ready feature batch.

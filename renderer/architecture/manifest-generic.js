@@ -3,11 +3,11 @@ export const manifest = {
   "build": {
     "generator": "architecture-manifest-builder-v0.5.0",
     "inputDigests": {
-      "references/bibliography.yaml": "abe9226586bfb64261c81b7756b7275c48a3a172a9a18b5f91f7acfd3145e374",
+      "references/bibliography.yaml": "aa83264d6b5cce1245347f404a9d13daa41d4b6782fd94f1458397f312843b9f",
       "architectures/generic-feature-refinement.yaml": "856e34131dc78dd2454df9b0dc3ad3d0adff67c5a7f9dee5809cacf311722d68",
       "views/generic-semantic-zoom.view.yaml": "2212d81c8217db03c68fa7d59f44dc36e55052503d8d503b3386bded040b5714",
       "pseudocode/generic-feature-refinement.yaml": "7020e10be441c1d161e8113b54937fd89c303ef55f198fd2432bc69243e55696",
-      "standard_blocks/pair-biased-attention.yaml": "9cd25cca99e46326432232d92a00d84d82b3e59d028aff4e47d73aa31bac9381",
+      "standard_blocks/pair-biased-attention.yaml": "3c6be1ec47623fa320eb6eace772216f41014d4bf14765b8ff52b1602cf26fb7",
       "standard_blocks/per-item-adaln-conditioning.yaml": "544bca1c4d238825bfe6e389fe0409e64b27726b54f737e86021a0dc078987f9",
       "standard_blocks/additive-conditioning.yaml": "5638ead7cbb2df6729e58393703d3e35b6e480b3ba42c657312dc6581bb032f7"
     }
@@ -2350,6 +2350,17 @@ export const manifest = {
         "href": "https://github.com/aqlaboratory/genie3/blob/d77ae5ac04212ff1e8b29b585859a3244c614804/src/genie3/generation/model/module/invariant_point_attention.py"
       },
       {
+        "id": "genie3_transition_code",
+        "kind": "code",
+        "title": "Genie 3 transition modules",
+        "organization": "AQLaboratory",
+        "repository": "aqlaboratory/genie3",
+        "revision": "d77ae5ac04212ff1e8b29b585859a3244c614804",
+        "path": "src/genie3/generation/model/module/transition.py",
+        "url": "https://github.com/aqlaboratory/genie3/blob/d77ae5ac04212ff1e8b29b585859a3244c614804/src/genie3/generation/model/module/transition.py",
+        "href": "https://github.com/aqlaboratory/genie3/blob/d77ae5ac04212ff1e8b29b585859a3244c614804/src/genie3/generation/model/module/transition.py"
+      },
+      {
         "id": "genie3_sequence_code",
         "kind": "code",
         "title": "Genie 3 optional sequence head",
@@ -2481,7 +2492,7 @@ export const manifest = {
       "schemaVersion": "standard-block-v0.2",
       "name": "Pair-Biased Attention",
       "sourceYaml": "../../standard_blocks/pair-biased-attention.yaml",
-      "description": "Update a single/token stream with self-attention whose logits are conditioned by a pair representation, optionally adding attention-weighted pair-value aggregation and an architecture wrapper.",
+      "description": "Form a single/token attention update with self-attention whose logits are conditioned by a pair representation, optionally adding attention-weighted pair-value aggregation.",
       "math": [
         {
           "id": "project_qkv",
@@ -2546,16 +2557,6 @@ export const manifest = {
           "id": "project_reduced_output",
           "text": "attention_delta = output_projection(concat(scalar_context, pair_context_out))",
           "operation": "output_projection"
-        },
-        {
-          "id": "residual_norm",
-          "text": "normalized_single = layer_norm(single_state + dropout(attention_delta))",
-          "operation": "residual_normalization"
-        },
-        {
-          "id": "transition_and_mask",
-          "text": "updated_single_state = transition(normalized_single) * attention_mask",
-          "operation": "transition_mask"
         }
       ],
       "kind": "attention",
@@ -2611,7 +2612,7 @@ export const manifest = {
           "label": "updated single state",
           "direction": "output",
           "kind": "representation",
-          "required": true,
+          "required": false,
           "cardinality": "one",
           "relation_kinds": [
             "data_flow",
@@ -2619,7 +2620,22 @@ export const manifest = {
           ],
           "glyph": "single",
           "notation": "s'",
-          "role": "attention-updated single/token stream"
+          "role": "attention-updated single/token stream for variants that include the residual boundary"
+        },
+        {
+          "id": "attention_delta",
+          "label": "attention delta",
+          "direction": "output",
+          "kind": "representation",
+          "required": false,
+          "cardinality": "one",
+          "relation_kinds": [
+            "data_flow",
+            "state_update"
+          ],
+          "glyph": "single",
+          "notation": "Δs",
+          "role": "projected attention update before any architecture-owned residual wrapper"
         }
       ],
       "variants": [
@@ -2638,9 +2654,9 @@ export const manifest = {
           ]
         },
         {
-          "id": "pair_values_residual_norm_transition",
-          "label": "Reduced pair attention + wrapper",
-          "description": "A reduced IPA-style path adds pair bias and attention-weighted pair-value aggregation, then applies residual normalization, a transition, and output masking.",
+          "id": "pair_values_attention_delta",
+          "label": "Reduced pair attention delta",
+          "description": "A reduced IPA-style path adds pair bias and attention-weighted pair-value aggregation, then projects the concatenated contexts into an attention delta.",
           "step_refs": [
             "steps.project_qkv",
             "steps.scalar_logits",
@@ -2650,9 +2666,7 @@ export const manifest = {
             "steps.softmax_attention_masked",
             "steps.aggregate_scalar_values",
             "steps.aggregate_pair_values",
-            "steps.project_reduced_output",
-            "steps.residual_norm",
-            "steps.transition_and_mask"
+            "steps.project_reduced_output"
           ]
         }
       ],
@@ -2727,20 +2741,6 @@ export const manifest = {
           "kind": "representation",
           "glyph": "single",
           "notation": "o_z"
-        },
-        {
-          "id": "attention_delta",
-          "label": "attention delta",
-          "kind": "representation",
-          "glyph": "single",
-          "notation": "delta_s"
-        },
-        {
-          "id": "normalized_single",
-          "label": "residual-normalized state",
-          "kind": "representation",
-          "glyph": "single",
-          "notation": "s_norm"
         }
       ],
       "steps": [
@@ -2891,44 +2891,19 @@ export const manifest = {
             "values.pair_value_context"
           ],
           "outputs": [
-            "values.attention_delta"
+            "ports.attention_delta"
           ],
           "code": "attention_delta = output_projection(concat(scalar_context, pair_context_out))"
-        },
-        {
-          "id": "residual_norm",
-          "label": "Residual, dropout, and norm",
-          "operation": "residual_normalization",
-          "inputs": [
-            "ports.single_state",
-            "values.attention_delta"
-          ],
-          "outputs": [
-            "values.normalized_single"
-          ],
-          "code": "normalized_single = layer_norm(single_state + dropout(attention_delta))"
-        },
-        {
-          "id": "transition_and_mask",
-          "label": "Transition and mask",
-          "operation": "transition_mask",
-          "inputs": [
-            "values.normalized_single",
-            "ports.attention_mask"
-          ],
-          "outputs": [
-            "ports.updated_single_state"
-          ],
-          "code": "updated_single_state = transition(normalized_single) * attention_mask"
         }
       ],
       "visualTemplate": {
         "grid": {
-          "columns": 9,
-          "rows": 6,
+          "columns": 13,
+          "rows": 7,
           "column_sizing": "content",
-          "col_gap": 28,
-          "row_gap": 24
+          "row_sizing": "content",
+          "col_gap": 22,
+          "row_gap": 34
         },
         "nodes": [
           {
@@ -2950,7 +2925,7 @@ export const manifest = {
           {
             "id": "attention_mask",
             "ref": "ports.attention_mask",
-            "col": 3,
+            "col": 5,
             "row": 6,
             "prominence": "context",
             "treatment": "chip"
@@ -2958,8 +2933,16 @@ export const manifest = {
           {
             "id": "updated_single_state",
             "ref": "ports.updated_single_state",
-            "col": 9,
-            "row": 2,
+            "col": 13,
+            "row": 3,
+            "prominence": "secondary",
+            "treatment": "compact"
+          },
+          {
+            "id": "attention_delta",
+            "ref": "ports.attention_delta",
+            "col": 13,
+            "row": 4,
             "prominence": "secondary",
             "treatment": "compact"
           },
@@ -2991,7 +2974,7 @@ export const manifest = {
             "id": "scalar_values",
             "ref": "values.scalar_values",
             "col": 3,
-            "row": 3,
+            "row": 4,
             "prominence": "context",
             "treatment": "chip"
           },
@@ -3046,7 +3029,7 @@ export const manifest = {
           {
             "id": "apply_attention_mask",
             "ref": "steps.apply_attention_mask",
-            "col": 5,
+            "col": 6,
             "row": 6,
             "prominence": "secondary",
             "treatment": "compact"
@@ -3079,30 +3062,30 @@ export const manifest = {
             "id": "attention_weights",
             "ref": "values.attention_weights",
             "col": 9,
-            "row": 3,
+            "row": 4,
             "prominence": "context",
             "treatment": "compact"
           },
           {
             "id": "aggregate_scalar_values",
             "ref": "steps.aggregate_scalar_values",
-            "col": 6,
-            "row": 1,
+            "col": 10,
+            "row": 3,
             "prominence": "primary",
             "treatment": "compact"
           },
           {
             "id": "scalar_context",
             "ref": "values.scalar_context",
-            "col": 7,
-            "row": 1,
+            "col": 11,
+            "row": 3,
             "prominence": "context",
             "treatment": "compact"
           },
           {
             "id": "aggregate_pair_values",
             "ref": "steps.aggregate_pair_values",
-            "col": 6,
+            "col": 10,
             "row": 5,
             "prominence": "primary",
             "treatment": "compact"
@@ -3110,7 +3093,7 @@ export const manifest = {
           {
             "id": "pair_value_context",
             "ref": "values.pair_value_context",
-            "col": 7,
+            "col": 11,
             "row": 5,
             "prominence": "context",
             "treatment": "compact"
@@ -3118,58 +3101,68 @@ export const manifest = {
           {
             "id": "project_attention_output",
             "ref": "steps.project_attention_output",
-            "col": 8,
-            "row": 1,
+            "col": 12,
+            "row": 3,
             "prominence": "primary",
             "treatment": "compact"
           },
           {
             "id": "project_reduced_output",
             "ref": "steps.project_reduced_output",
-            "col": 8,
-            "row": 5,
-            "prominence": "primary",
-            "treatment": "compact"
-          },
-          {
-            "id": "attention_delta",
-            "ref": "values.attention_delta",
-            "col": 9,
-            "row": 5,
-            "prominence": "context",
-            "treatment": "compact"
-          },
-          {
-            "id": "residual_norm",
-            "ref": "steps.residual_norm",
-            "col": 7,
-            "row": 4,
-            "prominence": "primary",
-            "treatment": "compact"
-          },
-          {
-            "id": "normalized_single",
-            "ref": "values.normalized_single",
-            "col": 8,
-            "row": 4,
-            "prominence": "context",
-            "treatment": "compact"
-          },
-          {
-            "id": "transition_and_mask",
-            "ref": "steps.transition_and_mask",
-            "col": 9,
+            "col": 12,
             "row": 4,
             "prominence": "primary",
             "treatment": "compact"
           }
+        ],
+        "segments": [
+          {
+            "id": "attention_weights",
+            "label": "Compute attention weights",
+            "description": "Project Q/K/V from the single stream, add the pair-derived logit bias, apply the validity mask when present, and normalize over keys.",
+            "node_refs": [
+              "ports.single_state",
+              "ports.pair_context",
+              "ports.attention_mask",
+              "steps.project_qkv",
+              "values.queries",
+              "values.keys",
+              "steps.scalar_logits",
+              "values.scalar_logits",
+              "steps.project_pair_bias",
+              "values.pair_bias",
+              "steps.combine_logits",
+              "values.biased_logits",
+              "steps.apply_attention_mask",
+              "values.masked_logits",
+              "steps.softmax_attention_unmasked",
+              "steps.softmax_attention_masked",
+              "values.attention_weights"
+            ]
+          },
+          {
+            "id": "value_aggregation",
+            "label": "Aggregate values",
+            "description": "Reuse the same attention weights to aggregate ordinary scalar values and, in the reduced IPA-style variant, attention-weighted pair values.",
+            "node_refs": [
+              "values.scalar_values",
+              "steps.aggregate_scalar_values",
+              "values.scalar_context",
+              "steps.aggregate_pair_values",
+              "values.pair_value_context",
+              "steps.project_attention_output",
+              "steps.project_reduced_output",
+              "ports.updated_single_state",
+              "ports.attention_delta"
+            ]
+          }
         ]
       },
       "evidencePolicy": {
-        "generic_definition": "The template is reusable algorithm vocabulary, not evidence that a method uses every variant.",
+        "generic_definition": "The template is reusable attention-core vocabulary; residual addition, dropout, normalization, transition, and masking belong to the surrounding architecture unless a variant explicitly includes that boundary.",
         "usage_requires": [
           "Evidence for the pair projection and addition to attention logits.",
-          "Evidence for attention-weighted pair-value aggregation and wrapper operations when the reduced variant is selected."
+          "Evidence for attention-weighted pair-value aggregation when the reduced variant is selected."
         ]
       }
     },
@@ -4947,11 +4940,12 @@ export const manifest = {
         "expansion_depth": 0,
         "block_instance_ref": "block_instances.generic_group_pair_attention",
         "grid": {
-          "columns": 9,
-          "rows": 6,
+          "columns": 13,
+          "rows": 7,
           "column_sizing": "content",
-          "col_gap": 28,
-          "row_gap": 24
+          "row_sizing": "content",
+          "col_gap": 22,
+          "row_gap": 34
         },
         "nodes": [
           {
@@ -5001,9 +4995,9 @@ export const manifest = {
           {
             "id": "updated_single_state",
             "label": "updated single state",
-            "role": "attention-updated single/token stream",
-            "col": 9,
-            "row": 2,
+            "role": "attention-updated single/token stream for variants that include the residual boundary",
+            "col": 13,
+            "row": 3,
             "prominence": "secondary",
             "treatment": "compact",
             "standard_block_ref": "standard_blocks/pair-biased-attention.yaml",
@@ -5080,7 +5074,7 @@ export const manifest = {
             "id": "scalar_values",
             "label": "scalar values",
             "col": 3,
-            "row": 3,
+            "row": 4,
             "prominence": "context",
             "treatment": "chip",
             "standard_block_ref": "standard_blocks/pair-biased-attention.yaml",
@@ -5229,7 +5223,7 @@ export const manifest = {
             "id": "attention_weights",
             "label": "attention weights",
             "col": 9,
-            "row": 3,
+            "row": 4,
             "prominence": "context",
             "treatment": "compact",
             "standard_block_ref": "standard_blocks/pair-biased-attention.yaml",
@@ -5246,8 +5240,8 @@ export const manifest = {
           {
             "id": "aggregate_scalar_values",
             "label": "Aggregate scalar values",
-            "col": 6,
-            "row": 1,
+            "col": 10,
+            "row": 3,
             "prominence": "primary",
             "treatment": "compact",
             "standard_block_ref": "standard_blocks/pair-biased-attention.yaml",
@@ -5265,8 +5259,8 @@ export const manifest = {
           {
             "id": "scalar_context",
             "label": "scalar context",
-            "col": 7,
-            "row": 1,
+            "col": 11,
+            "row": 3,
             "prominence": "context",
             "treatment": "compact",
             "standard_block_ref": "standard_blocks/pair-biased-attention.yaml",
@@ -5283,8 +5277,8 @@ export const manifest = {
           {
             "id": "project_attention_output",
             "label": "Project attention output",
-            "col": 8,
-            "row": 1,
+            "col": 12,
+            "row": 3,
             "prominence": "primary",
             "treatment": "compact",
             "standard_block_ref": "standard_blocks/pair-biased-attention.yaml",
@@ -5708,6 +5702,42 @@ export const manifest = {
               "role": "reusable step output",
               "inside": "updated_single_state = output_projection(scalar_context)"
             }
+          }
+        ],
+        "segments": [
+          {
+            "id": "attention_weights",
+            "label": "Compute attention weights",
+            "description": "Project Q/K/V from the single stream, add the pair-derived logit bias, apply the validity mask when present, and normalize over keys.",
+            "order": 1,
+            "node_ids": [
+              "single_state",
+              "pair_context",
+              "project_qkv",
+              "queries",
+              "keys",
+              "scalar_logits_step",
+              "scalar_logits",
+              "project_pair_bias",
+              "pair_bias",
+              "combine_logits",
+              "biased_logits",
+              "softmax_attention_unmasked",
+              "attention_weights"
+            ]
+          },
+          {
+            "id": "value_aggregation",
+            "label": "Aggregate values",
+            "description": "Reuse the same attention weights to aggregate ordinary scalar values and, in the reduced IPA-style variant, attention-weighted pair values.",
+            "order": 2,
+            "node_ids": [
+              "scalar_values",
+              "aggregate_scalar_values",
+              "scalar_context",
+              "project_attention_output",
+              "updated_single_state"
+            ]
           }
         ],
         "projectionMode": "standard_block_template",

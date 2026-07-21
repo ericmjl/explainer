@@ -73,6 +73,8 @@ execution:
       repeats: 5
       reruns:
         - modules.pair_biased_attention_update
+        - modules.latent_single_residual_norm
+        - modules.latent_single_transition
         - modules.single_to_pair_update
         - modules.triangle_multiplication_stack
         - modules.pair_transition
@@ -670,6 +672,16 @@ value_sites:
         - source_ref: genie3_latent_transformer_code
           role: implementation_evidence
           locator: LatentTransformer.forward
+  - id: single_attention_delta
+    representation_ref: representations.single_features
+    scope_ref: modules.latent_transformer
+    role: latent_block_attention_delta
+    evidence: *latent_evidence
+  - id: single_after_attention_residual_norm
+    representation_ref: representations.single_features
+    scope_ref: modules.latent_transformer
+    role: latent_block_residual_normalized_single_state
+    evidence: *latent_evidence
   - id: pair_with_global_tokens
     representation_ref: representations.pair_features
     scope_ref: modules.latent_transformer
@@ -957,7 +969,7 @@ modules:
     mechanisms:
     - pair_biased_attention
     - attention_weighted_pair_value_aggregation
-    role: update single features using pair-biased self-attention and attention-weighted pair-value aggregation, with no frame geometry
+    role: produce an attention delta from pair-biased self-attention and attention-weighted pair-value aggregation, with no frame geometry
     scale: token
     attention:
       pattern: full
@@ -967,6 +979,29 @@ modules:
       pair_bias: true
       pair_bias_source: pair_with_global_tokens
       positional_encoding: { kind: none }
+    evidence: *latent_evidence
+  - id: latent_single_residual_norm
+    parent_ref: modules.latent_transformer
+    decomposition: { status: leaf }
+    label: Reduced IPA Residual + Norm
+    kind: residual_update
+    mechanisms:
+    - residual_add
+    - dropout
+    - layer_normalization
+    role: add the reduced-IPA delta back to the incoming single state, then apply dropout and LayerNorm before the single-state transition
+    scale: token
+    evidence: *latent_evidence
+  - id: latent_single_transition
+    parent_ref: modules.latent_transformer
+    decomposition: { status: leaf }
+    label: Latent Single Structure Transition
+    kind: feed_forward
+    mechanisms:
+    - structure_transition
+    - masking
+    role: run the same StructureTransition feed-forward block used in the structure decoder, then mask padded tokens before single-to-pair communication
+    scale: token
     evidence: *latent_evidence
   - id: single_to_pair_update
     parent_ref: modules.latent_transformer
@@ -1309,17 +1344,17 @@ block_instances:
   - id: latent_reduced_pair_attention
     block_ref: standard_blocks/pair-biased-attention.yaml
     subject_ref: modules.pair_biased_attention_update
-    variant: pair_values_residual_norm_transition
+    variant: pair_values_attention_delta
     use_scope: whole_module
     conformance: reduced
-    difference_summary: Genie 3 removes frame-aware point terms, keeps pair-logit bias and attention-weighted pair-value aggregation, then adds residual normalization, a single transition, and final masking.
+    difference_summary: Genie 3 removes frame-aware point terms and keeps pair-logit bias plus attention-weighted pair-value aggregation. The residual add, normalization, transition, and final masking are modeled as the surrounding latent-block wrapper.
     port_bindings:
       - port_ref: ports.single_state
         relation_refs: [relations.single_with_global_tokens_enters_attention]
       - port_ref: ports.pair_context
         relation_refs: [relations.pair_with_global_tokens_bias_attention]
-      - port_ref: ports.updated_single_state
-        relation_refs: [relations.pair_attention_produces_single_state]
+      - port_ref: ports.attention_delta
+        relation_refs: [relations.pair_attention_produces_single_delta]
     evidence:
       status: confirmed_from_code
       refs:
@@ -1327,10 +1362,31 @@ block_instances:
           role: implementation_evidence
           locator: ReducedInvariantPointAttention.forward
           note: Reduced IPA implements scalar attention with pair bias and attention-weighted pair-value aggregation while omitting frame-aware point terms.
+  - id: latent_structure_transition
+    block_ref: standard_blocks/structure-transition.yaml
+    subject_ref: modules.latent_single_transition
+    variant: three_linear_residual_dropout_norm
+    use_scope: whole_module
+    conformance: wrapped
+    difference_summary: The latent transformer instantiates the same StructureTransition module, then applies an output token mask outside the transition block.
+    port_bindings:
+      - port_ref: ports.single_state
+        relation_refs: [relations.single_after_residual_norm_enters_latent_transition]
+      - port_ref: ports.updated_single_state
+        relation_refs: [relations.latent_single_transition_produces_single_state]
+    parameter_bindings:
+      - { parameter_ref: parameters.num_layers, value: 1 }
+    evidence:
+      status: confirmed_from_code
+      refs:
         - source_ref: genie3_latent_transformer_code
-          role: wrapper_evidence
+          role: caller_evidence
           locator: LatentTransformerBlock.forward
-          note: The latent block applies the residual normalization, transition, and output mask around ReducedIPA.
+          note: The latent block calls ipa_transition after the reduced-IPA residual dropout and LayerNorm, then applies the token mask.
+        - source_ref: genie3_transition_code
+          role: implementation_evidence
+          locator: StructureTransitionLayer.forward and StructureTransition.forward
+          note: StructureTransitionLayer applies three same-width linear layers with ReLU between them and a residual add; StructureTransition then applies dropout and LayerNorm.
   - id: structure_ipa
     block_ref: standard_blocks/invariant-point-attention.yaml
     subject_ref: modules.invariant_point_attention
@@ -1360,6 +1416,26 @@ block_instances:
           role: implementation_evidence
           locator: InvariantPointAttention.forward
           note: Full IPA implements scalar and point attention, pair bias, and attention-weighted pair-value aggregation.
+  - id: structure_transition
+    block_ref: standard_blocks/structure-transition.yaml
+    subject_ref: modules.structure_transition
+    variant: three_linear_residual_dropout_norm
+    use_scope: whole_module
+    conformance: exact
+    port_bindings:
+      - port_ref: ports.single_state
+        relation_refs: [relations.ipa_state_enters_structure_transition]
+      - port_ref: ports.updated_single_state
+        relation_refs: [relations.structure_transition_produces_single_state]
+    parameter_bindings:
+      - { parameter_ref: parameters.num_layers, value: 1 }
+    evidence:
+      status: confirmed_from_code
+      refs:
+        - source_ref: genie3_transition_code
+          role: implementation_evidence
+          locator: StructureTransitionLayer.forward and StructureTransition.forward
+          note: StructureTransitionLayer applies three same-width linear layers with ReLU between them and a residual add; StructureTransition then applies dropout and LayerNorm.
 relations:
   - id: design_request_enters_feature_builder
     from: value_sites.design_request
@@ -1560,12 +1636,47 @@ relations:
     carries: [representations.pair_features]
     operation: bias_attention_and_aggregate_pair_values
     evidence: *latent_relation_evidence
-  - id: pair_attention_produces_single_state
+  - id: pair_attention_produces_single_delta
     from: modules.pair_biased_attention_update
+    to: value_sites.single_attention_delta
+    kind: data_flow
+    carries: [representations.single_features]
+    operation: project_reduced_ipa_delta
+    evidence: *latent_relation_evidence
+  - id: single_attention_delta_enters_residual_norm
+    from: value_sites.single_attention_delta
+    to: modules.latent_single_residual_norm
+    kind: data_flow
+    carries: [representations.single_features]
+    operation: add_reduced_attention_delta
+    evidence: *latent_relation_evidence
+  - id: single_with_global_tokens_skip_to_residual_norm
+    from: value_sites.single_with_global_tokens
+    to: modules.latent_single_residual_norm
+    kind: data_flow
+    carries: [representations.single_features]
+    operation: residual_skip_single_state
+    evidence: *latent_relation_evidence
+  - id: latent_single_residual_norm_produces_single_state
+    from: modules.latent_single_residual_norm
+    to: value_sites.single_after_attention_residual_norm
+    kind: state_update
+    carries: [representations.single_features]
+    operation: residual_dropout_layer_norm
+    evidence: *latent_relation_evidence
+  - id: single_after_residual_norm_enters_latent_transition
+    from: value_sites.single_after_attention_residual_norm
+    to: modules.latent_single_transition
+    kind: data_flow
+    carries: [representations.single_features]
+    operation: structure_transition_input
+    evidence: *latent_relation_evidence
+  - id: latent_single_transition_produces_single_state
+    from: modules.latent_single_transition
     to: value_sites.single_after_pair_attention
     kind: state_update
     carries: [representations.single_features]
-    operation: residual_single_update
+    operation: structure_transition_and_token_mask
     evidence: *latent_relation_evidence
   - id: single_after_pair_attention_enters_single_to_pair_update
     from: value_sites.single_after_pair_attention

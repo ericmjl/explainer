@@ -3,12 +3,13 @@ export const manifest = {
   "build": {
     "generator": "architecture-manifest-builder-v0.5.0",
     "inputDigests": {
-      "references/bibliography.yaml": "abe9226586bfb64261c81b7756b7275c48a3a172a9a18b5f91f7acfd3145e374",
-      "architectures/genie3.yaml": "313447c6bd218b67ba3a5cdda312b9b229a56068d59033333ac5cbac757e051c",
-      "views/genie3-semantic-zoom.view.yaml": "32cc547f46338f828b3f6c1edfc95fdf02d622d567ced4cf1642d3c13eccea29",
+      "references/bibliography.yaml": "aa83264d6b5cce1245347f404a9d13daa41d4b6782fd94f1458397f312843b9f",
+      "architectures/genie3.yaml": "9f6b978940bdcb1547f1484b2f261e1def12375f556d7cf151fe74ddb6358735",
+      "views/genie3-semantic-zoom.view.yaml": "2c3d2e6fad18e180f51548b75d4cbee898cfcb667cc931763f28a773798f4775",
       "pseudocode/genie3.yaml": "822369fcf368f6fc2cf07c70a810d408a122d4cc1bad4f33ef2fbbf6b848d09c",
-      "standard_blocks/pair-biased-attention.yaml": "9cd25cca99e46326432232d92a00d84d82b3e59d028aff4e47d73aa31bac9381",
-      "standard_blocks/invariant-point-attention.yaml": "a5c02021172a36135808767943f20309424cc956240bf956ed156d1c380bb7b5"
+      "standard_blocks/pair-biased-attention.yaml": "3c6be1ec47623fa320eb6eace772216f41014d4bf14765b8ff52b1602cf26fb7",
+      "standard_blocks/invariant-point-attention.yaml": "a5c02021172a36135808767943f20309424cc956240bf956ed156d1c380bb7b5",
+      "standard_blocks/structure-transition.yaml": "2708baf8035a8e77ab3e3da3bf2f067225757a813743efb90c72ac0f0c77b723"
     }
   },
   "architecture": {
@@ -228,10 +229,12 @@ export const manifest = {
         "modules.latent_transformer": {
           "status": "complete",
           "depth": 4,
-          "immediateModuleCount": 5,
+          "immediateModuleCount": 7,
           "immediateModuleRefs": [
             "modules.global_token_adapter",
             "modules.pair_biased_attention_update",
+            "modules.latent_single_residual_norm",
+            "modules.latent_single_transition",
             "modules.single_to_pair_update",
             "modules.triangle_multiplication_stack",
             "modules.pair_transition"
@@ -265,6 +268,22 @@ export const manifest = {
           ]
         },
         "modules.pair_biased_attention_update": {
+          "status": "leaf",
+          "depth": 5,
+          "immediateModuleCount": 0,
+          "immediateModuleRefs": [
+
+          ]
+        },
+        "modules.latent_single_residual_norm": {
+          "status": "leaf",
+          "depth": 5,
+          "immediateModuleCount": 0,
+          "immediateModuleRefs": [
+
+          ]
+        },
+        "modules.latent_single_transition": {
           "status": "leaf",
           "depth": 5,
           "immediateModuleCount": 0,
@@ -466,11 +485,11 @@ export const manifest = {
         }
       },
       "summary": {
-        "scopeCount": 43,
+        "scopeCount": 45,
         "expandedScopeCount": 11,
         "completeExpandedScopeCount": 11,
         "partialScopeCount": 0,
-        "leafFrontierCount": 32,
+        "leafFrontierCount": 34,
         "opaqueFrontierCount": 0,
         "partialFrontierCount": 0,
         "maximumAuthoredDepth": 5
@@ -971,7 +990,7 @@ export const manifest = {
           "pair_biased_attention",
           "attention_weighted_pair_value_aggregation"
         ],
-        "role": "update single features using pair-biased self-attention and attention-weighted pair-value aggregation, with no frame geometry",
+        "role": "produce an attention delta from pair-biased self-attention and attention-weighted pair-value aggregation, with no frame geometry",
         "scale": "token",
         "attention": {
           "pattern": "full",
@@ -984,6 +1003,57 @@ export const manifest = {
             "kind": "none"
           }
         },
+        "evidence": {
+          "status": "confirmed_from_code",
+          "refs": [
+            {
+              "source_ref": "genie3_latent_transformer_code",
+              "role": "implementation_evidence",
+              "locator": "LatentTransformer.forward"
+            }
+          ]
+        }
+      },
+      {
+        "id": "latent_single_residual_norm",
+        "parent_ref": "modules.latent_transformer",
+        "decomposition": {
+          "status": "leaf"
+        },
+        "label": "Reduced IPA Residual + Norm",
+        "kind": "residual_update",
+        "mechanisms": [
+          "residual_add",
+          "dropout",
+          "layer_normalization"
+        ],
+        "role": "add the reduced-IPA delta back to the incoming single state, then apply dropout and LayerNorm before the single-state transition",
+        "scale": "token",
+        "evidence": {
+          "status": "confirmed_from_code",
+          "refs": [
+            {
+              "source_ref": "genie3_latent_transformer_code",
+              "role": "implementation_evidence",
+              "locator": "LatentTransformer.forward"
+            }
+          ]
+        }
+      },
+      {
+        "id": "latent_single_transition",
+        "parent_ref": "modules.latent_transformer",
+        "decomposition": {
+          "status": "leaf"
+        },
+        "label": "Latent Single Structure Transition",
+        "kind": "feed_forward",
+        "mechanisms": [
+          "structure_transition",
+          "masking"
+        ],
+        "role": "run the same StructureTransition feed-forward block used in the structure decoder, then mask padded tokens before single-to-pair communication",
+        "scale": "token",
         "evidence": {
           "status": "confirmed_from_code",
           "refs": [
@@ -1574,12 +1644,12 @@ export const manifest = {
         "standardBlockRef": "standard_blocks/pair-biased-attention.yaml",
         "standardBlockName": "Pair-Biased Attention",
         "subjectRef": "modules.pair_biased_attention_update",
-        "variant": "pair_values_residual_norm_transition",
-        "variantLabel": "Reduced pair attention + wrapper",
-        "variantDescription": "A reduced IPA-style path adds pair bias and attention-weighted pair-value aggregation, then applies residual normalization, a transition, and output masking.",
+        "variant": "pair_values_attention_delta",
+        "variantLabel": "Reduced pair attention delta",
+        "variantDescription": "A reduced IPA-style path adds pair bias and attention-weighted pair-value aggregation, then projects the concatenated contexts into an attention delta.",
         "useScope": "whole_module",
         "conformance": "reduced",
-        "differenceSummary": "Genie 3 removes frame-aware point terms, keeps pair-logit bias and attention-weighted pair-value aggregation, then adds residual normalization, a single transition, and final masking.",
+        "differenceSummary": "Genie 3 removes frame-aware point terms and keeps pair-logit bias plus attention-weighted pair-value aggregation. The residual add, normalization, transition, and final masking are modeled as the surrounding latent-block wrapper.",
         "evidence": {
           "status": "confirmed_from_code",
           "refs": [
@@ -1588,12 +1658,6 @@ export const manifest = {
               "role": "implementation_evidence",
               "locator": "ReducedInvariantPointAttention.forward",
               "note": "Reduced IPA implements scalar attention with pair bias and attention-weighted pair-value aggregation while omitting frame-aware point terms."
-            },
-            {
-              "source_ref": "genie3_latent_transformer_code",
-              "role": "wrapper_evidence",
-              "locator": "LatentTransformerBlock.forward",
-              "note": "The latent block applies the residual normalization, transition, and output mask around ReducedIPA."
             }
           ]
         },
@@ -1635,17 +1699,17 @@ export const manifest = {
             ]
           },
           {
-            "portRef": "ports.updated_single_state",
+            "portRef": "ports.attention_delta",
             "relationRefs": [
-              "relations.pair_attention_produces_single_state"
+              "relations.pair_attention_produces_single_delta"
             ],
             "relations": [
               {
-                "relationRef": "relations.pair_attention_produces_single_state",
+                "relationRef": "relations.pair_attention_produces_single_delta",
                 "from": "modules.pair_biased_attention_update",
-                "to": "value_sites.single_after_pair_attention",
-                "kind": "state_update",
-                "operation": "residual_single_update",
+                "to": "value_sites.single_attention_delta",
+                "kind": "data_flow",
+                "operation": "project_reduced_ipa_delta",
                 "carries": [
                   "representations.single_features"
                 ]
@@ -1793,37 +1857,332 @@ export const manifest = {
               "values.pair_value_context"
             ],
             "outputs": [
-              "values.attention_delta"
+              "ports.attention_delta"
+            ]
+          }
+        ]
+      },
+      {
+        "id": "latent_structure_transition",
+        "standardBlockId": "structure_transition",
+        "standardBlockRef": "standard_blocks/structure-transition.yaml",
+        "standardBlockName": "Structure Transition",
+        "subjectRef": "modules.latent_single_transition",
+        "variant": "three_linear_residual_dropout_norm",
+        "variantLabel": "Three-linear residual + dropout/norm",
+        "variantDescription": "Each transition layer applies three same-width linear projections with ReLU between them, adds the input state residually, then the wrapper applies dropout and LayerNorm after the layer stack.",
+        "useScope": "whole_module",
+        "conformance": "wrapped",
+        "differenceSummary": "The latent transformer instantiates the same StructureTransition module, then applies an output token mask outside the transition block.",
+        "evidence": {
+          "status": "confirmed_from_code",
+          "refs": [
+            {
+              "source_ref": "genie3_latent_transformer_code",
+              "role": "caller_evidence",
+              "locator": "LatentTransformerBlock.forward",
+              "note": "The latent block calls ipa_transition after the reduced-IPA residual dropout and LayerNorm, then applies the token mask."
+            },
+            {
+              "source_ref": "genie3_transition_code",
+              "role": "implementation_evidence",
+              "locator": "StructureTransitionLayer.forward and StructureTransition.forward",
+              "note": "StructureTransitionLayer applies three same-width linear layers with ReLU between them and a residual add; StructureTransition then applies dropout and LayerNorm."
+            }
+          ]
+        },
+        "shapeParameters": {
+          "num_layers": 1,
+          "b": "B",
+          "n": "N",
+          "c_s": 384
+        },
+        "shapeParameterSources": {
+          "num_layers": {
+            "kind": "literal"
+          },
+          "b": {
+            "kind": "boundary",
+            "portRef": "ports.single_state",
+            "representationRef": "representations.single_features"
+          },
+          "n": {
+            "kind": "boundary",
+            "portRef": "ports.single_state",
+            "representationRef": "representations.single_features"
+          },
+          "c_s": {
+            "kind": "boundary",
+            "portRef": "ports.single_state",
+            "representationRef": "representations.single_features"
+          }
+        },
+        "portBindings": [
+          {
+            "portRef": "ports.single_state",
+            "relationRefs": [
+              "relations.single_after_residual_norm_enters_latent_transition"
+            ],
+            "relations": [
+              {
+                "relationRef": "relations.single_after_residual_norm_enters_latent_transition",
+                "from": "value_sites.single_after_attention_residual_norm",
+                "to": "modules.latent_single_transition",
+                "kind": "data_flow",
+                "operation": "structure_transition_input",
+                "carries": [
+                  "representations.single_features"
+                ]
+              }
             ]
           },
           {
-            "id": "residual_norm",
-            "templateFactRef": "standard_blocks.pair_biased_attention.steps.residual_norm",
-            "instanceFactRef": "block_instances.latent_reduced_pair_attention.steps.residual_norm",
-            "label": "Residual, dropout, and norm",
-            "operation": "residual_normalization",
-            "code": "normalized_single = layer_norm(single_state + dropout(attention_delta))",
+            "portRef": "ports.updated_single_state",
+            "relationRefs": [
+              "relations.latent_single_transition_produces_single_state"
+            ],
+            "relations": [
+              {
+                "relationRef": "relations.latent_single_transition_produces_single_state",
+                "from": "modules.latent_single_transition",
+                "to": "value_sites.single_after_pair_attention",
+                "kind": "state_update",
+                "operation": "structure_transition_and_token_mask",
+                "carries": [
+                  "representations.single_features"
+                ]
+              }
+            ]
+          }
+        ],
+        "pseudocode": [
+          {
+            "id": "project_first",
+            "templateFactRef": "standard_blocks.structure_transition.steps.project_first",
+            "instanceFactRef": "block_instances.latent_structure_transition.steps.project_first",
+            "label": "First linear + ReLU",
+            "operation": "linear_relu",
+            "code": "hidden_1 = relu(linear_1(single_state))",
+            "tex": "h^{(1)}_i = ReLU(W_1 s_i)",
             "inputs": [
-              "ports.single_state",
-              "values.attention_delta"
+              "ports.single_state"
             ],
             "outputs": [
-              "values.normalized_single"
+              "values.hidden_1"
+            ],
+            "codeBindings": [
+              {
+                "lexeme": "single_state",
+                "access": "read",
+                "localRef": "ports.single_state",
+                "templateFactRef": "standard_blocks.structure_transition.ports.single_state",
+                "instanceFactRef": "block_instances.latent_structure_transition.ports.single_state",
+                "occurrences": [
+                  {
+                    "start": 25,
+                    "end": 37
+                  }
+                ]
+              },
+              {
+                "lexeme": "hidden_1",
+                "access": "write",
+                "localRef": "values.hidden_1",
+                "templateFactRef": "standard_blocks.structure_transition.values.hidden_1",
+                "instanceFactRef": "block_instances.latent_structure_transition.values.hidden_1",
+                "occurrences": [
+                  {
+                    "start": 0,
+                    "end": 8
+                  }
+                ]
+              }
             ]
           },
           {
-            "id": "transition_and_mask",
-            "templateFactRef": "standard_blocks.pair_biased_attention.steps.transition_and_mask",
-            "instanceFactRef": "block_instances.latent_reduced_pair_attention.steps.transition_and_mask",
-            "label": "Transition and mask",
-            "operation": "transition_mask",
-            "code": "updated_single_state = transition(normalized_single) * attention_mask",
+            "id": "project_second",
+            "templateFactRef": "standard_blocks.structure_transition.steps.project_second",
+            "instanceFactRef": "block_instances.latent_structure_transition.steps.project_second",
+            "label": "Second linear + ReLU",
+            "operation": "linear_relu",
+            "code": "hidden_2 = relu(linear_2(hidden_1))",
+            "tex": "h^{(2)}_i = ReLU(W_2 h^{(1)}_i)",
             "inputs": [
-              "values.normalized_single",
-              "ports.attention_mask"
+              "values.hidden_1"
+            ],
+            "outputs": [
+              "values.hidden_2"
+            ],
+            "codeBindings": [
+              {
+                "lexeme": "hidden_1",
+                "access": "read",
+                "localRef": "values.hidden_1",
+                "templateFactRef": "standard_blocks.structure_transition.values.hidden_1",
+                "instanceFactRef": "block_instances.latent_structure_transition.values.hidden_1",
+                "occurrences": [
+                  {
+                    "start": 25,
+                    "end": 33
+                  }
+                ]
+              },
+              {
+                "lexeme": "hidden_2",
+                "access": "write",
+                "localRef": "values.hidden_2",
+                "templateFactRef": "standard_blocks.structure_transition.values.hidden_2",
+                "instanceFactRef": "block_instances.latent_structure_transition.values.hidden_2",
+                "occurrences": [
+                  {
+                    "start": 0,
+                    "end": 8
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "id": "project_final_delta",
+            "templateFactRef": "standard_blocks.structure_transition.steps.project_final_delta",
+            "instanceFactRef": "block_instances.latent_structure_transition.steps.project_final_delta",
+            "label": "Final zero-init projection",
+            "operation": "linear",
+            "code": "transition_delta = linear_3(hidden_2)",
+            "tex": "delta s_i = W_3 h^{(2)}_i",
+            "inputs": [
+              "values.hidden_2"
+            ],
+            "outputs": [
+              "values.transition_delta"
+            ],
+            "codeBindings": [
+              {
+                "lexeme": "hidden_2",
+                "access": "read",
+                "localRef": "values.hidden_2",
+                "templateFactRef": "standard_blocks.structure_transition.values.hidden_2",
+                "instanceFactRef": "block_instances.latent_structure_transition.values.hidden_2",
+                "occurrences": [
+                  {
+                    "start": 28,
+                    "end": 36
+                  }
+                ]
+              },
+              {
+                "lexeme": "transition_delta",
+                "access": "write",
+                "localRef": "values.transition_delta",
+                "templateFactRef": "standard_blocks.structure_transition.values.transition_delta",
+                "instanceFactRef": "block_instances.latent_structure_transition.values.transition_delta",
+                "occurrences": [
+                  {
+                    "start": 0,
+                    "end": 16
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "id": "residual_add",
+            "templateFactRef": "standard_blocks.structure_transition.steps.residual_add",
+            "instanceFactRef": "block_instances.latent_structure_transition.steps.residual_add",
+            "label": "Add transition residual",
+            "operation": "residual_add",
+            "code": "residual_single = single_state + transition_delta",
+            "tex": "s^{res}_i = s_i + delta s_i",
+            "inputs": [
+              "ports.single_state",
+              "values.transition_delta"
+            ],
+            "outputs": [
+              "values.residual_single"
+            ],
+            "codeBindings": [
+              {
+                "lexeme": "single_state",
+                "access": "read",
+                "localRef": "ports.single_state",
+                "templateFactRef": "standard_blocks.structure_transition.ports.single_state",
+                "instanceFactRef": "block_instances.latent_structure_transition.ports.single_state",
+                "occurrences": [
+                  {
+                    "start": 18,
+                    "end": 30
+                  }
+                ]
+              },
+              {
+                "lexeme": "transition_delta",
+                "access": "read",
+                "localRef": "values.transition_delta",
+                "templateFactRef": "standard_blocks.structure_transition.values.transition_delta",
+                "instanceFactRef": "block_instances.latent_structure_transition.values.transition_delta",
+                "occurrences": [
+                  {
+                    "start": 33,
+                    "end": 49
+                  }
+                ]
+              },
+              {
+                "lexeme": "residual_single",
+                "access": "write",
+                "localRef": "values.residual_single",
+                "templateFactRef": "standard_blocks.structure_transition.values.residual_single",
+                "instanceFactRef": "block_instances.latent_structure_transition.values.residual_single",
+                "occurrences": [
+                  {
+                    "start": 0,
+                    "end": 15
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "id": "dropout_layer_norm",
+            "templateFactRef": "standard_blocks.structure_transition.steps.dropout_layer_norm",
+            "instanceFactRef": "block_instances.latent_structure_transition.steps.dropout_layer_norm",
+            "label": "Dropout and LayerNorm",
+            "operation": "dropout_layer_norm",
+            "code": "updated_single_state = layer_norm(dropout(residual_single))",
+            "tex": "s'_i = LayerNorm(Dropout(s^{res}_i))",
+            "inputs": [
+              "values.residual_single"
             ],
             "outputs": [
               "ports.updated_single_state"
+            ],
+            "codeBindings": [
+              {
+                "lexeme": "residual_single",
+                "access": "read",
+                "localRef": "values.residual_single",
+                "templateFactRef": "standard_blocks.structure_transition.values.residual_single",
+                "instanceFactRef": "block_instances.latent_structure_transition.values.residual_single",
+                "occurrences": [
+                  {
+                    "start": 42,
+                    "end": 57
+                  }
+                ]
+              },
+              {
+                "lexeme": "updated_single_state",
+                "access": "write",
+                "localRef": "ports.updated_single_state",
+                "templateFactRef": "standard_blocks.structure_transition.ports.updated_single_state",
+                "instanceFactRef": "block_instances.latent_structure_transition.ports.updated_single_state",
+                "occurrences": [
+                  {
+                    "start": 0,
+                    "end": 20
+                  }
+                ]
+              }
             ]
           }
         ]
@@ -2812,6 +3171,324 @@ export const manifest = {
             ]
           }
         ]
+      },
+      {
+        "id": "structure_transition",
+        "standardBlockId": "structure_transition",
+        "standardBlockRef": "standard_blocks/structure-transition.yaml",
+        "standardBlockName": "Structure Transition",
+        "subjectRef": "modules.structure_transition",
+        "variant": "three_linear_residual_dropout_norm",
+        "variantLabel": "Three-linear residual + dropout/norm",
+        "variantDescription": "Each transition layer applies three same-width linear projections with ReLU between them, adds the input state residually, then the wrapper applies dropout and LayerNorm after the layer stack.",
+        "useScope": "whole_module",
+        "conformance": "exact",
+        "evidence": {
+          "status": "confirmed_from_code",
+          "refs": [
+            {
+              "source_ref": "genie3_transition_code",
+              "role": "implementation_evidence",
+              "locator": "StructureTransitionLayer.forward and StructureTransition.forward",
+              "note": "StructureTransitionLayer applies three same-width linear layers with ReLU between them and a residual add; StructureTransition then applies dropout and LayerNorm."
+            }
+          ]
+        },
+        "shapeParameters": {
+          "num_layers": 1,
+          "b": "B",
+          "n": "N",
+          "c_s": 384
+        },
+        "shapeParameterSources": {
+          "num_layers": {
+            "kind": "literal"
+          },
+          "b": {
+            "kind": "boundary",
+            "portRef": "ports.single_state",
+            "representationRef": "representations.single_features"
+          },
+          "n": {
+            "kind": "boundary",
+            "portRef": "ports.single_state",
+            "representationRef": "representations.single_features"
+          },
+          "c_s": {
+            "kind": "boundary",
+            "portRef": "ports.single_state",
+            "representationRef": "representations.single_features"
+          }
+        },
+        "portBindings": [
+          {
+            "portRef": "ports.single_state",
+            "relationRefs": [
+              "relations.ipa_state_enters_structure_transition"
+            ],
+            "relations": [
+              {
+                "relationRef": "relations.ipa_state_enters_structure_transition",
+                "from": "value_sites.single_after_ipa",
+                "to": "modules.structure_transition",
+                "kind": "data_flow",
+                "operation": "transition_single_state",
+                "carries": [
+                  "representations.single_features"
+                ]
+              }
+            ]
+          },
+          {
+            "portRef": "ports.updated_single_state",
+            "relationRefs": [
+              "relations.structure_transition_produces_single_state"
+            ],
+            "relations": [
+              {
+                "relationRef": "relations.structure_transition_produces_single_state",
+                "from": "modules.structure_transition",
+                "to": "value_sites.single_after_transition",
+                "kind": "state_update",
+                "operation": "feed_forward_update",
+                "carries": [
+                  "representations.single_features"
+                ]
+              }
+            ]
+          }
+        ],
+        "pseudocode": [
+          {
+            "id": "project_first",
+            "templateFactRef": "standard_blocks.structure_transition.steps.project_first",
+            "instanceFactRef": "block_instances.structure_transition.steps.project_first",
+            "label": "First linear + ReLU",
+            "operation": "linear_relu",
+            "code": "hidden_1 = relu(linear_1(single_state))",
+            "tex": "h^{(1)}_i = ReLU(W_1 s_i)",
+            "inputs": [
+              "ports.single_state"
+            ],
+            "outputs": [
+              "values.hidden_1"
+            ],
+            "codeBindings": [
+              {
+                "lexeme": "single_state",
+                "access": "read",
+                "localRef": "ports.single_state",
+                "templateFactRef": "standard_blocks.structure_transition.ports.single_state",
+                "instanceFactRef": "block_instances.structure_transition.ports.single_state",
+                "occurrences": [
+                  {
+                    "start": 25,
+                    "end": 37
+                  }
+                ]
+              },
+              {
+                "lexeme": "hidden_1",
+                "access": "write",
+                "localRef": "values.hidden_1",
+                "templateFactRef": "standard_blocks.structure_transition.values.hidden_1",
+                "instanceFactRef": "block_instances.structure_transition.values.hidden_1",
+                "occurrences": [
+                  {
+                    "start": 0,
+                    "end": 8
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "id": "project_second",
+            "templateFactRef": "standard_blocks.structure_transition.steps.project_second",
+            "instanceFactRef": "block_instances.structure_transition.steps.project_second",
+            "label": "Second linear + ReLU",
+            "operation": "linear_relu",
+            "code": "hidden_2 = relu(linear_2(hidden_1))",
+            "tex": "h^{(2)}_i = ReLU(W_2 h^{(1)}_i)",
+            "inputs": [
+              "values.hidden_1"
+            ],
+            "outputs": [
+              "values.hidden_2"
+            ],
+            "codeBindings": [
+              {
+                "lexeme": "hidden_1",
+                "access": "read",
+                "localRef": "values.hidden_1",
+                "templateFactRef": "standard_blocks.structure_transition.values.hidden_1",
+                "instanceFactRef": "block_instances.structure_transition.values.hidden_1",
+                "occurrences": [
+                  {
+                    "start": 25,
+                    "end": 33
+                  }
+                ]
+              },
+              {
+                "lexeme": "hidden_2",
+                "access": "write",
+                "localRef": "values.hidden_2",
+                "templateFactRef": "standard_blocks.structure_transition.values.hidden_2",
+                "instanceFactRef": "block_instances.structure_transition.values.hidden_2",
+                "occurrences": [
+                  {
+                    "start": 0,
+                    "end": 8
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "id": "project_final_delta",
+            "templateFactRef": "standard_blocks.structure_transition.steps.project_final_delta",
+            "instanceFactRef": "block_instances.structure_transition.steps.project_final_delta",
+            "label": "Final zero-init projection",
+            "operation": "linear",
+            "code": "transition_delta = linear_3(hidden_2)",
+            "tex": "delta s_i = W_3 h^{(2)}_i",
+            "inputs": [
+              "values.hidden_2"
+            ],
+            "outputs": [
+              "values.transition_delta"
+            ],
+            "codeBindings": [
+              {
+                "lexeme": "hidden_2",
+                "access": "read",
+                "localRef": "values.hidden_2",
+                "templateFactRef": "standard_blocks.structure_transition.values.hidden_2",
+                "instanceFactRef": "block_instances.structure_transition.values.hidden_2",
+                "occurrences": [
+                  {
+                    "start": 28,
+                    "end": 36
+                  }
+                ]
+              },
+              {
+                "lexeme": "transition_delta",
+                "access": "write",
+                "localRef": "values.transition_delta",
+                "templateFactRef": "standard_blocks.structure_transition.values.transition_delta",
+                "instanceFactRef": "block_instances.structure_transition.values.transition_delta",
+                "occurrences": [
+                  {
+                    "start": 0,
+                    "end": 16
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "id": "residual_add",
+            "templateFactRef": "standard_blocks.structure_transition.steps.residual_add",
+            "instanceFactRef": "block_instances.structure_transition.steps.residual_add",
+            "label": "Add transition residual",
+            "operation": "residual_add",
+            "code": "residual_single = single_state + transition_delta",
+            "tex": "s^{res}_i = s_i + delta s_i",
+            "inputs": [
+              "ports.single_state",
+              "values.transition_delta"
+            ],
+            "outputs": [
+              "values.residual_single"
+            ],
+            "codeBindings": [
+              {
+                "lexeme": "single_state",
+                "access": "read",
+                "localRef": "ports.single_state",
+                "templateFactRef": "standard_blocks.structure_transition.ports.single_state",
+                "instanceFactRef": "block_instances.structure_transition.ports.single_state",
+                "occurrences": [
+                  {
+                    "start": 18,
+                    "end": 30
+                  }
+                ]
+              },
+              {
+                "lexeme": "transition_delta",
+                "access": "read",
+                "localRef": "values.transition_delta",
+                "templateFactRef": "standard_blocks.structure_transition.values.transition_delta",
+                "instanceFactRef": "block_instances.structure_transition.values.transition_delta",
+                "occurrences": [
+                  {
+                    "start": 33,
+                    "end": 49
+                  }
+                ]
+              },
+              {
+                "lexeme": "residual_single",
+                "access": "write",
+                "localRef": "values.residual_single",
+                "templateFactRef": "standard_blocks.structure_transition.values.residual_single",
+                "instanceFactRef": "block_instances.structure_transition.values.residual_single",
+                "occurrences": [
+                  {
+                    "start": 0,
+                    "end": 15
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "id": "dropout_layer_norm",
+            "templateFactRef": "standard_blocks.structure_transition.steps.dropout_layer_norm",
+            "instanceFactRef": "block_instances.structure_transition.steps.dropout_layer_norm",
+            "label": "Dropout and LayerNorm",
+            "operation": "dropout_layer_norm",
+            "code": "updated_single_state = layer_norm(dropout(residual_single))",
+            "tex": "s'_i = LayerNorm(Dropout(s^{res}_i))",
+            "inputs": [
+              "values.residual_single"
+            ],
+            "outputs": [
+              "ports.updated_single_state"
+            ],
+            "codeBindings": [
+              {
+                "lexeme": "residual_single",
+                "access": "read",
+                "localRef": "values.residual_single",
+                "templateFactRef": "standard_blocks.structure_transition.values.residual_single",
+                "instanceFactRef": "block_instances.structure_transition.values.residual_single",
+                "occurrences": [
+                  {
+                    "start": 42,
+                    "end": 57
+                  }
+                ]
+              },
+              {
+                "lexeme": "updated_single_state",
+                "access": "write",
+                "localRef": "ports.updated_single_state",
+                "templateFactRef": "standard_blocks.structure_transition.ports.updated_single_state",
+                "instanceFactRef": "block_instances.structure_transition.ports.updated_single_state",
+                "occurrences": [
+                  {
+                    "start": 0,
+                    "end": 20
+                  }
+                ]
+              }
+            ]
+          }
+        ]
       }
     ],
     "representations": [
@@ -3674,6 +4351,38 @@ export const manifest = {
         }
       },
       {
+        "id": "single_attention_delta",
+        "representation_ref": "representations.single_features",
+        "scope_ref": "modules.latent_transformer",
+        "role": "latent_block_attention_delta",
+        "evidence": {
+          "status": "confirmed_from_code",
+          "refs": [
+            {
+              "source_ref": "genie3_latent_transformer_code",
+              "role": "implementation_evidence",
+              "locator": "LatentTransformer.forward"
+            }
+          ]
+        }
+      },
+      {
+        "id": "single_after_attention_residual_norm",
+        "representation_ref": "representations.single_features",
+        "scope_ref": "modules.latent_transformer",
+        "role": "latent_block_residual_normalized_single_state",
+        "evidence": {
+          "status": "confirmed_from_code",
+          "refs": [
+            {
+              "source_ref": "genie3_latent_transformer_code",
+              "role": "implementation_evidence",
+              "locator": "LatentTransformer.forward"
+            }
+          ]
+        }
+      },
+      {
         "id": "pair_with_global_tokens",
         "representation_ref": "representations.pair_features",
         "scope_ref": "modules.latent_transformer",
@@ -4206,14 +4915,44 @@ export const manifest = {
           "relations.block_single_output_reenters_next_latent_block"
         ],
         "outgoingRelationRefs": [
-          "relations.single_with_global_tokens_enters_attention"
+          "relations.single_with_global_tokens_enters_attention",
+          "relations.single_with_global_tokens_skip_to_residual_norm"
         ],
         "producerRefs": [
           "modules.global_token_adapter",
           "value_sites.single_after_pair_attention"
         ],
         "consumerRefs": [
+          "modules.pair_biased_attention_update",
+          "modules.latent_single_residual_norm"
+        ]
+      },
+      "single_attention_delta": {
+        "incomingRelationRefs": [
+          "relations.pair_attention_produces_single_delta"
+        ],
+        "outgoingRelationRefs": [
+          "relations.single_attention_delta_enters_residual_norm"
+        ],
+        "producerRefs": [
           "modules.pair_biased_attention_update"
+        ],
+        "consumerRefs": [
+          "modules.latent_single_residual_norm"
+        ]
+      },
+      "single_after_attention_residual_norm": {
+        "incomingRelationRefs": [
+          "relations.latent_single_residual_norm_produces_single_state"
+        ],
+        "outgoingRelationRefs": [
+          "relations.single_after_residual_norm_enters_latent_transition"
+        ],
+        "producerRefs": [
+          "modules.latent_single_residual_norm"
+        ],
+        "consumerRefs": [
+          "modules.latent_single_transition"
         ]
       },
       "pair_with_global_tokens": {
@@ -4236,7 +4975,7 @@ export const manifest = {
       },
       "single_after_pair_attention": {
         "incomingRelationRefs": [
-          "relations.pair_attention_produces_single_state"
+          "relations.latent_single_transition_produces_single_state"
         ],
         "outgoingRelationRefs": [
           "relations.single_after_pair_attention_enters_single_to_pair_update",
@@ -4244,7 +4983,7 @@ export const manifest = {
           "relations.block_single_output_reenters_next_latent_block"
         ],
         "producerRefs": [
-          "modules.pair_biased_attention_update"
+          "modules.latent_single_transition"
         ],
         "consumerRefs": [
           "modules.single_to_pair_update",
@@ -4529,6 +5268,8 @@ export const manifest = {
           "repeats": 5,
           "reruns": [
             "modules.pair_biased_attention_update",
+            "modules.latent_single_residual_norm",
+            "modules.latent_single_transition",
             "modules.single_to_pair_update",
             "modules.triangle_multiplication_stack",
             "modules.pair_transition"
@@ -5944,14 +6685,114 @@ export const manifest = {
         }
       },
       {
-        "id": "pair_attention_produces_single_state",
+        "id": "pair_attention_produces_single_delta",
         "from": "modules.pair_biased_attention_update",
+        "to": "value_sites.single_attention_delta",
+        "kind": "data_flow",
+        "carries": [
+          "representations.single_features"
+        ],
+        "operation": "project_reduced_ipa_delta",
+        "evidence": {
+          "status": "confirmed_from_code",
+          "refs": [
+            {
+              "source_ref": "genie3_latent_transformer_code",
+              "role": "implementation_evidence",
+              "locator": "LatentTransformer.forward and LatentTransformerBlock.forward"
+            }
+          ]
+        }
+      },
+      {
+        "id": "single_attention_delta_enters_residual_norm",
+        "from": "value_sites.single_attention_delta",
+        "to": "modules.latent_single_residual_norm",
+        "kind": "data_flow",
+        "carries": [
+          "representations.single_features"
+        ],
+        "operation": "add_reduced_attention_delta",
+        "evidence": {
+          "status": "confirmed_from_code",
+          "refs": [
+            {
+              "source_ref": "genie3_latent_transformer_code",
+              "role": "implementation_evidence",
+              "locator": "LatentTransformer.forward and LatentTransformerBlock.forward"
+            }
+          ]
+        }
+      },
+      {
+        "id": "single_with_global_tokens_skip_to_residual_norm",
+        "from": "value_sites.single_with_global_tokens",
+        "to": "modules.latent_single_residual_norm",
+        "kind": "data_flow",
+        "carries": [
+          "representations.single_features"
+        ],
+        "operation": "residual_skip_single_state",
+        "evidence": {
+          "status": "confirmed_from_code",
+          "refs": [
+            {
+              "source_ref": "genie3_latent_transformer_code",
+              "role": "implementation_evidence",
+              "locator": "LatentTransformer.forward and LatentTransformerBlock.forward"
+            }
+          ]
+        }
+      },
+      {
+        "id": "latent_single_residual_norm_produces_single_state",
+        "from": "modules.latent_single_residual_norm",
+        "to": "value_sites.single_after_attention_residual_norm",
+        "kind": "state_update",
+        "carries": [
+          "representations.single_features"
+        ],
+        "operation": "residual_dropout_layer_norm",
+        "evidence": {
+          "status": "confirmed_from_code",
+          "refs": [
+            {
+              "source_ref": "genie3_latent_transformer_code",
+              "role": "implementation_evidence",
+              "locator": "LatentTransformer.forward and LatentTransformerBlock.forward"
+            }
+          ]
+        }
+      },
+      {
+        "id": "single_after_residual_norm_enters_latent_transition",
+        "from": "value_sites.single_after_attention_residual_norm",
+        "to": "modules.latent_single_transition",
+        "kind": "data_flow",
+        "carries": [
+          "representations.single_features"
+        ],
+        "operation": "structure_transition_input",
+        "evidence": {
+          "status": "confirmed_from_code",
+          "refs": [
+            {
+              "source_ref": "genie3_latent_transformer_code",
+              "role": "implementation_evidence",
+              "locator": "LatentTransformer.forward and LatentTransformerBlock.forward"
+            }
+          ]
+        }
+      },
+      {
+        "id": "latent_single_transition_produces_single_state",
+        "from": "modules.latent_single_transition",
         "to": "value_sites.single_after_pair_attention",
         "kind": "state_update",
         "carries": [
           "representations.single_features"
         ],
-        "operation": "residual_single_update",
+        "operation": "structure_transition_and_token_mask",
         "evidence": {
           "status": "confirmed_from_code",
           "refs": [
@@ -7969,6 +8810,17 @@ export const manifest = {
         "href": "https://github.com/aqlaboratory/genie3/blob/d77ae5ac04212ff1e8b29b585859a3244c614804/src/genie3/generation/model/module/invariant_point_attention.py"
       },
       {
+        "id": "genie3_transition_code",
+        "kind": "code",
+        "title": "Genie 3 transition modules",
+        "organization": "AQLaboratory",
+        "repository": "aqlaboratory/genie3",
+        "revision": "d77ae5ac04212ff1e8b29b585859a3244c614804",
+        "path": "src/genie3/generation/model/module/transition.py",
+        "url": "https://github.com/aqlaboratory/genie3/blob/d77ae5ac04212ff1e8b29b585859a3244c614804/src/genie3/generation/model/module/transition.py",
+        "href": "https://github.com/aqlaboratory/genie3/blob/d77ae5ac04212ff1e8b29b585859a3244c614804/src/genie3/generation/model/module/transition.py"
+      },
+      {
         "id": "genie3_sequence_code",
         "kind": "code",
         "title": "Genie 3 optional sequence head",
@@ -8100,7 +8952,7 @@ export const manifest = {
       "schemaVersion": "standard-block-v0.2",
       "name": "Pair-Biased Attention",
       "sourceYaml": "../../standard_blocks/pair-biased-attention.yaml",
-      "description": "Update a single/token stream with self-attention whose logits are conditioned by a pair representation, optionally adding attention-weighted pair-value aggregation and an architecture wrapper.",
+      "description": "Form a single/token attention update with self-attention whose logits are conditioned by a pair representation, optionally adding attention-weighted pair-value aggregation.",
       "math": [
         {
           "id": "project_qkv",
@@ -8165,16 +9017,6 @@ export const manifest = {
           "id": "project_reduced_output",
           "text": "attention_delta = output_projection(concat(scalar_context, pair_context_out))",
           "operation": "output_projection"
-        },
-        {
-          "id": "residual_norm",
-          "text": "normalized_single = layer_norm(single_state + dropout(attention_delta))",
-          "operation": "residual_normalization"
-        },
-        {
-          "id": "transition_and_mask",
-          "text": "updated_single_state = transition(normalized_single) * attention_mask",
-          "operation": "transition_mask"
         }
       ],
       "kind": "attention",
@@ -8230,7 +9072,7 @@ export const manifest = {
           "label": "updated single state",
           "direction": "output",
           "kind": "representation",
-          "required": true,
+          "required": false,
           "cardinality": "one",
           "relation_kinds": [
             "data_flow",
@@ -8238,7 +9080,22 @@ export const manifest = {
           ],
           "glyph": "single",
           "notation": "s'",
-          "role": "attention-updated single/token stream"
+          "role": "attention-updated single/token stream for variants that include the residual boundary"
+        },
+        {
+          "id": "attention_delta",
+          "label": "attention delta",
+          "direction": "output",
+          "kind": "representation",
+          "required": false,
+          "cardinality": "one",
+          "relation_kinds": [
+            "data_flow",
+            "state_update"
+          ],
+          "glyph": "single",
+          "notation": "Δs",
+          "role": "projected attention update before any architecture-owned residual wrapper"
         }
       ],
       "variants": [
@@ -8257,9 +9114,9 @@ export const manifest = {
           ]
         },
         {
-          "id": "pair_values_residual_norm_transition",
-          "label": "Reduced pair attention + wrapper",
-          "description": "A reduced IPA-style path adds pair bias and attention-weighted pair-value aggregation, then applies residual normalization, a transition, and output masking.",
+          "id": "pair_values_attention_delta",
+          "label": "Reduced pair attention delta",
+          "description": "A reduced IPA-style path adds pair bias and attention-weighted pair-value aggregation, then projects the concatenated contexts into an attention delta.",
           "step_refs": [
             "steps.project_qkv",
             "steps.scalar_logits",
@@ -8269,9 +9126,7 @@ export const manifest = {
             "steps.softmax_attention_masked",
             "steps.aggregate_scalar_values",
             "steps.aggregate_pair_values",
-            "steps.project_reduced_output",
-            "steps.residual_norm",
-            "steps.transition_and_mask"
+            "steps.project_reduced_output"
           ]
         }
       ],
@@ -8346,20 +9201,6 @@ export const manifest = {
           "kind": "representation",
           "glyph": "single",
           "notation": "o_z"
-        },
-        {
-          "id": "attention_delta",
-          "label": "attention delta",
-          "kind": "representation",
-          "glyph": "single",
-          "notation": "delta_s"
-        },
-        {
-          "id": "normalized_single",
-          "label": "residual-normalized state",
-          "kind": "representation",
-          "glyph": "single",
-          "notation": "s_norm"
         }
       ],
       "steps": [
@@ -8510,44 +9351,19 @@ export const manifest = {
             "values.pair_value_context"
           ],
           "outputs": [
-            "values.attention_delta"
+            "ports.attention_delta"
           ],
           "code": "attention_delta = output_projection(concat(scalar_context, pair_context_out))"
-        },
-        {
-          "id": "residual_norm",
-          "label": "Residual, dropout, and norm",
-          "operation": "residual_normalization",
-          "inputs": [
-            "ports.single_state",
-            "values.attention_delta"
-          ],
-          "outputs": [
-            "values.normalized_single"
-          ],
-          "code": "normalized_single = layer_norm(single_state + dropout(attention_delta))"
-        },
-        {
-          "id": "transition_and_mask",
-          "label": "Transition and mask",
-          "operation": "transition_mask",
-          "inputs": [
-            "values.normalized_single",
-            "ports.attention_mask"
-          ],
-          "outputs": [
-            "ports.updated_single_state"
-          ],
-          "code": "updated_single_state = transition(normalized_single) * attention_mask"
         }
       ],
       "visualTemplate": {
         "grid": {
-          "columns": 9,
-          "rows": 6,
+          "columns": 13,
+          "rows": 7,
           "column_sizing": "content",
-          "col_gap": 28,
-          "row_gap": 24
+          "row_sizing": "content",
+          "col_gap": 22,
+          "row_gap": 34
         },
         "nodes": [
           {
@@ -8569,7 +9385,7 @@ export const manifest = {
           {
             "id": "attention_mask",
             "ref": "ports.attention_mask",
-            "col": 3,
+            "col": 5,
             "row": 6,
             "prominence": "context",
             "treatment": "chip"
@@ -8577,8 +9393,16 @@ export const manifest = {
           {
             "id": "updated_single_state",
             "ref": "ports.updated_single_state",
-            "col": 9,
-            "row": 2,
+            "col": 13,
+            "row": 3,
+            "prominence": "secondary",
+            "treatment": "compact"
+          },
+          {
+            "id": "attention_delta",
+            "ref": "ports.attention_delta",
+            "col": 13,
+            "row": 4,
             "prominence": "secondary",
             "treatment": "compact"
           },
@@ -8610,7 +9434,7 @@ export const manifest = {
             "id": "scalar_values",
             "ref": "values.scalar_values",
             "col": 3,
-            "row": 3,
+            "row": 4,
             "prominence": "context",
             "treatment": "chip"
           },
@@ -8665,7 +9489,7 @@ export const manifest = {
           {
             "id": "apply_attention_mask",
             "ref": "steps.apply_attention_mask",
-            "col": 5,
+            "col": 6,
             "row": 6,
             "prominence": "secondary",
             "treatment": "compact"
@@ -8698,30 +9522,30 @@ export const manifest = {
             "id": "attention_weights",
             "ref": "values.attention_weights",
             "col": 9,
-            "row": 3,
+            "row": 4,
             "prominence": "context",
             "treatment": "compact"
           },
           {
             "id": "aggregate_scalar_values",
             "ref": "steps.aggregate_scalar_values",
-            "col": 6,
-            "row": 1,
+            "col": 10,
+            "row": 3,
             "prominence": "primary",
             "treatment": "compact"
           },
           {
             "id": "scalar_context",
             "ref": "values.scalar_context",
-            "col": 7,
-            "row": 1,
+            "col": 11,
+            "row": 3,
             "prominence": "context",
             "treatment": "compact"
           },
           {
             "id": "aggregate_pair_values",
             "ref": "steps.aggregate_pair_values",
-            "col": 6,
+            "col": 10,
             "row": 5,
             "prominence": "primary",
             "treatment": "compact"
@@ -8729,7 +9553,7 @@ export const manifest = {
           {
             "id": "pair_value_context",
             "ref": "values.pair_value_context",
-            "col": 7,
+            "col": 11,
             "row": 5,
             "prominence": "context",
             "treatment": "compact"
@@ -8737,58 +9561,68 @@ export const manifest = {
           {
             "id": "project_attention_output",
             "ref": "steps.project_attention_output",
-            "col": 8,
-            "row": 1,
+            "col": 12,
+            "row": 3,
             "prominence": "primary",
             "treatment": "compact"
           },
           {
             "id": "project_reduced_output",
             "ref": "steps.project_reduced_output",
-            "col": 8,
-            "row": 5,
-            "prominence": "primary",
-            "treatment": "compact"
-          },
-          {
-            "id": "attention_delta",
-            "ref": "values.attention_delta",
-            "col": 9,
-            "row": 5,
-            "prominence": "context",
-            "treatment": "compact"
-          },
-          {
-            "id": "residual_norm",
-            "ref": "steps.residual_norm",
-            "col": 7,
-            "row": 4,
-            "prominence": "primary",
-            "treatment": "compact"
-          },
-          {
-            "id": "normalized_single",
-            "ref": "values.normalized_single",
-            "col": 8,
-            "row": 4,
-            "prominence": "context",
-            "treatment": "compact"
-          },
-          {
-            "id": "transition_and_mask",
-            "ref": "steps.transition_and_mask",
-            "col": 9,
+            "col": 12,
             "row": 4,
             "prominence": "primary",
             "treatment": "compact"
           }
+        ],
+        "segments": [
+          {
+            "id": "attention_weights",
+            "label": "Compute attention weights",
+            "description": "Project Q/K/V from the single stream, add the pair-derived logit bias, apply the validity mask when present, and normalize over keys.",
+            "node_refs": [
+              "ports.single_state",
+              "ports.pair_context",
+              "ports.attention_mask",
+              "steps.project_qkv",
+              "values.queries",
+              "values.keys",
+              "steps.scalar_logits",
+              "values.scalar_logits",
+              "steps.project_pair_bias",
+              "values.pair_bias",
+              "steps.combine_logits",
+              "values.biased_logits",
+              "steps.apply_attention_mask",
+              "values.masked_logits",
+              "steps.softmax_attention_unmasked",
+              "steps.softmax_attention_masked",
+              "values.attention_weights"
+            ]
+          },
+          {
+            "id": "value_aggregation",
+            "label": "Aggregate values",
+            "description": "Reuse the same attention weights to aggregate ordinary scalar values and, in the reduced IPA-style variant, attention-weighted pair values.",
+            "node_refs": [
+              "values.scalar_values",
+              "steps.aggregate_scalar_values",
+              "values.scalar_context",
+              "steps.aggregate_pair_values",
+              "values.pair_value_context",
+              "steps.project_attention_output",
+              "steps.project_reduced_output",
+              "ports.updated_single_state",
+              "ports.attention_delta"
+            ]
+          }
         ]
       },
       "evidencePolicy": {
-        "generic_definition": "The template is reusable algorithm vocabulary, not evidence that a method uses every variant.",
+        "generic_definition": "The template is reusable attention-core vocabulary; residual addition, dropout, normalization, transition, and masking belong to the surrounding architecture unless a variant explicitly includes that boundary.",
         "usage_requires": [
           "Evidence for the pair projection and addition to attention logits.",
-          "Evidence for attention-weighted pair-value aggregation and wrapper operations when the reduced variant is selected."
+          "Evidence for attention-weighted pair-value aggregation when the reduced variant is selected."
         ]
       }
     },
@@ -10379,6 +11213,505 @@ export const manifest = {
           "Evidence for scalar, point-distance, and pair logit terms.",
           "Evidence for scalar and point aggregation plus attention-weighted pair-value aggregation.",
           "Evidence that the output projection returns the IPA update before any architecture-owned residual wrapper."
+        ]
+      }
+    },
+    "structure_transition": {
+      "id": "structure_transition",
+      "schemaVersion": "standard-block-v0.3",
+      "name": "Structure Transition",
+      "sourceYaml": "../../standard_blocks/structure-transition.yaml",
+      "description": "Update a single/token stream with one or more AF2-style structure-transition layers, then apply dropout and LayerNorm to the resulting single state.",
+      "math": [
+        {
+          "id": "project_first",
+          "text": "hidden_1 = relu(linear_1(single_state))",
+          "tex": "h^{(1)}_i = ReLU(W_1 s_i)",
+          "operation": "linear_relu"
+        },
+        {
+          "id": "project_second",
+          "text": "hidden_2 = relu(linear_2(hidden_1))",
+          "tex": "h^{(2)}_i = ReLU(W_2 h^{(1)}_i)",
+          "operation": "linear_relu"
+        },
+        {
+          "id": "project_final_delta",
+          "text": "transition_delta = linear_3(hidden_2)",
+          "tex": "delta s_i = W_3 h^{(2)}_i",
+          "operation": "linear"
+        },
+        {
+          "id": "residual_add",
+          "text": "residual_single = single_state + transition_delta",
+          "tex": "s^{res}_i = s_i + delta s_i",
+          "operation": "residual_add"
+        },
+        {
+          "id": "dropout_layer_norm",
+          "text": "updated_single_state = layer_norm(dropout(residual_single))",
+          "tex": "s'_i = LayerNorm(Dropout(s^{res}_i))",
+          "operation": "dropout_layer_norm"
+        }
+      ],
+      "kind": "feed_forward",
+      "status": "review",
+      "parameters": [
+        {
+          "id": "b",
+          "notation": "B",
+          "kind": "batch",
+          "resolution": "boundary",
+          "role": "leading batch axes"
+        },
+        {
+          "id": "n",
+          "notation": "N",
+          "kind": "sequence",
+          "resolution": "boundary",
+          "role": "number of residue or atom tokens"
+        },
+        {
+          "id": "c_s",
+          "notation": "C_s",
+          "kind": "channel",
+          "resolution": "boundary",
+          "role": "single-state channel width"
+        },
+        {
+          "id": "num_layers",
+          "notation": "L",
+          "kind": "extent",
+          "resolution": "instance",
+          "role": "number of residual transition layers"
+        }
+      ],
+      "ports": [
+        {
+          "id": "single_state",
+          "label": "single state",
+          "direction": "input",
+          "kind": "representation",
+          "required": true,
+          "cardinality": "one",
+          "relation_kinds": [
+            "data_flow",
+            "state_update"
+          ],
+          "glyph": "single",
+          "notation": "s",
+          "role": "post-IPA single/token representation entering the transition MLP",
+          "shape_contract": {
+            "kind": "tensor",
+            "axes": [
+              {
+                "id": "batch",
+                "dimension": "b"
+              },
+              {
+                "id": "token",
+                "dimension": "n"
+              },
+              {
+                "id": "single_channel",
+                "dimension": "c_s"
+              }
+            ]
+          }
+        },
+        {
+          "id": "updated_single_state",
+          "label": "updated single state",
+          "direction": "output",
+          "kind": "representation",
+          "required": true,
+          "cardinality": "one",
+          "relation_kinds": [
+            "data_flow",
+            "state_update"
+          ],
+          "glyph": "single",
+          "notation": "s'",
+          "role": "transition-updated single/token representation after dropout and LayerNorm",
+          "shape_contract": {
+            "kind": "tensor",
+            "axes": [
+              {
+                "id": "batch",
+                "dimension": "b"
+              },
+              {
+                "id": "token",
+                "dimension": "n"
+              },
+              {
+                "id": "single_channel",
+                "dimension": "c_s"
+              }
+            ]
+          }
+        }
+      ],
+      "variants": [
+        {
+          "id": "three_linear_residual_dropout_norm",
+          "label": "Three-linear residual + dropout/norm",
+          "description": "Each transition layer applies three same-width linear projections with ReLU between them, adds the input state residually, then the wrapper applies dropout and LayerNorm after the layer stack.",
+          "step_refs": [
+            "steps.project_first",
+            "steps.project_second",
+            "steps.project_final_delta",
+            "steps.residual_add",
+            "steps.dropout_layer_norm"
+          ]
+        }
+      ],
+      "defaultVariant": "three_linear_residual_dropout_norm",
+      "values": [
+        {
+          "id": "hidden_1",
+          "label": "first hidden state",
+          "kind": "representation",
+          "glyph": "single",
+          "notation": "h_1",
+          "shape_contract": {
+            "kind": "tensor",
+            "axes": [
+              {
+                "id": "batch",
+                "dimension": "b"
+              },
+              {
+                "id": "token",
+                "dimension": "n"
+              },
+              {
+                "id": "single_channel",
+                "dimension": "c_s"
+              }
+            ]
+          }
+        },
+        {
+          "id": "hidden_2",
+          "label": "second hidden state",
+          "kind": "representation",
+          "glyph": "single",
+          "notation": "h_2",
+          "shape_contract": {
+            "kind": "tensor",
+            "axes": [
+              {
+                "id": "batch",
+                "dimension": "b"
+              },
+              {
+                "id": "token",
+                "dimension": "n"
+              },
+              {
+                "id": "single_channel",
+                "dimension": "c_s"
+              }
+            ]
+          }
+        },
+        {
+          "id": "transition_delta",
+          "label": "transition delta",
+          "kind": "representation",
+          "glyph": "single",
+          "notation": "delta_s",
+          "shape_contract": {
+            "kind": "tensor",
+            "axes": [
+              {
+                "id": "batch",
+                "dimension": "b"
+              },
+              {
+                "id": "token",
+                "dimension": "n"
+              },
+              {
+                "id": "single_channel",
+                "dimension": "c_s"
+              }
+            ]
+          }
+        },
+        {
+          "id": "residual_single",
+          "label": "residual single state",
+          "kind": "representation",
+          "glyph": "single",
+          "notation": "s_res",
+          "shape_contract": {
+            "kind": "tensor",
+            "axes": [
+              {
+                "id": "batch",
+                "dimension": "b"
+              },
+              {
+                "id": "token",
+                "dimension": "n"
+              },
+              {
+                "id": "single_channel",
+                "dimension": "c_s"
+              }
+            ]
+          }
+        }
+      ],
+      "steps": [
+        {
+          "id": "project_first",
+          "label": "First linear + ReLU",
+          "operation": "linear_relu",
+          "shape_rule": "preserve",
+          "inputs": [
+            "ports.single_state"
+          ],
+          "outputs": [
+            "values.hidden_1"
+          ],
+          "code": "hidden_1 = relu(linear_1(single_state))",
+          "tex": "h^{(1)}_i = ReLU(W_1 s_i)",
+          "role": "first same-width projection inside each structure-transition layer",
+          "code_bindings": [
+            {
+              "lexeme": "single_state",
+              "ref": "ports.single_state",
+              "access": "read"
+            },
+            {
+              "lexeme": "hidden_1",
+              "ref": "values.hidden_1",
+              "access": "write"
+            }
+          ]
+        },
+        {
+          "id": "project_second",
+          "label": "Second linear + ReLU",
+          "operation": "linear_relu",
+          "shape_rule": "preserve",
+          "inputs": [
+            "values.hidden_1"
+          ],
+          "outputs": [
+            "values.hidden_2"
+          ],
+          "code": "hidden_2 = relu(linear_2(hidden_1))",
+          "tex": "h^{(2)}_i = ReLU(W_2 h^{(1)}_i)",
+          "role": "second same-width projection inside each structure-transition layer",
+          "code_bindings": [
+            {
+              "lexeme": "hidden_1",
+              "ref": "values.hidden_1",
+              "access": "read"
+            },
+            {
+              "lexeme": "hidden_2",
+              "ref": "values.hidden_2",
+              "access": "write"
+            }
+          ]
+        },
+        {
+          "id": "project_final_delta",
+          "label": "Final zero-init projection",
+          "operation": "linear",
+          "shape_rule": "preserve",
+          "inputs": [
+            "values.hidden_2"
+          ],
+          "outputs": [
+            "values.transition_delta"
+          ],
+          "code": "transition_delta = linear_3(hidden_2)",
+          "tex": "delta s_i = W_3 h^{(2)}_i",
+          "role": "final same-width projection, initialized as a near-zero residual update in AF2-style implementations",
+          "code_bindings": [
+            {
+              "lexeme": "hidden_2",
+              "ref": "values.hidden_2",
+              "access": "read"
+            },
+            {
+              "lexeme": "transition_delta",
+              "ref": "values.transition_delta",
+              "access": "write"
+            }
+          ]
+        },
+        {
+          "id": "residual_add",
+          "label": "Add transition residual",
+          "operation": "residual_add",
+          "shape_rule": "residual_add",
+          "inputs": [
+            "ports.single_state",
+            "values.transition_delta"
+          ],
+          "outputs": [
+            "values.residual_single"
+          ],
+          "code": "residual_single = single_state + transition_delta",
+          "tex": "s^{res}_i = s_i + delta s_i",
+          "role": "preserve the incoming single state while adding the transition MLP update",
+          "code_bindings": [
+            {
+              "lexeme": "single_state",
+              "ref": "ports.single_state",
+              "access": "read"
+            },
+            {
+              "lexeme": "transition_delta",
+              "ref": "values.transition_delta",
+              "access": "read"
+            },
+            {
+              "lexeme": "residual_single",
+              "ref": "values.residual_single",
+              "access": "write"
+            }
+          ]
+        },
+        {
+          "id": "dropout_layer_norm",
+          "label": "Dropout and LayerNorm",
+          "operation": "dropout_layer_norm",
+          "shape_rule": "preserve",
+          "inputs": [
+            "values.residual_single"
+          ],
+          "outputs": [
+            "ports.updated_single_state"
+          ],
+          "code": "updated_single_state = layer_norm(dropout(residual_single))",
+          "tex": "s'_i = LayerNorm(Dropout(s^{res}_i))",
+          "role": "normalize the residual transition state before frame update or the next layer",
+          "code_bindings": [
+            {
+              "lexeme": "residual_single",
+              "ref": "values.residual_single",
+              "access": "read"
+            },
+            {
+              "lexeme": "updated_single_state",
+              "ref": "ports.updated_single_state",
+              "access": "write"
+            }
+          ]
+        }
+      ],
+      "visualTemplate": {
+        "grid": {
+          "columns": 7,
+          "rows": 3,
+          "column_sizing": "content",
+          "col_gap": 28,
+          "row_gap": 24
+        },
+        "nodes": [
+          {
+            "id": "single_state",
+            "ref": "ports.single_state",
+            "col": 1,
+            "row": 2,
+            "prominence": "secondary",
+            "treatment": "compact"
+          },
+          {
+            "id": "project_first",
+            "ref": "steps.project_first",
+            "col": 2,
+            "row": 2,
+            "prominence": "primary",
+            "treatment": "compact"
+          },
+          {
+            "id": "hidden_1",
+            "ref": "values.hidden_1",
+            "col": 3,
+            "row": 2,
+            "prominence": "context",
+            "treatment": "compact"
+          },
+          {
+            "id": "project_second",
+            "ref": "steps.project_second",
+            "col": 4,
+            "row": 2,
+            "prominence": "primary",
+            "treatment": "compact"
+          },
+          {
+            "id": "hidden_2",
+            "ref": "values.hidden_2",
+            "col": 5,
+            "row": 2,
+            "prominence": "context",
+            "treatment": "compact"
+          },
+          {
+            "id": "project_final_delta",
+            "ref": "steps.project_final_delta",
+            "col": 6,
+            "row": 2,
+            "prominence": "primary",
+            "treatment": "compact"
+          },
+          {
+            "id": "transition_delta",
+            "ref": "values.transition_delta",
+            "col": 7,
+            "row": 2,
+            "prominence": "context",
+            "treatment": "compact"
+          },
+          {
+            "id": "residual_add",
+            "ref": "steps.residual_add",
+            "col": 4,
+            "row": 1,
+            "prominence": "primary",
+            "treatment": "compact"
+          },
+          {
+            "id": "residual_single",
+            "ref": "values.residual_single",
+            "col": 5,
+            "row": 1,
+            "prominence": "context",
+            "treatment": "compact"
+          },
+          {
+            "id": "dropout_layer_norm",
+            "ref": "steps.dropout_layer_norm",
+            "col": 6,
+            "row": 1,
+            "prominence": "primary",
+            "treatment": "compact"
+          },
+          {
+            "id": "updated_single_state",
+            "ref": "ports.updated_single_state",
+            "col": 7,
+            "row": 1,
+            "prominence": "secondary",
+            "treatment": "compact"
+          }
+        ]
+      },
+      "evidencePolicy": {
+        "generic_definition": "The template captures the AF2-style structure-module transition pattern; concrete architectures must separately cite where they instantiate it.",
+        "usage_requires": [
+          "Evidence for the three same-width linear layers and residual add.",
+          "Evidence for dropout and LayerNorm after the residual transition."
         ]
       }
     }
@@ -12518,6 +13851,8 @@ export const manifest = {
           "modules.global_token_adapter": "collapsed:modules.diffusion_sampler",
           "modules.invariant_point_attention": "excluded",
           "modules.ipa_residual_norm": "excluded",
+          "modules.latent_single_residual_norm": "collapsed:modules.diffusion_sampler",
+          "modules.latent_single_transition": "collapsed:modules.diffusion_sampler",
           "modules.motif_conditioned_tokens": "collapsed:modules.feature_builder",
           "modules.motif_feature_assembler": "collapsed:modules.feature_builder",
           "modules.motif_featurizer": "collapsed:modules.feature_builder",
@@ -12568,9 +13903,11 @@ export const manifest = {
           "value_sites.refined_single_features": "collapsed:modules.diffusion_sampler",
           "value_sites.sampler_step_coordinates": "collapsed:modules.diffusion_sampler",
           "value_sites.sequence_logits": "collapsed:modules.diffusion_sampler",
+          "value_sites.single_after_attention_residual_norm": "collapsed:modules.diffusion_sampler",
           "value_sites.single_after_ipa": "collapsed:modules.diffusion_sampler",
           "value_sites.single_after_pair_attention": "collapsed:modules.diffusion_sampler",
           "value_sites.single_after_transition": "collapsed:modules.diffusion_sampler",
+          "value_sites.single_attention_delta": "collapsed:modules.diffusion_sampler",
           "value_sites.single_with_global_tokens": "collapsed:modules.diffusion_sampler",
           "value_sites.step_coordinates": "collapsed:modules.diffusion_sampler",
           "value_sites.timestep": "collapsed:modules.diffusion_sampler",
@@ -13133,6 +14470,8 @@ export const manifest = {
           "modules.global_token_adapter": "collapsed:modules.reverse_diffusion_step",
           "modules.invariant_point_attention": "excluded",
           "modules.ipa_residual_norm": "excluded",
+          "modules.latent_single_residual_norm": "collapsed:modules.reverse_diffusion_step",
+          "modules.latent_single_transition": "collapsed:modules.reverse_diffusion_step",
           "modules.noise_readout": "collapsed:modules.reverse_diffusion_step",
           "modules.pair_biased_attention_update": "collapsed:modules.reverse_diffusion_step",
           "modules.pair_feature_embedder": "excluded",
@@ -13168,9 +14507,11 @@ export const manifest = {
           "value_sites.refined_single_features": "collapsed:modules.reverse_diffusion_step",
           "value_sites.sampler_step_coordinates": "collapsed:modules.reverse_diffusion_step",
           "value_sites.sequence_logits": "excluded",
+          "value_sites.single_after_attention_residual_norm": "collapsed:modules.reverse_diffusion_step",
           "value_sites.single_after_ipa": "collapsed:modules.reverse_diffusion_step",
           "value_sites.single_after_pair_attention": "collapsed:modules.reverse_diffusion_step",
           "value_sites.single_after_transition": "collapsed:modules.reverse_diffusion_step",
+          "value_sites.single_attention_delta": "collapsed:modules.reverse_diffusion_step",
           "value_sites.single_with_global_tokens": "collapsed:modules.reverse_diffusion_step",
           "value_sites.step_coordinates": "collapsed:modules.reverse_diffusion_step",
           "value_sites.timestep": "collapsed:modules.reverse_diffusion_step",
@@ -13781,6 +15122,8 @@ export const manifest = {
           "modules.global_token_adapter": "collapsed:modules.denoiser",
           "modules.invariant_point_attention": "excluded",
           "modules.ipa_residual_norm": "excluded",
+          "modules.latent_single_residual_norm": "collapsed:modules.denoiser",
+          "modules.latent_single_transition": "collapsed:modules.denoiser",
           "modules.noise_readout": "collapsed:modules.directional_ddim_sampler_math",
           "modules.pair_biased_attention_update": "collapsed:modules.denoiser",
           "modules.pair_feature_embedder": "excluded",
@@ -13811,9 +15154,11 @@ export const manifest = {
           "value_sites.refined_single_features": "collapsed:modules.denoiser",
           "value_sites.sampler_step_coordinates": "collapsed:modules.directional_ddim_sampler_math",
           "value_sites.sequence_logits": "excluded",
+          "value_sites.single_after_attention_residual_norm": "collapsed:modules.denoiser",
           "value_sites.single_after_ipa": "collapsed:modules.denoiser",
           "value_sites.single_after_pair_attention": "collapsed:modules.denoiser",
           "value_sites.single_after_transition": "collapsed:modules.denoiser",
+          "value_sites.single_attention_delta": "collapsed:modules.denoiser",
           "value_sites.single_with_global_tokens": "collapsed:modules.denoiser",
           "value_sites.step_coordinates": "visible",
           "value_sites.timestep": "visible",
@@ -14961,6 +16306,8 @@ export const manifest = {
           "modules.global_token_adapter": "collapsed:modules.latent_transformer",
           "modules.invariant_point_attention": "collapsed:modules.structure_decoder",
           "modules.ipa_residual_norm": "collapsed:modules.structure_decoder",
+          "modules.latent_single_residual_norm": "collapsed:modules.latent_transformer",
+          "modules.latent_single_transition": "collapsed:modules.latent_transformer",
           "modules.latent_transformer": "visible",
           "modules.noise_readout": "excluded",
           "modules.pair_biased_attention_update": "collapsed:modules.latent_transformer",
@@ -14988,9 +16335,11 @@ export const manifest = {
           "value_sites.refined_pair_features": "visible",
           "value_sites.refined_single_features": "visible",
           "value_sites.sequence_logits": "visible",
+          "value_sites.single_after_attention_residual_norm": "collapsed:modules.latent_transformer",
           "value_sites.single_after_ipa": "collapsed:modules.structure_decoder",
           "value_sites.single_after_pair_attention": "collapsed:modules.latent_transformer",
           "value_sites.single_after_transition": "collapsed:modules.structure_decoder",
+          "value_sites.single_attention_delta": "collapsed:modules.latent_transformer",
           "value_sites.single_with_global_tokens": "collapsed:modules.latent_transformer",
           "value_sites.timestep": "visible",
           "value_sites.token_structure_frame_mask": "collapsed:modules.structure_decoder",
@@ -15006,7 +16355,7 @@ export const manifest = {
         "subject_ref": "modules.latent_transformer",
         "expansion_depth": 1,
         "grid": {
-          "columns": 11,
+          "columns": 15,
           "rows": 4,
           "column_sizing": "content",
           "col_gap": 24
@@ -15021,6 +16370,10 @@ export const manifest = {
               "single_with_global_tokens",
               "pair_with_global_tokens",
               "pair_biased_attention_update",
+              "single_attention_delta",
+              "latent_single_residual_norm",
+              "single_after_attention_residual_norm",
+              "latent_single_transition",
               "single_after_pair_attention",
               "single_to_pair_update",
               "pair_after_single_update",
@@ -15101,6 +16454,49 @@ export const manifest = {
             "board_ref": "genie3_reduced_pair_attention_internals"
           },
           {
+            "id": "single_attention_delta",
+            "ref": "value_sites.single_attention_delta",
+            "label": "attention delta",
+            "notation": "Δs",
+            "prominence": "context",
+            "treatment": "compact",
+            "density": "compact",
+            "col": 5,
+            "row": 2
+          },
+          {
+            "id": "latent_single_residual_norm",
+            "ref": "modules.latent_single_residual_norm",
+            "label": "residual + norm",
+            "prominence": "primary",
+            "treatment": "compact",
+            "density": "compact",
+            "col": 6,
+            "row": 2
+          },
+          {
+            "id": "single_after_attention_residual_norm",
+            "ref": "value_sites.single_after_attention_residual_norm",
+            "label": "residual-normalized singles",
+            "notation": "s_norm",
+            "prominence": "context",
+            "treatment": "compact",
+            "density": "compact",
+            "col": 7,
+            "row": 2
+          },
+          {
+            "id": "latent_single_transition",
+            "ref": "modules.latent_single_transition",
+            "label": "structure transition",
+            "prominence": "primary",
+            "treatment": "compact",
+            "density": "compact",
+            "col": 8,
+            "row": 2,
+            "board_ref": "genie3_latent_structure_transition_internals"
+          },
+          {
             "id": "single_after_pair_attention",
             "ref": "value_sites.single_after_pair_attention",
             "label": "next-block singles",
@@ -15108,7 +16504,7 @@ export const manifest = {
             "prominence": "secondary",
             "treatment": "compact",
             "density": "compact",
-            "col": 5,
+            "col": 9,
             "row": 2
           },
           {
@@ -15117,7 +16513,7 @@ export const manifest = {
             "prominence": "primary",
             "treatment": "compact",
             "density": "compact",
-            "col": 5,
+            "col": 9,
             "row": 4
           },
           {
@@ -15129,7 +16525,7 @@ export const manifest = {
             "treatment": "compact",
             "density": "compact",
             "glyph": "pair",
-            "col": 6,
+            "col": 10,
             "row": 4
           },
           {
@@ -15138,7 +16534,7 @@ export const manifest = {
             "prominence": "secondary",
             "treatment": "compact",
             "density": "compact",
-            "col": 7,
+            "col": 11,
             "row": 4
           },
           {
@@ -15150,7 +16546,7 @@ export const manifest = {
             "treatment": "compact",
             "density": "compact",
             "glyph": "pair",
-            "col": 8,
+            "col": 12,
             "row": 4
           },
           {
@@ -15159,7 +16555,7 @@ export const manifest = {
             "prominence": "secondary",
             "treatment": "compact",
             "density": "compact",
-            "col": 9,
+            "col": 13,
             "row": 4
           },
           {
@@ -15171,7 +16567,7 @@ export const manifest = {
             "treatment": "compact",
             "density": "compact",
             "glyph": "pair",
-            "col": 10,
+            "col": 14,
             "row": 4
           },
           {
@@ -15182,7 +16578,7 @@ export const manifest = {
             "prominence": "context",
             "treatment": "compact",
             "density": "compact",
-            "col": 11,
+            "col": 15,
             "row": 2
           },
           {
@@ -15194,7 +16590,7 @@ export const manifest = {
             "treatment": "compact",
             "density": "compact",
             "glyph": "pair",
-            "col": 11,
+            "col": 15,
             "row": 4
           }
         ],
@@ -15208,7 +16604,40 @@ export const manifest = {
             "connection": {
               "title": "Pairs update singles",
               "role": "pair-to-single communication",
-              "inside": "Pair features bias self-attention and also contribute projected values to the single residual stream."
+              "inside": "Pair features bias self-attention and also contribute attention-weighted pair values to the projected Δs update."
+            }
+          },
+          {
+            "match": {
+              "relation_ref": "relations.pair_attention_produces_single_delta"
+            },
+            "label": "Δs",
+            "connection": {
+              "title": "Reduced IPA emits a delta",
+              "role": "attention update",
+              "inside": "The reduced attention core returns only the projected attention update; it does not apply the residual wrapper itself."
+            }
+          },
+          {
+            "match": {
+              "relation_ref": "relations.latent_single_residual_norm_produces_single_state"
+            },
+            "label": "residual + norm",
+            "connection": {
+              "title": "Residual wrapper",
+              "role": "latent single-state update",
+              "inside": "The parent latent block adds Δs to the incoming single state, then applies dropout and LayerNorm before the transition."
+            }
+          },
+          {
+            "match": {
+              "relation_ref": "relations.latent_single_transition_produces_single_state"
+            },
+            "label": "transition + mask",
+            "connection": {
+              "title": "Structure transition",
+              "role": "latent single-state feed-forward update",
+              "inside": "The same StructureTransition block used in the structure decoder runs on the residual-normalized singles; the latent path then reapplies the token mask."
             }
           },
           {
@@ -15333,6 +16762,66 @@ export const manifest = {
             }
           },
           {
+            "id": "projection_b3616346319f",
+            "from": "latent_single_residual_norm",
+            "to": "single_after_attention_residual_norm",
+            "projection": "direct",
+            "origin": "canonical",
+            "kind": "state_update",
+            "relation_path": [
+              "relations.latent_single_residual_norm_produces_single_state"
+            ],
+            "provenance_hops": [
+              {
+                "relation_ref": "relations.latent_single_residual_norm_produces_single_state"
+              }
+            ],
+            "hidden_refs": [
+
+            ],
+            "carries": [
+              "representations.single_features"
+            ],
+            "presentation": {
+              "label": "residual + norm",
+              "connection": {
+                "title": "Residual wrapper",
+                "role": "latent single-state update",
+                "inside": "The parent latent block adds Δs to the incoming single state, then applies dropout and LayerNorm before the transition."
+              }
+            }
+          },
+          {
+            "id": "projection_0e0953f4c5af",
+            "from": "latent_single_transition",
+            "to": "single_after_pair_attention",
+            "projection": "direct",
+            "origin": "canonical",
+            "kind": "state_update",
+            "relation_path": [
+              "relations.latent_single_transition_produces_single_state"
+            ],
+            "provenance_hops": [
+              {
+                "relation_ref": "relations.latent_single_transition_produces_single_state"
+              }
+            ],
+            "hidden_refs": [
+
+            ],
+            "carries": [
+              "representations.single_features"
+            ],
+            "presentation": {
+              "label": "transition + mask",
+              "connection": {
+                "title": "Structure transition",
+                "role": "latent single-state feed-forward update",
+                "inside": "The same StructureTransition block used in the structure decoder runs on the residual-normalized singles; the latent path then reapplies the token mask."
+              }
+            }
+          },
+          {
             "id": "projection_f36b8072189a",
             "from": "pair_after_single_update",
             "to": "triangle_multiplication_stack",
@@ -15429,18 +16918,18 @@ export const manifest = {
             }
           },
           {
-            "id": "projection_e79c6de090ae",
+            "id": "projection_595b994c0837",
             "from": "pair_biased_attention_update",
-            "to": "single_after_pair_attention",
+            "to": "single_attention_delta",
             "projection": "direct",
             "origin": "canonical",
-            "kind": "state_update",
+            "kind": "data_flow",
             "relation_path": [
-              "relations.pair_attention_produces_single_state"
+              "relations.pair_attention_produces_single_delta"
             ],
             "provenance_hops": [
               {
-                "relation_ref": "relations.pair_attention_produces_single_state"
+                "relation_ref": "relations.pair_attention_produces_single_delta"
               }
             ],
             "hidden_refs": [
@@ -15450,6 +16939,12 @@ export const manifest = {
               "representations.single_features"
             ],
             "presentation": {
+              "label": "Δs",
+              "connection": {
+                "title": "Reduced IPA emits a delta",
+                "role": "attention update",
+                "inside": "The reduced attention core returns only the projected attention update; it does not apply the residual wrapper itself."
+              }
             }
           },
           {
@@ -15503,7 +16998,7 @@ export const manifest = {
               "connection": {
                 "title": "Pairs update singles",
                 "role": "pair-to-single communication",
-                "inside": "Pair features bias self-attention and also contribute projected values to the single residual stream."
+                "inside": "Pair features bias self-attention and also contribute attention-weighted pair values to the projected Δs update."
               }
             }
           },
@@ -15527,6 +17022,30 @@ export const manifest = {
             ],
             "carries": [
               "representations.pair_features"
+            ],
+            "presentation": {
+            }
+          },
+          {
+            "id": "projection_e1d5baf9ff0e",
+            "from": "single_after_attention_residual_norm",
+            "to": "latent_single_transition",
+            "projection": "direct",
+            "origin": "canonical",
+            "kind": "data_flow",
+            "relation_path": [
+              "relations.single_after_residual_norm_enters_latent_transition"
+            ],
+            "provenance_hops": [
+              {
+                "relation_ref": "relations.single_after_residual_norm_enters_latent_transition"
+              }
+            ],
+            "hidden_refs": [
+
+            ],
+            "carries": [
+              "representations.single_features"
             ],
             "presentation": {
             }
@@ -15610,6 +17129,30 @@ export const manifest = {
             }
           },
           {
+            "id": "projection_b1259f5f70d2",
+            "from": "single_attention_delta",
+            "to": "latent_single_residual_norm",
+            "projection": "direct",
+            "origin": "canonical",
+            "kind": "data_flow",
+            "relation_path": [
+              "relations.single_attention_delta_enters_residual_norm"
+            ],
+            "provenance_hops": [
+              {
+                "relation_ref": "relations.single_attention_delta_enters_residual_norm"
+              }
+            ],
+            "hidden_refs": [
+
+            ],
+            "carries": [
+              "representations.single_features"
+            ],
+            "presentation": {
+            }
+          },
+          {
             "id": "projection_162a900ee1ac",
             "from": "single_to_pair_update",
             "to": "pair_after_single_update",
@@ -15629,6 +17172,30 @@ export const manifest = {
             ],
             "carries": [
               "representations.pair_features"
+            ],
+            "presentation": {
+            }
+          },
+          {
+            "id": "projection_ac7dd6089943",
+            "from": "single_with_global_tokens",
+            "to": "latent_single_residual_norm",
+            "projection": "direct",
+            "origin": "canonical",
+            "kind": "data_flow",
+            "relation_path": [
+              "relations.single_with_global_tokens_skip_to_residual_norm"
+            ],
+            "provenance_hops": [
+              {
+                "relation_ref": "relations.single_with_global_tokens_skip_to_residual_norm"
+              }
+            ],
+            "hidden_refs": [
+
+            ],
+            "carries": [
+              "representations.single_features"
             ],
             "presentation": {
             }
@@ -15690,6 +17257,8 @@ export const manifest = {
         ],
         "classifications": {
           "modules.global_token_adapter": "visible",
+          "modules.latent_single_residual_norm": "visible",
+          "modules.latent_single_transition": "visible",
           "modules.pair_biased_attention_update": "visible",
           "modules.pair_transition": "visible",
           "modules.single_to_pair_update": "visible",
@@ -15702,7 +17271,9 @@ export const manifest = {
           "value_sites.pair_with_global_tokens": "visible",
           "value_sites.refined_pair_features": "visible",
           "value_sites.refined_single_features": "visible",
+          "value_sites.single_after_attention_residual_norm": "visible",
           "value_sites.single_after_pair_attention": "visible",
+          "value_sites.single_attention_delta": "visible",
           "value_sites.single_with_global_tokens": "visible"
         },
         "projectionMode": "derived"
@@ -15851,7 +17422,8 @@ export const manifest = {
             "treatment": "compact",
             "density": "compact",
             "col": 7,
-            "row": 3
+            "row": 3,
+            "board_ref": "genie3_structure_transition_internals"
           },
           {
             "id": "single_after_transition",
@@ -16531,11 +18103,12 @@ export const manifest = {
         "expansion_depth": 0,
         "block_instance_ref": "block_instances.latent_reduced_pair_attention",
         "grid": {
-          "columns": 9,
-          "rows": 6,
+          "columns": 13,
+          "rows": 7,
           "column_sizing": "content",
-          "col_gap": 28,
-          "row_gap": 24
+          "row_sizing": "content",
+          "col_gap": 22,
+          "row_gap": 34
         },
         "nodes": [
           {
@@ -16586,7 +18159,7 @@ export const manifest = {
             "id": "attention_mask",
             "label": "attention mask",
             "role": "optional validity mask applied before softmax and after a reduced wrapper",
-            "col": 3,
+            "col": 5,
             "row": 6,
             "prominence": "context",
             "treatment": "chip",
@@ -16602,26 +18175,26 @@ export const manifest = {
             "port_ref": "ports.attention_mask"
           },
           {
-            "id": "updated_single_state",
-            "label": "updated single state",
-            "role": "attention-updated single/token stream",
-            "col": 9,
-            "row": 2,
+            "id": "attention_delta",
+            "label": "attention delta",
+            "role": "projected attention update before any architecture-owned residual wrapper",
+            "col": 13,
+            "row": 4,
             "prominence": "secondary",
             "treatment": "compact",
             "standard_block_ref": "standard_blocks/pair-biased-attention.yaml",
             "standard_block_id": "pair_biased_attention",
             "block_instance_ref": "block_instances.latent_reduced_pair_attention",
-            "template_fact_ref": "standard_blocks.pair_biased_attention.ports.updated_single_state",
-            "instance_fact_ref": "block_instances.latent_reduced_pair_attention.ports.updated_single_state",
+            "template_fact_ref": "standard_blocks.pair_biased_attention.ports.attention_delta",
+            "instance_fact_ref": "block_instances.latent_reduced_pair_attention.ports.attention_delta",
             "kind": "representation",
             "rep_ref": "single_features",
             "shape": "B x N x 384",
             "scale": "token",
             "glyph": "single",
             "flow_family": "single",
-            "notation": "s'",
-            "port_ref": "ports.updated_single_state"
+            "notation": "Δs",
+            "port_ref": "ports.attention_delta"
           },
           {
             "id": "project_qkv",
@@ -16683,7 +18256,7 @@ export const manifest = {
             "id": "scalar_values",
             "label": "scalar values",
             "col": 3,
-            "row": 3,
+            "row": 4,
             "prominence": "context",
             "treatment": "chip",
             "standard_block_ref": "standard_blocks/pair-biased-attention.yaml",
@@ -16812,7 +18385,7 @@ export const manifest = {
           {
             "id": "apply_attention_mask",
             "label": "Apply attention mask",
-            "col": 5,
+            "col": 6,
             "row": 6,
             "prominence": "secondary",
             "treatment": "compact",
@@ -16869,7 +18442,7 @@ export const manifest = {
             "id": "attention_weights",
             "label": "attention weights",
             "col": 9,
-            "row": 3,
+            "row": 4,
             "prominence": "context",
             "treatment": "compact",
             "standard_block_ref": "standard_blocks/pair-biased-attention.yaml",
@@ -16886,8 +18459,8 @@ export const manifest = {
           {
             "id": "aggregate_scalar_values",
             "label": "Aggregate scalar values",
-            "col": 6,
-            "row": 1,
+            "col": 10,
+            "row": 3,
             "prominence": "primary",
             "treatment": "compact",
             "standard_block_ref": "standard_blocks/pair-biased-attention.yaml",
@@ -16905,8 +18478,8 @@ export const manifest = {
           {
             "id": "scalar_context",
             "label": "scalar context",
-            "col": 7,
-            "row": 1,
+            "col": 11,
+            "row": 3,
             "prominence": "context",
             "treatment": "compact",
             "standard_block_ref": "standard_blocks/pair-biased-attention.yaml",
@@ -16923,7 +18496,7 @@ export const manifest = {
           {
             "id": "aggregate_pair_values",
             "label": "Attention-weighted pair-value aggregation",
-            "col": 6,
+            "col": 10,
             "row": 5,
             "prominence": "primary",
             "treatment": "compact",
@@ -16942,7 +18515,7 @@ export const manifest = {
           {
             "id": "pair_value_context",
             "label": "pair-value context",
-            "col": 7,
+            "col": 11,
             "row": 5,
             "prominence": "context",
             "treatment": "compact",
@@ -16960,8 +18533,8 @@ export const manifest = {
           {
             "id": "project_reduced_output",
             "label": "Fuse scalar and pair contexts",
-            "col": 8,
-            "row": 5,
+            "col": 12,
+            "row": 4,
             "prominence": "primary",
             "treatment": "compact",
             "standard_block_ref": "standard_blocks/pair-biased-attention.yaml",
@@ -16974,78 +18547,6 @@ export const manifest = {
             "detail": "output_projection",
             "code": "attention_delta = output_projection(concat(scalar_context, pair_context_out))",
             "operation": "output_projection"
-          },
-          {
-            "id": "attention_delta",
-            "label": "attention delta",
-            "col": 9,
-            "row": 5,
-            "prominence": "context",
-            "treatment": "compact",
-            "standard_block_ref": "standard_blocks/pair-biased-attention.yaml",
-            "standard_block_id": "pair_biased_attention",
-            "block_instance_ref": "block_instances.latent_reduced_pair_attention",
-            "template_fact_ref": "standard_blocks.pair_biased_attention.values.attention_delta",
-            "instance_fact_ref": "block_instances.latent_reduced_pair_attention.values.attention_delta",
-            "kind": "representation",
-            "scale": "item",
-            "glyph": "single",
-            "flow_family": "single",
-            "notation": "delta_s"
-          },
-          {
-            "id": "residual_norm",
-            "label": "Residual, dropout, and norm",
-            "col": 7,
-            "row": 4,
-            "prominence": "primary",
-            "treatment": "compact",
-            "standard_block_ref": "standard_blocks/pair-biased-attention.yaml",
-            "standard_block_id": "pair_biased_attention",
-            "block_instance_ref": "block_instances.latent_reduced_pair_attention",
-            "template_fact_ref": "standard_blocks.pair_biased_attention.steps.residual_norm",
-            "instance_fact_ref": "block_instances.latent_reduced_pair_attention.steps.residual_norm",
-            "kind": "operation",
-            "scale": "operation",
-            "detail": "residual_normalization",
-            "code": "normalized_single = layer_norm(single_state + dropout(attention_delta))",
-            "operation": "residual_normalization"
-          },
-          {
-            "id": "normalized_single",
-            "label": "residual-normalized state",
-            "col": 8,
-            "row": 4,
-            "prominence": "context",
-            "treatment": "compact",
-            "standard_block_ref": "standard_blocks/pair-biased-attention.yaml",
-            "standard_block_id": "pair_biased_attention",
-            "block_instance_ref": "block_instances.latent_reduced_pair_attention",
-            "template_fact_ref": "standard_blocks.pair_biased_attention.values.normalized_single",
-            "instance_fact_ref": "block_instances.latent_reduced_pair_attention.values.normalized_single",
-            "kind": "representation",
-            "scale": "item",
-            "glyph": "single",
-            "flow_family": "single",
-            "notation": "s_norm"
-          },
-          {
-            "id": "transition_and_mask",
-            "label": "Transition and mask",
-            "col": 9,
-            "row": 4,
-            "prominence": "primary",
-            "treatment": "compact",
-            "standard_block_ref": "standard_blocks/pair-biased-attention.yaml",
-            "standard_block_id": "pair_biased_attention",
-            "block_instance_ref": "block_instances.latent_reduced_pair_attention",
-            "template_fact_ref": "standard_blocks.pair_biased_attention.steps.transition_and_mask",
-            "instance_fact_ref": "block_instances.latent_reduced_pair_attention.steps.transition_and_mask",
-            "kind": "operation",
-            "scale": "operation",
-            "detail": "transition_mask",
-            "code": "updated_single_state = transition(normalized_single) * attention_mask",
-            "operation": "transition_mask"
           }
         ],
         "edges": [
@@ -17591,163 +19092,75 @@ export const manifest = {
             "to": "attention_delta",
             "kind": "data_flow",
             "carries": [
-
+              "representations.single_features"
             ],
-            "grounding": "standard_block_template",
+            "relation_path": [
+              "relations.pair_attention_produces_single_delta"
+            ],
+            "grounding": "canonical_relation_path",
             "standard_block_ref": "standard_blocks/pair-biased-attention.yaml",
             "standard_block_id": "pair_biased_attention",
             "block_instance_ref": "block_instances.latent_reduced_pair_attention",
             "template_fact_ref": "standard_blocks.pair_biased_attention.steps.project_reduced_output",
             "instance_fact_ref": "block_instances.latent_reduced_pair_attention.steps.project_reduced_output",
-            "template_data_ref": "values.attention_delta",
+            "template_data_ref": "ports.attention_delta",
             "connection": {
               "title": "Fuse scalar and pair contexts",
               "role": "reusable step output",
               "inside": "attention_delta = output_projection(concat(scalar_context, pair_context_out))"
             }
+          }
+        ],
+        "segments": [
+          {
+            "id": "attention_weights",
+            "label": "Compute attention weights",
+            "description": "Project Q/K/V from the single stream, add the pair-derived logit bias, apply the validity mask when present, and normalize over keys.",
+            "order": 1,
+            "node_ids": [
+              "single_state",
+              "pair_context",
+              "attention_mask",
+              "project_qkv",
+              "queries",
+              "keys",
+              "scalar_logits_step",
+              "scalar_logits",
+              "project_pair_bias",
+              "pair_bias",
+              "combine_logits",
+              "biased_logits",
+              "apply_attention_mask",
+              "masked_logits",
+              "softmax_attention_masked",
+              "attention_weights"
+            ]
           },
           {
-            "id": "latent_reduced_pair_attention__residual_norm__input_1",
-            "from": "single_state",
-            "to": "residual_norm",
-            "kind": "data_flow",
-            "carries": [
-              "representations.single_features"
-            ],
-            "relation_path": [
-              "relations.single_with_global_tokens_enters_attention"
-            ],
-            "grounding": "canonical_relation_path",
-            "standard_block_ref": "standard_blocks/pair-biased-attention.yaml",
-            "standard_block_id": "pair_biased_attention",
-            "block_instance_ref": "block_instances.latent_reduced_pair_attention",
-            "template_fact_ref": "standard_blocks.pair_biased_attention.steps.residual_norm",
-            "instance_fact_ref": "block_instances.latent_reduced_pair_attention.steps.residual_norm",
-            "template_data_ref": "ports.single_state",
-            "connection": {
-              "title": "Residual, dropout, and norm",
-              "role": "reusable step input",
-              "inside": "normalized_single = layer_norm(single_state + dropout(attention_delta))"
-            }
-          },
-          {
-            "id": "latent_reduced_pair_attention__residual_norm__input_2",
-            "from": "attention_delta",
-            "to": "residual_norm",
-            "kind": "data_flow",
-            "carries": [
-
-            ],
-            "grounding": "standard_block_template",
-            "standard_block_ref": "standard_blocks/pair-biased-attention.yaml",
-            "standard_block_id": "pair_biased_attention",
-            "block_instance_ref": "block_instances.latent_reduced_pair_attention",
-            "template_fact_ref": "standard_blocks.pair_biased_attention.steps.residual_norm",
-            "instance_fact_ref": "block_instances.latent_reduced_pair_attention.steps.residual_norm",
-            "template_data_ref": "values.attention_delta",
-            "connection": {
-              "title": "Residual, dropout, and norm",
-              "role": "reusable step input",
-              "inside": "normalized_single = layer_norm(single_state + dropout(attention_delta))"
-            }
-          },
-          {
-            "id": "latent_reduced_pair_attention__residual_norm__output_1",
-            "from": "residual_norm",
-            "to": "normalized_single",
-            "kind": "data_flow",
-            "carries": [
-
-            ],
-            "grounding": "standard_block_template",
-            "standard_block_ref": "standard_blocks/pair-biased-attention.yaml",
-            "standard_block_id": "pair_biased_attention",
-            "block_instance_ref": "block_instances.latent_reduced_pair_attention",
-            "template_fact_ref": "standard_blocks.pair_biased_attention.steps.residual_norm",
-            "instance_fact_ref": "block_instances.latent_reduced_pair_attention.steps.residual_norm",
-            "template_data_ref": "values.normalized_single",
-            "connection": {
-              "title": "Residual, dropout, and norm",
-              "role": "reusable step output",
-              "inside": "normalized_single = layer_norm(single_state + dropout(attention_delta))"
-            }
-          },
-          {
-            "id": "latent_reduced_pair_attention__transition_and_mask__input_1",
-            "from": "normalized_single",
-            "to": "transition_and_mask",
-            "kind": "data_flow",
-            "carries": [
-
-            ],
-            "grounding": "standard_block_template",
-            "standard_block_ref": "standard_blocks/pair-biased-attention.yaml",
-            "standard_block_id": "pair_biased_attention",
-            "block_instance_ref": "block_instances.latent_reduced_pair_attention",
-            "template_fact_ref": "standard_blocks.pair_biased_attention.steps.transition_and_mask",
-            "instance_fact_ref": "block_instances.latent_reduced_pair_attention.steps.transition_and_mask",
-            "template_data_ref": "values.normalized_single",
-            "connection": {
-              "title": "Transition and mask",
-              "role": "reusable step input",
-              "inside": "updated_single_state = transition(normalized_single) * attention_mask"
-            }
-          },
-          {
-            "id": "latent_reduced_pair_attention__transition_and_mask__input_2",
-            "from": "attention_mask",
-            "to": "transition_and_mask",
-            "kind": "data_flow",
-            "carries": [
-
-            ],
-            "grounding": "standard_block_template",
-            "standard_block_ref": "standard_blocks/pair-biased-attention.yaml",
-            "standard_block_id": "pair_biased_attention",
-            "block_instance_ref": "block_instances.latent_reduced_pair_attention",
-            "template_fact_ref": "standard_blocks.pair_biased_attention.steps.transition_and_mask",
-            "instance_fact_ref": "block_instances.latent_reduced_pair_attention.steps.transition_and_mask",
-            "template_data_ref": "ports.attention_mask",
-            "connection": {
-              "title": "Transition and mask",
-              "role": "reusable step input",
-              "inside": "updated_single_state = transition(normalized_single) * attention_mask"
-            }
-          },
-          {
-            "id": "latent_reduced_pair_attention__transition_and_mask__output_1",
-            "from": "transition_and_mask",
-            "to": "updated_single_state",
-            "kind": "state_update",
-            "carries": [
-              "representations.single_features"
-            ],
-            "relation_path": [
-              "relations.pair_attention_produces_single_state"
-            ],
-            "grounding": "canonical_relation_path",
-            "standard_block_ref": "standard_blocks/pair-biased-attention.yaml",
-            "standard_block_id": "pair_biased_attention",
-            "block_instance_ref": "block_instances.latent_reduced_pair_attention",
-            "template_fact_ref": "standard_blocks.pair_biased_attention.steps.transition_and_mask",
-            "instance_fact_ref": "block_instances.latent_reduced_pair_attention.steps.transition_and_mask",
-            "template_data_ref": "ports.updated_single_state",
-            "connection": {
-              "title": "Transition and mask",
-              "role": "reusable step output",
-              "inside": "updated_single_state = transition(normalized_single) * attention_mask"
-            }
+            "id": "value_aggregation",
+            "label": "Aggregate values",
+            "description": "Reuse the same attention weights to aggregate ordinary scalar values and, in the reduced IPA-style variant, attention-weighted pair values.",
+            "order": 2,
+            "node_ids": [
+              "scalar_values",
+              "aggregate_scalar_values",
+              "scalar_context",
+              "aggregate_pair_values",
+              "pair_value_context",
+              "project_reduced_output",
+              "attention_delta"
+            ]
           }
         ],
         "projectionMode": "standard_block_template",
         "standardBlockRef": "standard_blocks/pair-biased-attention.yaml",
         "standardBlockId": "pair_biased_attention",
         "blockInstanceRef": "block_instances.latent_reduced_pair_attention",
-        "variant": "pair_values_residual_norm_transition",
-        "variantLabel": "Reduced pair attention + wrapper",
+        "variant": "pair_values_attention_delta",
+        "variantLabel": "Reduced pair attention delta",
         "useScope": "whole_module",
         "conformance": "reduced",
-        "differenceSummary": "Genie 3 removes frame-aware point terms, keeps pair-logit bias and attention-weighted pair-value aggregation, then adds residual normalization, a single transition, and final masking.",
+        "differenceSummary": "Genie 3 removes frame-aware point terms and keeps pair-logit bias plus attention-weighted pair-value aggregation. The residual add, normalization, transition, and final masking are modeled as the surrounding latent-block wrapper.",
         "pseudocode": [
           {
             "id": "project_qkv",
@@ -17888,37 +19301,7 @@ export const manifest = {
               "values.pair_value_context"
             ],
             "outputs": [
-              "values.attention_delta"
-            ]
-          },
-          {
-            "id": "residual_norm",
-            "templateFactRef": "standard_blocks.pair_biased_attention.steps.residual_norm",
-            "instanceFactRef": "block_instances.latent_reduced_pair_attention.steps.residual_norm",
-            "label": "Residual, dropout, and norm",
-            "operation": "residual_normalization",
-            "code": "normalized_single = layer_norm(single_state + dropout(attention_delta))",
-            "inputs": [
-              "ports.single_state",
-              "values.attention_delta"
-            ],
-            "outputs": [
-              "values.normalized_single"
-            ]
-          },
-          {
-            "id": "transition_and_mask",
-            "templateFactRef": "standard_blocks.pair_biased_attention.steps.transition_and_mask",
-            "instanceFactRef": "block_instances.latent_reduced_pair_attention.steps.transition_and_mask",
-            "label": "Transition and mask",
-            "operation": "transition_mask",
-            "code": "updated_single_state = transition(normalized_single) * attention_mask",
-            "inputs": [
-              "values.normalized_single",
-              "ports.attention_mask"
-            ],
-            "outputs": [
-              "ports.updated_single_state"
+              "ports.attention_delta"
             ]
           }
         ]
@@ -20791,6 +22174,1727 @@ export const manifest = {
                   {
                     "start": 74,
                     "end": 92
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "id": "genie3_structure_transition_internals",
+        "kind": "standard_block_instance",
+        "title": "Genie 3 Structure Transition Internals",
+        "summary": "One structure-transition layer applies three same-width linear projections with ReLU between them, adds the result residually to the incoming single state, then applies dropout and LayerNorm.",
+        "parent": "structure_decoder",
+        "subject_ref": "modules.structure_transition",
+        "expansion_depth": 0,
+        "block_instance_ref": "block_instances.structure_transition",
+        "grid": {
+          "columns": 7,
+          "rows": 3,
+          "column_sizing": "content",
+          "col_gap": 28,
+          "row_gap": 24
+        },
+        "nodes": [
+          {
+            "id": "single_state",
+            "label": "single state",
+            "role": "post-IPA single/token representation entering the transition MLP",
+            "col": 1,
+            "row": 2,
+            "prominence": "secondary",
+            "treatment": "compact",
+            "standard_block_ref": "standard_blocks/structure-transition.yaml",
+            "standard_block_id": "structure_transition",
+            "block_instance_ref": "block_instances.structure_transition",
+            "template_fact_ref": "standard_blocks.structure_transition.ports.single_state",
+            "instance_fact_ref": "block_instances.structure_transition.ports.single_state",
+            "kind": "representation",
+            "rep_ref": "single_features",
+            "shape": "B x N x 384",
+            "resolved_shape": {
+              "kind": "tensor",
+              "axes": [
+                {
+                  "id": "batch",
+                  "dimension": "B"
+                },
+                {
+                  "id": "token",
+                  "dimension": "N"
+                },
+                {
+                  "id": "single_channel",
+                  "dimension": 384
+                }
+              ],
+              "label": "B x N x 384"
+            },
+            "shape_status": "resolved",
+            "scale": "token",
+            "glyph": "single",
+            "flow_family": "single",
+            "notation": "s",
+            "port_ref": "ports.single_state"
+          },
+          {
+            "id": "project_first",
+            "label": "First linear + ReLU",
+            "role": "first same-width projection inside each structure-transition layer",
+            "col": 2,
+            "row": 2,
+            "prominence": "primary",
+            "treatment": "compact",
+            "standard_block_ref": "standard_blocks/structure-transition.yaml",
+            "standard_block_id": "structure_transition",
+            "block_instance_ref": "block_instances.structure_transition",
+            "template_fact_ref": "standard_blocks.structure_transition.steps.project_first",
+            "instance_fact_ref": "block_instances.structure_transition.steps.project_first",
+            "kind": "operation",
+            "scale": "operation",
+            "detail": "linear_relu",
+            "code": "hidden_1 = relu(linear_1(single_state))",
+            "tex": "h^{(1)}_i = ReLU(W_1 s_i)",
+            "operation": "linear_relu"
+          },
+          {
+            "id": "hidden_1",
+            "label": "first hidden state",
+            "col": 3,
+            "row": 2,
+            "prominence": "context",
+            "treatment": "compact",
+            "standard_block_ref": "standard_blocks/structure-transition.yaml",
+            "standard_block_id": "structure_transition",
+            "block_instance_ref": "block_instances.structure_transition",
+            "template_fact_ref": "standard_blocks.structure_transition.values.hidden_1",
+            "instance_fact_ref": "block_instances.structure_transition.values.hidden_1",
+            "kind": "representation",
+            "shape": "B x N x 384",
+            "resolved_shape": {
+              "kind": "tensor",
+              "axes": [
+                {
+                  "id": "batch",
+                  "dimension": "B"
+                },
+                {
+                  "id": "token",
+                  "dimension": "N"
+                },
+                {
+                  "id": "single_channel",
+                  "dimension": 384
+                }
+              ],
+              "label": "B x N x 384"
+            },
+            "shape_status": "resolved",
+            "scale": "item",
+            "glyph": "single",
+            "flow_family": "single",
+            "notation": "h_1"
+          },
+          {
+            "id": "project_second",
+            "label": "Second linear + ReLU",
+            "role": "second same-width projection inside each structure-transition layer",
+            "col": 4,
+            "row": 2,
+            "prominence": "primary",
+            "treatment": "compact",
+            "standard_block_ref": "standard_blocks/structure-transition.yaml",
+            "standard_block_id": "structure_transition",
+            "block_instance_ref": "block_instances.structure_transition",
+            "template_fact_ref": "standard_blocks.structure_transition.steps.project_second",
+            "instance_fact_ref": "block_instances.structure_transition.steps.project_second",
+            "kind": "operation",
+            "scale": "operation",
+            "detail": "linear_relu",
+            "code": "hidden_2 = relu(linear_2(hidden_1))",
+            "tex": "h^{(2)}_i = ReLU(W_2 h^{(1)}_i)",
+            "operation": "linear_relu"
+          },
+          {
+            "id": "hidden_2",
+            "label": "second hidden state",
+            "col": 5,
+            "row": 2,
+            "prominence": "context",
+            "treatment": "compact",
+            "standard_block_ref": "standard_blocks/structure-transition.yaml",
+            "standard_block_id": "structure_transition",
+            "block_instance_ref": "block_instances.structure_transition",
+            "template_fact_ref": "standard_blocks.structure_transition.values.hidden_2",
+            "instance_fact_ref": "block_instances.structure_transition.values.hidden_2",
+            "kind": "representation",
+            "shape": "B x N x 384",
+            "resolved_shape": {
+              "kind": "tensor",
+              "axes": [
+                {
+                  "id": "batch",
+                  "dimension": "B"
+                },
+                {
+                  "id": "token",
+                  "dimension": "N"
+                },
+                {
+                  "id": "single_channel",
+                  "dimension": 384
+                }
+              ],
+              "label": "B x N x 384"
+            },
+            "shape_status": "resolved",
+            "scale": "item",
+            "glyph": "single",
+            "flow_family": "single",
+            "notation": "h_2"
+          },
+          {
+            "id": "project_final_delta",
+            "label": "Final zero-init projection",
+            "role": "final same-width projection, initialized as a near-zero residual update in AF2-style implementations",
+            "col": 6,
+            "row": 2,
+            "prominence": "primary",
+            "treatment": "compact",
+            "standard_block_ref": "standard_blocks/structure-transition.yaml",
+            "standard_block_id": "structure_transition",
+            "block_instance_ref": "block_instances.structure_transition",
+            "template_fact_ref": "standard_blocks.structure_transition.steps.project_final_delta",
+            "instance_fact_ref": "block_instances.structure_transition.steps.project_final_delta",
+            "kind": "operation",
+            "scale": "operation",
+            "detail": "linear",
+            "code": "transition_delta = linear_3(hidden_2)",
+            "tex": "delta s_i = W_3 h^{(2)}_i",
+            "operation": "linear"
+          },
+          {
+            "id": "transition_delta",
+            "label": "transition delta",
+            "col": 7,
+            "row": 2,
+            "prominence": "context",
+            "treatment": "compact",
+            "standard_block_ref": "standard_blocks/structure-transition.yaml",
+            "standard_block_id": "structure_transition",
+            "block_instance_ref": "block_instances.structure_transition",
+            "template_fact_ref": "standard_blocks.structure_transition.values.transition_delta",
+            "instance_fact_ref": "block_instances.structure_transition.values.transition_delta",
+            "kind": "representation",
+            "shape": "B x N x 384",
+            "resolved_shape": {
+              "kind": "tensor",
+              "axes": [
+                {
+                  "id": "batch",
+                  "dimension": "B"
+                },
+                {
+                  "id": "token",
+                  "dimension": "N"
+                },
+                {
+                  "id": "single_channel",
+                  "dimension": 384
+                }
+              ],
+              "label": "B x N x 384"
+            },
+            "shape_status": "resolved",
+            "scale": "item",
+            "glyph": "single",
+            "flow_family": "single",
+            "notation": "delta_s"
+          },
+          {
+            "id": "residual_add",
+            "label": "Add transition residual",
+            "role": "preserve the incoming single state while adding the transition MLP update",
+            "col": 4,
+            "row": 1,
+            "prominence": "primary",
+            "treatment": "compact",
+            "standard_block_ref": "standard_blocks/structure-transition.yaml",
+            "standard_block_id": "structure_transition",
+            "block_instance_ref": "block_instances.structure_transition",
+            "template_fact_ref": "standard_blocks.structure_transition.steps.residual_add",
+            "instance_fact_ref": "block_instances.structure_transition.steps.residual_add",
+            "kind": "operation",
+            "scale": "operation",
+            "detail": "residual_add",
+            "code": "residual_single = single_state + transition_delta",
+            "tex": "s^{res}_i = s_i + delta s_i",
+            "operation": "residual_add"
+          },
+          {
+            "id": "residual_single",
+            "label": "residual single state",
+            "col": 5,
+            "row": 1,
+            "prominence": "context",
+            "treatment": "compact",
+            "standard_block_ref": "standard_blocks/structure-transition.yaml",
+            "standard_block_id": "structure_transition",
+            "block_instance_ref": "block_instances.structure_transition",
+            "template_fact_ref": "standard_blocks.structure_transition.values.residual_single",
+            "instance_fact_ref": "block_instances.structure_transition.values.residual_single",
+            "kind": "representation",
+            "shape": "B x N x 384",
+            "resolved_shape": {
+              "kind": "tensor",
+              "axes": [
+                {
+                  "id": "batch",
+                  "dimension": "B"
+                },
+                {
+                  "id": "token",
+                  "dimension": "N"
+                },
+                {
+                  "id": "single_channel",
+                  "dimension": 384
+                }
+              ],
+              "label": "B x N x 384"
+            },
+            "shape_status": "resolved",
+            "scale": "item",
+            "glyph": "single",
+            "flow_family": "single",
+            "notation": "s_res"
+          },
+          {
+            "id": "dropout_layer_norm",
+            "label": "Dropout and LayerNorm",
+            "role": "normalize the residual transition state before frame update or the next layer",
+            "col": 6,
+            "row": 1,
+            "prominence": "primary",
+            "treatment": "compact",
+            "standard_block_ref": "standard_blocks/structure-transition.yaml",
+            "standard_block_id": "structure_transition",
+            "block_instance_ref": "block_instances.structure_transition",
+            "template_fact_ref": "standard_blocks.structure_transition.steps.dropout_layer_norm",
+            "instance_fact_ref": "block_instances.structure_transition.steps.dropout_layer_norm",
+            "kind": "operation",
+            "scale": "operation",
+            "detail": "dropout_layer_norm",
+            "code": "updated_single_state = layer_norm(dropout(residual_single))",
+            "tex": "s'_i = LayerNorm(Dropout(s^{res}_i))",
+            "operation": "dropout_layer_norm"
+          },
+          {
+            "id": "updated_single_state",
+            "label": "updated single state",
+            "role": "transition-updated single/token representation after dropout and LayerNorm",
+            "col": 7,
+            "row": 1,
+            "prominence": "secondary",
+            "treatment": "compact",
+            "standard_block_ref": "standard_blocks/structure-transition.yaml",
+            "standard_block_id": "structure_transition",
+            "block_instance_ref": "block_instances.structure_transition",
+            "template_fact_ref": "standard_blocks.structure_transition.ports.updated_single_state",
+            "instance_fact_ref": "block_instances.structure_transition.ports.updated_single_state",
+            "kind": "representation",
+            "rep_ref": "single_features",
+            "shape": "B x N x 384",
+            "resolved_shape": {
+              "kind": "tensor",
+              "axes": [
+                {
+                  "id": "batch",
+                  "dimension": "B"
+                },
+                {
+                  "id": "token",
+                  "dimension": "N"
+                },
+                {
+                  "id": "single_channel",
+                  "dimension": 384
+                }
+              ],
+              "label": "B x N x 384"
+            },
+            "shape_status": "resolved",
+            "scale": "token",
+            "glyph": "single",
+            "flow_family": "single",
+            "notation": "s'",
+            "port_ref": "ports.updated_single_state"
+          }
+        ],
+        "edges": [
+          {
+            "id": "structure_transition__project_first__input_1",
+            "from": "single_state",
+            "to": "project_first",
+            "kind": "data_flow",
+            "carries": [
+              "representations.single_features"
+            ],
+            "relation_path": [
+              "relations.ipa_state_enters_structure_transition"
+            ],
+            "grounding": "canonical_relation_path",
+            "standard_block_ref": "standard_blocks/structure-transition.yaml",
+            "standard_block_id": "structure_transition",
+            "block_instance_ref": "block_instances.structure_transition",
+            "template_fact_ref": "standard_blocks.structure_transition.steps.project_first",
+            "instance_fact_ref": "block_instances.structure_transition.steps.project_first",
+            "template_data_ref": "ports.single_state",
+            "connection": {
+              "title": "First linear + ReLU",
+              "role": "reusable step input",
+              "inside": "hidden_1 = relu(linear_1(single_state))"
+            }
+          },
+          {
+            "id": "structure_transition__project_first__output_1",
+            "from": "project_first",
+            "to": "hidden_1",
+            "kind": "data_flow",
+            "carries": [
+
+            ],
+            "grounding": "standard_block_template",
+            "standard_block_ref": "standard_blocks/structure-transition.yaml",
+            "standard_block_id": "structure_transition",
+            "block_instance_ref": "block_instances.structure_transition",
+            "template_fact_ref": "standard_blocks.structure_transition.steps.project_first",
+            "instance_fact_ref": "block_instances.structure_transition.steps.project_first",
+            "template_data_ref": "values.hidden_1",
+            "connection": {
+              "title": "First linear + ReLU",
+              "role": "reusable step output",
+              "inside": "hidden_1 = relu(linear_1(single_state))"
+            }
+          },
+          {
+            "id": "structure_transition__project_second__input_1",
+            "from": "hidden_1",
+            "to": "project_second",
+            "kind": "data_flow",
+            "carries": [
+
+            ],
+            "grounding": "standard_block_template",
+            "standard_block_ref": "standard_blocks/structure-transition.yaml",
+            "standard_block_id": "structure_transition",
+            "block_instance_ref": "block_instances.structure_transition",
+            "template_fact_ref": "standard_blocks.structure_transition.steps.project_second",
+            "instance_fact_ref": "block_instances.structure_transition.steps.project_second",
+            "template_data_ref": "values.hidden_1",
+            "connection": {
+              "title": "Second linear + ReLU",
+              "role": "reusable step input",
+              "inside": "hidden_2 = relu(linear_2(hidden_1))"
+            }
+          },
+          {
+            "id": "structure_transition__project_second__output_1",
+            "from": "project_second",
+            "to": "hidden_2",
+            "kind": "data_flow",
+            "carries": [
+
+            ],
+            "grounding": "standard_block_template",
+            "standard_block_ref": "standard_blocks/structure-transition.yaml",
+            "standard_block_id": "structure_transition",
+            "block_instance_ref": "block_instances.structure_transition",
+            "template_fact_ref": "standard_blocks.structure_transition.steps.project_second",
+            "instance_fact_ref": "block_instances.structure_transition.steps.project_second",
+            "template_data_ref": "values.hidden_2",
+            "connection": {
+              "title": "Second linear + ReLU",
+              "role": "reusable step output",
+              "inside": "hidden_2 = relu(linear_2(hidden_1))"
+            }
+          },
+          {
+            "id": "structure_transition__project_final_delta__input_1",
+            "from": "hidden_2",
+            "to": "project_final_delta",
+            "kind": "data_flow",
+            "carries": [
+
+            ],
+            "grounding": "standard_block_template",
+            "standard_block_ref": "standard_blocks/structure-transition.yaml",
+            "standard_block_id": "structure_transition",
+            "block_instance_ref": "block_instances.structure_transition",
+            "template_fact_ref": "standard_blocks.structure_transition.steps.project_final_delta",
+            "instance_fact_ref": "block_instances.structure_transition.steps.project_final_delta",
+            "template_data_ref": "values.hidden_2",
+            "connection": {
+              "title": "Final zero-init projection",
+              "role": "reusable step input",
+              "inside": "transition_delta = linear_3(hidden_2)"
+            }
+          },
+          {
+            "id": "structure_transition__project_final_delta__output_1",
+            "from": "project_final_delta",
+            "to": "transition_delta",
+            "kind": "data_flow",
+            "carries": [
+
+            ],
+            "grounding": "standard_block_template",
+            "standard_block_ref": "standard_blocks/structure-transition.yaml",
+            "standard_block_id": "structure_transition",
+            "block_instance_ref": "block_instances.structure_transition",
+            "template_fact_ref": "standard_blocks.structure_transition.steps.project_final_delta",
+            "instance_fact_ref": "block_instances.structure_transition.steps.project_final_delta",
+            "template_data_ref": "values.transition_delta",
+            "connection": {
+              "title": "Final zero-init projection",
+              "role": "reusable step output",
+              "inside": "transition_delta = linear_3(hidden_2)"
+            }
+          },
+          {
+            "id": "structure_transition__residual_add__input_1",
+            "from": "single_state",
+            "to": "residual_add",
+            "kind": "data_flow",
+            "carries": [
+              "representations.single_features"
+            ],
+            "relation_path": [
+              "relations.ipa_state_enters_structure_transition"
+            ],
+            "grounding": "canonical_relation_path",
+            "standard_block_ref": "standard_blocks/structure-transition.yaml",
+            "standard_block_id": "structure_transition",
+            "block_instance_ref": "block_instances.structure_transition",
+            "template_fact_ref": "standard_blocks.structure_transition.steps.residual_add",
+            "instance_fact_ref": "block_instances.structure_transition.steps.residual_add",
+            "template_data_ref": "ports.single_state",
+            "connection": {
+              "title": "Add transition residual",
+              "role": "reusable step input",
+              "inside": "residual_single = single_state + transition_delta"
+            }
+          },
+          {
+            "id": "structure_transition__residual_add__input_2",
+            "from": "transition_delta",
+            "to": "residual_add",
+            "kind": "data_flow",
+            "carries": [
+
+            ],
+            "grounding": "standard_block_template",
+            "standard_block_ref": "standard_blocks/structure-transition.yaml",
+            "standard_block_id": "structure_transition",
+            "block_instance_ref": "block_instances.structure_transition",
+            "template_fact_ref": "standard_blocks.structure_transition.steps.residual_add",
+            "instance_fact_ref": "block_instances.structure_transition.steps.residual_add",
+            "template_data_ref": "values.transition_delta",
+            "connection": {
+              "title": "Add transition residual",
+              "role": "reusable step input",
+              "inside": "residual_single = single_state + transition_delta"
+            }
+          },
+          {
+            "id": "structure_transition__residual_add__output_1",
+            "from": "residual_add",
+            "to": "residual_single",
+            "kind": "data_flow",
+            "carries": [
+
+            ],
+            "grounding": "standard_block_template",
+            "standard_block_ref": "standard_blocks/structure-transition.yaml",
+            "standard_block_id": "structure_transition",
+            "block_instance_ref": "block_instances.structure_transition",
+            "template_fact_ref": "standard_blocks.structure_transition.steps.residual_add",
+            "instance_fact_ref": "block_instances.structure_transition.steps.residual_add",
+            "template_data_ref": "values.residual_single",
+            "connection": {
+              "title": "Add transition residual",
+              "role": "reusable step output",
+              "inside": "residual_single = single_state + transition_delta"
+            }
+          },
+          {
+            "id": "structure_transition__dropout_layer_norm__input_1",
+            "from": "residual_single",
+            "to": "dropout_layer_norm",
+            "kind": "data_flow",
+            "carries": [
+
+            ],
+            "grounding": "standard_block_template",
+            "standard_block_ref": "standard_blocks/structure-transition.yaml",
+            "standard_block_id": "structure_transition",
+            "block_instance_ref": "block_instances.structure_transition",
+            "template_fact_ref": "standard_blocks.structure_transition.steps.dropout_layer_norm",
+            "instance_fact_ref": "block_instances.structure_transition.steps.dropout_layer_norm",
+            "template_data_ref": "values.residual_single",
+            "connection": {
+              "title": "Dropout and LayerNorm",
+              "role": "reusable step input",
+              "inside": "updated_single_state = layer_norm(dropout(residual_single))"
+            }
+          },
+          {
+            "id": "structure_transition__dropout_layer_norm__output_1",
+            "from": "dropout_layer_norm",
+            "to": "updated_single_state",
+            "kind": "state_update",
+            "carries": [
+              "representations.single_features"
+            ],
+            "relation_path": [
+              "relations.structure_transition_produces_single_state"
+            ],
+            "grounding": "canonical_relation_path",
+            "standard_block_ref": "standard_blocks/structure-transition.yaml",
+            "standard_block_id": "structure_transition",
+            "block_instance_ref": "block_instances.structure_transition",
+            "template_fact_ref": "standard_blocks.structure_transition.steps.dropout_layer_norm",
+            "instance_fact_ref": "block_instances.structure_transition.steps.dropout_layer_norm",
+            "template_data_ref": "ports.updated_single_state",
+            "connection": {
+              "title": "Dropout and LayerNorm",
+              "role": "reusable step output",
+              "inside": "updated_single_state = layer_norm(dropout(residual_single))"
+            }
+          }
+        ],
+        "projectionMode": "standard_block_template",
+        "standardBlockRef": "standard_blocks/structure-transition.yaml",
+        "standardBlockId": "structure_transition",
+        "blockInstanceRef": "block_instances.structure_transition",
+        "variant": "three_linear_residual_dropout_norm",
+        "variantLabel": "Three-linear residual + dropout/norm",
+        "useScope": "whole_module",
+        "conformance": "exact",
+        "shapeParameters": {
+          "num_layers": 1,
+          "b": "B",
+          "n": "N",
+          "c_s": 384
+        },
+        "shapeParameterSources": {
+          "num_layers": {
+            "kind": "literal"
+          },
+          "b": {
+            "kind": "boundary",
+            "portRef": "ports.single_state",
+            "representationRef": "representations.single_features"
+          },
+          "n": {
+            "kind": "boundary",
+            "portRef": "ports.single_state",
+            "representationRef": "representations.single_features"
+          },
+          "c_s": {
+            "kind": "boundary",
+            "portRef": "ports.single_state",
+            "representationRef": "representations.single_features"
+          }
+        },
+        "pseudocode": [
+          {
+            "id": "project_first",
+            "templateFactRef": "standard_blocks.structure_transition.steps.project_first",
+            "instanceFactRef": "block_instances.structure_transition.steps.project_first",
+            "label": "First linear + ReLU",
+            "operation": "linear_relu",
+            "code": "hidden_1 = relu(linear_1(single_state))",
+            "tex": "h^{(1)}_i = ReLU(W_1 s_i)",
+            "inputs": [
+              "ports.single_state"
+            ],
+            "outputs": [
+              "values.hidden_1"
+            ],
+            "codeBindings": [
+              {
+                "lexeme": "single_state",
+                "access": "read",
+                "localRef": "ports.single_state",
+                "templateFactRef": "standard_blocks.structure_transition.ports.single_state",
+                "instanceFactRef": "block_instances.structure_transition.ports.single_state",
+                "occurrences": [
+                  {
+                    "start": 25,
+                    "end": 37
+                  }
+                ]
+              },
+              {
+                "lexeme": "hidden_1",
+                "access": "write",
+                "localRef": "values.hidden_1",
+                "templateFactRef": "standard_blocks.structure_transition.values.hidden_1",
+                "instanceFactRef": "block_instances.structure_transition.values.hidden_1",
+                "occurrences": [
+                  {
+                    "start": 0,
+                    "end": 8
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "id": "project_second",
+            "templateFactRef": "standard_blocks.structure_transition.steps.project_second",
+            "instanceFactRef": "block_instances.structure_transition.steps.project_second",
+            "label": "Second linear + ReLU",
+            "operation": "linear_relu",
+            "code": "hidden_2 = relu(linear_2(hidden_1))",
+            "tex": "h^{(2)}_i = ReLU(W_2 h^{(1)}_i)",
+            "inputs": [
+              "values.hidden_1"
+            ],
+            "outputs": [
+              "values.hidden_2"
+            ],
+            "codeBindings": [
+              {
+                "lexeme": "hidden_1",
+                "access": "read",
+                "localRef": "values.hidden_1",
+                "templateFactRef": "standard_blocks.structure_transition.values.hidden_1",
+                "instanceFactRef": "block_instances.structure_transition.values.hidden_1",
+                "occurrences": [
+                  {
+                    "start": 25,
+                    "end": 33
+                  }
+                ]
+              },
+              {
+                "lexeme": "hidden_2",
+                "access": "write",
+                "localRef": "values.hidden_2",
+                "templateFactRef": "standard_blocks.structure_transition.values.hidden_2",
+                "instanceFactRef": "block_instances.structure_transition.values.hidden_2",
+                "occurrences": [
+                  {
+                    "start": 0,
+                    "end": 8
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "id": "project_final_delta",
+            "templateFactRef": "standard_blocks.structure_transition.steps.project_final_delta",
+            "instanceFactRef": "block_instances.structure_transition.steps.project_final_delta",
+            "label": "Final zero-init projection",
+            "operation": "linear",
+            "code": "transition_delta = linear_3(hidden_2)",
+            "tex": "delta s_i = W_3 h^{(2)}_i",
+            "inputs": [
+              "values.hidden_2"
+            ],
+            "outputs": [
+              "values.transition_delta"
+            ],
+            "codeBindings": [
+              {
+                "lexeme": "hidden_2",
+                "access": "read",
+                "localRef": "values.hidden_2",
+                "templateFactRef": "standard_blocks.structure_transition.values.hidden_2",
+                "instanceFactRef": "block_instances.structure_transition.values.hidden_2",
+                "occurrences": [
+                  {
+                    "start": 28,
+                    "end": 36
+                  }
+                ]
+              },
+              {
+                "lexeme": "transition_delta",
+                "access": "write",
+                "localRef": "values.transition_delta",
+                "templateFactRef": "standard_blocks.structure_transition.values.transition_delta",
+                "instanceFactRef": "block_instances.structure_transition.values.transition_delta",
+                "occurrences": [
+                  {
+                    "start": 0,
+                    "end": 16
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "id": "residual_add",
+            "templateFactRef": "standard_blocks.structure_transition.steps.residual_add",
+            "instanceFactRef": "block_instances.structure_transition.steps.residual_add",
+            "label": "Add transition residual",
+            "operation": "residual_add",
+            "code": "residual_single = single_state + transition_delta",
+            "tex": "s^{res}_i = s_i + delta s_i",
+            "inputs": [
+              "ports.single_state",
+              "values.transition_delta"
+            ],
+            "outputs": [
+              "values.residual_single"
+            ],
+            "codeBindings": [
+              {
+                "lexeme": "single_state",
+                "access": "read",
+                "localRef": "ports.single_state",
+                "templateFactRef": "standard_blocks.structure_transition.ports.single_state",
+                "instanceFactRef": "block_instances.structure_transition.ports.single_state",
+                "occurrences": [
+                  {
+                    "start": 18,
+                    "end": 30
+                  }
+                ]
+              },
+              {
+                "lexeme": "transition_delta",
+                "access": "read",
+                "localRef": "values.transition_delta",
+                "templateFactRef": "standard_blocks.structure_transition.values.transition_delta",
+                "instanceFactRef": "block_instances.structure_transition.values.transition_delta",
+                "occurrences": [
+                  {
+                    "start": 33,
+                    "end": 49
+                  }
+                ]
+              },
+              {
+                "lexeme": "residual_single",
+                "access": "write",
+                "localRef": "values.residual_single",
+                "templateFactRef": "standard_blocks.structure_transition.values.residual_single",
+                "instanceFactRef": "block_instances.structure_transition.values.residual_single",
+                "occurrences": [
+                  {
+                    "start": 0,
+                    "end": 15
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "id": "dropout_layer_norm",
+            "templateFactRef": "standard_blocks.structure_transition.steps.dropout_layer_norm",
+            "instanceFactRef": "block_instances.structure_transition.steps.dropout_layer_norm",
+            "label": "Dropout and LayerNorm",
+            "operation": "dropout_layer_norm",
+            "code": "updated_single_state = layer_norm(dropout(residual_single))",
+            "tex": "s'_i = LayerNorm(Dropout(s^{res}_i))",
+            "inputs": [
+              "values.residual_single"
+            ],
+            "outputs": [
+              "ports.updated_single_state"
+            ],
+            "codeBindings": [
+              {
+                "lexeme": "residual_single",
+                "access": "read",
+                "localRef": "values.residual_single",
+                "templateFactRef": "standard_blocks.structure_transition.values.residual_single",
+                "instanceFactRef": "block_instances.structure_transition.values.residual_single",
+                "occurrences": [
+                  {
+                    "start": 42,
+                    "end": 57
+                  }
+                ]
+              },
+              {
+                "lexeme": "updated_single_state",
+                "access": "write",
+                "localRef": "ports.updated_single_state",
+                "templateFactRef": "standard_blocks.structure_transition.ports.updated_single_state",
+                "instanceFactRef": "block_instances.structure_transition.ports.updated_single_state",
+                "occurrences": [
+                  {
+                    "start": 0,
+                    "end": 20
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "id": "genie3_latent_structure_transition_internals",
+        "kind": "standard_block_instance",
+        "title": "Genie 3 Latent Structure Transition Internals",
+        "summary": "The latent transformer reuses the same StructureTransition implementation after reduced-IPA residual dropout and LayerNorm; the surrounding latent path then masks padded tokens.",
+        "parent": "latent_transformer",
+        "subject_ref": "modules.latent_single_transition",
+        "expansion_depth": 0,
+        "block_instance_ref": "block_instances.latent_structure_transition",
+        "grid": {
+          "columns": 7,
+          "rows": 3,
+          "column_sizing": "content",
+          "col_gap": 28,
+          "row_gap": 24
+        },
+        "nodes": [
+          {
+            "id": "single_state",
+            "label": "single state",
+            "role": "post-IPA single/token representation entering the transition MLP",
+            "col": 1,
+            "row": 2,
+            "prominence": "secondary",
+            "treatment": "compact",
+            "standard_block_ref": "standard_blocks/structure-transition.yaml",
+            "standard_block_id": "structure_transition",
+            "block_instance_ref": "block_instances.latent_structure_transition",
+            "template_fact_ref": "standard_blocks.structure_transition.ports.single_state",
+            "instance_fact_ref": "block_instances.latent_structure_transition.ports.single_state",
+            "kind": "representation",
+            "rep_ref": "single_features",
+            "shape": "B x N x 384",
+            "resolved_shape": {
+              "kind": "tensor",
+              "axes": [
+                {
+                  "id": "batch",
+                  "dimension": "B"
+                },
+                {
+                  "id": "token",
+                  "dimension": "N"
+                },
+                {
+                  "id": "single_channel",
+                  "dimension": 384
+                }
+              ],
+              "label": "B x N x 384"
+            },
+            "shape_status": "resolved",
+            "scale": "token",
+            "glyph": "single",
+            "flow_family": "single",
+            "notation": "s",
+            "port_ref": "ports.single_state"
+          },
+          {
+            "id": "project_first",
+            "label": "First linear + ReLU",
+            "role": "first same-width projection inside each structure-transition layer",
+            "col": 2,
+            "row": 2,
+            "prominence": "primary",
+            "treatment": "compact",
+            "standard_block_ref": "standard_blocks/structure-transition.yaml",
+            "standard_block_id": "structure_transition",
+            "block_instance_ref": "block_instances.latent_structure_transition",
+            "template_fact_ref": "standard_blocks.structure_transition.steps.project_first",
+            "instance_fact_ref": "block_instances.latent_structure_transition.steps.project_first",
+            "kind": "operation",
+            "scale": "operation",
+            "detail": "linear_relu",
+            "code": "hidden_1 = relu(linear_1(single_state))",
+            "tex": "h^{(1)}_i = ReLU(W_1 s_i)",
+            "operation": "linear_relu"
+          },
+          {
+            "id": "hidden_1",
+            "label": "first hidden state",
+            "col": 3,
+            "row": 2,
+            "prominence": "context",
+            "treatment": "compact",
+            "standard_block_ref": "standard_blocks/structure-transition.yaml",
+            "standard_block_id": "structure_transition",
+            "block_instance_ref": "block_instances.latent_structure_transition",
+            "template_fact_ref": "standard_blocks.structure_transition.values.hidden_1",
+            "instance_fact_ref": "block_instances.latent_structure_transition.values.hidden_1",
+            "kind": "representation",
+            "shape": "B x N x 384",
+            "resolved_shape": {
+              "kind": "tensor",
+              "axes": [
+                {
+                  "id": "batch",
+                  "dimension": "B"
+                },
+                {
+                  "id": "token",
+                  "dimension": "N"
+                },
+                {
+                  "id": "single_channel",
+                  "dimension": 384
+                }
+              ],
+              "label": "B x N x 384"
+            },
+            "shape_status": "resolved",
+            "scale": "item",
+            "glyph": "single",
+            "flow_family": "single",
+            "notation": "h_1"
+          },
+          {
+            "id": "project_second",
+            "label": "Second linear + ReLU",
+            "role": "second same-width projection inside each structure-transition layer",
+            "col": 4,
+            "row": 2,
+            "prominence": "primary",
+            "treatment": "compact",
+            "standard_block_ref": "standard_blocks/structure-transition.yaml",
+            "standard_block_id": "structure_transition",
+            "block_instance_ref": "block_instances.latent_structure_transition",
+            "template_fact_ref": "standard_blocks.structure_transition.steps.project_second",
+            "instance_fact_ref": "block_instances.latent_structure_transition.steps.project_second",
+            "kind": "operation",
+            "scale": "operation",
+            "detail": "linear_relu",
+            "code": "hidden_2 = relu(linear_2(hidden_1))",
+            "tex": "h^{(2)}_i = ReLU(W_2 h^{(1)}_i)",
+            "operation": "linear_relu"
+          },
+          {
+            "id": "hidden_2",
+            "label": "second hidden state",
+            "col": 5,
+            "row": 2,
+            "prominence": "context",
+            "treatment": "compact",
+            "standard_block_ref": "standard_blocks/structure-transition.yaml",
+            "standard_block_id": "structure_transition",
+            "block_instance_ref": "block_instances.latent_structure_transition",
+            "template_fact_ref": "standard_blocks.structure_transition.values.hidden_2",
+            "instance_fact_ref": "block_instances.latent_structure_transition.values.hidden_2",
+            "kind": "representation",
+            "shape": "B x N x 384",
+            "resolved_shape": {
+              "kind": "tensor",
+              "axes": [
+                {
+                  "id": "batch",
+                  "dimension": "B"
+                },
+                {
+                  "id": "token",
+                  "dimension": "N"
+                },
+                {
+                  "id": "single_channel",
+                  "dimension": 384
+                }
+              ],
+              "label": "B x N x 384"
+            },
+            "shape_status": "resolved",
+            "scale": "item",
+            "glyph": "single",
+            "flow_family": "single",
+            "notation": "h_2"
+          },
+          {
+            "id": "project_final_delta",
+            "label": "Final zero-init projection",
+            "role": "final same-width projection, initialized as a near-zero residual update in AF2-style implementations",
+            "col": 6,
+            "row": 2,
+            "prominence": "primary",
+            "treatment": "compact",
+            "standard_block_ref": "standard_blocks/structure-transition.yaml",
+            "standard_block_id": "structure_transition",
+            "block_instance_ref": "block_instances.latent_structure_transition",
+            "template_fact_ref": "standard_blocks.structure_transition.steps.project_final_delta",
+            "instance_fact_ref": "block_instances.latent_structure_transition.steps.project_final_delta",
+            "kind": "operation",
+            "scale": "operation",
+            "detail": "linear",
+            "code": "transition_delta = linear_3(hidden_2)",
+            "tex": "delta s_i = W_3 h^{(2)}_i",
+            "operation": "linear"
+          },
+          {
+            "id": "transition_delta",
+            "label": "transition delta",
+            "col": 7,
+            "row": 2,
+            "prominence": "context",
+            "treatment": "compact",
+            "standard_block_ref": "standard_blocks/structure-transition.yaml",
+            "standard_block_id": "structure_transition",
+            "block_instance_ref": "block_instances.latent_structure_transition",
+            "template_fact_ref": "standard_blocks.structure_transition.values.transition_delta",
+            "instance_fact_ref": "block_instances.latent_structure_transition.values.transition_delta",
+            "kind": "representation",
+            "shape": "B x N x 384",
+            "resolved_shape": {
+              "kind": "tensor",
+              "axes": [
+                {
+                  "id": "batch",
+                  "dimension": "B"
+                },
+                {
+                  "id": "token",
+                  "dimension": "N"
+                },
+                {
+                  "id": "single_channel",
+                  "dimension": 384
+                }
+              ],
+              "label": "B x N x 384"
+            },
+            "shape_status": "resolved",
+            "scale": "item",
+            "glyph": "single",
+            "flow_family": "single",
+            "notation": "delta_s"
+          },
+          {
+            "id": "residual_add",
+            "label": "Add transition residual",
+            "role": "preserve the incoming single state while adding the transition MLP update",
+            "col": 4,
+            "row": 1,
+            "prominence": "primary",
+            "treatment": "compact",
+            "standard_block_ref": "standard_blocks/structure-transition.yaml",
+            "standard_block_id": "structure_transition",
+            "block_instance_ref": "block_instances.latent_structure_transition",
+            "template_fact_ref": "standard_blocks.structure_transition.steps.residual_add",
+            "instance_fact_ref": "block_instances.latent_structure_transition.steps.residual_add",
+            "kind": "operation",
+            "scale": "operation",
+            "detail": "residual_add",
+            "code": "residual_single = single_state + transition_delta",
+            "tex": "s^{res}_i = s_i + delta s_i",
+            "operation": "residual_add"
+          },
+          {
+            "id": "residual_single",
+            "label": "residual single state",
+            "col": 5,
+            "row": 1,
+            "prominence": "context",
+            "treatment": "compact",
+            "standard_block_ref": "standard_blocks/structure-transition.yaml",
+            "standard_block_id": "structure_transition",
+            "block_instance_ref": "block_instances.latent_structure_transition",
+            "template_fact_ref": "standard_blocks.structure_transition.values.residual_single",
+            "instance_fact_ref": "block_instances.latent_structure_transition.values.residual_single",
+            "kind": "representation",
+            "shape": "B x N x 384",
+            "resolved_shape": {
+              "kind": "tensor",
+              "axes": [
+                {
+                  "id": "batch",
+                  "dimension": "B"
+                },
+                {
+                  "id": "token",
+                  "dimension": "N"
+                },
+                {
+                  "id": "single_channel",
+                  "dimension": 384
+                }
+              ],
+              "label": "B x N x 384"
+            },
+            "shape_status": "resolved",
+            "scale": "item",
+            "glyph": "single",
+            "flow_family": "single",
+            "notation": "s_res"
+          },
+          {
+            "id": "dropout_layer_norm",
+            "label": "Dropout and LayerNorm",
+            "role": "normalize the residual transition state before frame update or the next layer",
+            "col": 6,
+            "row": 1,
+            "prominence": "primary",
+            "treatment": "compact",
+            "standard_block_ref": "standard_blocks/structure-transition.yaml",
+            "standard_block_id": "structure_transition",
+            "block_instance_ref": "block_instances.latent_structure_transition",
+            "template_fact_ref": "standard_blocks.structure_transition.steps.dropout_layer_norm",
+            "instance_fact_ref": "block_instances.latent_structure_transition.steps.dropout_layer_norm",
+            "kind": "operation",
+            "scale": "operation",
+            "detail": "dropout_layer_norm",
+            "code": "updated_single_state = layer_norm(dropout(residual_single))",
+            "tex": "s'_i = LayerNorm(Dropout(s^{res}_i))",
+            "operation": "dropout_layer_norm"
+          },
+          {
+            "id": "updated_single_state",
+            "label": "updated single state",
+            "role": "transition-updated single/token representation after dropout and LayerNorm",
+            "col": 7,
+            "row": 1,
+            "prominence": "secondary",
+            "treatment": "compact",
+            "standard_block_ref": "standard_blocks/structure-transition.yaml",
+            "standard_block_id": "structure_transition",
+            "block_instance_ref": "block_instances.latent_structure_transition",
+            "template_fact_ref": "standard_blocks.structure_transition.ports.updated_single_state",
+            "instance_fact_ref": "block_instances.latent_structure_transition.ports.updated_single_state",
+            "kind": "representation",
+            "rep_ref": "single_features",
+            "shape": "B x N x 384",
+            "resolved_shape": {
+              "kind": "tensor",
+              "axes": [
+                {
+                  "id": "batch",
+                  "dimension": "B"
+                },
+                {
+                  "id": "token",
+                  "dimension": "N"
+                },
+                {
+                  "id": "single_channel",
+                  "dimension": 384
+                }
+              ],
+              "label": "B x N x 384"
+            },
+            "shape_status": "resolved",
+            "scale": "token",
+            "glyph": "single",
+            "flow_family": "single",
+            "notation": "s'",
+            "port_ref": "ports.updated_single_state"
+          }
+        ],
+        "edges": [
+          {
+            "id": "latent_structure_transition__project_first__input_1",
+            "from": "single_state",
+            "to": "project_first",
+            "kind": "data_flow",
+            "carries": [
+              "representations.single_features"
+            ],
+            "relation_path": [
+              "relations.single_after_residual_norm_enters_latent_transition"
+            ],
+            "grounding": "canonical_relation_path",
+            "standard_block_ref": "standard_blocks/structure-transition.yaml",
+            "standard_block_id": "structure_transition",
+            "block_instance_ref": "block_instances.latent_structure_transition",
+            "template_fact_ref": "standard_blocks.structure_transition.steps.project_first",
+            "instance_fact_ref": "block_instances.latent_structure_transition.steps.project_first",
+            "template_data_ref": "ports.single_state",
+            "connection": {
+              "title": "First linear + ReLU",
+              "role": "reusable step input",
+              "inside": "hidden_1 = relu(linear_1(single_state))"
+            }
+          },
+          {
+            "id": "latent_structure_transition__project_first__output_1",
+            "from": "project_first",
+            "to": "hidden_1",
+            "kind": "data_flow",
+            "carries": [
+
+            ],
+            "grounding": "standard_block_template",
+            "standard_block_ref": "standard_blocks/structure-transition.yaml",
+            "standard_block_id": "structure_transition",
+            "block_instance_ref": "block_instances.latent_structure_transition",
+            "template_fact_ref": "standard_blocks.structure_transition.steps.project_first",
+            "instance_fact_ref": "block_instances.latent_structure_transition.steps.project_first",
+            "template_data_ref": "values.hidden_1",
+            "connection": {
+              "title": "First linear + ReLU",
+              "role": "reusable step output",
+              "inside": "hidden_1 = relu(linear_1(single_state))"
+            }
+          },
+          {
+            "id": "latent_structure_transition__project_second__input_1",
+            "from": "hidden_1",
+            "to": "project_second",
+            "kind": "data_flow",
+            "carries": [
+
+            ],
+            "grounding": "standard_block_template",
+            "standard_block_ref": "standard_blocks/structure-transition.yaml",
+            "standard_block_id": "structure_transition",
+            "block_instance_ref": "block_instances.latent_structure_transition",
+            "template_fact_ref": "standard_blocks.structure_transition.steps.project_second",
+            "instance_fact_ref": "block_instances.latent_structure_transition.steps.project_second",
+            "template_data_ref": "values.hidden_1",
+            "connection": {
+              "title": "Second linear + ReLU",
+              "role": "reusable step input",
+              "inside": "hidden_2 = relu(linear_2(hidden_1))"
+            }
+          },
+          {
+            "id": "latent_structure_transition__project_second__output_1",
+            "from": "project_second",
+            "to": "hidden_2",
+            "kind": "data_flow",
+            "carries": [
+
+            ],
+            "grounding": "standard_block_template",
+            "standard_block_ref": "standard_blocks/structure-transition.yaml",
+            "standard_block_id": "structure_transition",
+            "block_instance_ref": "block_instances.latent_structure_transition",
+            "template_fact_ref": "standard_blocks.structure_transition.steps.project_second",
+            "instance_fact_ref": "block_instances.latent_structure_transition.steps.project_second",
+            "template_data_ref": "values.hidden_2",
+            "connection": {
+              "title": "Second linear + ReLU",
+              "role": "reusable step output",
+              "inside": "hidden_2 = relu(linear_2(hidden_1))"
+            }
+          },
+          {
+            "id": "latent_structure_transition__project_final_delta__input_1",
+            "from": "hidden_2",
+            "to": "project_final_delta",
+            "kind": "data_flow",
+            "carries": [
+
+            ],
+            "grounding": "standard_block_template",
+            "standard_block_ref": "standard_blocks/structure-transition.yaml",
+            "standard_block_id": "structure_transition",
+            "block_instance_ref": "block_instances.latent_structure_transition",
+            "template_fact_ref": "standard_blocks.structure_transition.steps.project_final_delta",
+            "instance_fact_ref": "block_instances.latent_structure_transition.steps.project_final_delta",
+            "template_data_ref": "values.hidden_2",
+            "connection": {
+              "title": "Final zero-init projection",
+              "role": "reusable step input",
+              "inside": "transition_delta = linear_3(hidden_2)"
+            }
+          },
+          {
+            "id": "latent_structure_transition__project_final_delta__output_1",
+            "from": "project_final_delta",
+            "to": "transition_delta",
+            "kind": "data_flow",
+            "carries": [
+
+            ],
+            "grounding": "standard_block_template",
+            "standard_block_ref": "standard_blocks/structure-transition.yaml",
+            "standard_block_id": "structure_transition",
+            "block_instance_ref": "block_instances.latent_structure_transition",
+            "template_fact_ref": "standard_blocks.structure_transition.steps.project_final_delta",
+            "instance_fact_ref": "block_instances.latent_structure_transition.steps.project_final_delta",
+            "template_data_ref": "values.transition_delta",
+            "connection": {
+              "title": "Final zero-init projection",
+              "role": "reusable step output",
+              "inside": "transition_delta = linear_3(hidden_2)"
+            }
+          },
+          {
+            "id": "latent_structure_transition__residual_add__input_1",
+            "from": "single_state",
+            "to": "residual_add",
+            "kind": "data_flow",
+            "carries": [
+              "representations.single_features"
+            ],
+            "relation_path": [
+              "relations.single_after_residual_norm_enters_latent_transition"
+            ],
+            "grounding": "canonical_relation_path",
+            "standard_block_ref": "standard_blocks/structure-transition.yaml",
+            "standard_block_id": "structure_transition",
+            "block_instance_ref": "block_instances.latent_structure_transition",
+            "template_fact_ref": "standard_blocks.structure_transition.steps.residual_add",
+            "instance_fact_ref": "block_instances.latent_structure_transition.steps.residual_add",
+            "template_data_ref": "ports.single_state",
+            "connection": {
+              "title": "Add transition residual",
+              "role": "reusable step input",
+              "inside": "residual_single = single_state + transition_delta"
+            }
+          },
+          {
+            "id": "latent_structure_transition__residual_add__input_2",
+            "from": "transition_delta",
+            "to": "residual_add",
+            "kind": "data_flow",
+            "carries": [
+
+            ],
+            "grounding": "standard_block_template",
+            "standard_block_ref": "standard_blocks/structure-transition.yaml",
+            "standard_block_id": "structure_transition",
+            "block_instance_ref": "block_instances.latent_structure_transition",
+            "template_fact_ref": "standard_blocks.structure_transition.steps.residual_add",
+            "instance_fact_ref": "block_instances.latent_structure_transition.steps.residual_add",
+            "template_data_ref": "values.transition_delta",
+            "connection": {
+              "title": "Add transition residual",
+              "role": "reusable step input",
+              "inside": "residual_single = single_state + transition_delta"
+            }
+          },
+          {
+            "id": "latent_structure_transition__residual_add__output_1",
+            "from": "residual_add",
+            "to": "residual_single",
+            "kind": "data_flow",
+            "carries": [
+
+            ],
+            "grounding": "standard_block_template",
+            "standard_block_ref": "standard_blocks/structure-transition.yaml",
+            "standard_block_id": "structure_transition",
+            "block_instance_ref": "block_instances.latent_structure_transition",
+            "template_fact_ref": "standard_blocks.structure_transition.steps.residual_add",
+            "instance_fact_ref": "block_instances.latent_structure_transition.steps.residual_add",
+            "template_data_ref": "values.residual_single",
+            "connection": {
+              "title": "Add transition residual",
+              "role": "reusable step output",
+              "inside": "residual_single = single_state + transition_delta"
+            }
+          },
+          {
+            "id": "latent_structure_transition__dropout_layer_norm__input_1",
+            "from": "residual_single",
+            "to": "dropout_layer_norm",
+            "kind": "data_flow",
+            "carries": [
+
+            ],
+            "grounding": "standard_block_template",
+            "standard_block_ref": "standard_blocks/structure-transition.yaml",
+            "standard_block_id": "structure_transition",
+            "block_instance_ref": "block_instances.latent_structure_transition",
+            "template_fact_ref": "standard_blocks.structure_transition.steps.dropout_layer_norm",
+            "instance_fact_ref": "block_instances.latent_structure_transition.steps.dropout_layer_norm",
+            "template_data_ref": "values.residual_single",
+            "connection": {
+              "title": "Dropout and LayerNorm",
+              "role": "reusable step input",
+              "inside": "updated_single_state = layer_norm(dropout(residual_single))"
+            }
+          },
+          {
+            "id": "latent_structure_transition__dropout_layer_norm__output_1",
+            "from": "dropout_layer_norm",
+            "to": "updated_single_state",
+            "kind": "state_update",
+            "carries": [
+              "representations.single_features"
+            ],
+            "relation_path": [
+              "relations.latent_single_transition_produces_single_state"
+            ],
+            "grounding": "canonical_relation_path",
+            "standard_block_ref": "standard_blocks/structure-transition.yaml",
+            "standard_block_id": "structure_transition",
+            "block_instance_ref": "block_instances.latent_structure_transition",
+            "template_fact_ref": "standard_blocks.structure_transition.steps.dropout_layer_norm",
+            "instance_fact_ref": "block_instances.latent_structure_transition.steps.dropout_layer_norm",
+            "template_data_ref": "ports.updated_single_state",
+            "connection": {
+              "title": "Dropout and LayerNorm",
+              "role": "reusable step output",
+              "inside": "updated_single_state = layer_norm(dropout(residual_single))"
+            }
+          }
+        ],
+        "projectionMode": "standard_block_template",
+        "standardBlockRef": "standard_blocks/structure-transition.yaml",
+        "standardBlockId": "structure_transition",
+        "blockInstanceRef": "block_instances.latent_structure_transition",
+        "variant": "three_linear_residual_dropout_norm",
+        "variantLabel": "Three-linear residual + dropout/norm",
+        "useScope": "whole_module",
+        "conformance": "wrapped",
+        "differenceSummary": "The latent transformer instantiates the same StructureTransition module, then applies an output token mask outside the transition block.",
+        "shapeParameters": {
+          "num_layers": 1,
+          "b": "B",
+          "n": "N",
+          "c_s": 384
+        },
+        "shapeParameterSources": {
+          "num_layers": {
+            "kind": "literal"
+          },
+          "b": {
+            "kind": "boundary",
+            "portRef": "ports.single_state",
+            "representationRef": "representations.single_features"
+          },
+          "n": {
+            "kind": "boundary",
+            "portRef": "ports.single_state",
+            "representationRef": "representations.single_features"
+          },
+          "c_s": {
+            "kind": "boundary",
+            "portRef": "ports.single_state",
+            "representationRef": "representations.single_features"
+          }
+        },
+        "pseudocode": [
+          {
+            "id": "project_first",
+            "templateFactRef": "standard_blocks.structure_transition.steps.project_first",
+            "instanceFactRef": "block_instances.latent_structure_transition.steps.project_first",
+            "label": "First linear + ReLU",
+            "operation": "linear_relu",
+            "code": "hidden_1 = relu(linear_1(single_state))",
+            "tex": "h^{(1)}_i = ReLU(W_1 s_i)",
+            "inputs": [
+              "ports.single_state"
+            ],
+            "outputs": [
+              "values.hidden_1"
+            ],
+            "codeBindings": [
+              {
+                "lexeme": "single_state",
+                "access": "read",
+                "localRef": "ports.single_state",
+                "templateFactRef": "standard_blocks.structure_transition.ports.single_state",
+                "instanceFactRef": "block_instances.latent_structure_transition.ports.single_state",
+                "occurrences": [
+                  {
+                    "start": 25,
+                    "end": 37
+                  }
+                ]
+              },
+              {
+                "lexeme": "hidden_1",
+                "access": "write",
+                "localRef": "values.hidden_1",
+                "templateFactRef": "standard_blocks.structure_transition.values.hidden_1",
+                "instanceFactRef": "block_instances.latent_structure_transition.values.hidden_1",
+                "occurrences": [
+                  {
+                    "start": 0,
+                    "end": 8
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "id": "project_second",
+            "templateFactRef": "standard_blocks.structure_transition.steps.project_second",
+            "instanceFactRef": "block_instances.latent_structure_transition.steps.project_second",
+            "label": "Second linear + ReLU",
+            "operation": "linear_relu",
+            "code": "hidden_2 = relu(linear_2(hidden_1))",
+            "tex": "h^{(2)}_i = ReLU(W_2 h^{(1)}_i)",
+            "inputs": [
+              "values.hidden_1"
+            ],
+            "outputs": [
+              "values.hidden_2"
+            ],
+            "codeBindings": [
+              {
+                "lexeme": "hidden_1",
+                "access": "read",
+                "localRef": "values.hidden_1",
+                "templateFactRef": "standard_blocks.structure_transition.values.hidden_1",
+                "instanceFactRef": "block_instances.latent_structure_transition.values.hidden_1",
+                "occurrences": [
+                  {
+                    "start": 25,
+                    "end": 33
+                  }
+                ]
+              },
+              {
+                "lexeme": "hidden_2",
+                "access": "write",
+                "localRef": "values.hidden_2",
+                "templateFactRef": "standard_blocks.structure_transition.values.hidden_2",
+                "instanceFactRef": "block_instances.latent_structure_transition.values.hidden_2",
+                "occurrences": [
+                  {
+                    "start": 0,
+                    "end": 8
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "id": "project_final_delta",
+            "templateFactRef": "standard_blocks.structure_transition.steps.project_final_delta",
+            "instanceFactRef": "block_instances.latent_structure_transition.steps.project_final_delta",
+            "label": "Final zero-init projection",
+            "operation": "linear",
+            "code": "transition_delta = linear_3(hidden_2)",
+            "tex": "delta s_i = W_3 h^{(2)}_i",
+            "inputs": [
+              "values.hidden_2"
+            ],
+            "outputs": [
+              "values.transition_delta"
+            ],
+            "codeBindings": [
+              {
+                "lexeme": "hidden_2",
+                "access": "read",
+                "localRef": "values.hidden_2",
+                "templateFactRef": "standard_blocks.structure_transition.values.hidden_2",
+                "instanceFactRef": "block_instances.latent_structure_transition.values.hidden_2",
+                "occurrences": [
+                  {
+                    "start": 28,
+                    "end": 36
+                  }
+                ]
+              },
+              {
+                "lexeme": "transition_delta",
+                "access": "write",
+                "localRef": "values.transition_delta",
+                "templateFactRef": "standard_blocks.structure_transition.values.transition_delta",
+                "instanceFactRef": "block_instances.latent_structure_transition.values.transition_delta",
+                "occurrences": [
+                  {
+                    "start": 0,
+                    "end": 16
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "id": "residual_add",
+            "templateFactRef": "standard_blocks.structure_transition.steps.residual_add",
+            "instanceFactRef": "block_instances.latent_structure_transition.steps.residual_add",
+            "label": "Add transition residual",
+            "operation": "residual_add",
+            "code": "residual_single = single_state + transition_delta",
+            "tex": "s^{res}_i = s_i + delta s_i",
+            "inputs": [
+              "ports.single_state",
+              "values.transition_delta"
+            ],
+            "outputs": [
+              "values.residual_single"
+            ],
+            "codeBindings": [
+              {
+                "lexeme": "single_state",
+                "access": "read",
+                "localRef": "ports.single_state",
+                "templateFactRef": "standard_blocks.structure_transition.ports.single_state",
+                "instanceFactRef": "block_instances.latent_structure_transition.ports.single_state",
+                "occurrences": [
+                  {
+                    "start": 18,
+                    "end": 30
+                  }
+                ]
+              },
+              {
+                "lexeme": "transition_delta",
+                "access": "read",
+                "localRef": "values.transition_delta",
+                "templateFactRef": "standard_blocks.structure_transition.values.transition_delta",
+                "instanceFactRef": "block_instances.latent_structure_transition.values.transition_delta",
+                "occurrences": [
+                  {
+                    "start": 33,
+                    "end": 49
+                  }
+                ]
+              },
+              {
+                "lexeme": "residual_single",
+                "access": "write",
+                "localRef": "values.residual_single",
+                "templateFactRef": "standard_blocks.structure_transition.values.residual_single",
+                "instanceFactRef": "block_instances.latent_structure_transition.values.residual_single",
+                "occurrences": [
+                  {
+                    "start": 0,
+                    "end": 15
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "id": "dropout_layer_norm",
+            "templateFactRef": "standard_blocks.structure_transition.steps.dropout_layer_norm",
+            "instanceFactRef": "block_instances.latent_structure_transition.steps.dropout_layer_norm",
+            "label": "Dropout and LayerNorm",
+            "operation": "dropout_layer_norm",
+            "code": "updated_single_state = layer_norm(dropout(residual_single))",
+            "tex": "s'_i = LayerNorm(Dropout(s^{res}_i))",
+            "inputs": [
+              "values.residual_single"
+            ],
+            "outputs": [
+              "ports.updated_single_state"
+            ],
+            "codeBindings": [
+              {
+                "lexeme": "residual_single",
+                "access": "read",
+                "localRef": "values.residual_single",
+                "templateFactRef": "standard_blocks.structure_transition.values.residual_single",
+                "instanceFactRef": "block_instances.latent_structure_transition.values.residual_single",
+                "occurrences": [
+                  {
+                    "start": 42,
+                    "end": 57
+                  }
+                ]
+              },
+              {
+                "lexeme": "updated_single_state",
+                "access": "write",
+                "localRef": "ports.updated_single_state",
+                "templateFactRef": "standard_blocks.structure_transition.ports.updated_single_state",
+                "instanceFactRef": "block_instances.latent_structure_transition.ports.updated_single_state",
+                "occurrences": [
+                  {
+                    "start": 0,
+                    "end": 20
                   }
                 ]
               }
