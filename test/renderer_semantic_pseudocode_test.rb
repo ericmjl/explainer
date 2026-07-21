@@ -32,6 +32,8 @@ class RendererSemanticPseudocodeTest < Minitest::Test
       'element.classList.toggle("is-connectivity-muted", dimUnrelated && !focused && !source && !target)'
     assert_includes renderer, "focusNodeOccurrence(nodeId)"
     assert_includes renderer, "applySemanticTraceTransientHighlight([...focusIds])"
+    assert_includes renderer, 'classList.toggle("has-trace-spotlight", hasMatches)'
+    assert_includes renderer, 'line.classList.toggle("is-trace-muted", hasMatches && !matches)'
     assert_includes renderer, "semanticStatementTextParts(statement)"
     assert_includes renderer, "semanticPlainCodeMarkup(segment.text)"
     assert_includes renderer, "semanticOperationLabel(statement.operation)"
@@ -58,6 +60,8 @@ class RendererSemanticPseudocodeTest < Minitest::Test
     assert_includes styles, ".semantic-token-math-fallback"
     assert_includes styles, ".semantic-trace-body.has-mathjax"
     assert_includes styles, ".semantic-trace-line.is-trace-selected"
+    assert_includes styles, ".semantic-trace-list.has-trace-spotlight .semantic-trace-line.is-trace-transient"
+    assert_includes styles, ".semantic-trace-list.has-trace-spotlight .semantic-trace-line.is-trace-muted"
     assert_includes styles, ".semantic-trace-phase"
     assert_includes styles, ".semantic-trace-drill"
     assert_includes styles, ".semantic-code-expression"

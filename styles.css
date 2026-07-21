@@ -2073,6 +2073,12 @@ code {
   outline-offset: 2px;
 }
 
+/* J/K moves both semantic selection and DOM focus. The persistent outer frame
+   is the focus indicator in that state, so do not draw a second inset ring. */
+.arch-node.is-selected-node .arch-node-main:focus-visible {
+  outline: none;
+}
+
 .arch-node:hover,
 .arch-node.is-focused {
   border-color: color-mix(in srgb, var(--accent) 50%, transparent);
@@ -2125,10 +2131,15 @@ code {
 }
 
 .arch-node:focus-visible,
-.mini-summary.is-drilldown:focus-visible,
-.architecture-canvas:focus-visible {
+.mini-summary.is-drilldown:focus-visible {
   outline: 3px solid color-mix(in srgb, var(--accent) 58%, transparent);
   outline-offset: 3px;
+}
+
+/* The canvas receives programmatic focus as a navigation fallback, but it is
+   not itself a control. Focus remains visible on its real controls and nodes. */
+.architecture-canvas:focus {
+  outline: none;
 }
 
 @media (prefers-reduced-motion: no-preference) {
@@ -2964,6 +2975,11 @@ code {
   color: var(--copy);
   cursor: default;
   counter-increment: semantic-trace-line;
+  transition:
+    opacity 120ms ease,
+    border-color 120ms ease,
+    background-color 120ms ease,
+    box-shadow 120ms ease;
 }
 
 .semantic-trace-phase {
@@ -3000,11 +3016,21 @@ code {
 }
 
 .semantic-trace-line:hover,
-.semantic-trace-line:focus-visible,
-.semantic-trace-line.is-trace-transient {
+.semantic-trace-line:focus-visible {
   border-color: color-mix(in srgb, var(--accent) 26%, var(--line));
   background: color-mix(in srgb, var(--accent) 5%, var(--surface-card));
   outline: none;
+}
+
+.semantic-trace-list.has-trace-spotlight .semantic-trace-line.is-trace-transient {
+  opacity: 1;
+  border-color: color-mix(in srgb, var(--accent) 38%, var(--line));
+  background: color-mix(in srgb, var(--accent) 8%, var(--surface-card));
+  box-shadow: inset 3px 0 0 color-mix(in srgb, var(--accent) 82%, transparent);
+}
+
+.semantic-trace-list.has-trace-spotlight .semantic-trace-line.is-trace-muted {
+  opacity: 0.34;
 }
 
 .semantic-trace-line.is-trace-selected {

@@ -1241,16 +1241,39 @@ function activateSemanticInteraction(interaction) {
 
 function clearSemanticTraceTransientHighlight() {
   elements.semanticTraceBody
-    ?.querySelectorAll(".is-trace-transient")
-    .forEach((element) => element.classList.remove("is-trace-transient"));
+    ?.querySelector(".semantic-trace-list")
+    ?.classList.remove("has-trace-spotlight");
+  elements.semanticTraceBody
+    ?.querySelectorAll(".is-trace-transient, .is-trace-muted")
+    .forEach((element) => element.classList.remove("is-trace-transient", "is-trace-muted"));
 }
 
 function applySemanticTraceTransientHighlight(nodeIds) {
   const highlighted = new Set(connectivityNodeIds(nodeIds));
-  elements.semanticTraceBody?.querySelectorAll("[data-semantic-interaction]").forEach((element) => {
+  const interactionElements = [
+    ...(elements.semanticTraceBody?.querySelectorAll("[data-semantic-interaction]") || []),
+  ];
+  interactionElements.forEach((element) => {
     const interaction = semanticTraceInteractions.get(element.dataset.semanticInteraction);
     const matches = interaction?.resolution.nodeIds.some((nodeId) => highlighted.has(nodeId));
     element.classList.toggle("is-trace-transient", Boolean(matches));
+  });
+
+  const lines = [
+    ...(elements.semanticTraceBody?.querySelectorAll(".semantic-trace-line") || []),
+  ];
+  const matchingLines = new Set(lines.filter((line) => (
+    line.classList.contains("is-trace-transient")
+    || Boolean(line.querySelector(".is-trace-transient"))
+  )));
+  const hasMatches = matchingLines.size > 0;
+  elements.semanticTraceBody
+    ?.querySelector(".semantic-trace-list")
+    ?.classList.toggle("has-trace-spotlight", hasMatches);
+  lines.forEach((line) => {
+    const matches = matchingLines.has(line);
+    line.classList.toggle("is-trace-transient", matches);
+    line.classList.toggle("is-trace-muted", hasMatches && !matches);
   });
 }
 
@@ -1861,7 +1884,7 @@ function navigateAlong(direction) {
   if (candidates.length === 0) return;
   if (candidates.length === 1) {
     closeNavMenu();
-    focusNodeOccurrence(candidates[0]);
+    focusNodeOccurrence(candidates[0], { moveDomFocus: true });
     centerOnNode(candidates[0]);
     return;
   }
@@ -1870,7 +1893,7 @@ function navigateAlong(direction) {
 
 function focusFirstVisibleOccurrence() {
   const first = visibleNodes(currentBoard())[0];
-  if (!first || !focusNodeOccurrence(first.id)) return false;
+  if (!first || !focusNodeOccurrence(first.id, { moveDomFocus: true })) return false;
   closeNavMenu();
   centerOnNode(first.id);
   return true;
@@ -1941,7 +1964,7 @@ function confirmNavMenu() {
   const id = navMenuState.candidates[navMenuState.selectedIndex];
   closeNavMenu();
   if (!id) return;
-  focusNodeOccurrence(id);
+  focusNodeOccurrence(id, { moveDomFocus: true });
   centerOnNode(id);
 }
 
@@ -5372,20 +5395,29 @@ function visibleNodes(board) {
   );
 }
 
-function focusNodeOccurrence(nodeId) {
+function focusRenderedNodeOccurrence(nodeId) {
+  const occurrence = elements.moduleLayer.querySelector(`[data-node-id="${CSS.escape(nodeId)}"]`);
+  const focusTarget = occurrence?.matches("button")
+    ? occurrence
+    : occurrence?.querySelector(".arch-node-main");
+  focusTarget?.focus({ preventScroll: true });
+}
+
+function focusNodeOccurrence(nodeId, { moveDomFocus = false } = {}) {
   if (!nodeId) return false;
   const node = visibleNodes(currentBoard()).find((candidate) => candidate.id === nodeId);
   if (!node) return false;
   if (node.kind === "representation") {
     focusRepresentation(node, node.rep_ref ? repsById.get(node.rep_ref) : null);
-    return true;
-  }
-  const module = node.module_ref ? modulesById.get(node.module_ref) : null;
-  if (module) {
-    focusModule(module, node);
   } else {
-    focusOperation(node);
+    const module = node.module_ref ? modulesById.get(node.module_ref) : null;
+    if (module) {
+      focusModule(module, node);
+    } else {
+      focusOperation(node);
+    }
   }
+  if (moveDomFocus) focusRenderedNodeOccurrence(nodeId);
   return true;
 }
 

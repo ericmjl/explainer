@@ -332,6 +332,7 @@ class RendererSemanticPseudocodeBrowserTest < Minitest::Test
     browser.set_window(width: 1440, height: 1000)
     verify_ipa_token_to_graph_and_back(browser, base)
     verify_high_level_call_drilldown(browser, base)
+    verify_keyboard_focus_follows_selection(browser, base)
     verify_keyboard_board_traversal(browser, base)
     verify_dictionary_field_selection(browser, base)
     verify_published_reference_panel(browser, base)
@@ -340,6 +341,45 @@ class RendererSemanticPseudocodeBrowserTest < Minitest::Test
     verify_math_symbols_and_theme(browser, base)
     verify_touch_pinch_zoom(browser, base)
     verify_mobile_board_trace(browser, base)
+  end
+
+  def verify_keyboard_focus_follows_selection(browser, base)
+    browser.navigate("#{base}?arch=genie3&board=structure_decoder")
+    result = wait_for(browser, "J navigation to transfer focus from the old block") do
+      browser.execute(<<~JS)
+        const previous = document.querySelector('[data-node-id="structure_transition"] .arch-node-main');
+        const next = document.querySelector('[data-node-id="single_after_ipa"]');
+        if (!previous || !next) return null;
+        previous.focus();
+        previous.click();
+        document.dispatchEvent(new KeyboardEvent('keydown', {
+          key: 'j',
+          bubbles: true,
+          cancelable: true,
+        }));
+        const focusedOccurrence = document.activeElement?.closest?.('[data-node-id]');
+        return {
+          selected: next.classList.contains('is-selected-node'),
+          activeNodeId: focusedOccurrence?.dataset.nodeId || '',
+          previousStillFocused: document.activeElement === previous,
+          previousOutline: getComputedStyle(previous).outlineStyle,
+        };
+      JS
+    end
+    assert result["selected"], "J should move the semantic selection to the parent value"
+    assert_equal "single_after_ipa", result["activeNodeId"],
+      "DOM focus should follow the J/K semantic selection"
+    refute result["previousStillFocused"],
+      "the previously clicked block must not retain a second focus rectangle"
+    assert_equal "none", result["previousOutline"]
+
+    canvas_outline = browser.execute(<<~JS)
+      const canvas = document.querySelector('#architectureCanvas');
+      canvas.focus({ preventScroll: true });
+      return getComputedStyle(canvas).outlineStyle;
+    JS
+    assert_equal "none", canvas_outline,
+      "programmatic canvas focus should not draw a viewport-sized outline"
   end
 
   def verify_keyboard_board_traversal(browser, base)
@@ -480,6 +520,42 @@ class RendererSemanticPseudocodeBrowserTest < Minitest::Test
     assert_operator pointer_result["unrelatedOpacity"], :<=, 0.25
     assert restored_after_leave,
       "leaving the board component should restore the broader board context"
+
+    browser.execute(<<~JS)
+      const node = document.querySelector('[data-node-id="project_scalar_terms"]');
+      node.dispatchEvent(new MouseEvent('mouseenter'));
+      return true;
+    JS
+    block_trace_result = wait_for(browser, "the block-to-pseudocode spotlight") do
+      browser.execute(<<~JS)
+        const lines = [...document.querySelectorAll('.semantic-trace-line')];
+        const matching = lines.find((item) => item.textContent.includes('project_scalar_qkv'));
+        const unrelated = lines.find((item) => item.textContent.includes('attention = softmax'));
+        const result = {
+          matching: matching?.classList.contains('is-trace-transient') || false,
+          unrelatedMuted: unrelated?.classList.contains('is-trace-muted') || false,
+          matchingOpacity: matching ? Number(getComputedStyle(matching).opacity) : 0,
+          unrelatedOpacity: unrelated ? Number(getComputedStyle(unrelated).opacity) : 1,
+        };
+        return result.matching
+          && result.unrelatedMuted
+          && result.matchingOpacity > result.unrelatedOpacity
+          && result.unrelatedOpacity <= 0.4
+          ? result
+          : null;
+      JS
+    end
+    browser.execute(<<~JS)
+      document.querySelector('[data-node-id="project_scalar_terms"]')
+        ?.dispatchEvent(new MouseEvent('mouseleave'));
+      return true;
+    JS
+    assert block_trace_result["matching"],
+      "hovering a compute block should highlight its corresponding pseudocode line"
+    assert block_trace_result["unrelatedMuted"],
+      "unrelated pseudocode should recede during block hover"
+    assert_operator block_trace_result["matchingOpacity"], :>,
+      block_trace_result["unrelatedOpacity"]
 
     clicked_url = browser.execute(<<~JS)
       const line = [...document.querySelectorAll('.semantic-trace-line')]

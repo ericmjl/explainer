@@ -192,8 +192,29 @@ class RendererWorkspaceTest < Minitest::Test
 
     assert_includes navigate, "focusFirstVisibleOccurrence();"
     assert_includes navigate, "const first = visibleNodes(currentBoard())[0];"
-    assert_includes navigate, "focusNodeOccurrence(first.id)"
+    assert_includes navigate, "focusNodeOccurrence(first.id, { moveDomFocus: true })"
     assert_includes navigate, "centerOnNode(first.id);"
+  end
+
+  def test_keyboard_navigation_transfers_dom_focus_to_the_selected_occurrence
+    renderer = read("renderer/architecture/renderer.js")
+    css = read("styles.css")
+    navigate = function_source(renderer, "navigateAlong", "openNavMenu")
+    focus = function_source(renderer, "focusRenderedNodeOccurrence", "resetFocusedDetail")
+
+    assert_includes navigate, "focusNodeOccurrence(candidates[0], { moveDomFocus: true })"
+    assert_includes renderer, "focusNodeOccurrence(id, { moveDomFocus: true })"
+    assert_includes focus, 'occurrence?.matches("button")'
+    assert_includes focus, 'occurrence?.querySelector(".arch-node-main")'
+    assert_includes focus, "focusTarget?.focus({ preventScroll: true })"
+    assert_includes css, ".arch-node.is-selected-node .arch-node-main:focus-visible"
+  end
+
+  def test_programmatic_canvas_focus_does_not_draw_a_viewport_sized_ring
+    css = read("styles.css")
+
+    assert_match(/\.architecture-canvas:focus\s*\{[^}]*outline:\s*none/m, css)
+    refute_match(/\.architecture-canvas:focus-visible\s*\{[^}]*outline:\s*3px/m, css)
   end
 
   def test_enter_and_escape_traverse_semantic_board_levels
