@@ -331,6 +331,7 @@ class RendererSemanticPseudocodeBrowserTest < Minitest::Test
     base = "http://#{LOOPBACK}:#{server_port}/renderer/architecture/"
     browser.set_window(width: 1440, height: 1000)
     verify_ipa_token_to_graph_and_back(browser, base)
+    verify_board_trace_persists_across_selection(browser, base)
     verify_high_level_call_drilldown(browser, base)
     verify_keyboard_focus_follows_selection(browser, base)
     verify_keyboard_board_traversal(browser, base)
@@ -341,6 +342,38 @@ class RendererSemanticPseudocodeBrowserTest < Minitest::Test
     verify_math_symbols_and_theme(browser, base)
     verify_touch_pinch_zoom(browser, base)
     verify_mobile_board_trace(browser, base)
+  end
+
+  def verify_board_trace_persists_across_selection(browser, base)
+    browser.navigate("#{base}?arch=genie3")
+    result = wait_for(browser, "the board pseudocode to remain stable after selection") do
+      browser.execute(<<~JS)
+        const linesBefore = [...document.querySelectorAll('.semantic-trace-line')];
+        const builder = document.querySelector('[data-node-id="feature_builder"] .arch-node-main');
+        if (!builder || linesBefore.length < 2) return null;
+        const before = {
+          count: linesBefore.length,
+          heading: document.querySelector('.semantic-trace-heading strong')?.textContent || '',
+          hasSampler: linesBefore.some((line) => line.textContent.includes('DiffusionSampler')),
+        };
+        builder.click();
+        const linesAfter = [...document.querySelectorAll('.semantic-trace-line')];
+        const selectedLine = linesAfter.find((line) => line.textContent.includes('tokenize(request)'));
+        const after = {
+          count: linesAfter.length,
+          heading: document.querySelector('.semantic-trace-heading strong')?.textContent || '',
+          hasSampler: linesAfter.some((line) => line.textContent.includes('DiffusionSampler')),
+          selectedLine: selectedLine?.classList.contains('is-trace-selected') || false,
+        };
+        return after.selectedLine ? { before, after } : null;
+      JS
+    end
+    assert_equal result["before"]["count"], result["after"]["count"],
+      "selecting a component must not narrow the board pseudocode"
+    assert_equal result["before"]["heading"], result["after"]["heading"]
+    assert result["before"]["hasSampler"] && result["after"]["hasSampler"]
+    assert result["after"]["selectedLine"],
+      "the selected component's corresponding line should be highlighted in place"
   end
 
   def verify_keyboard_focus_follows_selection(browser, base)

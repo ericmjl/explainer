@@ -815,15 +815,8 @@ function setFocusBody(html, { selected = false } = {}) {
 
 function semanticBlockInstanceRef() {
   const board = currentBoard();
-  const selectedNode = state.selection?.kind === "node" ? state.selection.node : null;
-  const direct = selectedNode?.block_instance_ref
-    || selectedNode?.blockInstanceRef
-    || board.blockInstanceRef
-    || board.block_instance_ref;
-  if (direct) return untypedRef(direct, "block_instances");
-  const subjectRef = selectedNode ? canonicalNodeRef(selectedNode) : null;
-  if (subjectRef) return (blockInstancesBySubject.get(subjectRef) || [])[0]?.id || null;
-  return null;
+  const direct = board.blockInstanceRef || board.block_instance_ref;
+  return direct ? untypedRef(direct, "block_instances") : null;
 }
 
 function semanticProgramContexts() {
@@ -862,11 +855,7 @@ function semanticTraceForCurrentContext() {
   const instance = instanceId ? blockInstancesById.get(instanceId) : null;
   if (instance?.pseudocode?.length) {
     const block = standardBlocksById.get(instance.standardBlockId);
-    const selectedNode = state.selection?.kind === "node" ? state.selection.node : null;
-    const detailBoard = selectedNode ? targetBoardForNode(selectedNode) : null;
-    const segments = currentBoard().segments?.length
-      ? currentBoard().segments
-      : detailBoard?.segments || [];
+    const segments = currentBoard().segments || [];
     return {
       title: block?.name || instance.standardBlockName || instance.standardBlockId,
       subtitle: `${instance.variantLabel || readableReuse(instance.variant)} · reusable ${readableReuse(instance.conformance)}`,
@@ -881,7 +870,6 @@ function semanticTraceForCurrentContext() {
     };
   }
 
-  const selectedId = state.selection?.kind === "node" ? state.selection.occurrenceId : null;
   const contexts = semanticProgramContexts();
   const candidates = contexts.flatMap(({ program, symbolsById }) => {
     const activeScope = semanticScopeForBoard({
@@ -901,31 +889,19 @@ function semanticTraceForCurrentContext() {
     const activeRef = activeScope.ref || `scopes.${activeScope.id}`;
     return (statement.scopeRef || statement.scope_ref) === activeRef;
   });
-  const statementMatches = selectedId ? scopedCandidates.filter(({ statement }) => {
-    const resolved = semanticTraceResolver.resolve(semanticRefsForStatement(statement));
-    return resolved.nodeIds.includes(selectedId);
-  }) : [];
-  const bindingMatches = selectedId && !statementMatches.length
-    ? scopedCandidates.filter(({ statement, symbolsById }) => {
-      const refs = semanticStatementBindings(statement).flatMap((binding) => (
-        semanticRefsForBinding(binding, symbolsById)
-      ));
-      return semanticTraceResolver.resolve(refs).nodeIds.includes(selectedId);
-    })
-    : [];
   const activeScopes = scopedCandidates.map(({ activeScope }) => activeScope).filter(Boolean);
-  const scoped = !selectedId && activeScopes.length ? scopedCandidates : [];
+  const scoped = activeScopes.length ? scopedCandidates : [];
   const boardRefs = new Set([
     currentBoard().subject_ref || currentBoard().subjectRef,
     ...visibleNodes(currentBoard()).map(canonicalNodeRef),
   ].filter(Boolean));
   const unscopedCandidates = candidates.filter(({ activeScope }) => !activeScope);
-  const boardFactMatches = !selectedId && !scoped.length
+  const boardFactMatches = !scoped.length
     ? unscopedCandidates.filter(({ statement }) =>
       semanticRefsForStatement(statement).some((ref) => boardRefs.has(ref)),
     )
     : [];
-  const projectedMatches = !selectedId && !scoped.length && !boardFactMatches.length
+  const projectedMatches = !scoped.length && !boardFactMatches.length
     ? unscopedCandidates.filter(({ statement, symbolsById }) => {
       const refs = [
         ...semanticRefsForStatement(statement),
@@ -937,27 +913,20 @@ function semanticTraceForCurrentContext() {
       return resolved.nodeIds.length > 0;
     })
     : [];
-  const fallback = !selectedId && currentBoard().id === manifest.boards.rootBoard
+  const fallback = currentBoard().id === manifest.boards.rootBoard
     ? candidates
     : [];
-  const statements = statementMatches.length
-    ? statementMatches
-    : bindingMatches.length
-      ? bindingMatches
-      : scoped.length
-        ? scoped
-        : boardFactMatches.length
-          ? boardFactMatches
-          : projectedMatches.length
-            ? projectedMatches
-            : fallback;
+  const statements = scoped.length
+    ? scoped
+    : boardFactMatches.length
+      ? boardFactMatches
+      : projectedMatches.length
+        ? projectedMatches
+        : fallback;
   const scope = statements[0]?.activeScope || activeScopes[0] || null;
   return {
     title: scope?.label || statements[0]?.program?.title || "Architecture trace",
-    subtitle: selectedId
-      ? [semanticScopeSubtitle(scope), "statements associated with the selected component"]
-        .filter(Boolean).join(" · ")
-      : semanticScopeSubtitle(scope) || "Statements visible at this board level",
+    subtitle: semanticScopeSubtitle(scope) || "Statements visible at this board level",
     statements,
   };
 }

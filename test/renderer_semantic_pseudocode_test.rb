@@ -43,7 +43,11 @@ class RendererSemanticPseudocodeTest < Minitest::Test
     assert_includes renderer, 'class="semantic-token-math"'
     assert_includes renderer, 'aria-label="${escapeHtml(accessibleLabel)}"'
     assert_includes renderer, "scope.executionRef || scope.execution_ref"
-    assert_includes renderer, "blockInstancesBySubject.get(subjectRef)"
+    assert_includes renderer, "const direct = board.blockInstanceRef || board.block_instance_ref"
+    refute_includes renderer, "blockInstancesBySubject.get(subjectRef)"
+    refute_includes renderer, "statements associated with the selected component"
+    refute_includes renderer, "const statementMatches = selectedId"
+    refute_includes renderer, "const bindingMatches = selectedId"
     assert_includes renderer, 'data-semantic-callee-board'
     assert_includes html, 'id="semanticTraceBody"'
     assert_includes html, 'class="focus-panel-pages"'
