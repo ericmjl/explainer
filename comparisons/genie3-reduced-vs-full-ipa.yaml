@@ -3,7 +3,7 @@ id: genie3_reduced_vs_full_ipa
 title: Genie 3 Reduced Attention vs Full Frame-Aware IPA
 status: review
 question: What does Genie 3's reduced latent attention retain, change, and remove relative to full frame-aware IPA?
-summary: Both attention cores use scalar attention, pair-logit bias, and attention-weighted pair-value aggregation. Full IPA additionally forms frame-aware point logits and point outputs; the reduced latent block omits that geometry and owns a residual-normalized transition wrapper that sits outside full IPA in the structure decoder.
+summary: Both attention cores use scalar attention, pair-logit bias, and attention-weighted pair-value aggregation, and both end at a projected single-state delta. Full IPA additionally forms frame-aware point logits and point outputs; the reduced latent attention omits that geometry.
 subjects:
   primary:
     label: Reduced latent attention
@@ -22,9 +22,6 @@ groups:
   - id: full_only
     label: Full IPA only
     description: Frame-aware point operations present only in the full structure-decoder IPA path.
-  - id: reduced_only
-    label: Reduced instance wrapper only
-    description: Wrapper behavior owned by the reduced latent block but kept outside the full IPA module boundary.
 alignments:
   - id: scalar_projection
     group_ref: groups.shared
@@ -107,23 +104,6 @@ alignments:
       - block_instances.structure_ipa.steps.project_ipa_delta
     explanation: Reduced attention fuses scalar and pair contexts, whereas full IPA also fuses the frame-aware local point context.
     evidence: *both_attention_evidence
-  - id: residual_normalization
-    group_ref: groups.reduced_only
-    label: Residual, dropout, and normalization
-    relationship: primary_only
-    primary_refs:
-      - block_instances.latent_reduced_pair_attention.steps.residual_norm
-    counterpart_refs: []
-    explanation: The reduced block instance owns its residual wrapper. Genie 3's structure decoder performs the analogous operation in StructureLayer after the full IPA module returns, so it is intentionally outside the full IPA standard-block instance.
-    evidence: &both_wrapper_evidence
-      status: confirmed_from_code
-      refs:
-        - source_ref: genie3_latent_transformer_code
-          role: primary_wrapper_evidence
-          locator: LatentTransformerBlock.forward
-        - source_ref: genie3_structure_code
-          role: counterpart_wrapper_evidence
-          locator: StructureLayer.forward
   - id: frame_aware_point_path
     group_ref: groups.full_only
     label: Frame-aware point attention
@@ -137,15 +117,6 @@ alignments:
       - block_instances.structure_ipa.steps.return_points_to_local_frame
     explanation: Only full IPA projects points, expresses them through token frames, uses invariant point distances in the logits, and returns aggregated point values to the query frame.
     evidence: *both_attention_evidence
-  - id: latent_transition_and_output_mask
-    group_ref: groups.reduced_only
-    label: Latent transition and final output mask
-    relationship: primary_only
-    primary_refs:
-      - block_instances.latent_reduced_pair_attention.steps.transition_and_mask
-    counterpart_refs: []
-    explanation: The reduced latent block follows residual normalization with its transition MLP and reapplies the token mask; that wrapper step is not part of the selected full IPA variant.
-    evidence: *both_wrapper_evidence
 findings:
   - id: pair_path_is_retained
     statement: Reduced attention retains both pair-logit bias and attention-weighted pair-value aggregation.
@@ -159,10 +130,4 @@ findings:
       - alignments.frame_aware_point_path
       - alignments.output_fusion
     evidence: *both_attention_evidence
-  - id: wrapper_scope_differs
-    statement: The reduced latent block owns residual normalization and its transition-and-mask wrapper, whereas the structure decoder keeps its residual and transition operations outside the full IPA module boundary.
-    alignment_refs:
-      - alignments.residual_normalization
-      - alignments.latent_transition_and_output_mask
-    evidence: *both_wrapper_evidence
 open_questions: []

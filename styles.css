@@ -4276,6 +4276,91 @@ code {
   color: var(--violet);
 }
 
+.arch-node.is-operation {
+  --operation-glyph: var(--accent);
+  min-width: 132px;
+  padding: 10px 12px;
+}
+
+.arch-node.is-operation .arch-node-main {
+  text-align: center;
+}
+
+.arch-operation-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+}
+
+.arch-operation-card strong {
+  max-width: 122px;
+  outline: none;
+  color: var(--ink);
+  font-size: 0.78rem;
+  line-height: 1.12;
+  text-align: center;
+}
+
+.op-glyph {
+  width: 104px;
+  height: 64px;
+  overflow: visible;
+  color: var(--operation-glyph);
+}
+
+.op-glyph text {
+  fill: currentColor;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 10px;
+  font-weight: 800;
+  text-anchor: middle;
+}
+
+.op-glyph-flow,
+.op-glyph-relu,
+.op-glyph-skip,
+.op-glyph-plus {
+  fill: none;
+  stroke: currentColor;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 2.4;
+  vector-effect: non-scaling-stroke;
+}
+
+.op-glyph-skip {
+  stroke-dasharray: 4 4;
+  opacity: 0.74;
+}
+
+.op-glyph-tile,
+.op-glyph-add {
+  fill: color-mix(in srgb, var(--operation-glyph) 10%, var(--surface-card));
+  stroke: currentColor;
+  stroke-width: 1.8;
+  vector-effect: non-scaling-stroke;
+}
+
+.op-glyph-zero {
+  fill: var(--surface-card);
+  stroke: currentColor;
+  stroke-width: 1.7;
+  vector-effect: non-scaling-stroke;
+}
+
+.op-glyph-dot {
+  fill: currentColor;
+}
+
+.op-glyph-dot.is-muted {
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.5;
+  opacity: 0.55;
+  vector-effect: non-scaling-stroke;
+}
+
 /* Chain endpoints are visible on the board; ghost them so hidden steps pop */
 
 .chain-chip.is-endpoint {
@@ -4834,6 +4919,48 @@ code {
 .model-map-operation-shape {
   fill: color-mix(in srgb, var(--surface-card) 76%, var(--model-map-node-accent));
   stroke-width: 2px;
+}
+
+.model-map-operation-frame {
+  fill: color-mix(in srgb, var(--surface-card) 76%, var(--model-map-node-accent));
+  stroke-width: 1.8px;
+}
+
+.model-map-operation-tile,
+.model-map-operation-add {
+  fill: color-mix(in srgb, var(--model-map-node-accent) 12%, var(--surface-card));
+  stroke: var(--model-map-node-accent);
+  stroke-width: 1.4px;
+  vector-effect: non-scaling-stroke;
+}
+
+.model-map-operation-flow,
+.model-map-operation-relu,
+.model-map-operation-skip,
+.model-map-operation-plus {
+  fill: none;
+  stroke: var(--model-map-node-accent);
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 1.8px;
+  vector-effect: non-scaling-stroke;
+}
+
+.model-map-operation-skip {
+  stroke-dasharray: 3 3;
+  opacity: 0.72;
+}
+
+.model-map-operation-text {
+  fill: var(--model-map-node-accent);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 9px;
+  font-weight: 900;
+  text-anchor: middle;
+}
+
+.model-map-operation-text.is-badge {
+  font-size: 10px;
 }
 
 .model-map-current-halo {

@@ -19,6 +19,7 @@ class StandardBlockContractTest < Minitest::Test
     %w[
       standard_blocks/pair-biased-attention.yaml
       standard_blocks/invariant-point-attention.yaml
+      standard_blocks/structure-transition.yaml
     ].each do |path|
       assert_empty StandardBlockContract.definition_errors(load_yaml(path)), path
     end
@@ -43,10 +44,12 @@ class StandardBlockContractTest < Minitest::Test
       blocks_by_path: {
         "standard_blocks/pair-biased-attention.yaml" => load_yaml("standard_blocks/pair-biased-attention.yaml"),
         "standard_blocks/invariant-point-attention.yaml" => block,
+        "standard_blocks/structure-transition.yaml" => load_yaml("standard_blocks/structure-transition.yaml"),
       },
       registered_blocks: %w[
         standard_blocks/pair-biased-attention.yaml
         standard_blocks/invariant-point-attention.yaml
+        standard_blocks/structure-transition.yaml
       ],
     )
 
@@ -69,10 +72,12 @@ class StandardBlockContractTest < Minitest::Test
       blocks_by_path: {
         "standard_blocks/pair-biased-attention.yaml" => load_yaml("standard_blocks/pair-biased-attention.yaml"),
         "standard_blocks/invariant-point-attention.yaml" => block,
+        "standard_blocks/structure-transition.yaml" => load_yaml("standard_blocks/structure-transition.yaml"),
       },
       registered_blocks: %w[
         standard_blocks/pair-biased-attention.yaml
         standard_blocks/invariant-point-attention.yaml
+        standard_blocks/structure-transition.yaml
       ],
     )
 
@@ -91,10 +96,12 @@ class StandardBlockContractTest < Minitest::Test
       blocks_by_path: {
         "standard_blocks/pair-biased-attention.yaml" => load_yaml("standard_blocks/pair-biased-attention.yaml"),
         "standard_blocks/invariant-point-attention.yaml" => block,
+        "standard_blocks/structure-transition.yaml" => load_yaml("standard_blocks/structure-transition.yaml"),
       },
       registered_blocks: %w[
         standard_blocks/pair-biased-attention.yaml
         standard_blocks/invariant-point-attention.yaml
+        standard_blocks/structure-transition.yaml
       ],
     )
 

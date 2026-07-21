@@ -1,0 +1,161 @@
+schema_version: standard-block-v0.3
+id: structure_transition
+name: Structure Transition
+kind: feed_forward
+status: review
+description: Update a single/token stream with one or more AF2-style structure-transition layers, then apply dropout and LayerNorm to the resulting single state.
+parameters:
+  - { id: b, notation: B, kind: batch, resolution: boundary, role: leading batch axes }
+  - { id: n, notation: N, kind: sequence, resolution: boundary, role: number of residue or atom tokens }
+  - { id: c_s, notation: C_s, kind: channel, resolution: boundary, role: single-state channel width }
+  - { id: num_layers, notation: L, kind: extent, resolution: instance, role: number of residual transition layers }
+ports:
+  - id: single_state
+    label: single state
+    direction: input
+    kind: representation
+    required: true
+    cardinality: one
+    relation_kinds: [data_flow, state_update]
+    glyph: single
+    notation: s
+    role: post-IPA single/token representation entering the transition MLP
+    shape_contract: &single_shape
+      kind: tensor
+      axes:
+        - { id: batch, dimension: b }
+        - { id: token, dimension: n }
+        - { id: single_channel, dimension: c_s }
+  - id: updated_single_state
+    label: updated single state
+    direction: output
+    kind: representation
+    required: true
+    cardinality: one
+    relation_kinds: [data_flow, state_update]
+    glyph: single
+    notation: s'
+    role: transition-updated single/token representation after dropout and LayerNorm
+    shape_contract: *single_shape
+variants:
+  - id: three_linear_residual_dropout_norm
+    label: Three-linear residual + dropout/norm
+    description: Each transition layer applies three same-width linear projections with ReLU between them, adds the input state residually, then the wrapper applies dropout and LayerNorm after the layer stack.
+    step_refs:
+      - steps.project_first
+      - steps.project_second
+      - steps.project_final_delta
+      - steps.residual_add
+      - steps.dropout_layer_norm
+default_variant: three_linear_residual_dropout_norm
+values:
+  - id: hidden_1
+    label: first hidden state
+    kind: representation
+    glyph: single
+    notation: h_1
+    shape_contract: *single_shape
+  - id: hidden_2
+    label: second hidden state
+    kind: representation
+    glyph: single
+    notation: h_2
+    shape_contract: *single_shape
+  - id: transition_delta
+    label: transition delta
+    kind: representation
+    glyph: single
+    notation: delta_s
+    shape_contract: *single_shape
+  - id: residual_single
+    label: residual single state
+    kind: representation
+    glyph: single
+    notation: s_res
+    shape_contract: *single_shape
+steps:
+  - id: project_first
+    label: First linear + ReLU
+    operation: linear_relu
+    shape_rule: preserve
+    inputs: [ports.single_state]
+    outputs: [values.hidden_1]
+    code: "hidden_1 = relu(linear_1(single_state))"
+    tex: "h^{(1)}_i = ReLU(W_1 s_i)"
+    role: first same-width projection inside each structure-transition layer
+    code_bindings:
+      - { lexeme: single_state, ref: ports.single_state, access: read }
+      - { lexeme: hidden_1, ref: values.hidden_1, access: write }
+  - id: project_second
+    label: Second linear + ReLU
+    operation: linear_relu
+    shape_rule: preserve
+    inputs: [values.hidden_1]
+    outputs: [values.hidden_2]
+    code: "hidden_2 = relu(linear_2(hidden_1))"
+    tex: "h^{(2)}_i = ReLU(W_2 h^{(1)}_i)"
+    role: second same-width projection inside each structure-transition layer
+    code_bindings:
+      - { lexeme: hidden_1, ref: values.hidden_1, access: read }
+      - { lexeme: hidden_2, ref: values.hidden_2, access: write }
+  - id: project_final_delta
+    label: Final zero-init projection
+    operation: linear
+    shape_rule: preserve
+    inputs: [values.hidden_2]
+    outputs: [values.transition_delta]
+    code: "transition_delta = linear_3(hidden_2)"
+    tex: "delta s_i = W_3 h^{(2)}_i"
+    role: final same-width projection, initialized as a near-zero residual update in AF2-style implementations
+    code_bindings:
+      - { lexeme: hidden_2, ref: values.hidden_2, access: read }
+      - { lexeme: transition_delta, ref: values.transition_delta, access: write }
+  - id: residual_add
+    label: Add transition residual
+    operation: residual_add
+    shape_rule: residual_add
+    inputs: [ports.single_state, values.transition_delta]
+    outputs: [values.residual_single]
+    code: "residual_single = single_state + transition_delta"
+    tex: "s^{res}_i = s_i + delta s_i"
+    role: preserve the incoming single state while adding the transition MLP update
+    code_bindings:
+      - { lexeme: single_state, ref: ports.single_state, access: read }
+      - { lexeme: transition_delta, ref: values.transition_delta, access: read }
+      - { lexeme: residual_single, ref: values.residual_single, access: write }
+  - id: dropout_layer_norm
+    label: Dropout and LayerNorm
+    operation: dropout_layer_norm
+    shape_rule: preserve
+    inputs: [values.residual_single]
+    outputs: [ports.updated_single_state]
+    code: "updated_single_state = layer_norm(dropout(residual_single))"
+    tex: "s'_i = LayerNorm(Dropout(s^{res}_i))"
+    role: normalize the residual transition state before frame update or the next layer
+    code_bindings:
+      - { lexeme: residual_single, ref: values.residual_single, access: read }
+      - { lexeme: updated_single_state, ref: ports.updated_single_state, access: write }
+visual_template:
+  grid:
+    columns: 7
+    rows: 3
+    column_sizing: content
+    col_gap: 28
+    row_gap: 24
+  nodes:
+    - { id: single_state, ref: ports.single_state, col: 1, row: 2, prominence: secondary, treatment: compact }
+    - { id: project_first, ref: steps.project_first, col: 2, row: 2, prominence: primary, treatment: compact }
+    - { id: hidden_1, ref: values.hidden_1, col: 3, row: 2, prominence: context, treatment: compact }
+    - { id: project_second, ref: steps.project_second, col: 4, row: 2, prominence: primary, treatment: compact }
+    - { id: hidden_2, ref: values.hidden_2, col: 5, row: 2, prominence: context, treatment: compact }
+    - { id: project_final_delta, ref: steps.project_final_delta, col: 6, row: 2, prominence: primary, treatment: compact }
+    - { id: transition_delta, ref: values.transition_delta, col: 7, row: 2, prominence: context, treatment: compact }
+    - { id: residual_add, ref: steps.residual_add, col: 4, row: 1, prominence: primary, treatment: compact }
+    - { id: residual_single, ref: values.residual_single, col: 5, row: 1, prominence: context, treatment: compact }
+    - { id: dropout_layer_norm, ref: steps.dropout_layer_norm, col: 6, row: 1, prominence: primary, treatment: compact }
+    - { id: updated_single_state, ref: ports.updated_single_state, col: 7, row: 1, prominence: secondary, treatment: compact }
+evidence_policy:
+  generic_definition: The template captures the AF2-style structure-module transition pattern; concrete architectures must separately cite where they instantiate it.
+  usage_requires:
+    - Evidence for the three same-width linear layers and residual add.
+    - Evidence for dropout and LayerNorm after the residual transition.

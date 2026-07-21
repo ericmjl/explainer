@@ -23,7 +23,7 @@ class RendererStandardBlockTest < Minitest::Test
 
     assert_equal "standard_block_template", board.fetch("projectionMode")
     assert_equal "reduced", board.fetch("conformance")
-    assert_equal "pair_values_residual_norm_transition", board.fetch("variant")
+    assert_equal "pair_values_attention_delta", board.fetch("variant")
     assert board.fetch("edges").any? { |edge| edge.fetch("grounding") == "standard_block_template" }
     assert board.fetch("edges").any? { |edge| edge.fetch("grounding") == "canonical_relation_path" }
     assert board.fetch("nodes").all? { |node| node.fetch("block_instance_ref") == "block_instances.latent_reduced_pair_attention" }
@@ -38,6 +38,22 @@ class RendererStandardBlockTest < Minitest::Test
     assert_includes comparison, "renderVisualSegmentRegions({"
     assert_includes styles, ".visual-segment-region"
     assert_includes styles, ".visual-segment-header"
+  end
+
+  def test_renderer_uses_generic_operation_glyphs
+    renderer = read("renderer/architecture/renderer.js")
+    styles = read("styles.css")
+
+    assert_includes renderer, "function operationGlyphKind(operation = \"\")"
+    assert_includes renderer, 'normalized === "linear_relu"'
+    assert_includes renderer, 'normalized === "linear") return "linear-final"'
+    assert_includes renderer, 'normalized === "residual_add"'
+    assert_includes renderer, 'normalized === "dropout_layer_norm"'
+    assert_includes renderer, "operationGlyphMarkup(node.operation)"
+    assert_includes renderer, "model-map-operation-glyph"
+    assert_includes styles, ".arch-operation-card"
+    assert_includes styles, ".op-glyph-relu"
+    assert_includes styles, ".model-map-operation-relu"
   end
 
   private

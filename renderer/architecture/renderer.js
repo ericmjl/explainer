@@ -3640,13 +3640,119 @@ function renderModelMapTensorShape(entry) {
 }
 
 function renderModelMapOperationShape(entry) {
-  return modelMapSvgElement("circle", {
-    class: "model-map-shape model-map-operation-shape",
-    cx: entry.x,
-    cy: entry.y,
-    r: Math.min(entry.width, entry.height) * 0.32,
-    "vector-effect": "non-scaling-stroke",
+  const glyph = operationGlyphKind(entry.node.operation);
+  if (!glyph) {
+    return modelMapSvgElement("circle", {
+      class: "model-map-shape model-map-operation-shape",
+      cx: entry.x,
+      cy: entry.y,
+      r: Math.min(entry.width, entry.height) * 0.32,
+      "vector-effect": "non-scaling-stroke",
+    });
+  }
+
+  const left = entry.x - entry.width / 2;
+  const top = entry.y - entry.height / 2;
+  const group = modelMapSvgElement("g", {
+    class: `model-map-operation-glyph model-map-operation-${glyph}`,
   });
+  group.appendChild(modelMapSvgElement("rect", {
+    class: "model-map-shape model-map-operation-frame",
+    x: left,
+    y: top,
+    width: entry.width,
+    height: entry.height,
+    rx: 8,
+    "vector-effect": "non-scaling-stroke",
+  }));
+  if (glyph === "linear" || glyph === "linear-final" || glyph === "linear-relu") {
+    group.append(
+      modelMapSvgElement("rect", {
+        class: "model-map-operation-tile",
+        x: left + entry.width * 0.22,
+        y: top + entry.height * 0.27,
+        width: entry.width * 0.28,
+        height: entry.height * 0.46,
+        rx: 4,
+      }),
+      modelMapSvgElement("path", {
+        class: "model-map-operation-flow",
+        d: `M ${left + entry.width * 0.08} ${entry.y} H ${left + entry.width * 0.22} M ${left + entry.width * 0.50} ${entry.y} H ${left + entry.width * 0.66}`,
+        "vector-effect": "non-scaling-stroke",
+      }),
+    );
+    const label = modelMapSvgElement("text", {
+      class: "model-map-operation-text",
+      x: left + entry.width * 0.36,
+      y: entry.y + 4,
+    });
+    label.textContent = "W";
+    group.appendChild(label);
+    if (glyph === "linear-relu") {
+      group.appendChild(modelMapSvgElement("path", {
+        class: "model-map-operation-relu",
+        d: `M ${left + entry.width * 0.62} ${top + entry.height * 0.62} H ${left + entry.width * 0.72} L ${left + entry.width * 0.80} ${top + entry.height * 0.36} H ${left + entry.width * 0.91}`,
+        "vector-effect": "non-scaling-stroke",
+      }));
+    }
+    if (glyph === "linear-final") {
+      const zero = modelMapSvgElement("text", {
+        class: "model-map-operation-text is-badge",
+        x: left + entry.width * 0.80,
+        y: top + entry.height * 0.42,
+      });
+      zero.textContent = "0";
+      group.appendChild(zero);
+    }
+    return group;
+  }
+  if (glyph === "residual-add") {
+    group.append(
+      modelMapSvgElement("path", {
+        class: "model-map-operation-skip",
+        d: `M ${left + entry.width * 0.20} ${top + entry.height * 0.70} C ${left + entry.width * 0.36} ${top + entry.height * 0.15} ${left + entry.width * 0.66} ${top + entry.height * 0.15} ${left + entry.width * 0.82} ${top + entry.height * 0.70}`,
+        "vector-effect": "non-scaling-stroke",
+      }),
+      modelMapSvgElement("circle", {
+        class: "model-map-operation-add",
+        cx: entry.x,
+        cy: top + entry.height * 0.68,
+        r: Math.min(entry.width, entry.height) * 0.18,
+      }),
+      modelMapSvgElement("path", {
+        class: "model-map-operation-plus",
+        d: `M ${entry.x} ${top + entry.height * 0.57} V ${top + entry.height * 0.79} M ${entry.x - entry.width * 0.11} ${top + entry.height * 0.68} H ${entry.x + entry.width * 0.11}`,
+        "vector-effect": "non-scaling-stroke",
+      }),
+    );
+    return group;
+  }
+  if (glyph === "dropout-norm") {
+    ["DO", "LN"].forEach((label, index) => {
+      const x = left + entry.width * (index === 0 ? 0.18 : 0.54);
+      group.appendChild(modelMapSvgElement("rect", {
+        class: "model-map-operation-tile",
+        x,
+        y: top + entry.height * 0.30,
+        width: entry.width * 0.28,
+        height: entry.height * 0.40,
+        rx: 4,
+      }));
+      const text = modelMapSvgElement("text", {
+        class: "model-map-operation-text",
+        x: x + entry.width * 0.14,
+        y: entry.y + 4,
+      });
+      text.textContent = label;
+      group.appendChild(text);
+    });
+    group.appendChild(modelMapSvgElement("path", {
+      class: "model-map-operation-flow",
+      d: `M ${left + entry.width * 0.46} ${entry.y} H ${left + entry.width * 0.54}`,
+      "vector-effect": "non-scaling-stroke",
+    }));
+  }
+  return group;
 }
 
 function renderModelMapNode(entry, activeNode) {
@@ -3973,6 +4079,67 @@ function operatorSymbolFor(node, module) {
   return node.operator || OPERATOR_KINDS[module?.kind] || null;
 }
 
+function operationGlyphKind(operation = "") {
+  const normalized = String(operation || "").replaceAll("-", "_");
+  if (normalized === "linear_relu") return "linear-relu";
+  if (normalized === "linear") return "linear-final";
+  if (normalized.endsWith("_projection")) return "linear";
+  if (normalized === "residual_add") return "residual-add";
+  if (normalized === "dropout_layer_norm" || normalized === "residual_normalization") return "dropout-norm";
+  return null;
+}
+
+function operationGlyphMarkup(operation) {
+  const glyph = operationGlyphKind(operation);
+  if (!glyph) return "";
+  const relu = glyph === "linear-relu"
+    ? '<path class="op-glyph-relu" d="M 64 46 H 72 L 79 30 H 88"></path><text x="76" y="58">ReLU</text>'
+    : "";
+  const zero = glyph === "linear-final"
+    ? '<circle class="op-glyph-zero" cx="86" cy="26" r="7"></circle><text x="86" y="29">0</text>'
+    : "";
+  if (glyph === "linear" || glyph === "linear-final" || glyph === "linear-relu") {
+    return `
+      <svg class="op-glyph op-glyph-${glyph}" viewBox="0 0 104 64" aria-hidden="true" focusable="false">
+        <path class="op-glyph-flow" d="M 8 32 H 23"></path>
+        <rect class="op-glyph-tile" x="25" y="17" width="32" height="30" rx="5"></rect>
+        <path class="op-glyph-flow" d="M 57 32 H 72"></path>
+        <text x="41" y="37">W</text>
+        ${relu}
+        ${zero}
+      </svg>
+    `;
+  }
+  if (glyph === "residual-add") {
+    return `
+      <svg class="op-glyph op-glyph-${glyph}" viewBox="0 0 104 64" aria-hidden="true" focusable="false">
+        <path class="op-glyph-skip" d="M 15 45 C 28 13 72 13 86 45"></path>
+        <path class="op-glyph-flow" d="M 8 45 H 39"></path>
+        <path class="op-glyph-flow" d="M 65 45 H 96"></path>
+        <circle class="op-glyph-add" cx="52" cy="45" r="13"></circle>
+        <path class="op-glyph-plus" d="M 52 37 V 53 M 44 45 H 60"></path>
+      </svg>
+    `;
+  }
+  if (glyph === "dropout-norm") {
+    return `
+      <svg class="op-glyph op-glyph-${glyph}" viewBox="0 0 104 64" aria-hidden="true" focusable="false">
+        <path class="op-glyph-flow" d="M 7 32 H 17"></path>
+        <rect class="op-glyph-tile" x="19" y="17" width="28" height="30" rx="5"></rect>
+        <circle class="op-glyph-dot" cx="28" cy="26" r="2.2"></circle>
+        <circle class="op-glyph-dot is-muted" cx="38" cy="26" r="2.2"></circle>
+        <circle class="op-glyph-dot" cx="28" cy="38" r="2.2"></circle>
+        <circle class="op-glyph-dot is-muted" cx="38" cy="38" r="2.2"></circle>
+        <path class="op-glyph-flow" d="M 47 32 H 57"></path>
+        <rect class="op-glyph-tile" x="59" y="17" width="28" height="30" rx="5"></rect>
+        <text x="73" y="37">LN</text>
+        <path class="op-glyph-flow" d="M 87 32 H 97"></path>
+      </svg>
+    `;
+  }
+  return "";
+}
+
 function targetBoardForNode(node) {
   const boardId = node.board_ref || (node.expandable ? node.module_ref || node.id : null);
   return boardId ? boardsById.get(boardId) || null : null;
@@ -4066,6 +4233,18 @@ function blockCardHtml(node, module) {
   const detail = node.detail || moduleDetail(module) || kind;
   const repeat = module?.repeats ? `<span class="arch-repeat">x${escapeHtml(module.repeats)}</span>` : "";
   const badges = blockBadges(node, module);
+  const operationGlyph = node.kind === "operation" ? operationGlyphMarkup(node.operation) : "";
+  if (operationGlyph) {
+    return `
+      <span class="arch-node-top">
+        <span class="arch-kind">${escapeHtml(kind)}</span>
+      </span>
+      <span class="arch-operation-card">
+        ${operationGlyph}
+        <strong>${escapeHtml(label)}</strong>
+      </span>
+    `;
+  }
   if (node.treatment === "chip" || node.density === "micro") {
     return `
       <strong>${escapeHtml(label)}</strong>
