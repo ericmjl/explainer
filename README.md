@@ -94,3 +94,10 @@ static deployment preserves links such as
 The browser is the canonical audience experience, but it is not an authoring
 surface. Durable corrections belong in the declarative sources and must pass
 the compiler and verifier before publication.
+
+## License
+
+Architecture Explainer is licensed under the [GNU Affero General Public
+License v3.0](LICENSE). Commercial use is permitted under the license, while
+modified versions offered to users over a network must make their corresponding
+source available as required by the AGPL.
