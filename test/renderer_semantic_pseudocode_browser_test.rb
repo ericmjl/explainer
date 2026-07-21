@@ -331,6 +331,7 @@ class RendererSemanticPseudocodeBrowserTest < Minitest::Test
     base = "http://#{LOOPBACK}:#{server_port}/renderer/architecture/"
     browser.set_window(width: 1440, height: 1000)
     verify_ipa_token_to_graph_and_back(browser, base)
+    verify_phased_trace_keyboard_navigation(browser, base)
     verify_board_trace_persists_across_selection(browser, base)
     verify_high_level_call_drilldown(browser, base)
     verify_keyboard_focus_follows_selection(browser, base)
@@ -422,6 +423,58 @@ class RendererSemanticPseudocodeBrowserTest < Minitest::Test
       "programmatic canvas focus should not draw a viewport-sized outline"
   end
 
+  def verify_phased_trace_keyboard_navigation(browser, base)
+    browser.navigate("#{base}?arch=genie3&board=genie3_ipa_internals")
+    crossed = wait_for(browser, "K to cross the IPA pseudocode phase boundary") do
+      browser.execute(<<~JS)
+        const phases = document.querySelectorAll('.semantic-trace-phase');
+        const from = document.querySelector('[data-node-id="softmax_attention"] .arch-node-main');
+        const to = document.querySelector('[data-node-id="aggregate_scalar_values"]');
+        if (phases.length < 2 || !from || !to) return null;
+        from.click();
+        document.dispatchEvent(new KeyboardEvent('keydown', {
+          key: 'k', bubbles: true, cancelable: true,
+        }));
+        const selectedLine = [...document.querySelectorAll('.semantic-trace-line')]
+          .find((line) => line.classList.contains('is-trace-selected'));
+        const selectedNode = document.querySelector('.is-selected-node')?.dataset.nodeId || null;
+        const activeNode = document.activeElement?.closest('[data-node-id]')?.dataset.nodeId || null;
+        return selectedNode === 'aggregate_scalar_values' ? {
+          phaseCount: phases.length,
+          selectedNode,
+          activeNode,
+          line: selectedLine?.textContent.replace(/\s+/g, ' ').trim() || '',
+          menuOpen: !document.querySelector('#architectureNavMenu')?.hidden,
+        } : null;
+      JS
+    end
+    assert_operator crossed["phaseCount"], :>=, 2
+    assert_equal "aggregate_scalar_values", crossed["selectedNode"]
+    assert_equal "aggregate_scalar_values", crossed["activeNode"]
+    assert_includes crossed["line"], "scalar_context"
+    refute crossed["menuOpen"], "phased trace navigation should not open a graph-branch menu"
+
+    returned = browser.execute(<<~JS)
+      document.dispatchEvent(new KeyboardEvent('keydown', {
+        key: 'j', bubbles: true, cancelable: true,
+      }));
+      return document.querySelector('.is-selected-node')?.dataset.nodeId || null;
+    JS
+    assert_equal "softmax_attention", returned,
+      "J should return to the final statement of the previous pseudocode phase"
+
+    terminal = browser.execute(<<~JS)
+      const finalNode = document.querySelector('[data-node-id="project_ipa_delta"] .arch-node-main');
+      finalNode.click();
+      document.dispatchEvent(new KeyboardEvent('keydown', {
+        key: 'k', bubbles: true, cancelable: true,
+      }));
+      return document.querySelector('.is-selected-node')?.dataset.nodeId || null;
+    JS
+    assert_equal "project_ipa_delta", terminal,
+      "K at the final pseudocode statement must not wrap to Phase 1"
+  end
+
   def verify_keyboard_board_traversal(browser, base)
     browser.navigate("#{base}?arch=genie3")
     entered = wait_for(browser, "Enter to open the selected sampler board") do
@@ -443,7 +496,8 @@ class RendererSemanticPseudocodeBrowserTest < Minitest::Test
       browser.execute(<<~JS)
         const canvas = document.querySelector('#architectureCanvas');
         return Boolean(document.querySelector('[data-node-id="reverse_diffusion_step"]'))
-          && !canvas?.classList.contains('is-board-fading')
+          && !canvas?.classList.contains('is-board-transition-preparing')
+          && !canvas?.classList.contains('is-board-transition-start')
           && !canvas?.classList.contains('is-board-transition');
       JS
     end

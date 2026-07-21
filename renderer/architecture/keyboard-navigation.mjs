@@ -90,6 +90,18 @@ export function neighborsOf(id, direction, edges, visibleIds) {
   return out;
 }
 
+// Move through an authored execution sequence without wrapping. Phased
+// reusable-block boards use this instead of raw graph adjacency so crossing a
+// phase boundary follows the pseudocode rather than a feedback or branch edge.
+export function adjacentSequenceNode(id, direction, sequence) {
+  if (!id || !Array.isArray(sequence)) return null;
+  const ordered = [...new Set(sequence.filter(Boolean))];
+  const index = ordered.indexOf(id);
+  if (index < 0) return null;
+  const nextIndex = direction === NAV_DIRECTIONS.PARENT ? index - 1 : index + 1;
+  return nextIndex >= 0 && nextIndex < ordered.length ? ordered[nextIndex] : null;
+}
+
 // Wrap-around menu index used when cycling through candidates. The renderer
 // always passes an integer currentIndex (highlightNavMenuItem) and a positive
 // length (openNavMenu only fires when candidates.length > 1).

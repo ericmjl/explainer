@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import {
+  adjacentSequenceNode,
   KEYBOARD_ZOOM_STEP,
   NAV_DIRECTIONS,
   neighborsOf,
@@ -160,6 +161,28 @@ test("neighborsOf hides non-visible neighbors such as elided nodes", () => {
   ];
   const visible = new Set(["x", "visible"]);
   assert.deepEqual(neighborsOf("x", NAV_DIRECTIONS.PARENT, edges, visible), ["visible"]);
+});
+
+test("adjacentSequenceNode crosses authored phase boundaries without wrapping", () => {
+  const sequence = ["phase_1_a", "phase_1_b", "phase_2_a", "phase_2_b"];
+  assert.equal(
+    adjacentSequenceNode("phase_1_b", NAV_DIRECTIONS.CHILD, sequence),
+    "phase_2_a",
+  );
+  assert.equal(
+    adjacentSequenceNode("phase_2_a", NAV_DIRECTIONS.PARENT, sequence),
+    "phase_1_b",
+  );
+  assert.equal(adjacentSequenceNode("phase_2_b", NAV_DIRECTIONS.CHILD, sequence), null);
+  assert.equal(adjacentSequenceNode("phase_1_a", NAV_DIRECTIONS.PARENT, sequence), null);
+});
+
+test("adjacentSequenceNode deduplicates repeated node mappings", () => {
+  const sequence = ["a", "b", "b", "c"];
+  assert.equal(adjacentSequenceNode("b", NAV_DIRECTIONS.CHILD, sequence), "c");
+  assert.equal(adjacentSequenceNode("b", NAV_DIRECTIONS.PARENT, sequence), "a");
+  assert.equal(adjacentSequenceNode("missing", NAV_DIRECTIONS.CHILD, sequence), null);
+  assert.equal(adjacentSequenceNode(null, NAV_DIRECTIONS.CHILD, sequence), null);
 });
 
 test("nextMenuIndex wraps in both directions", () => {

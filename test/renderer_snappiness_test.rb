@@ -12,12 +12,21 @@ class RendererSnappinessTest < Minitest::Test
 
   def test_semantic_navigation_is_one_short_render_first_transition
     assert_includes @renderer, "transitionMs: 200"
+    assert_includes @renderer, "zoomInStartFactor: 0.72"
+    assert_includes @renderer, "zoomOutStartFactor: 1.28"
     refute_includes @renderer, "animateDiveIn"
     refute_includes @renderer, "animateFadeOut"
+    refute_includes @renderer, "is-board-fading"
 
     push_board = @renderer[/function pushBoard\b.*?^}/m]
     refute_nil push_board
-    assert_operator push_board.index("renderBoard();"), :<, push_board.index("animateArriveFrom(null);")
+    assert_operator push_board.index("transitionFocusPoint(originNodeId)"), :<,
+      push_board.index("renderBoard();")
+    assert_operator push_board.index("renderBoard();"), :<,
+      push_board.index('animateBoardArrival({ direction: "in", focusPoint, layoutReady });')
+    assert_includes @styles, ".architecture-canvas.is-board-transition-start .module-layer"
+    assert_includes @styles, ".architecture-canvas.is-board-transition-preparing .module-layer"
+    assert_includes @styles, "opacity: 0.72"
   end
 
   def test_selection_and_math_ready_do_not_rebuild_the_board_chrome
@@ -51,10 +60,17 @@ class RendererSnappinessTest < Minitest::Test
 
   def test_board_arrival_fits_every_visible_node_before_optional_zooming
     fit = @renderer[/function fitToContent\b.*?^}/m]
+    transition = @renderer[/async function animateBoardArrival\b.*?(?=^function pushBoard\b)/m]
 
     refute_nil fit
+    refute_nil transition
     assert_includes fit, "readable = false"
     assert_includes fit, "requestedScale = readable ? Math.max(exactFit, readableFloor) : exactFit"
+    assert_operator transition.index("await Promise.resolve(layoutReady);"), :<,
+      transition.index("fitToContent();")
+    assert_operator transition.index("fitToContent();"), :<,
+      transition.index("transitionStartViewport(target, factor, resolvedFocus)")
+    refute_includes transition, "scheduleGeometryUpdate({ fit:"
   end
 
   def test_moving_renderer_chrome_does_not_use_backdrop_blur

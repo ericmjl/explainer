@@ -129,8 +129,8 @@ class RendererDeepLinkIntegrationTest < Minitest::Test
   end
 
   def test_history_restore_cancels_stale_arrival_callbacks
-    cancel = function_source("cancelBoardArrival", "animateArriveFrom")
-    animate = function_source("animateArriveFrom", "pushBoard")
+    cancel = function_source("cancelBoardArrival", "transitionFocusPoint")
+    animate = function_source("animateBoardArrival", "pushBoard")
 
     assert_includes cancel, "boardTransitionGeneration += 1"
     assert_includes cancel, "state.isTransitioning = false"

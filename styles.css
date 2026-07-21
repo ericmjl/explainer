@@ -4158,7 +4158,7 @@ code {
   display: none;
 }
 
-/* Semantic-zoom board transitions: dive into a module, emerge back out */
+/* Semantic-zoom board transitions: camera into a module, then back out */
 
 .architecture-canvas.is-board-transition .module-layer,
 .architecture-canvas.is-board-transition .board-region-layer,
@@ -4170,12 +4170,20 @@ code {
     opacity var(--board-transition-ms, 200ms) ease;
 }
 
-.architecture-canvas.is-board-fading .module-layer,
-.architecture-canvas.is-board-fading .board-region-layer,
-.architecture-canvas.is-board-fading .representation-lane-layer,
-.architecture-canvas.is-board-fading .edge-layer,
-.architecture-canvas.is-board-fading .reference-panel-layer {
-  opacity: 0;
+.architecture-canvas.is-board-transition-start .module-layer,
+.architecture-canvas.is-board-transition-start .board-region-layer,
+.architecture-canvas.is-board-transition-start .representation-lane-layer,
+.architecture-canvas.is-board-transition-start .edge-layer,
+.architecture-canvas.is-board-transition-start .reference-panel-layer {
+  opacity: 0.72;
+}
+
+.architecture-canvas.is-board-transition-preparing .module-layer,
+.architecture-canvas.is-board-transition-preparing .board-region-layer,
+.architecture-canvas.is-board-transition-preparing .representation-lane-layer,
+.architecture-canvas.is-board-transition-preparing .edge-layer,
+.architecture-canvas.is-board-transition-preparing .reference-panel-layer {
+  opacity: 0.01;
 }
 
 /* Contracted-edge hover: mini chain canvas instead of a wall of text */

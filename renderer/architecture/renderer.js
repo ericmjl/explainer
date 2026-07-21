@@ -92,6 +92,7 @@ import {
 } from "./semantic-pseudocode.mjs";
 import { pinchViewportBetween } from "./board-surface.mjs";
 import {
+  adjacentSequenceNode,
   KEYBOARD_ZOOM_STEP,
   NAV_DIRECTIONS,
   neighborsOf,
@@ -1930,6 +1931,16 @@ function navigateAlong(direction) {
     focusFirstVisibleOccurrence();
     return;
   }
+  const traceSequence = phasedSemanticNavigationNodeIds();
+  if (traceSequence.includes(id)) {
+    const next = adjacentSequenceNode(id, direction, traceSequence);
+    if (!next) return;
+    closeNavMenu();
+    focusNodeOccurrence(next, { moveDomFocus: true });
+    centerOnNode(next);
+    scrollSemanticTraceSelectionIntoView();
+    return;
+  }
   const edges = state.displayEdges || [];
   const visible = new Set(visibleNodes(currentBoard()).map((node) => node.id));
   const candidates = neighborsOf(id, direction, edges, visible);
@@ -1941,6 +1952,30 @@ function navigateAlong(direction) {
     return;
   }
   openNavMenu(direction, id, candidates);
+}
+
+function phasedSemanticNavigationNodeIds() {
+  const phases = currentBoard().segments || [];
+  if (phases.length < 2) return [];
+  const visible = new Set(visibleNodes(currentBoard()).map((node) => node.id));
+  const ordered = [];
+  elements.semanticTraceBody
+    ?.querySelectorAll(".semantic-trace-line[data-semantic-interaction]")
+    .forEach((line) => {
+      const interaction = semanticTraceInteractions.get(line.dataset.semanticInteraction);
+      const nodeId = interaction?.resolution.nodeIds.find((candidate) => visible.has(candidate));
+      if (nodeId && !ordered.includes(nodeId)) ordered.push(nodeId);
+    });
+  return ordered;
+}
+
+function scrollSemanticTraceSelectionIntoView() {
+  const lines = elements.semanticTraceBody?.querySelectorAll(".semantic-trace-line") || [];
+  const selected = [...lines].find((line) => (
+    line.classList.contains("is-trace-selected")
+    || Boolean(line.querySelector(".is-trace-selected"))
+  ));
+  selected?.scrollIntoView({ block: "nearest", inline: "nearest" });
 }
 
 function focusFirstVisibleOccurrence() {
@@ -2716,7 +2751,7 @@ function renderBoard() {
   applyPrimaryComparisonDecorations();
   updateCompareAction();
   applyViewport();
-  layoutBoard(graph);
+  return layoutBoard(graph);
 }
 
 function renderScaleLanes(board) {
@@ -4417,9 +4452,9 @@ const RULES = {
     portPreference: 42, // cost for choosing a side that faces away from the other node
     arrowLanding: DEFAULT_ARROW_LANDING, // straight shaft reserved before arrowheads
   },
-  // One render-first board arrival; navigation never waits on an outgoing scene.
-  diveScale: 2.2,
-  arriveScale: 0.92,
+  // One render-first camera move; navigation never waits on an outgoing scene.
+  zoomInStartFactor: 0.72,
+  zoomOutStartFactor: 1.28,
   transitionMs: 200,
   // fit-to-content margin inside the canvas
   fitMargin: 12,
@@ -4437,43 +4472,81 @@ function cancelBoardArrival() {
   boardTransitionGeneration += 1;
   state.isTransitioning = false;
   setBoardTransition(false);
-  elements.canvas.classList.remove("is-board-fading");
+  elements.canvas.classList.remove("is-board-transition-preparing");
+  elements.canvas.classList.remove("is-board-transition-start");
 }
 
-function animateArriveFrom(originNodeId) {
+function nextAnimationFrame() {
+  return new Promise((resolve) => window.requestAnimationFrame(resolve));
+}
+
+function transitionFocusPoint(nodeId) {
+  if (!nodeId) return null;
+  const node = elements.moduleLayer.querySelector(`[data-node-id="${CSS.escape(nodeId)}"]`);
+  if (!node) return null;
+  const canvasRect = elements.canvas.getBoundingClientRect();
+  const nodeRect = node.getBoundingClientRect();
+  return {
+    x: nodeRect.left + nodeRect.width / 2 - canvasRect.left,
+    y: nodeRect.top + nodeRect.height / 2 - canvasRect.top,
+  };
+}
+
+function transitionStartViewport(target, factor, focusPoint = null) {
+  const canvasRect = elements.canvas.getBoundingClientRect();
+  const baseX = elements.moduleLayer.offsetLeft;
+  const baseY = elements.moduleLayer.offsetTop;
+  const focus = focusPoint || boardViewportCenter(canvasRect, baseX, baseY);
+  const scale = clamp(target.scale * factor, 0.24, viewport.maxScale);
+  const localX = (focus.x - baseX - target.x) / target.scale;
+  const localY = (focus.y - baseY - target.y) / target.scale;
+  return {
+    scale,
+    x: focus.x - baseX - localX * scale,
+    y: focus.y - baseY - localY * scale,
+  };
+}
+
+function targetFocusPointForNode(nodeId, target) {
+  const box = nodeId ? nodeBox(nodeId) : null;
+  if (!box) return null;
+  return {
+    x: elements.moduleLayer.offsetLeft + target.x + box.cx * target.scale,
+    y: elements.moduleLayer.offsetTop + target.y + box.cy * target.scale,
+  };
+}
+
+async function animateBoardArrival({
+  direction = "in",
+  focusPoint = null,
+  originNodeId = null,
+  layoutReady = null,
+} = {}) {
   const generation = ++boardTransitionGeneration;
+  state.isTransitioning = true;
+  elements.canvas.classList.add("is-board-transition-preparing");
+  await Promise.resolve(layoutReady);
+  await nextAnimationFrame();
+  if (generation !== boardTransitionGeneration) return;
+  fitToContent();
+  const target = { x: viewport.x, y: viewport.y, scale: viewport.scale };
   if (prefersReducedMotion) {
+    applyViewport({ immediate: true });
     state.isTransitioning = false;
     setBoardTransition(false);
-    elements.canvas.classList.remove("is-board-fading");
+    elements.canvas.classList.remove("is-board-transition-preparing");
+    elements.canvas.classList.remove("is-board-transition-start");
     return;
   }
-  let start = null;
-  if (originNodeId) {
-    const box = nodeBox(originNodeId);
-    if (box) {
-      const canvasRect = elements.canvas.getBoundingClientRect();
-      const baseX = elements.moduleLayer.offsetLeft;
-      const baseY = elements.moduleLayer.offsetTop;
-      const center = boardViewportCenter(canvasRect, baseX, baseY);
-      const scale = RULES.diveScale;
-      start = {
-        scale,
-        x: center.x - baseX - box.cx * scale,
-        y: center.y - baseY - box.cy * scale,
-      };
-    }
-  }
-  if (!start) {
-    const scale = RULES.arriveScale;
-    start = {
-      scale,
-      x: (elements.moduleLayer.offsetWidth * (1 - scale)) / 2,
-      y: (elements.moduleLayer.offsetHeight * (1 - scale)) / 2,
-    };
-  }
-  state.isTransitioning = true;
-  elements.canvas.classList.add("is-board-fading");
+  const resolvedFocus = direction === "out"
+    ? targetFocusPointForNode(originNodeId, target) || focusPoint
+    : focusPoint;
+  const factor = direction === "out"
+    ? RULES.zoomOutStartFactor
+    : RULES.zoomInStartFactor;
+  const start = transitionStartViewport(target, factor, resolvedFocus);
+  elements.canvas.classList.remove("is-board-transition-preparing");
+  elements.canvas.classList.add("is-board-transition-start");
   viewport.x = start.x;
   viewport.y = start.y;
   viewport.scale = start.scale;
@@ -4483,13 +4556,15 @@ function animateArriveFrom(originNodeId) {
     window.requestAnimationFrame(() => {
       if (generation !== boardTransitionGeneration) return;
       setBoardTransition(true);
-      elements.canvas.classList.remove("is-board-fading");
-      fitToContent();
+      elements.canvas.classList.remove("is-board-transition-start");
+      viewport.x = target.x;
+      viewport.y = target.y;
+      viewport.scale = target.scale;
+      applyViewport({ immediate: true });
       window.setTimeout(() => {
         if (generation !== boardTransitionGeneration) return;
         setBoardTransition(false);
         state.isTransitioning = false;
-        scheduleGeometryUpdate({ fit: !state.userMovedViewport });
       }, RULES.transitionMs);
     });
   });
@@ -4497,16 +4572,18 @@ function animateArriveFrom(originNodeId) {
 
 function pushBoard(boardId, originNodeId) {
   if (!boardsById.has(boardId) || state.isTransitioning) return;
+  const focusPoint = transitionFocusPoint(originNodeId);
   state.boardStack.push(boardId);
   state.boardOrigins.push(originNodeId || null);
   state.userMovedViewport = false;
   resetViewport();
+  let layoutReady = null;
   withDeepLinkWritesSuppressed(() => {
-    renderBoard();
+    layoutReady = renderBoard();
     focusOverview();
   });
   syncDeepLinkHistory();
-  animateArriveFrom(null);
+  animateBoardArrival({ direction: "in", focusPoint, layoutReady });
   focusBoardNavigationTarget();
 }
 
@@ -4518,8 +4595,9 @@ function popToBoard(index) {
   state.boardOrigins = state.boardOrigins.slice(0, index + 1);
   state.userMovedViewport = false;
   resetViewport();
+  let layoutReady = null;
   withDeepLinkWritesSuppressed(() => {
-    renderBoard();
+    layoutReady = renderBoard();
     focusOverview();
   });
   syncDeepLinkHistory();
@@ -4528,7 +4606,11 @@ function popToBoard(index) {
       ? node.id === returningToOriginId
       : targetBoardForNode(node)?.id === returningFromBoardId,
   );
-  animateArriveFrom(origin?.id || null);
+  animateBoardArrival({
+    direction: "out",
+    originNodeId: origin?.id || null,
+    layoutReady,
+  });
   focusBoardNavigationTarget(origin?.id || null);
 }
 
