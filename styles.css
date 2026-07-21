@@ -1602,20 +1602,20 @@ code {
 
 .repeat-region-header {
   position: absolute;
-  top: -15px;
+  top: 7px;
   left: 14px;
   display: inline-flex;
   align-items: center;
   gap: 7px;
   max-width: calc(100% - 28px);
-  padding: 3px 7px;
+  padding: 3px 7px 3px 8px;
   border: 1px solid var(--line);
   border: 1px solid color-mix(in srgb, var(--accent) 24%, var(--line));
   border-radius: 7px;
   background: var(--panel);
   color: var(--copy-soft);
-  box-shadow: 0 3px 10px rgba(31, 37, 35, 0.05);
-  font-size: 0.69rem;
+  box-shadow: 0 2px 8px rgba(31, 37, 35, 0.045);
+  font-size: 0.66rem;
   font-weight: 850;
   letter-spacing: 0.045em;
   line-height: 1;

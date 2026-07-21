@@ -6,6 +6,8 @@ import {
   executionLoopForRef,
   repeatRegionAccessibleLabel,
   repeatRegionBounds,
+  repeatRegionDisplay,
+  repeatRegionHeaderPlacement,
   representedIterationRelationRefs,
 } from "../renderer/architecture/repeat-regions.mjs";
 
@@ -70,6 +72,26 @@ test("repeat region bounds wrap all members with asymmetric header padding", () 
     width: 242,
     height: 154,
   });
+});
+
+test("repeat captions stay concise when the repetition count is explicit", () => {
+  assert.deepEqual(
+    repeatRegionDisplay({ label: "one structure layer" }, { repeats: 8 }),
+    { label: "structure layer", count: "×8" },
+  );
+});
+
+test("repeat captions move along the header band to avoid incoming wires", () => {
+  const placement = repeatRegionHeaderPlacement(
+    { x: 100, y: 100, width: 520, height: 280 },
+    { width: 180, height: 22 },
+    [[{ x: 210, y: 60 }, { x: 210, y: 180 }]],
+    [],
+  );
+
+  assert.equal(placement.side, "top");
+  assert.equal(placement.top, 7);
+  assert.ok(placement.left > 115, "caption should move beyond the crossing wire");
 });
 
 test("a repeat enclosure is not drawn from a partial set of measured members", () => {

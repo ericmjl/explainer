@@ -974,7 +974,7 @@ boards:
       column_sizing: content
       col_gap: 32
       row_sizing: content
-      row_gap: 28
+      row_gap: 52
     regions:
       - id: structure_layer_iteration
         kind: repeat
@@ -1002,7 +1002,7 @@ boards:
         prominence: context
         treatment: chip
         density: micro
-        col: 1
+        col: 2
         row: 1
       - id: token_structure_frame_mask
         ref: value_sites.token_structure_frame_mask
@@ -1012,7 +1012,7 @@ boards:
         treatment: chip
         density: micro
         glyph: vector
-        col: 2
+        col: 3
         row: 1
       - id: decoder_single_state
         ref: value_sites.decoder_single_state
