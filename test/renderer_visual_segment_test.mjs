@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import {
+  alignVisualSegmentBounds,
   renderVisualSegmentRegions,
   visualSegmentAccessibleLabel,
   visualSegmentBounds,
@@ -118,6 +119,29 @@ test("segment bounds reserve a header without changing member geometry", () => {
 
   assert.deepEqual(bounds, { x: 86, y: 48, width: 168, height: 136 });
   assert.equal(visualSegmentBounds([]), null);
+});
+
+test("vertical alignment groups give neighboring phase enclosures a shared top and bottom", () => {
+  const entries = [
+    {
+      segment: { id: "construct", vertical_alignment_group: "paired_phases" },
+      bounds: { x: 10, y: 40, width: 100, height: 180 },
+    },
+    {
+      segment: { id: "update", vertical_alignment_group: "paired_phases" },
+      bounds: { x: 120, y: 90, width: 120, height: 200 },
+    },
+    {
+      segment: { id: "independent" },
+      bounds: { x: 250, y: 130, width: 80, height: 70 },
+    },
+  ];
+
+  const aligned = alignVisualSegmentBounds(entries);
+  assert.deepEqual(aligned[0].bounds, { x: 10, y: 40, width: 100, height: 250 });
+  assert.deepEqual(aligned[1].bounds, { x: 120, y: 40, width: 120, height: 250 });
+  assert.deepEqual(aligned[2].bounds, entries[2].bounds);
+  assert.notEqual(aligned[0].bounds, entries[0].bounds);
 });
 
 test("segment accessibility names expose sequence, label, and explanation", () => {

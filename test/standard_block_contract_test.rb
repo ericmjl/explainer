@@ -20,6 +20,8 @@ class StandardBlockContractTest < Minitest::Test
       standard_blocks/pair-biased-attention.yaml
       standard_blocks/invariant-point-attention.yaml
       standard_blocks/structure-transition.yaml
+      standard_blocks/single-to-pair-endpoint-update.yaml
+      standard_blocks/pair-transition.yaml
     ].each do |path|
       assert_empty StandardBlockContract.definition_errors(load_yaml(path)), path
     end
@@ -45,11 +47,15 @@ class StandardBlockContractTest < Minitest::Test
         "standard_blocks/pair-biased-attention.yaml" => load_yaml("standard_blocks/pair-biased-attention.yaml"),
         "standard_blocks/invariant-point-attention.yaml" => block,
         "standard_blocks/structure-transition.yaml" => load_yaml("standard_blocks/structure-transition.yaml"),
+        "standard_blocks/single-to-pair-endpoint-update.yaml" => load_yaml("standard_blocks/single-to-pair-endpoint-update.yaml"),
+        "standard_blocks/pair-transition.yaml" => load_yaml("standard_blocks/pair-transition.yaml"),
       },
       registered_blocks: %w[
         standard_blocks/pair-biased-attention.yaml
         standard_blocks/invariant-point-attention.yaml
         standard_blocks/structure-transition.yaml
+        standard_blocks/single-to-pair-endpoint-update.yaml
+        standard_blocks/pair-transition.yaml
       ],
     )
 
@@ -73,11 +79,15 @@ class StandardBlockContractTest < Minitest::Test
         "standard_blocks/pair-biased-attention.yaml" => load_yaml("standard_blocks/pair-biased-attention.yaml"),
         "standard_blocks/invariant-point-attention.yaml" => block,
         "standard_blocks/structure-transition.yaml" => load_yaml("standard_blocks/structure-transition.yaml"),
+        "standard_blocks/single-to-pair-endpoint-update.yaml" => load_yaml("standard_blocks/single-to-pair-endpoint-update.yaml"),
+        "standard_blocks/pair-transition.yaml" => load_yaml("standard_blocks/pair-transition.yaml"),
       },
       registered_blocks: %w[
         standard_blocks/pair-biased-attention.yaml
         standard_blocks/invariant-point-attention.yaml
         standard_blocks/structure-transition.yaml
+        standard_blocks/single-to-pair-endpoint-update.yaml
+        standard_blocks/pair-transition.yaml
       ],
     )
 
@@ -97,15 +107,44 @@ class StandardBlockContractTest < Minitest::Test
         "standard_blocks/pair-biased-attention.yaml" => load_yaml("standard_blocks/pair-biased-attention.yaml"),
         "standard_blocks/invariant-point-attention.yaml" => block,
         "standard_blocks/structure-transition.yaml" => load_yaml("standard_blocks/structure-transition.yaml"),
+        "standard_blocks/single-to-pair-endpoint-update.yaml" => load_yaml("standard_blocks/single-to-pair-endpoint-update.yaml"),
+        "standard_blocks/pair-transition.yaml" => load_yaml("standard_blocks/pair-transition.yaml"),
       },
       registered_blocks: %w[
         standard_blocks/pair-biased-attention.yaml
         standard_blocks/invariant-point-attention.yaml
         standard_blocks/structure-transition.yaml
+        standard_blocks/single-to-pair-endpoint-update.yaml
+        standard_blocks/pair-transition.yaml
       ],
     )
 
     assert_code diagnostics, "shape_boundary_mismatch"
+  end
+
+  def test_v03_endpoint_broadcast_sum_rejects_an_invalid_pair_expansion
+    path = "standard_blocks/single-to-pair-endpoint-update.yaml"
+    block = load_yaml(path)
+    pair_activations = block.fetch("values").find { |value| value.fetch("id") == "pair_activations" }
+    pair_activations.fetch("shape_contract").fetch("axes")[2]["dimension"] = "c_s"
+    architecture = load_yaml("architectures/genie3.yaml")
+    blocks = {
+      "standard_blocks/pair-biased-attention.yaml" => load_yaml("standard_blocks/pair-biased-attention.yaml"),
+      "standard_blocks/invariant-point-attention.yaml" => load_yaml("standard_blocks/invariant-point-attention.yaml"),
+      "standard_blocks/structure-transition.yaml" => load_yaml("standard_blocks/structure-transition.yaml"),
+      path => block,
+      "standard_blocks/pair-transition.yaml" => load_yaml("standard_blocks/pair-transition.yaml"),
+    }
+
+    diagnostics = StandardBlockContract.instance_errors(
+      architecture,
+      blocks_by_path: blocks,
+      registered_blocks: blocks.keys,
+    )
+
+    assert diagnostics.any? do |item|
+      item.code == "shape_rule_mismatch" && item.path.include?("broadcast_endpoint_sum")
+    end
   end
 
   def test_definition_rejects_dangling_steps_variants_and_visual_refs

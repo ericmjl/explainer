@@ -30,6 +30,31 @@ export function visualSegmentBounds(boxes = [], padding = {}) {
   };
 }
 
+export function alignVisualSegmentBounds(entries = []) {
+  const aligned = entries.map((entry) => ({
+    ...entry,
+    bounds: entry?.bounds ? { ...entry.bounds } : entry?.bounds,
+  }));
+  const groups = new Map();
+  aligned.forEach((entry) => {
+    const group = entry?.segment?.vertical_alignment_group
+      || entry?.segment?.verticalAlignmentGroup;
+    if (!group || !entry.bounds) return;
+    if (!groups.has(group)) groups.set(group, []);
+    groups.get(group).push(entry);
+  });
+  groups.forEach((members) => {
+    if (members.length < 2) return;
+    const top = Math.min(...members.map((entry) => entry.bounds.y));
+    const bottom = Math.max(...members.map((entry) => entry.bounds.y + entry.bounds.height));
+    members.forEach((entry) => {
+      entry.bounds.y = top;
+      entry.bounds.height = bottom - top;
+    });
+  });
+  return aligned;
+}
+
 export function visualSegmentAccessibleLabel(segment = {}) {
   const order = Number(segment.order);
   const prefix = Number.isFinite(order) && order > 0 ? `Phase ${order}: ` : "";
@@ -100,7 +125,7 @@ export function renderVisualSegmentRegions({
   const documentRef = regionLayer.ownerDocument || globalThis.document;
   const rendered = [];
 
-  visualSegments(board).forEach((segment) => {
+  const segmentEntries = visualSegments(board).map((segment) => {
     const members = (segment.node_ids || segment.nodeIds || []).map((nodeId) => (
       moduleLayer.querySelector(`[data-node-id="${escapedNodeId(nodeId)}"]`)
     ));
@@ -111,7 +136,10 @@ export function renderVisualSegmentRegions({
       height: element.offsetHeight,
     }));
     const bounds = visualSegmentBounds(boxes);
-    if (!bounds) return;
+    return bounds ? { segment, members, bounds } : null;
+  }).filter(Boolean);
+
+  alignVisualSegmentBounds(segmentEntries).forEach(({ segment, members, bounds }) => {
 
     const accessibleLabel = visualSegmentAccessibleLabel(segment);
     const descriptionId = visualSegmentDescriptionId(surfaceKey, segment.id);

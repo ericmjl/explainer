@@ -341,6 +341,23 @@ module StandardBlockShapes
           require_axis_ids(step, outputs.first, %w[batch query_token head value_point point_feature])
         when "pair_value_aggregation"
           require_axis_ids(step, outputs.first, %w[batch query_token head pair_channel])
+        when "broadcast_sum"
+          inputs.each { |shape| require_axis_ids(step, shape, %w[batch token pair_channel]) }
+          require_equal_shapes(step, inputs[0], inputs[1]) if inputs.length >= 2
+          require_axis_ids(step, outputs.first, %w[batch query_token key_token pair_channel])
+          input_dimensions = tensor_dimensions(inputs.first)
+          output_dimensions = tensor_dimensions(outputs.first)
+          expected_dimensions = if input_dimensions.length == 3
+            [input_dimensions[0], input_dimensions[1], input_dimensions[1], input_dimensions[2]]
+          else
+            []
+          end
+          unless expected_dimensions == output_dimensions
+            @diagnostics << StandardBlockShapes.diagnostic(
+              "shape_rule_mismatch", "$.steps.#{step['id']}.shape_rule",
+              "broadcast_sum expects B x N x C to become B x N x N x C",
+            )
+          end
         when "output_projection"
           require_axis_ids(step, outputs.first, %w[batch query_token single_channel])
         end
@@ -370,6 +387,12 @@ module StandardBlockShapes
       return [] unless shape && %w[tensor frames].include?(shape["kind"])
 
       Array(shape["axes"]).map { |axis| axis["id"] }
+    end
+
+    def tensor_dimensions(shape)
+      return [] unless shape && %w[tensor frames].include?(shape["kind"])
+
+      Array(shape["axes"]).map { |axis| axis["dimension"] }
     end
 
     def contract_axes(contract)

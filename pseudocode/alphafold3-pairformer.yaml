@@ -1,0 +1,625 @@
+schema_version: pseudocode-v0.2
+id: alphafold3_pairformer
+title: AlphaFold 3 Pairformer Trace
+sources:
+  - id: pairformer_code
+    source_ref: af3_pairformer_code
+  - id: evoformer_code
+    source_ref: af3_evoformer_code
+  - id: single_attention_code
+    source_ref: af3_self_attention_code
+root_scope: pairformer
+scopes:
+  - id: pairformer
+    label: AlphaFold 3 Pairformer
+    kind: program
+    parent_ref: pseudocode
+    subject_ref: architecture
+  - id: stack
+    label: 48-block Pairformer stack
+    kind: loop
+    parent_ref: scopes.pairformer
+    subject_ref: modules.pairformer_stack
+    execution_ref: execution.loops.pairformer_stack
+  - id: pair_update
+    label: Pair-track update
+    kind: module
+    parent_ref: scopes.stack
+    subject_ref: modules.pair_update_stage
+  - id: single_update
+    label: Single-track update
+    kind: module
+    parent_ref: scopes.stack
+    subject_ref: modules.single_update_stage
+
+symbols:
+  - id: input_single
+    name: s
+    tex: s
+    type: input
+    scope_ref: scopes.pairformer
+    architecture_ref: value_sites.single_state_input
+  - id: input_pair
+    name: z
+    tex: z
+    type: input
+    scope_ref: scopes.pairformer
+    architecture_ref: value_sites.pair_state_input
+  - id: input_token_mask
+    name: token_mask
+    type: mask
+    scope_ref: scopes.pairformer
+    architecture_ref: value_sites.token_mask_input
+  - id: input_pair_mask
+    name: pair_mask
+    type: mask
+    scope_ref: scopes.pairformer
+    architecture_ref: value_sites.pair_mask_input
+  - id: output_single
+    name: s_trunk
+    tex: 's^{trunk}'
+    type: output
+    scope_ref: scopes.pairformer
+    architecture_ref: value_sites.single_state_output
+  - id: output_pair
+    name: z_trunk
+    tex: 'z^{trunk}'
+    type: output
+    scope_ref: scopes.pairformer
+    architecture_ref: value_sites.pair_state_output
+  - id: stack_single_input
+    name: s
+    tex: s
+    type: input
+    scope_ref: scopes.stack
+    architecture_ref: value_sites.single_state_input
+  - id: stack_pair_input
+    name: z
+    tex: z
+    type: input
+    scope_ref: scopes.stack
+    architecture_ref: value_sites.pair_state_input
+  - id: stack_token_mask
+    name: token_mask
+    type: mask
+    scope_ref: scopes.stack
+    architecture_ref: value_sites.token_mask_input
+  - id: stack_pair_mask
+    name: pair_mask
+    type: mask
+    scope_ref: scopes.stack
+    architecture_ref: value_sites.pair_mask_input
+  - id: block_single
+    name: s_i
+    tex: s_i
+    type: state
+    scope_ref: scopes.stack
+    architecture_ref: value_sites.block_single_state
+  - id: block_pair
+    name: z_i
+    tex: z_i
+    type: state
+    scope_ref: scopes.stack
+    architecture_ref: value_sites.block_pair_state
+  - id: updated_pair
+    name: z_next
+    tex: 'z_{i+1}'
+    type: state
+    scope_ref: scopes.stack
+    architecture_ref: value_sites.pair_after_transition
+  - id: updated_single
+    name: s_next
+    tex: 's_{i+1}'
+    type: state
+    scope_ref: scopes.stack
+    architecture_ref: value_sites.single_after_transition
+  - id: stack_output_single
+    name: s_trunk
+    tex: 's^{trunk}'
+    type: output
+    scope_ref: scopes.stack
+    architecture_ref: value_sites.single_state_output
+  - id: stack_output_pair
+    name: z_trunk
+    tex: 'z^{trunk}'
+    type: output
+    scope_ref: scopes.stack
+    architecture_ref: value_sites.pair_state_output
+  - id: pair_input
+    name: z_i
+    tex: z_i
+    type: state
+    scope_ref: scopes.pair_update
+    architecture_ref: value_sites.block_pair_state
+  - id: pair_scope_mask
+    name: pair_mask
+    type: mask
+    scope_ref: scopes.pair_update
+    architecture_ref: value_sites.pair_mask_input
+  - id: pair_outgoing
+    name: z_out
+    tex: 'z^{out}'
+    type: state
+    scope_ref: scopes.pair_update
+    architecture_ref: value_sites.pair_after_outgoing_multiplication
+  - id: pair_incoming
+    name: z_in
+    tex: 'z^{in}'
+    type: state
+    scope_ref: scopes.pair_update
+    architecture_ref: value_sites.pair_after_incoming_multiplication
+  - id: pair_starting
+    name: z_start
+    tex: 'z^{start}'
+    type: state
+    scope_ref: scopes.pair_update
+    architecture_ref: value_sites.pair_after_starting_attention
+  - id: pair_ending
+    name: z_end
+    tex: 'z^{end}'
+    type: state
+    scope_ref: scopes.pair_update
+    architecture_ref: value_sites.pair_after_ending_attention
+  - id: pair_output
+    name: z_next
+    tex: 'z_{i+1}'
+    type: state
+    scope_ref: scopes.pair_update
+    architecture_ref: value_sites.pair_after_transition
+  - id: single_input
+    name: s_i
+    tex: s_i
+    type: state
+    scope_ref: scopes.single_update
+    architecture_ref: value_sites.block_single_state
+  - id: single_pair_input
+    name: z_next
+    tex: 'z_{i+1}'
+    type: representation
+    scope_ref: scopes.single_update
+    architecture_ref: value_sites.pair_after_transition
+  - id: single_scope_mask
+    name: token_mask
+    type: mask
+    scope_ref: scopes.single_update
+    architecture_ref: value_sites.token_mask_input
+  - id: pair_logits
+    name: pair_logits
+    type: conditioning
+    scope_ref: scopes.single_update
+    architecture_ref: value_sites.single_pair_attention_logits
+  - id: single_attention_state
+    name: s_attn
+    tex: 's^{attn}'
+    type: state
+    scope_ref: scopes.single_update
+    architecture_ref: value_sites.single_after_pair_attention
+  - id: single_output
+    name: s_next
+    tex: 's_{i+1}'
+    type: state
+    scope_ref: scopes.single_update
+    architecture_ref: value_sites.single_after_transition
+
+lines:
+  - id: run_pairformer
+    text: "s_trunk, z_trunk = PairformerStack(s, z, token_mask, pair_mask)"
+    comment: The component boundary starts after AF3 has already embedded the token and pair inputs.
+    scope_ref: scopes.pairformer
+    statement_ref: modules.pairformer_stack
+    callee_scope_ref: scopes.stack
+    operation: run_pairformer_stack
+    inputs: [input_single, input_pair, input_token_mask, input_pair_mask]
+    outputs: [output_single, output_pair]
+    architecture_refs:
+      - claims.pairformer_has_no_msa_state
+    source_refs:
+      - source: evoformer_code
+        locator: pairformer_stack application
+    code_bindings:
+      - lexeme: s_trunk
+        symbol_ref: output_single
+        access: write
+      - lexeme: z_trunk
+        symbol_ref: output_pair
+        access: write
+      - lexeme: PairformerStack
+        architecture_ref: modules.pairformer_stack
+        access: call
+      - lexeme: s
+        symbol_ref: input_single
+        access: read
+      - lexeme: z
+        symbol_ref: input_pair
+        access: read
+      - lexeme: token_mask
+        symbol_ref: input_token_mask
+        access: read
+      - lexeme: pair_mask
+        symbol_ref: input_pair_mask
+        access: read
+  - id: initialize_pair_state
+    text: "z_i = z"
+    scope_ref: scopes.stack
+    statement_ref: relations.input_pair_state_initializes_block_pair_state
+    operation: initialize_pair_state
+    inputs: [stack_pair_input]
+    outputs: [block_pair]
+    architecture_refs: []
+    source_refs:
+      - source: evoformer_code
+        locator: pairformer_stack input
+    code_bindings:
+      - lexeme: z_i
+        symbol_ref: block_pair
+        access: write
+      - lexeme: z
+        symbol_ref: stack_pair_input
+        access: read
+  - id: initialize_single_state
+    text: "s_i = s"
+    scope_ref: scopes.stack
+    statement_ref: relations.input_single_state_initializes_block_single_state
+    operation: initialize_single_state
+    inputs: [stack_single_input]
+    outputs: [block_single]
+    architecture_refs: []
+    source_refs:
+      - source: evoformer_code
+        locator: pairformer_stack input
+    code_bindings:
+      - lexeme: s_i
+        symbol_ref: block_single
+        access: write
+      - lexeme: s
+        symbol_ref: stack_single_input
+        access: read
+  - id: run_pair_update
+    text: "z_next = PairUpdate(z_i, pair_mask)"
+    comment: All five pair residual updates complete before the single track reads z_next.
+    scope_ref: scopes.stack
+    statement_ref: modules.pair_update_stage
+    callee_scope_ref: scopes.pair_update
+    operation: update_pair_track
+    inputs: [block_pair, stack_pair_mask]
+    outputs: [updated_pair]
+    architecture_refs:
+      - claims.pair_track_precedes_single_track
+    source_refs:
+      - source: pairformer_code
+        locator: PairFormerIteration.__call__ pair updates
+    code_bindings:
+      - lexeme: z_next
+        symbol_ref: updated_pair
+        access: write
+      - lexeme: PairUpdate
+        architecture_ref: modules.pair_update_stage
+        access: call
+      - lexeme: z_i
+        symbol_ref: block_pair
+        access: read
+      - lexeme: pair_mask
+        symbol_ref: stack_pair_mask
+        access: read
+  - id: run_single_update
+    text: "s_next = SingleUpdate(s_i, z_next, token_mask)"
+    scope_ref: scopes.stack
+    statement_ref: modules.single_update_stage
+    callee_scope_ref: scopes.single_update
+    operation: update_single_track
+    inputs: [block_single, updated_pair, stack_token_mask]
+    outputs: [updated_single]
+    architecture_refs:
+      - claims.pair_state_does_not_receive_single_update
+    source_refs:
+      - source: pairformer_code
+        locator: PairFormerIteration.__call__ single updates
+    code_bindings:
+      - lexeme: s_next
+        symbol_ref: updated_single
+        access: write
+      - lexeme: SingleUpdate
+        architecture_ref: modules.single_update_stage
+        access: call
+      - lexeme: s_i
+        symbol_ref: block_single
+        access: read
+      - lexeme: z_next
+        symbol_ref: updated_pair
+        access: read
+      - lexeme: token_mask
+        symbol_ref: stack_token_mask
+        access: read
+  - id: carry_pair_state
+    text: "z_i = z_next"
+    scope_ref: scopes.stack
+    statement_ref: relations.block_pair_output_reenters_next_pairformer_block
+    operation: advance_pair_block_state
+    inputs: [updated_pair]
+    outputs: [block_pair]
+    architecture_refs:
+      - execution.loops.pairformer_stack
+    source_refs:
+      - source: evoformer_code
+        locator: hk.experimental.layer_stack
+    code_bindings:
+      - lexeme: z_i
+        symbol_ref: block_pair
+        access: write
+      - lexeme: z_next
+        symbol_ref: updated_pair
+        access: read
+  - id: carry_single_state
+    text: "s_i = s_next"
+    scope_ref: scopes.stack
+    statement_ref: relations.block_single_output_reenters_next_pairformer_block
+    operation: advance_single_block_state
+    inputs: [updated_single]
+    outputs: [block_single]
+    architecture_refs:
+      - execution.loops.pairformer_stack
+    source_refs:
+      - source: evoformer_code
+        locator: hk.experimental.layer_stack
+    code_bindings:
+      - lexeme: s_i
+        symbol_ref: block_single
+        access: write
+      - lexeme: s_next
+        symbol_ref: updated_single
+        access: read
+  - id: expose_pair_output
+    text: "z_trunk = z_next"
+    scope_ref: scopes.stack
+    statement_ref: relations.final_pair_block_state_becomes_output
+    operation: expose_final_pair_state
+    inputs: [updated_pair]
+    outputs: [stack_output_pair]
+    architecture_refs: []
+    source_refs:
+      - source: evoformer_code
+        locator: pair_activations output
+    code_bindings:
+      - lexeme: z_trunk
+        symbol_ref: stack_output_pair
+        access: write
+      - lexeme: z_next
+        symbol_ref: updated_pair
+        access: read
+  - id: expose_single_output
+    text: "s_trunk = s_next"
+    scope_ref: scopes.stack
+    statement_ref: relations.final_single_block_state_becomes_output
+    operation: expose_final_single_state
+    inputs: [updated_single]
+    outputs: [stack_output_single]
+    architecture_refs: []
+    source_refs:
+      - source: evoformer_code
+        locator: single_activations output
+    code_bindings:
+      - lexeme: s_trunk
+        symbol_ref: stack_output_single
+        access: write
+      - lexeme: s_next
+        symbol_ref: updated_single
+        access: read
+  - id: outgoing_triangle_update
+    text: "z_out = z_i + TriangleMultiplicationOutgoing(z_i, pair_mask)"
+    scope_ref: scopes.pair_update
+    statement_ref: modules.triangle_multiplication_outgoing
+    operation: residual_outgoing_triangle_multiplication
+    inputs: [pair_input, pair_scope_mask]
+    outputs: [pair_outgoing]
+    architecture_refs: []
+    source_refs:
+      - source: pairformer_code
+        locator: PairFormerIteration triangle_multiplication_outgoing
+    code_bindings:
+      - lexeme: z_out
+        symbol_ref: pair_outgoing
+        access: write
+      - lexeme: z_i
+        symbol_ref: pair_input
+        access: read
+      - lexeme: TriangleMultiplicationOutgoing
+        architecture_ref: modules.triangle_multiplication_outgoing
+        access: call
+      - lexeme: pair_mask
+        symbol_ref: pair_scope_mask
+        access: read
+  - id: incoming_triangle_update
+    text: "z_in = z_out + TriangleMultiplicationIncoming(z_out, pair_mask)"
+    scope_ref: scopes.pair_update
+    statement_ref: modules.triangle_multiplication_incoming
+    operation: residual_incoming_triangle_multiplication
+    inputs: [pair_outgoing, pair_scope_mask]
+    outputs: [pair_incoming]
+    architecture_refs: []
+    source_refs:
+      - source: pairformer_code
+        locator: PairFormerIteration triangle_multiplication_incoming
+    code_bindings:
+      - lexeme: z_in
+        symbol_ref: pair_incoming
+        access: write
+      - lexeme: z_out
+        symbol_ref: pair_outgoing
+        access: read
+      - lexeme: TriangleMultiplicationIncoming
+        architecture_ref: modules.triangle_multiplication_incoming
+        access: call
+      - lexeme: pair_mask
+        symbol_ref: pair_scope_mask
+        access: read
+  - id: starting_node_attention_update
+    text: "z_start = z_in + TriangleAttentionStartingNode(z_in, pair_mask)"
+    scope_ref: scopes.pair_update
+    statement_ref: modules.pair_attention_starting_node
+    operation: residual_starting_node_attention
+    inputs: [pair_incoming, pair_scope_mask]
+    outputs: [pair_starting]
+    architecture_refs: []
+    source_refs:
+      - source: pairformer_code
+        locator: PairFormerIteration pair_attention1 transpose=False
+    code_bindings:
+      - lexeme: z_start
+        symbol_ref: pair_starting
+        access: write
+      - lexeme: z_in
+        symbol_ref: pair_incoming
+        access: read
+      - lexeme: TriangleAttentionStartingNode
+        architecture_ref: modules.pair_attention_starting_node
+        access: call
+      - lexeme: pair_mask
+        symbol_ref: pair_scope_mask
+        access: read
+  - id: ending_node_attention_update
+    text: "z_end = z_start + TriangleAttentionEndingNode(z_start, pair_mask)"
+    scope_ref: scopes.pair_update
+    statement_ref: modules.pair_attention_ending_node
+    operation: residual_ending_node_attention
+    inputs: [pair_starting, pair_scope_mask]
+    outputs: [pair_ending]
+    architecture_refs: []
+    source_refs:
+      - source: pairformer_code
+        locator: PairFormerIteration pair_attention2 transpose=True
+    code_bindings:
+      - lexeme: z_end
+        symbol_ref: pair_ending
+        access: write
+      - lexeme: z_start
+        symbol_ref: pair_starting
+        access: read
+      - lexeme: TriangleAttentionEndingNode
+        architecture_ref: modules.pair_attention_ending_node
+        access: call
+      - lexeme: pair_mask
+        symbol_ref: pair_scope_mask
+        access: read
+  - id: pair_transition_update
+    text: "z_next = z_end + PairTransition(z_end)"
+    scope_ref: scopes.pair_update
+    statement_ref: modules.pair_transition
+    operation: residual_pair_transition
+    inputs: [pair_ending]
+    outputs: [pair_output]
+    architecture_refs: []
+    source_refs:
+      - source: pairformer_code
+        locator: PairFormerIteration pair_transition and TransitionBlock
+    code_bindings:
+      - lexeme: z_next
+        symbol_ref: pair_output
+        access: write
+      - lexeme: z_end
+        symbol_ref: pair_ending
+        access: read
+      - lexeme: PairTransition
+        architecture_ref: modules.pair_transition
+        access: call
+  - id: project_pair_logits
+    text: "pair_logits = Linear16(LayerNorm(z_next))"
+    scope_ref: scopes.single_update
+    statement_ref: modules.single_pair_logits_projection
+    operation: project_pair_attention_logits
+    inputs: [single_pair_input]
+    outputs: [pair_logits]
+    architecture_refs: []
+    source_refs:
+      - source: pairformer_code
+        locator: single_pair_logits_norm and single_pair_logits_projection
+    code_bindings:
+      - lexeme: pair_logits
+        symbol_ref: pair_logits
+        access: write
+      - lexeme: Linear16
+        architecture_ref: modules.single_pair_logits_projection
+        access: call
+      - lexeme: z_next
+        symbol_ref: single_pair_input
+        access: read
+  - id: pair_biased_single_attention_update
+    text: "s_attn = s_i + SingleAttention(s_i, token_mask, pair_logits)"
+    scope_ref: scopes.single_update
+    statement_ref: modules.single_attention_with_pair_bias
+    operation: residual_pair_biased_single_attention
+    inputs: [single_input, single_scope_mask, pair_logits]
+    outputs: [single_attention_state]
+    architecture_refs:
+      - relations.pair_logits_bias_single_attention
+    source_refs:
+      - source: pairformer_code
+        locator: PairFormerIteration single_attention_ call
+      - source: single_attention_code
+        locator: self_attention
+    code_bindings:
+      - lexeme: s_attn
+        symbol_ref: single_attention_state
+        access: write
+      - lexeme: s_i
+        symbol_ref: single_input
+        access: read
+      - lexeme: SingleAttention
+        architecture_ref: modules.single_attention_with_pair_bias
+        access: call
+      - lexeme: token_mask
+        symbol_ref: single_scope_mask
+        access: read
+      - lexeme: pair_logits
+        symbol_ref: pair_logits
+        access: read
+  - id: single_transition_update
+    text: "s_next = s_attn + SingleTransition(s_attn)"
+    scope_ref: scopes.single_update
+    statement_ref: modules.single_transition
+    operation: residual_single_transition
+    inputs: [single_attention_state]
+    outputs: [single_output]
+    architecture_refs: []
+    source_refs:
+      - source: pairformer_code
+        locator: PairFormerIteration single_transition and TransitionBlock
+    code_bindings:
+      - lexeme: s_next
+        symbol_ref: single_output
+        access: write
+      - lexeme: s_attn
+        symbol_ref: single_attention_state
+        access: read
+      - lexeme: SingleTransition
+        architecture_ref: modules.single_transition
+        access: call
+
+claims:
+  - id: pair_updates_are_sequential
+    statement: Every pair residual update reads the state produced by the immediately preceding pair operation.
+    line_refs:
+      - outgoing_triangle_update
+      - incoming_triangle_update
+      - starting_node_attention_update
+      - ending_node_attention_update
+      - pair_transition_update
+    evidence:
+      status: confirmed_from_code
+      refs:
+        - source_ref: af3_pairformer_code
+          role: implementation_evidence
+          locator: PairFormerIteration.__call__
+  - id: pair_to_single_path_is_logit_bias
+    statement: Pair state affects the single update through additive per-head attention logits rather than through concatenation with the single values.
+    line_refs:
+      - project_pair_logits
+      - pair_biased_single_attention_update
+    evidence:
+      status: confirmed_from_code
+      refs:
+        - source_ref: af3_pairformer_code
+          role: implementation_evidence
+          locator: single_pair_logits_projection
+        - source_ref: af3_self_attention_code
+          role: implementation_evidence
+          locator: self_attention logits += pair_logits

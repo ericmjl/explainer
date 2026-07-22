@@ -1,0 +1,789 @@
+schema_version: architecture-v0.5
+id: alphafold3_pairformer
+name: AlphaFold 3 Pairformer
+family: transformer
+status: review
+task_modes:
+  - prediction
+sources:
+  - source_ref: af3_2024
+    role: architecture_source
+    locator: Fig. 2a and Supplementary Methods 3.6
+  - source_ref: af3_pairformer_code
+    role: implementation_source
+    locator: PairFormerIteration, GridSelfAttention, TriangleMultiplication, and TransitionBlock
+  - source_ref: af3_evoformer_code
+    role: configuration_source
+    locator: Evoformer.Config and Evoformer.__call__
+  - source_ref: af3_self_attention_code
+    role: implementation_source
+    locator: SelfAttentionConfig and self_attention
+
+decomposition:
+  status: complete
+  evidence:
+    status: confirmed_from_code
+    refs:
+      - source_ref: af3_pairformer_code
+        role: implementation_evidence
+        locator: PairFormerIteration.__call__
+        note: The source set deliberately stops at the already-embedded single and pair representations.
+
+execution:
+  loops:
+    - id: pairformer_stack
+      repeats: 48
+      reruns:
+        - modules.triangle_multiplication_outgoing
+        - modules.triangle_multiplication_incoming
+        - modules.pair_attention_starting_node
+        - modules.pair_attention_ending_node
+        - modules.pair_transition
+        - modules.single_pair_logits_projection
+        - modules.single_attention_with_pair_bias
+        - modules.single_transition
+      cached:
+        - value_sites.token_mask_input
+        - value_sites.pair_mask_input
+      notes:
+        - Each block has an independent parameter set; this is a depth stack, not weight sharing across 48 iterations.
+        - The pair track is fully updated before that block's pair state conditions the single-track attention.
+      evidence:
+        status: confirmed_from_code
+        refs:
+          - source_ref: af3_evoformer_code
+            role: configuration_evidence
+            locator: Evoformer.Config.pairformer and hk.experimental.layer_stack
+          - source_ref: af3_pairformer_code
+            role: implementation_evidence
+            locator: PairFormerIteration.__call__
+
+state_semantics:
+  pair_state:
+    representation_ref: representations.pair_state
+    value_site_refs:
+      - value_sites.pair_state_input
+      - value_sites.block_pair_state
+      - value_sites.pair_after_outgoing_multiplication
+      - value_sites.pair_after_incoming_multiplication
+      - value_sites.pair_after_starting_attention
+      - value_sites.pair_after_ending_attention
+      - value_sites.pair_after_transition
+      - value_sites.pair_state_output
+    lifecycle: refined_across_five_pair_updates_per_block
+    notes:
+      - Every operation returns an additive delta; PairFormerIteration applies the residual update before the next operation.
+    evidence:
+      status: confirmed_from_code
+      refs:
+        - source_ref: af3_pairformer_code
+          role: implementation_evidence
+          locator: PairFormerIteration.__call__
+  single_state:
+    representation_ref: representations.single_state
+    value_site_refs:
+      - value_sites.single_state_input
+      - value_sites.block_single_state
+      - value_sites.single_after_pair_attention
+      - value_sites.single_after_transition
+      - value_sites.single_state_output
+    lifecycle: refined_after_pair_track_in_each_block
+    notes:
+      - The updated pair state affects the single state through attention logits; the single state is not written back into the pair state in the same Pairformer block.
+    evidence:
+      status: confirmed_from_code
+      refs:
+        - source_ref: af3_pairformer_code
+          role: implementation_evidence
+          locator: PairFormerIteration.__call__ with with_single=True
+  pair_attention_logits:
+    representation_ref: representations.pair_attention_logits
+    value_site_refs:
+      - value_sites.single_pair_attention_logits
+    lifecycle: rebuilt_from_updated_pair_state_in_each_block
+    notes:
+      - These 16-head logits bias single self-attention and are not a persistent state track.
+    evidence:
+      status: confirmed_from_code
+      refs:
+        - source_ref: af3_pairformer_code
+          role: implementation_evidence
+          locator: single_pair_logits_norm and single_pair_logits_projection
+  token_mask:
+    representation_ref: representations.token_mask
+    value_site_refs:
+      - value_sites.token_mask_input
+    lifecycle: cached_read_only_mask
+    evidence:
+      status: confirmed_from_code
+      refs:
+        - source_ref: af3_evoformer_code
+          role: implementation_evidence
+          locator: seq_mask passed to PairFormerIteration
+  pair_mask:
+    representation_ref: representations.pair_mask
+    value_site_refs:
+      - value_sites.pair_mask_input
+    lifecycle: cached_read_only_mask
+    evidence:
+      status: confirmed_from_code
+      refs:
+        - source_ref: af3_evoformer_code
+          role: implementation_evidence
+          locator: pair_mask passed to PairFormerIteration
+
+conditioning:
+  - id: outgoing_pair_mask
+    relation_ref: relations.pair_mask_conditions_outgoing_multiplication
+    mode: padding_mask
+    updates_source: false
+    evidence: &pair_code_evidence
+      status: confirmed_from_code
+      refs:
+        - source_ref: af3_pairformer_code
+          role: implementation_evidence
+          locator: PairFormerIteration.__call__
+  - id: incoming_pair_mask
+    relation_ref: relations.pair_mask_conditions_incoming_multiplication
+    mode: padding_mask
+    updates_source: false
+    evidence: *pair_code_evidence
+  - id: starting_attention_pair_mask
+    relation_ref: relations.pair_mask_conditions_starting_attention
+    mode: attention_mask
+    updates_source: false
+    evidence: *pair_code_evidence
+  - id: ending_attention_pair_mask
+    relation_ref: relations.pair_mask_conditions_ending_attention
+    mode: attention_mask
+    updates_source: false
+    evidence: *pair_code_evidence
+  - id: single_attention_token_mask
+    relation_ref: relations.token_mask_conditions_single_attention
+    mode: attention_mask
+    updates_source: false
+    evidence:
+      status: confirmed_from_code
+      refs:
+        - source_ref: af3_self_attention_code
+          role: implementation_evidence
+          locator: self_attention mask bias
+  - id: updated_pair_biases_single_attention
+    relation_ref: relations.pair_logits_bias_single_attention
+    mode: pair_logit_bias
+    updates_source: false
+    evidence:
+      status: confirmed_from_code
+      refs:
+        - source_ref: af3_pairformer_code
+          role: implementation_evidence
+          locator: single_pair_logits_projection and self_attention pair_logits argument
+  - id: updated_pair_enters_bias_projection
+    relation_ref: relations.updated_pair_state_enters_bias_projection
+    mode: pair_logit_bias_source
+    updates_source: false
+    evidence: *pair_code_evidence
+  - id: projected_pair_logits
+    relation_ref: relations.bias_projection_produces_pair_logits
+    mode: pair_logit_projection
+    updates_source: false
+    evidence: *pair_code_evidence
+
+scale_transitions: []
+
+training_inference:
+  objective:
+    kind: component_only
+    notes:
+      - The Pairformer is trained as part of the complete AlphaFold 3 system; this bounded diagram does not assign it a standalone loss.
+  schedule:
+    kind: none
+  sampler:
+    kind: none
+  teacher_forcing: not_applicable
+  self_conditioning: none
+  checkpoint_notes:
+    - The released implementation applies the same deterministic Pairformer computation in training and inference; upstream recycling is outside this diagram.
+  evidence:
+    status: confirmed_from_code
+    refs:
+      - source_ref: af3_evoformer_code
+        role: implementation_evidence
+        locator: Evoformer.__call__ pairformer_stack
+
+representations:
+  - id: single_state
+    scale: token
+    semantic_role: mutable token-wise trunk representation
+    shape: "N_token x 384"
+    glyph: single
+    carries:
+      - token context
+      - trunk single features
+    evidence: &single_shape_evidence
+      status: confirmed_from_code
+      refs:
+        - source_ref: af3_evoformer_code
+          role: shape_evidence
+          locator: seq_channel=384 and single_activations shape assertion
+        - source_ref: af3_2024
+          role: paper_evidence
+          locator: Fig. 2a
+  - id: pair_state
+    scale: token_pair
+    semantic_role: mutable ordered token-pair trunk representation
+    shape: "N_token x N_token x 128"
+    glyph: pair
+    carries:
+      - pairwise token context
+      - relational geometry evidence
+    evidence: &pair_shape_evidence
+      status: confirmed_from_code
+      refs:
+        - source_ref: af3_evoformer_code
+          role: shape_evidence
+          locator: pair_channel=128 and pair_activations shape assertion
+        - source_ref: af3_2024
+          role: paper_evidence
+          locator: Fig. 2a
+  - id: token_mask
+    scale: token
+    semantic_role: valid-token mask for single attention
+    shape: "N_token"
+    glyph: vector
+    carries:
+      - token validity
+    evidence:
+      status: confirmed_from_code
+      refs:
+        - source_ref: af3_pairformer_code
+          role: shape_evidence
+          locator: PairFormerIteration.__call__ seq_mask argument
+  - id: pair_mask
+    scale: token_pair
+    semantic_role: valid-token-pair mask for pair updates
+    shape: "N_token x N_token"
+    glyph: matrix
+    carries:
+      - pair validity
+    evidence:
+      status: confirmed_from_code
+      refs:
+        - source_ref: af3_pairformer_code
+          role: shape_evidence
+          locator: PairFormerIteration.__call__ pair_mask argument
+  - id: pair_attention_logits
+    scale: token_pair
+    semantic_role: per-head additive bias for token self-attention
+    shape: "16 x N_token x N_token"
+    glyph: volume
+    carries:
+      - pair-derived attention logits
+    evidence:
+      status: confirmed_from_code
+      refs:
+        - source_ref: af3_pairformer_code
+          role: shape_evidence
+          locator: single_pair_logits_projection and transpose
+        - source_ref: af3_self_attention_code
+          role: configuration_evidence
+          locator: SelfAttentionConfig.num_head=16
+
+value_sites:
+  - id: single_state_input
+    representation_ref: representations.single_state
+    scope_ref: architecture
+    boundary: input
+    role: component_input
+    evidence: *single_shape_evidence
+  - id: pair_state_input
+    representation_ref: representations.pair_state
+    scope_ref: architecture
+    boundary: input
+    role: component_input
+    evidence: *pair_shape_evidence
+  - id: token_mask_input
+    representation_ref: representations.token_mask
+    scope_ref: architecture
+    boundary: input
+    role: component_input
+    evidence: *pair_code_evidence
+  - id: pair_mask_input
+    representation_ref: representations.pair_mask
+    scope_ref: architecture
+    boundary: input
+    role: component_input
+    evidence: *pair_code_evidence
+  - id: block_pair_state
+    representation_ref: representations.pair_state
+    scope_ref: modules.pairformer_stack
+    role: pairformer_block_pair_read
+    evidence: *pair_shape_evidence
+  - id: pair_after_outgoing_multiplication
+    representation_ref: representations.pair_state
+    scope_ref: modules.pair_update_stage
+    role: outgoing_triangle_updated_pair_state
+    evidence: *pair_code_evidence
+  - id: pair_after_incoming_multiplication
+    representation_ref: representations.pair_state
+    scope_ref: modules.pair_update_stage
+    role: incoming_triangle_updated_pair_state
+    evidence: *pair_code_evidence
+  - id: pair_after_starting_attention
+    representation_ref: representations.pair_state
+    scope_ref: modules.pair_update_stage
+    role: starting_node_attention_updated_pair_state
+    evidence: *pair_code_evidence
+  - id: pair_after_ending_attention
+    representation_ref: representations.pair_state
+    scope_ref: modules.pair_update_stage
+    role: ending_node_attention_updated_pair_state
+    evidence: *pair_code_evidence
+  - id: pair_after_transition
+    representation_ref: representations.pair_state
+    scope_ref: modules.pairformer_stack
+    role: pairformer_block_pair_write
+    evidence: *pair_shape_evidence
+  - id: block_single_state
+    representation_ref: representations.single_state
+    scope_ref: modules.pairformer_stack
+    role: pairformer_block_single_read
+    evidence: *single_shape_evidence
+  - id: single_pair_attention_logits
+    representation_ref: representations.pair_attention_logits
+    scope_ref: modules.single_update_stage
+    role: pair_derived_single_attention_bias
+    evidence: *pair_code_evidence
+  - id: single_after_pair_attention
+    representation_ref: representations.single_state
+    scope_ref: modules.single_update_stage
+    role: attention_updated_single_state
+    evidence: *single_shape_evidence
+  - id: single_after_transition
+    representation_ref: representations.single_state
+    scope_ref: modules.pairformer_stack
+    role: pairformer_block_single_write
+    evidence: *single_shape_evidence
+  - id: single_state_output
+    representation_ref: representations.single_state
+    scope_ref: architecture
+    boundary: output
+    role: component_output
+    evidence: *single_shape_evidence
+  - id: pair_state_output
+    representation_ref: representations.pair_state
+    scope_ref: architecture
+    boundary: output
+    role: component_output
+    evidence: *pair_shape_evidence
+
+modules:
+  - id: pairformer_stack
+    parent_ref: architecture
+    decomposition:
+      status: complete
+    label: Pairformer Stack
+    kind: refiner
+    mechanisms: [pair_reasoning, pair_biased_single_attention]
+    role: refine pair and single token representations through 48 independently parameterized blocks
+    scale: token_and_token_pair
+    repeats: 48
+    depth:
+      blocks: 48
+    pseudocode_ref: pseudocode/alphafold3-pairformer.yaml
+    evidence:
+      status: confirmed_from_code
+      refs:
+        - source_ref: af3_evoformer_code
+          role: implementation_evidence
+          locator: pairformer_stack construction and application
+  - id: pair_update_stage
+    parent_ref: modules.pairformer_stack
+    decomposition:
+      status: complete
+    label: Pair Track Update
+    kind: refiner
+    mechanisms: [triangle_multiplication, axial_pair_attention, transition]
+    role: apply five ordered residual updates to the pair representation
+    scale: token_pair
+    evidence: *pair_code_evidence
+  - id: triangle_multiplication_outgoing
+    parent_ref: modules.pair_update_stage
+    decomposition:
+      status: leaf
+    label: Triangle Multiplication Outgoing
+    kind: operator
+    mechanisms: [triangle_multiplication, gated_projection, residual_update]
+    role: aggregate products over shared outgoing edges and add the result to pair state
+    scale: token_pair
+    evidence: &triangle_code_evidence
+      status: confirmed_from_code
+      refs:
+        - source_ref: af3_pairformer_code
+          role: implementation_evidence
+          locator: TriangleMultiplication.__call__ and PairFormerIteration.__call__
+  - id: triangle_multiplication_incoming
+    parent_ref: modules.pair_update_stage
+    decomposition:
+      status: leaf
+    label: Triangle Multiplication Incoming
+    kind: operator
+    mechanisms: [triangle_multiplication, gated_projection, residual_update]
+    role: aggregate products over shared incoming edges and add the result to pair state
+    scale: token_pair
+    evidence: *triangle_code_evidence
+  - id: pair_attention_starting_node
+    parent_ref: modules.pair_update_stage
+    decomposition:
+      status: leaf
+    label: Triangle Attention Starting Node
+    kind: attention
+    mechanisms: [axial_attention, self_derived_pair_bias, query_gating, residual_update]
+    role: update each ordered pair by attending along the starting-node pair-grid axis
+    scale: token_pair
+    attention:
+      pattern: pair_grid_starting_node
+      query_scale: token_pair
+      key_value_scale: token_pair
+      heads: 4
+      pair_bias: true
+      pair_bias_source: normalized_pair_state
+      positional_encoding:
+        kind: none
+    evidence: &grid_attention_evidence
+      status: confirmed_from_code
+      refs:
+        - source_ref: af3_pairformer_code
+          role: implementation_evidence
+          locator: GridSelfAttention.__call__, GridSelfAttention._attention, and PairFormerIteration.__call__
+  - id: pair_attention_ending_node
+    parent_ref: modules.pair_update_stage
+    decomposition:
+      status: leaf
+    label: Triangle Attention Ending Node
+    kind: attention
+    mechanisms: [axial_attention, self_derived_pair_bias, query_gating, residual_update]
+    role: transpose the pair grid, attend along the complementary ending-node axis, and add the result to pair state
+    scale: token_pair
+    attention:
+      pattern: pair_grid_ending_node
+      query_scale: token_pair
+      key_value_scale: token_pair
+      heads: 4
+      pair_bias: true
+      pair_bias_source: normalized_pair_state
+      positional_encoding:
+        kind: none
+    evidence: *grid_attention_evidence
+  - id: pair_transition
+    parent_ref: modules.pair_update_stage
+    decomposition:
+      status: leaf
+    label: Pair Transition
+    kind: feed_forward
+    mechanisms: [layer_normalization, swiglu, residual_update]
+    role: apply a pointwise 4x SwiGLU transition and add its 128-channel projection back to each pair entry
+    scale: token_pair
+    evidence: &transition_code_evidence
+      status: confirmed_from_code
+      refs:
+        - source_ref: af3_pairformer_code
+          role: implementation_evidence
+          locator: TransitionBlock.__call__ and PairFormerIteration.__call__
+  - id: single_update_stage
+    parent_ref: modules.pairformer_stack
+    decomposition:
+      status: complete
+    label: Single Track Update
+    kind: refiner
+    mechanisms: [pair_logit_projection, self_attention, transition]
+    role: use the updated pair state to bias token self-attention, then apply a token-wise transition
+    scale: token
+    evidence: *pair_code_evidence
+  - id: single_pair_logits_projection
+    parent_ref: modules.single_update_stage
+    decomposition:
+      status: leaf
+    label: Project Pair Attention Bias
+    kind: adapter
+    mechanisms: [layer_normalization, linear_projection]
+    role: normalize the updated pair state and project each token pair to 16 single-attention head logits
+    scale: token_pair
+    evidence: *pair_code_evidence
+  - id: single_attention_with_pair_bias
+    parent_ref: modules.single_update_stage
+    decomposition:
+      status: leaf
+    label: Single Attention with Pair Bias
+    kind: attention
+    mechanisms: [full_attention, pair_logit_bias, query_gating, residual_update]
+    role: update each token state with 16-head self-attention whose logits receive the projected pair bias
+    scale: token
+    attention:
+      pattern: full
+      query_scale: token
+      key_value_scale: token
+      heads: 16
+      pair_bias: true
+      pair_bias_source: updated_pair_state
+      positional_encoding:
+        kind: none
+    evidence:
+      status: confirmed_from_code
+      refs:
+        - source_ref: af3_pairformer_code
+          role: callsite_evidence
+          locator: PairFormerIteration single_attention_ call
+        - source_ref: af3_self_attention_code
+          role: implementation_evidence
+          locator: self_attention
+  - id: single_transition
+    parent_ref: modules.single_update_stage
+    decomposition:
+      status: leaf
+    label: Single Transition
+    kind: feed_forward
+    mechanisms: [layer_normalization, swiglu, residual_update]
+    role: apply a pointwise 4x SwiGLU transition and add its 384-channel projection back to each token state
+    scale: token
+    evidence: *transition_code_evidence
+
+relations:
+  - id: input_pair_state_initializes_block_pair_state
+    from: value_sites.pair_state_input
+    to: value_sites.block_pair_state
+    kind: state_update
+    carries: [representations.pair_state]
+    operation: initialize_pairformer_pair_state
+    evidence: &pair_relation_evidence
+      status: confirmed_from_code
+      refs:
+        - source_ref: af3_evoformer_code
+          role: implementation_evidence
+          locator: pairformer_stack input and output
+        - source_ref: af3_pairformer_code
+          role: implementation_evidence
+          locator: PairFormerIteration.__call__
+  - id: input_single_state_initializes_block_single_state
+    from: value_sites.single_state_input
+    to: value_sites.block_single_state
+    kind: state_update
+    carries: [representations.single_state]
+    operation: initialize_pairformer_single_state
+    evidence: *pair_relation_evidence
+  - id: block_pair_state_enters_outgoing_multiplication
+    from: value_sites.block_pair_state
+    to: modules.triangle_multiplication_outgoing
+    kind: data_flow
+    carries: [representations.pair_state]
+    operation: compute_outgoing_triangle_delta
+    evidence: *pair_relation_evidence
+  - id: pair_mask_conditions_outgoing_multiplication
+    from: value_sites.pair_mask_input
+    to: modules.triangle_multiplication_outgoing
+    kind: conditioning
+    carries: [representations.pair_mask]
+    operation: mask_outgoing_triangle_inputs
+    evidence: *pair_relation_evidence
+  - id: outgoing_multiplication_updates_pair_state
+    from: modules.triangle_multiplication_outgoing
+    to: value_sites.pair_after_outgoing_multiplication
+    kind: state_update
+    carries: [representations.pair_state]
+    operation: add_outgoing_triangle_delta
+    evidence: *pair_relation_evidence
+  - id: outgoing_pair_state_enters_incoming_multiplication
+    from: value_sites.pair_after_outgoing_multiplication
+    to: modules.triangle_multiplication_incoming
+    kind: data_flow
+    carries: [representations.pair_state]
+    operation: compute_incoming_triangle_delta
+    evidence: *pair_relation_evidence
+  - id: pair_mask_conditions_incoming_multiplication
+    from: value_sites.pair_mask_input
+    to: modules.triangle_multiplication_incoming
+    kind: conditioning
+    carries: [representations.pair_mask]
+    operation: mask_incoming_triangle_inputs
+    evidence: *pair_relation_evidence
+  - id: incoming_multiplication_updates_pair_state
+    from: modules.triangle_multiplication_incoming
+    to: value_sites.pair_after_incoming_multiplication
+    kind: state_update
+    carries: [representations.pair_state]
+    operation: add_incoming_triangle_delta
+    evidence: *pair_relation_evidence
+  - id: incoming_pair_state_enters_starting_attention
+    from: value_sites.pair_after_incoming_multiplication
+    to: modules.pair_attention_starting_node
+    kind: data_flow
+    carries: [representations.pair_state]
+    operation: attend_along_starting_node_axis
+    evidence: *pair_relation_evidence
+  - id: pair_mask_conditions_starting_attention
+    from: value_sites.pair_mask_input
+    to: modules.pair_attention_starting_node
+    kind: conditioning
+    carries: [representations.pair_mask]
+    operation: mask_starting_node_attention
+    evidence: *pair_relation_evidence
+  - id: starting_attention_updates_pair_state
+    from: modules.pair_attention_starting_node
+    to: value_sites.pair_after_starting_attention
+    kind: state_update
+    carries: [representations.pair_state]
+    operation: add_starting_node_attention_delta
+    evidence: *pair_relation_evidence
+  - id: starting_pair_state_enters_ending_attention
+    from: value_sites.pair_after_starting_attention
+    to: modules.pair_attention_ending_node
+    kind: data_flow
+    carries: [representations.pair_state]
+    operation: attend_along_ending_node_axis
+    evidence: *pair_relation_evidence
+  - id: pair_mask_conditions_ending_attention
+    from: value_sites.pair_mask_input
+    to: modules.pair_attention_ending_node
+    kind: conditioning
+    carries: [representations.pair_mask]
+    operation: mask_ending_node_attention
+    evidence: *pair_relation_evidence
+  - id: ending_attention_updates_pair_state
+    from: modules.pair_attention_ending_node
+    to: value_sites.pair_after_ending_attention
+    kind: state_update
+    carries: [representations.pair_state]
+    operation: add_ending_node_attention_delta
+    evidence: *pair_relation_evidence
+  - id: ending_pair_state_enters_pair_transition
+    from: value_sites.pair_after_ending_attention
+    to: modules.pair_transition
+    kind: data_flow
+    carries: [representations.pair_state]
+    operation: compute_pair_transition_delta
+    evidence: *pair_relation_evidence
+  - id: pair_transition_updates_pair_state
+    from: modules.pair_transition
+    to: value_sites.pair_after_transition
+    kind: state_update
+    carries: [representations.pair_state]
+    operation: add_pair_transition_delta
+    evidence: *pair_relation_evidence
+  - id: updated_pair_state_enters_bias_projection
+    from: value_sites.pair_after_transition
+    to: modules.single_pair_logits_projection
+    kind: conditioning
+    carries: [representations.pair_state]
+    operation: normalize_and_project_pair_logits
+    evidence: *pair_relation_evidence
+  - id: bias_projection_produces_pair_logits
+    from: modules.single_pair_logits_projection
+    to: value_sites.single_pair_attention_logits
+    kind: conditioning
+    carries: [representations.pair_attention_logits]
+    operation: project_sixteen_attention_logits
+    evidence: *pair_relation_evidence
+  - id: block_single_state_enters_pair_biased_attention
+    from: value_sites.block_single_state
+    to: modules.single_attention_with_pair_bias
+    kind: data_flow
+    carries: [representations.single_state]
+    operation: project_single_queries_keys_values
+    evidence: *pair_relation_evidence
+  - id: pair_logits_bias_single_attention
+    from: value_sites.single_pair_attention_logits
+    to: modules.single_attention_with_pair_bias
+    kind: conditioning
+    carries: [representations.pair_attention_logits]
+    operation: add_pair_logits_to_attention_scores
+    evidence: *pair_relation_evidence
+  - id: token_mask_conditions_single_attention
+    from: value_sites.token_mask_input
+    to: modules.single_attention_with_pair_bias
+    kind: conditioning
+    carries: [representations.token_mask]
+    operation: mask_invalid_attention_keys
+    evidence: *pair_relation_evidence
+  - id: pair_biased_attention_updates_single_state
+    from: modules.single_attention_with_pair_bias
+    to: value_sites.single_after_pair_attention
+    kind: state_update
+    carries: [representations.single_state]
+    operation: add_single_attention_delta
+    evidence: *pair_relation_evidence
+  - id: attention_updated_single_enters_transition
+    from: value_sites.single_after_pair_attention
+    to: modules.single_transition
+    kind: data_flow
+    carries: [representations.single_state]
+    operation: compute_single_transition_delta
+    evidence: *pair_relation_evidence
+  - id: single_transition_updates_single_state
+    from: modules.single_transition
+    to: value_sites.single_after_transition
+    kind: state_update
+    carries: [representations.single_state]
+    operation: add_single_transition_delta
+    evidence: *pair_relation_evidence
+  - id: block_pair_output_reenters_next_pairformer_block
+    from: value_sites.pair_after_transition
+    to: value_sites.block_pair_state
+    kind: state_update
+    carries: [representations.pair_state]
+    operation: advance_pair_state_to_next_block
+    evidence: *pair_relation_evidence
+  - id: block_single_output_reenters_next_pairformer_block
+    from: value_sites.single_after_transition
+    to: value_sites.block_single_state
+    kind: state_update
+    carries: [representations.single_state]
+    operation: advance_single_state_to_next_block
+    evidence: *pair_relation_evidence
+  - id: final_pair_block_state_becomes_output
+    from: value_sites.pair_after_transition
+    to: value_sites.pair_state_output
+    kind: state_update
+    carries: [representations.pair_state]
+    operation: expose_final_pair_state
+    evidence: *pair_relation_evidence
+  - id: final_single_block_state_becomes_output
+    from: value_sites.single_after_transition
+    to: value_sites.single_state_output
+    kind: state_update
+    carries: [representations.single_state]
+    operation: expose_final_single_state
+    evidence: *pair_relation_evidence
+
+claims:
+  - id: pairformer_has_no_msa_state
+    statement: The Pairformer boundary retains only pair and single token representations; MSA processing occurs earlier in the AF3 trunk.
+    scope:
+      module_ref: modules.pairformer_stack
+    evidence:
+      status: confirmed_from_paper
+      refs:
+        - source_ref: af3_2024
+          role: paper_evidence
+          locator: Network architecture and training; Fig. 2a
+  - id: pair_track_precedes_single_track
+    statement: Within each block, all five pair updates finish before the updated pair state is projected into logits for single self-attention.
+    scope:
+      module_ref: modules.pairformer_stack
+    evidence: *pair_code_evidence
+  - id: pair_state_does_not_receive_single_update
+    statement: The released AF3 Pairformer iteration updates single state from pair-derived attention logits but does not inject the updated single state back into pair state within that block.
+    scope:
+      module_ref: modules.pairformer_stack
+    evidence: *pair_code_evidence
+  - id: blocks_have_independent_weights
+    statement: The 48 Pairformer blocks have independent trainable parameters rather than sharing one block's weights.
+    scope:
+      module_ref: modules.pairformer_stack
+    evidence:
+      status: confirmed_from_paper
+      refs:
+        - source_ref: af3_2024
+          role: paper_evidence
+          locator: Fig. 2a caption
+
+open_questions: []

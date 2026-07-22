@@ -3,7 +3,7 @@ export const manifest = {
   "build": {
     "generator": "architecture-manifest-builder-v0.5.0",
     "inputDigests": {
-      "references/bibliography.yaml": "aa83264d6b5cce1245347f404a9d13daa41d4b6782fd94f1458397f312843b9f",
+      "references/bibliography.yaml": "82f709e900c8a4856e4b834e7d3d7269313b9e4aa08f6bea91d75c33ef974bdd",
       "architectures/alphafold2.yaml": "a754a17dc83303c7dff50f6925771b01dc51d237dae382476b8bf87fbead77fe",
       "views/alphafold2-semantic-zoom.view.yaml": "6b317c6d224a7e3b8416839247c0c12d6b9e0cd34d859475f4529a939d51fe8e",
       "pseudocode/alphafold2.yaml": "dc6534469437eba99e292899d31f28860a89f091d9457288e7d927af66598fac"
@@ -3027,6 +3027,75 @@ export const manifest = {
         "path": "alphafold/relax/relax.py",
         "url": "https://github.com/google-deepmind/alphafold/blob/09ed0c5d5a32d794ed9f78b70906cbeaff0ef439/alphafold/relax/relax.py",
         "href": "https://github.com/google-deepmind/alphafold/blob/09ed0c5d5a32d794ed9f78b70906cbeaff0ef439/alphafold/relax/relax.py"
+      },
+      {
+        "id": "af3_2024",
+        "kind": "paper",
+        "title": "Accurate structure prediction of biomolecular interactions with AlphaFold 3",
+        "authors": [
+          "Josh Abramson",
+          "Jonas Adler",
+          "Jack Dunger",
+          "Richard Evans",
+          "Tim Green",
+          "Alexander Pritzel",
+          "Olaf Ronneberger",
+          "Lindsay Willmore",
+          "Andrew J. Ballard",
+          "Joshua Bambrick",
+          "Sebastian W. Bodenstein",
+          "David A. Evans",
+          "Chia-Chun Hung",
+          "Michael O'Neill",
+          "David Reiman",
+          "Kathryn Tunyasuvunakool",
+          "Zachary Wu",
+          "Akvile Zemgulyte",
+          "Victor Bapst",
+          "Pushmeet Kohli",
+          "Max Jaderberg",
+          "Demis Hassabis",
+          "John M. Jumper"
+        ],
+        "year": 2024,
+        "identifiers": {
+          "doi": "10.1038/s41586-024-07487-w"
+        },
+        "url": "https://www.nature.com/articles/s41586-024-07487-w",
+        "href": "https://www.nature.com/articles/s41586-024-07487-w"
+      },
+      {
+        "id": "af3_pairformer_code",
+        "kind": "code",
+        "title": "AlphaFold 3 Pairformer iteration and pair-update implementation",
+        "organization": "Google DeepMind",
+        "repository": "google-deepmind/alphafold3",
+        "revision": "f3e86f27dfac16559d16f470bb2f9323eb357f1f",
+        "path": "src/alphafold3/model/network/modules.py",
+        "url": "https://github.com/google-deepmind/alphafold3/blob/f3e86f27dfac16559d16f470bb2f9323eb357f1f/src/alphafold3/model/network/modules.py",
+        "href": "https://github.com/google-deepmind/alphafold3/blob/f3e86f27dfac16559d16f470bb2f9323eb357f1f/src/alphafold3/model/network/modules.py"
+      },
+      {
+        "id": "af3_evoformer_code",
+        "kind": "code",
+        "title": "AlphaFold 3 trunk and Pairformer stack configuration",
+        "organization": "Google DeepMind",
+        "repository": "google-deepmind/alphafold3",
+        "revision": "f3e86f27dfac16559d16f470bb2f9323eb357f1f",
+        "path": "src/alphafold3/model/network/evoformer.py",
+        "url": "https://github.com/google-deepmind/alphafold3/blob/f3e86f27dfac16559d16f470bb2f9323eb357f1f/src/alphafold3/model/network/evoformer.py",
+        "href": "https://github.com/google-deepmind/alphafold3/blob/f3e86f27dfac16559d16f470bb2f9323eb357f1f/src/alphafold3/model/network/evoformer.py"
+      },
+      {
+        "id": "af3_self_attention_code",
+        "kind": "code",
+        "title": "AlphaFold 3 single self-attention implementation",
+        "organization": "Google DeepMind",
+        "repository": "google-deepmind/alphafold3",
+        "revision": "f3e86f27dfac16559d16f470bb2f9323eb357f1f",
+        "path": "src/alphafold3/model/network/diffusion_transformer.py",
+        "url": "https://github.com/google-deepmind/alphafold3/blob/f3e86f27dfac16559d16f470bb2f9323eb357f1f/src/alphafold3/model/network/diffusion_transformer.py",
+        "href": "https://github.com/google-deepmind/alphafold3/blob/f3e86f27dfac16559d16f470bb2f9323eb357f1f/src/alphafold3/model/network/diffusion_transformer.py"
       },
       {
         "id": "genie2_2024",

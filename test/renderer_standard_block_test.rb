@@ -40,6 +40,37 @@ class RendererStandardBlockTest < Minitest::Test
     assert_includes styles, ".visual-segment-header"
   end
 
+  def test_genie3_pair_transition_board_is_compiled_from_the_standard_block
+    manifest = manifest("genie3")
+    board = manifest.dig("boards", "items").find do |candidate|
+      candidate.fetch("id") == "genie3_pair_transition_internals"
+    end
+
+    assert_equal "standard_block_template", board.fetch("projectionMode")
+    assert_equal "block_instances.latent_pair_transition", board.fetch("blockInstanceRef")
+    assert_equal "layer_norm_expansion_relu_projection_mask_residual", board.fetch("variant")
+    assert_equal "exact", board.fetch("conformance")
+    assert board.fetch("nodes").any? { |node| node.fetch("id") == "expanded_pair_state" }
+    assert board.fetch("nodes").any? { |node| node.fetch("id") == "add_pair_residual" }
+  end
+
+  def test_genie3_single_to_pair_endpoint_board_is_compiled_from_the_standard_block
+    manifest = manifest("genie3")
+    board = manifest.dig("boards", "items").find do |candidate|
+      candidate.fetch("id") == "genie3_single_to_pair_endpoint_update_internals"
+    end
+
+    assert_equal "standard_block_template", board.fetch("projectionMode")
+    assert_equal "block_instances.latent_single_to_pair_endpoint_update", board.fetch("blockInstanceRef")
+    assert_equal "projected_endpoint_sum_residual", board.fetch("variant")
+    assert_equal "exact", board.fetch("conformance")
+    assert board.fetch("nodes").any? { |node| node.fetch("id") == "left_single" }
+    assert board.fetch("nodes").any? { |node| node.fetch("id") == "right_single" }
+    assert board.fetch("nodes").any? { |node| node.fetch("id") == "pair_activations" }
+    assert_equal %w[endpoint_pair_construction residual_pair_update],
+      board.fetch("segments").map { |segment| segment.fetch("id") }
+  end
+
   def test_renderer_uses_generic_operation_glyphs
     renderer = read("renderer/architecture/renderer.js")
     styles = read("styles.css")

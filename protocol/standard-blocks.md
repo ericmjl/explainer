@@ -143,7 +143,9 @@ their labels, operations, or edges. Segment memberships may not overlap. The
 compiler converts active `node_refs` to instance-board node IDs, preserves
 source order as phase order, and drops a segment only when the selected variant
 contains none of its members. Both the primary and comparison board surfaces
-render these as subtle labeled enclosures.
+render these as subtle labeled enclosures. Segments that should retain their
+independent horizontal bounds while sharing a common top and bottom may declare
+the same `vertical_alignment_group`.
 
 ## Concrete Architecture Use
 

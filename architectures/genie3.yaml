@@ -15,6 +15,7 @@ reference_configuration:
   default_sampling_steps: 100
   single_feature_dimension: 384
   pair_feature_dimension: 128
+  pair_transition_hidden_dimension: 512
   latent_transformer_blocks: 5
   global_tokens: 10
   structure_layers: 8
@@ -251,7 +252,7 @@ scale_transitions:
     relation_path:
       - relations.single_after_pair_attention_enters_single_to_pair_update
       - relations.single_to_pair_update_produces_pair_state
-    aggregation: projected_outer_product
+    aggregation: projected_endpoint_broadcast_sum
     copy_vs_pool: expand
     evidence:
       status: confirmed_from_code
@@ -788,6 +789,46 @@ value_sites:
       - source_ref: genie3_structure_code
         role: implementation_evidence
         locator: StructureLayer.forward
+  - id: endpoint_pair_activations
+    representation_ref: representations.pair_features
+    scope_ref: modules.pair_feature_embedder
+    role: endpoint_projection_pair_term
+    evidence:
+      status: confirmed_from_code
+      refs:
+      - source_ref: genie3_pair_feature_code
+        role: implementation_evidence
+        locator: V1PairFeatureNet.forward zi, zj, and zij outer-sum section
+  - id: relative_position_pair_features
+    representation_ref: representations.pair_features
+    scope_ref: modules.pair_feature_embedder
+    role: relative_position_pair_term
+    evidence:
+      status: confirmed_from_code
+      refs:
+      - source_ref: genie3_pair_feature_code
+        role: implementation_evidence
+        locator: V1PairFeatureNet.forward relpos_embedder contribution
+  - id: noisy_frame_pair_features
+    representation_ref: representations.pair_features
+    scope_ref: modules.pair_feature_embedder
+    role: current_noisy_geometry_pair_term
+    evidence:
+      status: confirmed_from_code
+      refs:
+      - source_ref: genie3_pair_feature_code
+        role: implementation_evidence
+        locator: V1PairFeatureNet.forward template-based encoding on noisy structure
+  - id: conditioned_pair_features
+    representation_ref: representations.pair_features
+    scope_ref: modules.pair_feature_embedder
+    role: conditioned_geometry_pair_term
+    evidence:
+      status: confirmed_from_code
+      refs:
+      - source_ref: genie3_pair_feature_code
+        role: implementation_evidence
+        locator: V1PairFeatureNet.forward template-based encoding on conditional structure
 modules:
   - id: feature_builder
     parent_ref: architecture
@@ -917,7 +958,8 @@ modules:
     evidence: *single_evidence
   - id: pair_feature_embedder
     parent_ref: modules.denoiser
-    decomposition: { status: leaf }
+    decomposition:
+      status: complete
     label: Pair-Feature Embedder
     kind: encoder
     role: combine single outer sums, relative indices, noisy frame geometry, and conditioned geometry into 128-dimensional pair features
@@ -1006,12 +1048,18 @@ modules:
   - id: single_to_pair_update
     parent_ref: modules.latent_transformer
     decomposition: { status: leaf }
-    label: Single-to-Pair Outer Product
+    label: Single-to-Pair Endpoint Update
     kind: operator
-    mechanisms: [outer_product]
-    role: project the updated single state into a residual pair update
+    mechanisms: [endpoint_projection, broadcast_sum, residual_update]
+    role: separately project the source and destination endpoint features from updated singles, broadcast-sum them over ordered token pairs, project to pair channels, and add them residually to the current pair state
     scale: pair
-    evidence: *latent_evidence
+    evidence:
+      status: confirmed_from_code
+      refs:
+        - source_ref: genie3_latent_transformer_code
+          role: implementation_evidence
+          locator: LatentTransformerBlock.__init__ and LatentTransformerBlock.forward
+          note: linear_pi and linear_pj separately project the token state, their broadcast sum passes through linear_p, and the result is added to p.
   - id: triangle_multiplication_stack
     parent_ref: modules.latent_transformer
     decomposition: { status: leaf }
@@ -1024,9 +1072,9 @@ modules:
   - id: pair_transition
     parent_ref: modules.latent_transformer
     decomposition: { status: leaf }
-    label: Pair Transition
+    label: Pointwise Pair Transition
     kind: feed_forward
-    role: apply the residual pair-wise transition at the end of each latent block
+    role: apply a shared LayerNorm-MLP independently to every pair entry, mask its update, and add it residually at the end of each latent block
     scale: pair
     evidence: *latent_evidence
   - id: invariant_point_attention
@@ -1340,6 +1388,95 @@ modules:
       - source_ref: genie3_feature_code
         role: implementation_evidence
         locator: create_np_features_from_target_config, concatenate_np_features, and update_np_features_with_ca_centering
+  - id: endpoint_pair_constructor
+    parent_ref: modules.pair_feature_embedder
+    decomposition:
+      status: leaf
+    label: Endpoint Pair Construction
+    kind: encoder
+    mechanisms:
+    - endpoint_projection
+    - broadcast_sum
+    role: separately project every single feature as a source and destination endpoint, then broadcast-add the two projections for every ordered token pair
+    scale: pair
+    evidence:
+      status: confirmed_from_code
+      refs:
+      - source_ref: genie3_pair_feature_code
+        role: implementation_evidence
+        locator: V1PairFeatureNet.__init__ and V1PairFeatureNet.forward linear_zi, linear_zj, and outer-sum section
+  - id: relative_position_embedder
+    parent_ref: modules.pair_feature_embedder
+    decomposition:
+      status: leaf
+    label: Relative Position Embedder
+    kind: encoder
+    mechanisms:
+    - relative_position_encoding
+    - linear_projection
+    role: map chain, entity, token-index, and residue-index relationships into one 128-channel feature for every ordered token pair
+    scale: pair
+    evidence:
+      status: confirmed_from_code
+      refs:
+      - source_ref: genie3_pair_feature_code
+        role: implementation_evidence
+        locator: V1PairFeatureNet.__init__ and V1PairFeatureNet.forward relpos_embedder call
+  - id: noisy_frame_pair_encoder
+    parent_ref: modules.pair_feature_embedder
+    decomposition:
+      status: leaf
+    label: Noisy-Frame Geometry Encoder
+    kind: encoder
+    mechanisms:
+    - distance_binning
+    - relative_orientation
+    - linear_projection
+    - masking
+    role: encode pairwise distances and relative frame orientations from the current noisy structure, together with structure-availability indicators, into 128 pair channels
+    scale: pair
+    evidence:
+      status: confirmed_from_code
+      refs:
+      - source_ref: genie3_pair_feature_code
+        role: implementation_evidence
+        locator: V1PairFeatureNet.forward template-based encoding on noisy structure and helper methods
+  - id: conditioned_pair_geometry_encoder
+    parent_ref: modules.pair_feature_embedder
+    decomposition:
+      status: leaf
+    label: Conditioned Geometry Encoder
+    kind: encoder
+    mechanisms:
+    - conditional_frame_construction
+    - distance_binning
+    - relative_orientation
+    - group_masking
+    role: encode distances and relative orientations only between structurally conditioned tokens that belong to the same conditioning group
+    scale: pair
+    evidence:
+      status: confirmed_from_code
+      refs:
+      - source_ref: genie3_pair_feature_code
+        role: implementation_evidence
+        locator: V1PairFeatureNet.forward conditional pair masks and template-based encoding on conditional structure
+  - id: pair_feature_assembler
+    parent_ref: modules.pair_feature_embedder
+    decomposition:
+      status: leaf
+    label: Pair Feature Sum + Mask
+    kind: encoder
+    mechanisms:
+    - additive_fusion
+    - pair_masking
+    role: add the endpoint, relative-position, noisy-geometry, and conditioned-geometry terms and zero invalid token pairs with the token-pair mask
+    scale: pair
+    evidence:
+      status: confirmed_from_code
+      refs:
+      - source_ref: genie3_pair_feature_code
+        role: implementation_evidence
+        locator: V1PairFeatureNet.forward accumulated zij updates and final masked return
 block_instances:
   - id: latent_reduced_pair_attention
     block_ref: standard_blocks/pair-biased-attention.yaml
@@ -1387,6 +1524,50 @@ block_instances:
           role: implementation_evidence
           locator: StructureTransitionLayer.forward and StructureTransition.forward
           note: StructureTransitionLayer applies three same-width linear layers with ReLU between them and a residual add; StructureTransition then applies dropout and LayerNorm.
+  - id: latent_single_to_pair_endpoint_update
+    block_ref: standard_blocks/single-to-pair-endpoint-update.yaml
+    subject_ref: modules.single_to_pair_update
+    variant: projected_endpoint_sum_residual
+    use_scope: whole_module
+    conformance: exact
+    port_bindings:
+      - port_ref: ports.single_state
+        relation_refs: [relations.single_after_pair_attention_enters_single_to_pair_update]
+      - port_ref: ports.pair_state
+        relation_refs: [relations.pair_with_global_tokens_enters_single_to_pair_update]
+      - port_ref: ports.updated_pair_state
+        relation_refs: [relations.single_to_pair_update_produces_pair_state]
+    evidence:
+      status: confirmed_from_code
+      refs:
+        - source_ref: genie3_latent_transformer_code
+          role: implementation_evidence
+          locator: LatentTransformerBlock.__init__ and LatentTransformerBlock.forward
+          note: Genie 3 implements the full endpoint-projection, broadcast-sum, final-projection, and residual-add pattern represented by this instance.
+  - id: latent_pair_transition
+    block_ref: standard_blocks/pair-transition.yaml
+    subject_ref: modules.pair_transition
+    variant: layer_norm_expansion_relu_projection_mask_residual
+    use_scope: whole_module
+    conformance: exact
+    port_bindings:
+      - port_ref: ports.pair_state
+        relation_refs: [relations.pair_after_triangle_updates_enter_transition]
+      - port_ref: ports.updated_pair_state
+        relation_refs: [relations.pair_transition_produces_block_pair_output]
+    parameter_bindings:
+      - { parameter_ref: parameters.c_hidden, configuration_ref: reference_configuration.pair_transition_hidden_dimension }
+    evidence:
+      status: confirmed_from_code
+      refs:
+        - source_ref: genie3_transition_code
+          role: implementation_evidence
+          locator: PairTransition.forward and PairTransition._transition
+          note: PairTransition applies LayerNorm, expands 128 pair channels fourfold, applies ReLU, projects back to 128 channels, and multiplies by the pair mask.
+        - source_ref: genie3_latent_transformer_code
+          role: caller_evidence
+          locator: LatentTransformerBlock.forward
+          note: The latent block adds the returned masked pair-transition update residually to the triangle-refined pair state.
   - id: structure_ipa
     block_ref: standard_blocks/invariant-point-attention.yaml
     subject_ref: modules.invariant_point_attention
@@ -1558,10 +1739,10 @@ relations:
     evidence: *single_relation_evidence
   - id: initial_single_features_enter_pair_embedder
     from: value_sites.initial_single_features
-    to: modules.pair_feature_embedder
+    to: modules.endpoint_pair_constructor
     kind: data_flow
     carries: [representations.single_features]
-    operation: project_outer_sum
+    operation: project_endpoint_features
     evidence: &pair_relation_evidence
       status: confirmed_from_code
       refs:
@@ -1570,7 +1751,7 @@ relations:
           locator: V1PairFeatureNet.forward
   - id: current_frames_enter_pair_embedder
     from: value_sites.current_frames
-    to: modules.pair_feature_embedder
+    to: modules.noisy_frame_pair_encoder
     kind: data_flow
     carries: [representations.token_frames]
     operation: encode_noisy_frame_geometry
@@ -1580,14 +1761,14 @@ relations:
     to: modules.pair_feature_embedder
     kind: conditioning
     carries: [representations.feature_bundle]
-    operation: provide_relative_and_conditioned_geometry
+    operation: provide_pair_feature_inputs
     evidence: *pair_relation_evidence
   - id: pair_embedder_produces_initial_pair_features
-    from: modules.pair_feature_embedder
+    from: modules.pair_feature_assembler
     to: value_sites.initial_pair_features
     kind: data_flow
     carries: [representations.pair_features]
-    operation: sum_projected_pair_terms
+    operation: mask_and_emit_initial_pair_features
     evidence: *pair_relation_evidence
   - id: initial_single_features_enter_global_adapter
     from: value_sites.initial_single_features
@@ -1683,21 +1864,21 @@ relations:
     to: modules.single_to_pair_update
     kind: data_flow
     carries: [representations.single_features]
-    operation: projected_outer_product
+    operation: project_endpoint_features
     evidence: *latent_relation_evidence
   - id: pair_with_global_tokens_enters_single_to_pair_update
     from: value_sites.pair_with_global_tokens
     to: modules.single_to_pair_update
     kind: state_update
     carries: [representations.pair_features]
-    operation: receive_residual_pair_update
+    operation: provide_pair_residual_state
     evidence: *latent_relation_evidence
   - id: single_to_pair_update_produces_pair_state
     from: modules.single_to_pair_update
     to: value_sites.pair_after_single_update
     kind: state_update
     carries: [representations.pair_features]
-    operation: add_outer_product_update
+    operation: add_projected_endpoint_sum
     evidence: *latent_relation_evidence
   - id: pair_after_single_update_enters_triangle_stack
     from: value_sites.pair_after_single_update
@@ -2271,6 +2452,162 @@ relations:
       - source_ref: genie3_structure_code
         role: consumer_evidence
         locator: StructureLayer.forward
+  - id: endpoint_pair_constructor_produces_pair_activations
+    from: modules.endpoint_pair_constructor
+    to: value_sites.endpoint_pair_activations
+    kind: data_flow
+    carries:
+    - representations.pair_features
+    operation: broadcast_add_endpoint_projections
+    evidence:
+      status: confirmed_from_code
+      refs:
+      - source_ref: genie3_pair_feature_code
+        role: implementation_evidence
+        locator: V1PairFeatureNet.forward zi, zj, and zij outer-sum section
+  - id: endpoint_pair_activations_enter_pair_assembler
+    from: value_sites.endpoint_pair_activations
+    to: modules.pair_feature_assembler
+    kind: data_flow
+    carries:
+    - representations.pair_features
+    operation: add_endpoint_pair_term
+    evidence:
+      status: confirmed_from_code
+      refs:
+      - source_ref: genie3_pair_feature_code
+        role: implementation_evidence
+        locator: V1PairFeatureNet.forward accumulated zij updates
+  - id: relative_position_embedder_produces_pair_features
+    from: modules.relative_position_embedder
+    to: value_sites.relative_position_pair_features
+    kind: data_flow
+    carries:
+    - representations.pair_features
+    operation: project_relative_position_features
+    evidence:
+      status: confirmed_from_code
+      refs:
+      - source_ref: genie3_pair_feature_code
+        role: implementation_evidence
+        locator: V1PairFeatureNet.forward relpos_embedder contribution
+  - id: relative_position_pair_features_enter_assembler
+    from: value_sites.relative_position_pair_features
+    to: modules.pair_feature_assembler
+    kind: data_flow
+    carries:
+    - representations.pair_features
+    operation: add_relative_position_term
+    evidence:
+      status: confirmed_from_code
+      refs:
+      - source_ref: genie3_pair_feature_code
+        role: implementation_evidence
+        locator: V1PairFeatureNet.forward accumulated zij updates
+  - id: feature_bundle_conditions_noisy_pair_encoder
+    from: modules.pair_feature_embedder
+    to: modules.noisy_frame_pair_encoder
+    kind: conditioning
+    carries:
+    - representations.feature_bundle
+    operation: provide_structure_availability_masks
+    evidence:
+      status: confirmed_from_code
+      refs:
+      - source_ref: genie3_pair_feature_code
+        role: implementation_evidence
+        locator: V1PairFeatureNet.forward token structure pair-mask construction
+  - id: noisy_pair_encoder_produces_pair_features
+    from: modules.noisy_frame_pair_encoder
+    to: value_sites.noisy_frame_pair_features
+    kind: data_flow
+    carries:
+    - representations.pair_features
+    operation: project_noisy_distance_orientation_features
+    evidence:
+      status: confirmed_from_code
+      refs:
+      - source_ref: genie3_pair_feature_code
+        role: implementation_evidence
+        locator: V1PairFeatureNet.forward template-based encoding on noisy structure
+  - id: noisy_frame_pair_features_enter_assembler
+    from: value_sites.noisy_frame_pair_features
+    to: modules.pair_feature_assembler
+    kind: data_flow
+    carries:
+    - representations.pair_features
+    operation: add_noisy_geometry_term
+    evidence:
+      status: confirmed_from_code
+      refs:
+      - source_ref: genie3_pair_feature_code
+        role: implementation_evidence
+        locator: V1PairFeatureNet.forward accumulated zij updates
+  - id: feature_bundle_conditions_conditioned_pair_encoder
+    from: modules.pair_feature_embedder
+    to: modules.conditioned_pair_geometry_encoder
+    kind: conditioning
+    carries:
+    - representations.feature_bundle
+    operation: provide_conditioned_coordinates_frames_and_groups
+    evidence:
+      status: confirmed_from_code
+      refs:
+      - source_ref: genie3_pair_feature_code
+        role: implementation_evidence
+        locator: V1PairFeatureNet.forward conditional pair masks and compute_conditional_structure_frames call
+  - id: conditioned_pair_encoder_produces_pair_features
+    from: modules.conditioned_pair_geometry_encoder
+    to: value_sites.conditioned_pair_features
+    kind: data_flow
+    carries:
+    - representations.pair_features
+    operation: project_conditioned_distance_orientation_features
+    evidence:
+      status: confirmed_from_code
+      refs:
+      - source_ref: genie3_pair_feature_code
+        role: implementation_evidence
+        locator: V1PairFeatureNet.forward template-based encoding on conditional structure
+  - id: conditioned_pair_features_enter_assembler
+    from: value_sites.conditioned_pair_features
+    to: modules.pair_feature_assembler
+    kind: data_flow
+    carries:
+    - representations.pair_features
+    operation: add_conditioned_geometry_term
+    evidence:
+      status: confirmed_from_code
+      refs:
+      - source_ref: genie3_pair_feature_code
+        role: implementation_evidence
+        locator: V1PairFeatureNet.forward accumulated zij updates
+  - id: feature_bundle_provides_pair_mask_to_assembler
+    from: modules.pair_feature_embedder
+    to: modules.pair_feature_assembler
+    kind: conditioning
+    carries:
+    - representations.feature_bundle
+    operation: provide_token_pair_mask
+    evidence:
+      status: confirmed_from_code
+      refs:
+      - source_ref: genie3_pair_feature_code
+        role: implementation_evidence
+        locator: V1PairFeatureNet.forward token_pair_mask and final return
+  - id: pair_embedder_routes_relative_fields
+    from: modules.pair_feature_embedder
+    to: modules.relative_position_embedder
+    kind: conditioning
+    carries:
+    - representations.feature_bundle
+    operation: provide_relative_index_fields
+    evidence:
+      status: confirmed_from_code
+      refs:
+      - source_ref: genie3_pair_feature_code
+        role: implementation_evidence
+        locator: V1PairFeatureNet.forward relpos_embedder call
 claims:
   - id: atomization_is_task_dependent
     statement: Genie 3 does not represent every generated residue with atom14 coordinates. Unknown scaffold residues use one C-alpha token, while known motif or interface residues can be expanded into atom14-ordered heavy-atom tokens.

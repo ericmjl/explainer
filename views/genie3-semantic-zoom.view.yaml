@@ -660,6 +660,7 @@ boards:
       treatment: block
       col: 2
       row: 4
+      board_ref: pair_feature_embedder
     - id: latent_transformer
       ref: modules.latent_transformer
       prominence: primary
@@ -781,7 +782,7 @@ boards:
 
   - id: latent_transformer
     title: Five-Block Bidirectional Latent Transformer
-    summary: Ten global tokens are appended once. The repeated region shows one block, where pairs update singles through pair-biased attention, the updated singles feed pairs through an outer product, and triangle plus transition operations update the pair state. The block outputs become the next block inputs; after block five, global entries are removed to form the mature outputs.
+    summary: Ten global tokens are appended once. The repeated region shows one block, where pairs update singles through pair-biased attention, distinct endpoint projections of the updated singles are broadcast-summed into a pair update, and triangle plus transition operations further refine the pair state. The block outputs become the next block inputs; after block five, global entries are removed to form the mature outputs.
     parent: denoiser_forward
     subject_ref: modules.latent_transformer
     expansion_depth: 1
@@ -917,6 +918,7 @@ boards:
         density: compact
         col: 9
         row: 4
+        board_ref: genie3_single_to_pair_endpoint_update_internals
       - id: pair_after_single_update
         ref: value_sites.pair_after_single_update
         label: single-updated pairs
@@ -951,6 +953,7 @@ boards:
         density: compact
         col: 13
         row: 4
+        board_ref: genie3_pair_transition_internals
       - id: pair_after_transition
         ref: value_sites.pair_after_transition
         label: next-block pairs
@@ -1007,11 +1010,11 @@ boards:
           role: latent single-state feed-forward update
           inside: The same StructureTransition block used in the structure decoder runs on the residual-normalized singles; the latent path then reapplies the token mask.
       - match: { relation_ref: relations.single_after_pair_attention_enters_single_to_pair_update }
-        label: outer product
+        label: endpoint projections + sum
         connection:
           title: Singles update pairs
           role: single-to-pair communication
-          inside: Projected updated singles form an outer product that is added to the pair state.
+          inside: Distinct source- and destination-endpoint projections of the updated singles are broadcast over i and j, summed, projected to pair channels, and added to the current pair state.
       - match:
           relation_ref: relations.triangle_stack_produces_pair_state
         label: outgoing + incoming
@@ -1019,6 +1022,12 @@ boards:
           title: Triangular pair reasoning
           role: pair refinement
           inside: Outgoing and incoming triangular multiplication propagate information around three-token paths before the pair MLP.
+      - match: { relation_ref: relations.pair_transition_produces_block_pair_output }
+        label: pointwise MLP + residual
+        connection:
+          title: Pointwise pair transition
+          role: final pair-state update
+          inside: Each ordered token pair independently passes through LayerNorm and a 128-to-512-to-128 MLP; the masked update is then added back to the triangle-refined pair state.
   - id: structure_decoder
     title: Eight-Layer Equivariant Structure Decoder
     summary: Full IPA produces an additive update from mature single and pair features plus current frames. The structure layer adds that update back to the incoming state, applies dropout and LayerNorm, runs a residual transition, then composes a rigid frame increment; the updated state repeats for eight layers.
@@ -1281,6 +1290,22 @@ boards:
     subject_ref: modules.latent_single_transition
     expansion_depth: 0
     block_instance_ref: block_instances.latent_structure_transition
+  - id: genie3_single_to_pair_endpoint_update_internals
+    kind: standard_block_instance
+    title: Genie 3 Single-to-Pair Endpoint Update Internals
+    summary: Updated singles are projected into distinct left/source and right/destination endpoint features. Their broadcast sum forms pair activations, which are projected to a pair delta and added residually to the current pair state.
+    parent: latent_transformer
+    subject_ref: modules.single_to_pair_update
+    expansion_depth: 0
+    block_instance_ref: block_instances.latent_single_to_pair_endpoint_update
+  - id: genie3_pair_transition_internals
+    kind: standard_block_instance
+    title: Genie 3 Pointwise Pair Transition Internals
+    summary: Every pair entry independently passes through LayerNorm, a fourfold channel expansion with ReLU, and projection back to 128 channels. The pair-validity mask suppresses padded entries before the update is added residually to the incoming pair state.
+    parent: latent_transformer
+    subject_ref: modules.pair_transition
+    expansion_depth: 0
+    block_instance_ref: block_instances.latent_pair_transition
   - id: task_featurization
     title: Task Featurization
     summary: Exactly one configured task source selects the unconditional, motif, or target path for a run. Unknown designed regions stay C-alpha tokens; Atom14 selectively expands known motif or target-interface residues before all paths converge on one model-ready feature batch.
@@ -1616,3 +1641,161 @@ boards:
           title: Target feature context
           role: fixed structural context
           inside: Every target residue supplies conditioned C-alpha structure, and Atom14 selectively expands marked interface residues with side-chain atoms.
+  - id: pair_feature_embedder
+    title: Pair-Feature Embedder
+    summary: Four 128-channel pair terms are constructed in parallel from endpoint singles, relative indices, the current noisy frames, and task-conditioned geometry; their sum is finally masked to valid token pairs.
+    subject_ref: modules.pair_feature_embedder
+    expansion_depth: 1
+    grid:
+      columns: 5
+      rows: 5
+      column_sizing: content
+      row_sizing: content
+      col_gap: 32
+      row_gap: 28
+    nodes:
+    - id: value_current_frames
+      ref: value_sites.current_frames
+      prominence: secondary
+      treatment: compact
+      density: compact
+      col: 1
+      row: 5
+    - id: module_conditioned_pair_geometry_encoder
+      ref: modules.conditioned_pair_geometry_encoder
+      prominence: primary
+      treatment: block
+      col: 2
+      row: 4
+    - id: module_relative_position_embedder
+      ref: modules.relative_position_embedder
+      prominence: primary
+      treatment: block
+      col: 2
+      row: 2
+    - id: value_initial_single_features
+      ref: value_sites.initial_single_features
+      prominence: secondary
+      treatment: compact
+      density: compact
+      col: 1
+      row: 1
+    - id: value_feature_bundle
+      ref: value_sites.feature_bundle
+      prominence: secondary
+      treatment: compact
+      density: compact
+      col: 1
+      row: 3
+    - id: module_endpoint_pair_constructor
+      ref: modules.endpoint_pair_constructor
+      prominence: primary
+      treatment: block
+      col: 2
+      row: 1
+    - id: module_noisy_frame_pair_encoder
+      ref: modules.noisy_frame_pair_encoder
+      prominence: primary
+      treatment: block
+      col: 2
+      row: 5
+    - id: module_pair_feature_assembler
+      ref: modules.pair_feature_assembler
+      prominence: primary
+      treatment: block
+      col: 4
+      row: 3
+    - id: value_initial_pair_features
+      ref: value_sites.initial_pair_features
+      prominence: secondary
+      treatment: compact
+      density: compact
+      col: 5
+      row: 3
+    parent: denoiser_forward
+    elide:
+    - ref: value_sites.endpoint_pair_activations
+    - ref: value_sites.relative_position_pair_features
+    - ref: value_sites.noisy_frame_pair_features
+    - ref: value_sites.conditioned_pair_features
+    - ref: modules.pair_feature_embedder
+    edge_overrides:
+    - match:
+        relation_path:
+        - relations.endpoint_pair_constructor_produces_pair_activations
+        - relations.endpoint_pair_activations_enter_pair_assembler
+      label: endpoint pair activations
+      connection:
+        title: Endpoint-derived term
+        role: single-to-pair initialization
+        inside: Distinct source and destination projections are broadcast across i and j and added to produce one 128-channel term for every ordered token pair.
+    - match:
+        relation_path:
+        - relations.relative_position_embedder_produces_pair_features
+        - relations.relative_position_pair_features_enter_assembler
+      label: relative-position term
+      connection:
+        title: Relative-position term
+        role: sequence and chain relationship encoding
+        inside: Chain, entity, token-index, and residue-index relationships are projected into the same 128-channel pair space before addition.
+    - match:
+        relation_path:
+        - relations.noisy_pair_encoder_produces_pair_features
+        - relations.noisy_frame_pair_features_enter_assembler
+      label: noisy-geometry term
+      connection:
+        title: Current-structure geometry
+        role: diffusion-state pair geometry
+        inside: Binned distances, relative frame orientations, and structure-availability indicators describe the current noisy structure in pair channels.
+    - match:
+        relation_path:
+        - relations.conditioned_pair_encoder_produces_pair_features
+        - relations.conditioned_pair_features_enter_assembler
+      label: conditioned-geometry term
+      connection:
+        title: Known-structure geometry
+        role: task-conditioned pair geometry
+        inside: Known coordinates and frames contribute only within the same valid conditioning group, leaving unrelated or unknown pairs unconditioned.
+    - match:
+        relation_ref: relations.pair_embedder_produces_initial_pair_features
+      label: B × N × N × 128
+      connection:
+        title: Initial pair representation
+        role: latent-transformer pair input
+        inside: The four additive terms are summed and multiplied by the valid token-pair mask before entering the latent transformer.
+    - match:
+        relation_path:
+        - relations.feature_bundle_conditions_pair_embedder
+        - relations.pair_embedder_routes_relative_fields
+      label: relative indices
+      connection:
+        title: Relative-index fields
+        role: pairwise sequence and chain context
+        inside: Chain, entity, token, and residue indices are compared pairwise and projected into the relative-position contribution.
+    - match:
+        relation_path:
+        - relations.feature_bundle_conditions_pair_embedder
+        - relations.feature_bundle_conditions_noisy_pair_encoder
+      label: structure masks
+      connection:
+        title: Current-structure validity
+        role: noisy-geometry masking
+        inside: Token structure and frame masks determine which current-frame distances, orientations, and availability indicators may contribute.
+    - match:
+        relation_path:
+        - relations.feature_bundle_conditions_pair_embedder
+        - relations.feature_bundle_conditions_conditioned_pair_encoder
+      label: conditioned coordinates + groups
+      connection:
+        title: Known-structure conditioning
+        role: conditioned pair geometry
+        inside: Known coordinates, valid conditioning frames, and group identities restrict geometry features to related conditioned tokens.
+    - match:
+        relation_path:
+        - relations.feature_bundle_conditions_pair_embedder
+        - relations.feature_bundle_provides_pair_mask_to_assembler
+      label: valid token-pair mask
+      connection:
+        title: Final pair validity
+        role: output masking
+        inside: The outer product of token-validity masks zeros invalid rows and columns after the four pair terms are added.

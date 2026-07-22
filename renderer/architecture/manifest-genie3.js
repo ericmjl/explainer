@@ -3,13 +3,15 @@ export const manifest = {
   "build": {
     "generator": "architecture-manifest-builder-v0.5.0",
     "inputDigests": {
-      "references/bibliography.yaml": "aa83264d6b5cce1245347f404a9d13daa41d4b6782fd94f1458397f312843b9f",
-      "architectures/genie3.yaml": "9f6b978940bdcb1547f1484b2f261e1def12375f556d7cf151fe74ddb6358735",
-      "views/genie3-semantic-zoom.view.yaml": "2c3d2e6fad18e180f51548b75d4cbee898cfcb667cc931763f28a773798f4775",
+      "references/bibliography.yaml": "82f709e900c8a4856e4b834e7d3d7269313b9e4aa08f6bea91d75c33ef974bdd",
+      "architectures/genie3.yaml": "19cbf29d593acad3a8a93ac275de668b1b5f8187605d039fc2922267f461a37d",
+      "views/genie3-semantic-zoom.view.yaml": "11cc5437e51ad87c6af03242817f6d6bfc4a143c0507fbd9499f03e26b8d432e",
       "pseudocode/genie3.yaml": "822369fcf368f6fc2cf07c70a810d408a122d4cc1bad4f33ef2fbbf6b848d09c",
       "standard_blocks/pair-biased-attention.yaml": "3c6be1ec47623fa320eb6eace772216f41014d4bf14765b8ff52b1602cf26fb7",
       "standard_blocks/invariant-point-attention.yaml": "a5c02021172a36135808767943f20309424cc956240bf956ed156d1c380bb7b5",
-      "standard_blocks/structure-transition.yaml": "2708baf8035a8e77ab3e3da3bf2f067225757a813743efb90c72ac0f0c77b723"
+      "standard_blocks/structure-transition.yaml": "2708baf8035a8e77ab3e3da3bf2f067225757a813743efb90c72ac0f0c77b723",
+      "standard_blocks/single-to-pair-endpoint-update.yaml": "d8ff8b5a5a9faa2d0af710afcc20d7094b1a9107238b402a9dc5f290642e7606",
+      "standard_blocks/pair-transition.yaml": "67972606f8b0da22bce83da0c93d37075755df487fe100865ab7fc98e5941bd1"
     }
   },
   "architecture": {
@@ -31,6 +33,7 @@ export const manifest = {
       "default_sampling_steps": 100,
       "single_feature_dimension": 384,
       "pair_feature_dimension": 128,
+      "pair_transition_hidden_dimension": 512,
       "latent_transformer_blocks": 5,
       "global_tokens": 10,
       "structure_layers": 8,
@@ -219,11 +222,15 @@ export const manifest = {
           ]
         },
         "modules.pair_feature_embedder": {
-          "status": "leaf",
+          "status": "complete",
           "depth": 4,
-          "immediateModuleCount": 0,
+          "immediateModuleCount": 5,
           "immediateModuleRefs": [
-
+            "modules.endpoint_pair_constructor",
+            "modules.relative_position_embedder",
+            "modules.noisy_frame_pair_encoder",
+            "modules.conditioned_pair_geometry_encoder",
+            "modules.pair_feature_assembler"
           ]
         },
         "modules.latent_transformer": {
@@ -482,14 +489,54 @@ export const manifest = {
           "immediateModuleRefs": [
 
           ]
+        },
+        "modules.endpoint_pair_constructor": {
+          "status": "leaf",
+          "depth": 5,
+          "immediateModuleCount": 0,
+          "immediateModuleRefs": [
+
+          ]
+        },
+        "modules.relative_position_embedder": {
+          "status": "leaf",
+          "depth": 5,
+          "immediateModuleCount": 0,
+          "immediateModuleRefs": [
+
+          ]
+        },
+        "modules.noisy_frame_pair_encoder": {
+          "status": "leaf",
+          "depth": 5,
+          "immediateModuleCount": 0,
+          "immediateModuleRefs": [
+
+          ]
+        },
+        "modules.conditioned_pair_geometry_encoder": {
+          "status": "leaf",
+          "depth": 5,
+          "immediateModuleCount": 0,
+          "immediateModuleRefs": [
+
+          ]
+        },
+        "modules.pair_feature_assembler": {
+          "status": "leaf",
+          "depth": 5,
+          "immediateModuleCount": 0,
+          "immediateModuleRefs": [
+
+          ]
         }
       },
       "summary": {
-        "scopeCount": 45,
-        "expandedScopeCount": 11,
-        "completeExpandedScopeCount": 11,
+        "scopeCount": 50,
+        "expandedScopeCount": 12,
+        "completeExpandedScopeCount": 12,
         "partialScopeCount": 0,
-        "leafFrontierCount": 34,
+        "leafFrontierCount": 38,
         "opaqueFrontierCount": 0,
         "partialFrontierCount": 0,
         "maximumAuthoredDepth": 5
@@ -855,7 +902,7 @@ export const manifest = {
         "id": "pair_feature_embedder",
         "parent_ref": "modules.denoiser",
         "decomposition": {
-          "status": "leaf"
+          "status": "complete"
         },
         "label": "Pair-Feature Embedder",
         "kind": "encoder",
@@ -1071,12 +1118,14 @@ export const manifest = {
         "decomposition": {
           "status": "leaf"
         },
-        "label": "Single-to-Pair Outer Product",
+        "label": "Single-to-Pair Endpoint Update",
         "kind": "operator",
         "mechanisms": [
-          "outer_product"
+          "endpoint_projection",
+          "broadcast_sum",
+          "residual_update"
         ],
-        "role": "project the updated single state into a residual pair update",
+        "role": "separately project the source and destination endpoint features from updated singles, broadcast-sum them over ordered token pairs, project to pair channels, and add them residually to the current pair state",
         "scale": "pair",
         "evidence": {
           "status": "confirmed_from_code",
@@ -1084,7 +1133,8 @@ export const manifest = {
             {
               "source_ref": "genie3_latent_transformer_code",
               "role": "implementation_evidence",
-              "locator": "LatentTransformer.forward"
+              "locator": "LatentTransformerBlock.__init__ and LatentTransformerBlock.forward",
+              "note": "linear_pi and linear_pj separately project the token state, their broadcast sum passes through linear_p, and the result is added to p."
             }
           ]
         }
@@ -1119,9 +1169,9 @@ export const manifest = {
         "decomposition": {
           "status": "leaf"
         },
-        "label": "Pair Transition",
+        "label": "Pointwise Pair Transition",
         "kind": "feed_forward",
-        "role": "apply the residual pair-wise transition at the end of each latent block",
+        "role": "apply a shared LayerNorm-MLP independently to every pair entry, mask its update, and add it residually at the end of each latent block",
         "scale": "pair",
         "evidence": {
           "status": "confirmed_from_code",
@@ -1632,6 +1682,135 @@ export const manifest = {
               "source_ref": "genie3_feature_code",
               "role": "implementation_evidence",
               "locator": "create_np_features_from_target_config, concatenate_np_features, and update_np_features_with_ca_centering"
+            }
+          ]
+        }
+      },
+      {
+        "id": "endpoint_pair_constructor",
+        "parent_ref": "modules.pair_feature_embedder",
+        "decomposition": {
+          "status": "leaf"
+        },
+        "label": "Endpoint Pair Construction",
+        "kind": "encoder",
+        "mechanisms": [
+          "endpoint_projection",
+          "broadcast_sum"
+        ],
+        "role": "separately project every single feature as a source and destination endpoint, then broadcast-add the two projections for every ordered token pair",
+        "scale": "pair",
+        "evidence": {
+          "status": "confirmed_from_code",
+          "refs": [
+            {
+              "source_ref": "genie3_pair_feature_code",
+              "role": "implementation_evidence",
+              "locator": "V1PairFeatureNet.__init__ and V1PairFeatureNet.forward linear_zi, linear_zj, and outer-sum section"
+            }
+          ]
+        }
+      },
+      {
+        "id": "relative_position_embedder",
+        "parent_ref": "modules.pair_feature_embedder",
+        "decomposition": {
+          "status": "leaf"
+        },
+        "label": "Relative Position Embedder",
+        "kind": "encoder",
+        "mechanisms": [
+          "relative_position_encoding",
+          "linear_projection"
+        ],
+        "role": "map chain, entity, token-index, and residue-index relationships into one 128-channel feature for every ordered token pair",
+        "scale": "pair",
+        "evidence": {
+          "status": "confirmed_from_code",
+          "refs": [
+            {
+              "source_ref": "genie3_pair_feature_code",
+              "role": "implementation_evidence",
+              "locator": "V1PairFeatureNet.__init__ and V1PairFeatureNet.forward relpos_embedder call"
+            }
+          ]
+        }
+      },
+      {
+        "id": "noisy_frame_pair_encoder",
+        "parent_ref": "modules.pair_feature_embedder",
+        "decomposition": {
+          "status": "leaf"
+        },
+        "label": "Noisy-Frame Geometry Encoder",
+        "kind": "encoder",
+        "mechanisms": [
+          "distance_binning",
+          "relative_orientation",
+          "linear_projection",
+          "masking"
+        ],
+        "role": "encode pairwise distances and relative frame orientations from the current noisy structure, together with structure-availability indicators, into 128 pair channels",
+        "scale": "pair",
+        "evidence": {
+          "status": "confirmed_from_code",
+          "refs": [
+            {
+              "source_ref": "genie3_pair_feature_code",
+              "role": "implementation_evidence",
+              "locator": "V1PairFeatureNet.forward template-based encoding on noisy structure and helper methods"
+            }
+          ]
+        }
+      },
+      {
+        "id": "conditioned_pair_geometry_encoder",
+        "parent_ref": "modules.pair_feature_embedder",
+        "decomposition": {
+          "status": "leaf"
+        },
+        "label": "Conditioned Geometry Encoder",
+        "kind": "encoder",
+        "mechanisms": [
+          "conditional_frame_construction",
+          "distance_binning",
+          "relative_orientation",
+          "group_masking"
+        ],
+        "role": "encode distances and relative orientations only between structurally conditioned tokens that belong to the same conditioning group",
+        "scale": "pair",
+        "evidence": {
+          "status": "confirmed_from_code",
+          "refs": [
+            {
+              "source_ref": "genie3_pair_feature_code",
+              "role": "implementation_evidence",
+              "locator": "V1PairFeatureNet.forward conditional pair masks and template-based encoding on conditional structure"
+            }
+          ]
+        }
+      },
+      {
+        "id": "pair_feature_assembler",
+        "parent_ref": "modules.pair_feature_embedder",
+        "decomposition": {
+          "status": "leaf"
+        },
+        "label": "Pair Feature Sum + Mask",
+        "kind": "encoder",
+        "mechanisms": [
+          "additive_fusion",
+          "pair_masking"
+        ],
+        "role": "add the endpoint, relative-position, noisy-geometry, and conditioned-geometry terms and zero invalid token pairs with the token-pair mask",
+        "scale": "pair",
+        "evidence": {
+          "status": "confirmed_from_code",
+          "refs": [
+            {
+              "source_ref": "genie3_pair_feature_code",
+              "role": "implementation_evidence",
+              "locator": "V1PairFeatureNet.forward accumulated zij updates and final masked return"
             }
           ]
         }
@@ -2180,6 +2359,697 @@ export const manifest = {
                   {
                     "start": 0,
                     "end": 20
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "id": "latent_single_to_pair_endpoint_update",
+        "standardBlockId": "single_to_pair_endpoint_update",
+        "standardBlockRef": "standard_blocks/single-to-pair-endpoint-update.yaml",
+        "standardBlockName": "Single-to-Pair Endpoint Update",
+        "subjectRef": "modules.single_to_pair_update",
+        "variant": "projected_endpoint_sum_residual",
+        "variantLabel": "Projected endpoint sum + residual",
+        "variantDescription": "Construct left/source and right/destination token features, broadcast-sum them over ordered pairs, apply a final pair projection, and add the result to the incoming pair state.",
+        "useScope": "whole_module",
+        "conformance": "exact",
+        "evidence": {
+          "status": "confirmed_from_code",
+          "refs": [
+            {
+              "source_ref": "genie3_latent_transformer_code",
+              "role": "implementation_evidence",
+              "locator": "LatentTransformerBlock.__init__ and LatentTransformerBlock.forward",
+              "note": "Genie 3 implements the full endpoint-projection, broadcast-sum, final-projection, and residual-add pattern represented by this instance."
+            }
+          ]
+        },
+        "shapeParameters": {
+          "b": "B",
+          "n": "N",
+          "c_s": 384,
+          "c_z": 128
+        },
+        "shapeParameterSources": {
+          "b": {
+            "kind": "boundary",
+            "portRef": "ports.single_state",
+            "representationRef": "representations.single_features"
+          },
+          "n": {
+            "kind": "boundary",
+            "portRef": "ports.single_state",
+            "representationRef": "representations.single_features"
+          },
+          "c_s": {
+            "kind": "boundary",
+            "portRef": "ports.single_state",
+            "representationRef": "representations.single_features"
+          },
+          "c_z": {
+            "kind": "boundary",
+            "portRef": "ports.pair_state",
+            "representationRef": "representations.pair_features"
+          }
+        },
+        "portBindings": [
+          {
+            "portRef": "ports.single_state",
+            "relationRefs": [
+              "relations.single_after_pair_attention_enters_single_to_pair_update"
+            ],
+            "relations": [
+              {
+                "relationRef": "relations.single_after_pair_attention_enters_single_to_pair_update",
+                "from": "value_sites.single_after_pair_attention",
+                "to": "modules.single_to_pair_update",
+                "kind": "data_flow",
+                "operation": "project_endpoint_features",
+                "carries": [
+                  "representations.single_features"
+                ]
+              }
+            ]
+          },
+          {
+            "portRef": "ports.pair_state",
+            "relationRefs": [
+              "relations.pair_with_global_tokens_enters_single_to_pair_update"
+            ],
+            "relations": [
+              {
+                "relationRef": "relations.pair_with_global_tokens_enters_single_to_pair_update",
+                "from": "value_sites.pair_with_global_tokens",
+                "to": "modules.single_to_pair_update",
+                "kind": "state_update",
+                "operation": "provide_pair_residual_state",
+                "carries": [
+                  "representations.pair_features"
+                ]
+              }
+            ]
+          },
+          {
+            "portRef": "ports.updated_pair_state",
+            "relationRefs": [
+              "relations.single_to_pair_update_produces_pair_state"
+            ],
+            "relations": [
+              {
+                "relationRef": "relations.single_to_pair_update_produces_pair_state",
+                "from": "modules.single_to_pair_update",
+                "to": "value_sites.pair_after_single_update",
+                "kind": "state_update",
+                "operation": "add_projected_endpoint_sum",
+                "carries": [
+                  "representations.pair_features"
+                ]
+              }
+            ]
+          }
+        ],
+        "pseudocode": [
+          {
+            "id": "project_left_single",
+            "templateFactRef": "standard_blocks.single_to_pair_endpoint_update.steps.project_left_single",
+            "instanceFactRef": "block_instances.latent_single_to_pair_endpoint_update.steps.project_left_single",
+            "label": "Project left/source endpoint",
+            "operation": "linear_projection",
+            "code": "left_single = linear_left(single_state)",
+            "tex": "p_i = W_i s_i",
+            "inputs": [
+              "ports.single_state"
+            ],
+            "outputs": [
+              "values.left_single"
+            ],
+            "codeBindings": [
+              {
+                "lexeme": "single_state",
+                "access": "read",
+                "localRef": "ports.single_state",
+                "templateFactRef": "standard_blocks.single_to_pair_endpoint_update.ports.single_state",
+                "instanceFactRef": "block_instances.latent_single_to_pair_endpoint_update.ports.single_state",
+                "occurrences": [
+                  {
+                    "start": 26,
+                    "end": 38
+                  }
+                ]
+              },
+              {
+                "lexeme": "left_single",
+                "access": "write",
+                "localRef": "values.left_single",
+                "templateFactRef": "standard_blocks.single_to_pair_endpoint_update.values.left_single",
+                "instanceFactRef": "block_instances.latent_single_to_pair_endpoint_update.values.left_single",
+                "occurrences": [
+                  {
+                    "start": 0,
+                    "end": 11
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "id": "project_right_single",
+            "templateFactRef": "standard_blocks.single_to_pair_endpoint_update.steps.project_right_single",
+            "instanceFactRef": "block_instances.latent_single_to_pair_endpoint_update.steps.project_right_single",
+            "label": "Project right/destination endpoint",
+            "operation": "linear_projection",
+            "code": "right_single = linear_right(single_state)",
+            "tex": "p_j = W_j s_j",
+            "inputs": [
+              "ports.single_state"
+            ],
+            "outputs": [
+              "values.right_single"
+            ],
+            "codeBindings": [
+              {
+                "lexeme": "single_state",
+                "access": "read",
+                "localRef": "ports.single_state",
+                "templateFactRef": "standard_blocks.single_to_pair_endpoint_update.ports.single_state",
+                "instanceFactRef": "block_instances.latent_single_to_pair_endpoint_update.ports.single_state",
+                "occurrences": [
+                  {
+                    "start": 28,
+                    "end": 40
+                  }
+                ]
+              },
+              {
+                "lexeme": "right_single",
+                "access": "write",
+                "localRef": "values.right_single",
+                "templateFactRef": "standard_blocks.single_to_pair_endpoint_update.values.right_single",
+                "instanceFactRef": "block_instances.latent_single_to_pair_endpoint_update.values.right_single",
+                "occurrences": [
+                  {
+                    "start": 0,
+                    "end": 12
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "id": "broadcast_endpoint_sum",
+            "templateFactRef": "standard_blocks.single_to_pair_endpoint_update.steps.broadcast_endpoint_sum",
+            "instanceFactRef": "block_instances.latent_single_to_pair_endpoint_update.steps.broadcast_endpoint_sum",
+            "label": "Broadcast + add endpoints",
+            "operation": "broadcast_sum",
+            "code": "pair_activations = left_single[:, :, None, :] + right_single[:, None, :, :]",
+            "tex": "a_{ij} = p_i + p_j",
+            "inputs": [
+              "values.left_single",
+              "values.right_single"
+            ],
+            "outputs": [
+              "values.pair_activations"
+            ],
+            "codeBindings": [
+              {
+                "lexeme": "left_single",
+                "access": "read",
+                "localRef": "values.left_single",
+                "templateFactRef": "standard_blocks.single_to_pair_endpoint_update.values.left_single",
+                "instanceFactRef": "block_instances.latent_single_to_pair_endpoint_update.values.left_single",
+                "occurrences": [
+                  {
+                    "start": 19,
+                    "end": 30
+                  }
+                ]
+              },
+              {
+                "lexeme": "right_single",
+                "access": "read",
+                "localRef": "values.right_single",
+                "templateFactRef": "standard_blocks.single_to_pair_endpoint_update.values.right_single",
+                "instanceFactRef": "block_instances.latent_single_to_pair_endpoint_update.values.right_single",
+                "occurrences": [
+                  {
+                    "start": 48,
+                    "end": 60
+                  }
+                ]
+              },
+              {
+                "lexeme": "pair_activations",
+                "access": "write",
+                "localRef": "values.pair_activations",
+                "templateFactRef": "standard_blocks.single_to_pair_endpoint_update.values.pair_activations",
+                "instanceFactRef": "block_instances.latent_single_to_pair_endpoint_update.values.pair_activations",
+                "occurrences": [
+                  {
+                    "start": 0,
+                    "end": 16
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "id": "project_pair_delta",
+            "templateFactRef": "standard_blocks.single_to_pair_endpoint_update.steps.project_pair_delta",
+            "instanceFactRef": "block_instances.latent_single_to_pair_endpoint_update.steps.project_pair_delta",
+            "label": "Project pair update",
+            "operation": "linear_projection",
+            "code": "pair_delta = linear_pair(pair_activations)",
+            "tex": "delta z_{ij} = W_p a_{ij}",
+            "inputs": [
+              "values.pair_activations"
+            ],
+            "outputs": [
+              "values.pair_delta"
+            ],
+            "codeBindings": [
+              {
+                "lexeme": "pair_activations",
+                "access": "read",
+                "localRef": "values.pair_activations",
+                "templateFactRef": "standard_blocks.single_to_pair_endpoint_update.values.pair_activations",
+                "instanceFactRef": "block_instances.latent_single_to_pair_endpoint_update.values.pair_activations",
+                "occurrences": [
+                  {
+                    "start": 25,
+                    "end": 41
+                  }
+                ]
+              },
+              {
+                "lexeme": "pair_delta",
+                "access": "write",
+                "localRef": "values.pair_delta",
+                "templateFactRef": "standard_blocks.single_to_pair_endpoint_update.values.pair_delta",
+                "instanceFactRef": "block_instances.latent_single_to_pair_endpoint_update.values.pair_delta",
+                "occurrences": [
+                  {
+                    "start": 0,
+                    "end": 10
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "id": "add_pair_residual",
+            "templateFactRef": "standard_blocks.single_to_pair_endpoint_update.steps.add_pair_residual",
+            "instanceFactRef": "block_instances.latent_single_to_pair_endpoint_update.steps.add_pair_residual",
+            "label": "Add to pair state",
+            "operation": "residual_add",
+            "code": "updated_pair_state = pair_state + pair_delta",
+            "tex": "z'_{ij} = z_{ij} + delta z_{ij}",
+            "inputs": [
+              "ports.pair_state",
+              "values.pair_delta"
+            ],
+            "outputs": [
+              "ports.updated_pair_state"
+            ],
+            "codeBindings": [
+              {
+                "lexeme": "pair_state",
+                "access": "read",
+                "localRef": "ports.pair_state",
+                "templateFactRef": "standard_blocks.single_to_pair_endpoint_update.ports.pair_state",
+                "instanceFactRef": "block_instances.latent_single_to_pair_endpoint_update.ports.pair_state",
+                "occurrences": [
+                  {
+                    "start": 21,
+                    "end": 31
+                  }
+                ]
+              },
+              {
+                "lexeme": "pair_delta",
+                "access": "read",
+                "localRef": "values.pair_delta",
+                "templateFactRef": "standard_blocks.single_to_pair_endpoint_update.values.pair_delta",
+                "instanceFactRef": "block_instances.latent_single_to_pair_endpoint_update.values.pair_delta",
+                "occurrences": [
+                  {
+                    "start": 34,
+                    "end": 44
+                  }
+                ]
+              },
+              {
+                "lexeme": "updated_pair_state",
+                "access": "write",
+                "localRef": "ports.updated_pair_state",
+                "templateFactRef": "standard_blocks.single_to_pair_endpoint_update.ports.updated_pair_state",
+                "instanceFactRef": "block_instances.latent_single_to_pair_endpoint_update.ports.updated_pair_state",
+                "occurrences": [
+                  {
+                    "start": 0,
+                    "end": 18
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "id": "latent_pair_transition",
+        "standardBlockId": "pair_transition",
+        "standardBlockRef": "standard_blocks/pair-transition.yaml",
+        "standardBlockName": "Pointwise Pair Transition",
+        "subjectRef": "modules.pair_transition",
+        "variant": "layer_norm_expansion_relu_projection_mask_residual",
+        "variantLabel": "LayerNorm + expanded MLP + residual",
+        "variantDescription": "Normalize each pair entry, expand its channels, apply ReLU, project back to the pair width, apply the pair-validity mask, and add the result to the incoming pair state.",
+        "useScope": "whole_module",
+        "conformance": "exact",
+        "evidence": {
+          "status": "confirmed_from_code",
+          "refs": [
+            {
+              "source_ref": "genie3_transition_code",
+              "role": "implementation_evidence",
+              "locator": "PairTransition.forward and PairTransition._transition",
+              "note": "PairTransition applies LayerNorm, expands 128 pair channels fourfold, applies ReLU, projects back to 128 channels, and multiplies by the pair mask."
+            },
+            {
+              "source_ref": "genie3_latent_transformer_code",
+              "role": "caller_evidence",
+              "locator": "LatentTransformerBlock.forward",
+              "note": "The latent block adds the returned masked pair-transition update residually to the triangle-refined pair state."
+            }
+          ]
+        },
+        "shapeParameters": {
+          "c_hidden": 512,
+          "b": "B",
+          "n": "N",
+          "c_z": 128
+        },
+        "shapeParameterSources": {
+          "c_hidden": {
+            "kind": "configuration",
+            "ref": "reference_configuration.pair_transition_hidden_dimension"
+          },
+          "b": {
+            "kind": "boundary",
+            "portRef": "ports.pair_state",
+            "representationRef": "representations.pair_features"
+          },
+          "n": {
+            "kind": "boundary",
+            "portRef": "ports.pair_state",
+            "representationRef": "representations.pair_features"
+          },
+          "c_z": {
+            "kind": "boundary",
+            "portRef": "ports.pair_state",
+            "representationRef": "representations.pair_features"
+          }
+        },
+        "portBindings": [
+          {
+            "portRef": "ports.pair_state",
+            "relationRefs": [
+              "relations.pair_after_triangle_updates_enter_transition"
+            ],
+            "relations": [
+              {
+                "relationRef": "relations.pair_after_triangle_updates_enter_transition",
+                "from": "value_sites.pair_after_triangle_updates",
+                "to": "modules.pair_transition",
+                "kind": "data_flow",
+                "operation": "pair_transition_mlp",
+                "carries": [
+                  "representations.pair_features"
+                ]
+              }
+            ]
+          },
+          {
+            "portRef": "ports.updated_pair_state",
+            "relationRefs": [
+              "relations.pair_transition_produces_block_pair_output"
+            ],
+            "relations": [
+              {
+                "relationRef": "relations.pair_transition_produces_block_pair_output",
+                "from": "modules.pair_transition",
+                "to": "value_sites.pair_after_transition",
+                "kind": "state_update",
+                "operation": "residual_pair_transition",
+                "carries": [
+                  "representations.pair_features"
+                ]
+              }
+            ]
+          }
+        ],
+        "pseudocode": [
+          {
+            "id": "normalize_pair_state",
+            "templateFactRef": "standard_blocks.pair_transition.steps.normalize_pair_state",
+            "instanceFactRef": "block_instances.latent_pair_transition.steps.normalize_pair_state",
+            "label": "LayerNorm each pair",
+            "operation": "layer_normalization",
+            "code": "normalized_pair_state = layer_norm(pair_state)",
+            "tex": "z^{norm}_{ij} = LayerNorm(z_{ij})",
+            "inputs": [
+              "ports.pair_state"
+            ],
+            "outputs": [
+              "values.normalized_pair_state"
+            ],
+            "codeBindings": [
+              {
+                "lexeme": "pair_state",
+                "access": "read",
+                "localRef": "ports.pair_state",
+                "templateFactRef": "standard_blocks.pair_transition.ports.pair_state",
+                "instanceFactRef": "block_instances.latent_pair_transition.ports.pair_state",
+                "occurrences": [
+                  {
+                    "start": 35,
+                    "end": 45
+                  }
+                ]
+              },
+              {
+                "lexeme": "normalized_pair_state",
+                "access": "write",
+                "localRef": "values.normalized_pair_state",
+                "templateFactRef": "standard_blocks.pair_transition.values.normalized_pair_state",
+                "instanceFactRef": "block_instances.latent_pair_transition.values.normalized_pair_state",
+                "occurrences": [
+                  {
+                    "start": 0,
+                    "end": 21
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "id": "expand_and_activate",
+            "templateFactRef": "standard_blocks.pair_transition.steps.expand_and_activate",
+            "instanceFactRef": "block_instances.latent_pair_transition.steps.expand_and_activate",
+            "label": "Expand channels + ReLU",
+            "operation": "linear_relu",
+            "code": "expanded_pair_state = relu(linear_1(normalized_pair_state))",
+            "tex": "h_{ij} = ReLU(W_1 z^{norm}_{ij})",
+            "inputs": [
+              "values.normalized_pair_state"
+            ],
+            "outputs": [
+              "values.expanded_pair_state"
+            ],
+            "codeBindings": [
+              {
+                "lexeme": "normalized_pair_state",
+                "access": "read",
+                "localRef": "values.normalized_pair_state",
+                "templateFactRef": "standard_blocks.pair_transition.values.normalized_pair_state",
+                "instanceFactRef": "block_instances.latent_pair_transition.values.normalized_pair_state",
+                "occurrences": [
+                  {
+                    "start": 36,
+                    "end": 57
+                  }
+                ]
+              },
+              {
+                "lexeme": "expanded_pair_state",
+                "access": "write",
+                "localRef": "values.expanded_pair_state",
+                "templateFactRef": "standard_blocks.pair_transition.values.expanded_pair_state",
+                "instanceFactRef": "block_instances.latent_pair_transition.values.expanded_pair_state",
+                "occurrences": [
+                  {
+                    "start": 0,
+                    "end": 19
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "id": "project_pair_delta",
+            "templateFactRef": "standard_blocks.pair_transition.steps.project_pair_delta",
+            "instanceFactRef": "block_instances.latent_pair_transition.steps.project_pair_delta",
+            "label": "Project back to pair width",
+            "operation": "linear",
+            "code": "projected_pair_delta = linear_2(expanded_pair_state)",
+            "tex": "delta z^{raw}_{ij} = W_2 h_{ij}",
+            "inputs": [
+              "values.expanded_pair_state"
+            ],
+            "outputs": [
+              "values.projected_pair_delta"
+            ],
+            "codeBindings": [
+              {
+                "lexeme": "expanded_pair_state",
+                "access": "read",
+                "localRef": "values.expanded_pair_state",
+                "templateFactRef": "standard_blocks.pair_transition.values.expanded_pair_state",
+                "instanceFactRef": "block_instances.latent_pair_transition.values.expanded_pair_state",
+                "occurrences": [
+                  {
+                    "start": 32,
+                    "end": 51
+                  }
+                ]
+              },
+              {
+                "lexeme": "projected_pair_delta",
+                "access": "write",
+                "localRef": "values.projected_pair_delta",
+                "templateFactRef": "standard_blocks.pair_transition.values.projected_pair_delta",
+                "instanceFactRef": "block_instances.latent_pair_transition.values.projected_pair_delta",
+                "occurrences": [
+                  {
+                    "start": 0,
+                    "end": 20
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "id": "apply_pair_mask",
+            "templateFactRef": "standard_blocks.pair_transition.steps.apply_pair_mask",
+            "instanceFactRef": "block_instances.latent_pair_transition.steps.apply_pair_mask",
+            "label": "Apply valid-pair mask",
+            "operation": "masking",
+            "code": "transition_delta = projected_pair_delta * pair_mask",
+            "tex": "delta z_{ij} = m_{ij} delta z^{raw}_{ij}",
+            "inputs": [
+              "values.projected_pair_delta",
+              "ports.pair_mask"
+            ],
+            "outputs": [
+              "values.transition_delta"
+            ],
+            "codeBindings": [
+              {
+                "lexeme": "projected_pair_delta",
+                "access": "read",
+                "localRef": "values.projected_pair_delta",
+                "templateFactRef": "standard_blocks.pair_transition.values.projected_pair_delta",
+                "instanceFactRef": "block_instances.latent_pair_transition.values.projected_pair_delta",
+                "occurrences": [
+                  {
+                    "start": 19,
+                    "end": 39
+                  }
+                ]
+              },
+              {
+                "lexeme": "pair_mask",
+                "access": "read",
+                "localRef": "ports.pair_mask",
+                "templateFactRef": "standard_blocks.pair_transition.ports.pair_mask",
+                "instanceFactRef": "block_instances.latent_pair_transition.ports.pair_mask",
+                "occurrences": [
+                  {
+                    "start": 42,
+                    "end": 51
+                  }
+                ]
+              },
+              {
+                "lexeme": "transition_delta",
+                "access": "write",
+                "localRef": "values.transition_delta",
+                "templateFactRef": "standard_blocks.pair_transition.values.transition_delta",
+                "instanceFactRef": "block_instances.latent_pair_transition.values.transition_delta",
+                "occurrences": [
+                  {
+                    "start": 0,
+                    "end": 16
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "id": "add_pair_residual",
+            "templateFactRef": "standard_blocks.pair_transition.steps.add_pair_residual",
+            "instanceFactRef": "block_instances.latent_pair_transition.steps.add_pair_residual",
+            "label": "Add pair residual",
+            "operation": "residual_add",
+            "code": "updated_pair_state = pair_state + transition_delta",
+            "tex": "z'_{ij} = z_{ij} + delta z_{ij}",
+            "inputs": [
+              "ports.pair_state",
+              "values.transition_delta"
+            ],
+            "outputs": [
+              "ports.updated_pair_state"
+            ],
+            "codeBindings": [
+              {
+                "lexeme": "pair_state",
+                "access": "read",
+                "localRef": "ports.pair_state",
+                "templateFactRef": "standard_blocks.pair_transition.ports.pair_state",
+                "instanceFactRef": "block_instances.latent_pair_transition.ports.pair_state",
+                "occurrences": [
+                  {
+                    "start": 21,
+                    "end": 31
+                  }
+                ]
+              },
+              {
+                "lexeme": "transition_delta",
+                "access": "read",
+                "localRef": "values.transition_delta",
+                "templateFactRef": "standard_blocks.pair_transition.values.transition_delta",
+                "instanceFactRef": "block_instances.latent_pair_transition.values.transition_delta",
+                "occurrences": [
+                  {
+                    "start": 34,
+                    "end": 50
+                  }
+                ]
+              },
+              {
+                "lexeme": "updated_pair_state",
+                "access": "write",
+                "localRef": "ports.updated_pair_state",
+                "templateFactRef": "standard_blocks.pair_transition.ports.updated_pair_state",
+                "instanceFactRef": "block_instances.latent_pair_transition.ports.updated_pair_state",
+                "occurrences": [
+                  {
+                    "start": 0,
+                    "end": 18
                   }
                 ]
               }
@@ -4670,6 +5540,70 @@ export const manifest = {
             }
           ]
         }
+      },
+      {
+        "id": "endpoint_pair_activations",
+        "representation_ref": "representations.pair_features",
+        "scope_ref": "modules.pair_feature_embedder",
+        "role": "endpoint_projection_pair_term",
+        "evidence": {
+          "status": "confirmed_from_code",
+          "refs": [
+            {
+              "source_ref": "genie3_pair_feature_code",
+              "role": "implementation_evidence",
+              "locator": "V1PairFeatureNet.forward zi, zj, and zij outer-sum section"
+            }
+          ]
+        }
+      },
+      {
+        "id": "relative_position_pair_features",
+        "representation_ref": "representations.pair_features",
+        "scope_ref": "modules.pair_feature_embedder",
+        "role": "relative_position_pair_term",
+        "evidence": {
+          "status": "confirmed_from_code",
+          "refs": [
+            {
+              "source_ref": "genie3_pair_feature_code",
+              "role": "implementation_evidence",
+              "locator": "V1PairFeatureNet.forward relpos_embedder contribution"
+            }
+          ]
+        }
+      },
+      {
+        "id": "noisy_frame_pair_features",
+        "representation_ref": "representations.pair_features",
+        "scope_ref": "modules.pair_feature_embedder",
+        "role": "current_noisy_geometry_pair_term",
+        "evidence": {
+          "status": "confirmed_from_code",
+          "refs": [
+            {
+              "source_ref": "genie3_pair_feature_code",
+              "role": "implementation_evidence",
+              "locator": "V1PairFeatureNet.forward template-based encoding on noisy structure"
+            }
+          ]
+        }
+      },
+      {
+        "id": "conditioned_pair_features",
+        "representation_ref": "representations.pair_features",
+        "scope_ref": "modules.pair_feature_embedder",
+        "role": "conditioned_geometry_pair_term",
+        "evidence": {
+          "status": "confirmed_from_code",
+          "refs": [
+            {
+              "source_ref": "genie3_pair_feature_code",
+              "role": "implementation_evidence",
+              "locator": "V1PairFeatureNet.forward template-based encoding on conditional structure"
+            }
+          ]
+        }
       }
     ],
     "valueSiteInterfaces": {
@@ -4769,7 +5703,7 @@ export const manifest = {
           "modules.frenet_frame_builder"
         ],
         "consumerRefs": [
-          "modules.pair_feature_embedder",
+          "modules.noisy_frame_pair_encoder",
           "value_sites.decoder_frames"
         ]
       },
@@ -4891,7 +5825,7 @@ export const manifest = {
           "modules.single_feature_embedder"
         ],
         "consumerRefs": [
-          "modules.pair_feature_embedder",
+          "modules.endpoint_pair_constructor",
           "modules.global_token_adapter"
         ]
       },
@@ -4903,7 +5837,7 @@ export const manifest = {
           "relations.initial_pair_features_enter_global_adapter"
         ],
         "producerRefs": [
-          "modules.pair_feature_embedder"
+          "modules.pair_feature_assembler"
         ],
         "consumerRefs": [
           "modules.global_token_adapter"
@@ -5229,6 +6163,62 @@ export const manifest = {
         ],
         "consumerRefs": [
           "modules.invariant_point_attention"
+        ]
+      },
+      "endpoint_pair_activations": {
+        "incomingRelationRefs": [
+          "relations.endpoint_pair_constructor_produces_pair_activations"
+        ],
+        "outgoingRelationRefs": [
+          "relations.endpoint_pair_activations_enter_pair_assembler"
+        ],
+        "producerRefs": [
+          "modules.endpoint_pair_constructor"
+        ],
+        "consumerRefs": [
+          "modules.pair_feature_assembler"
+        ]
+      },
+      "relative_position_pair_features": {
+        "incomingRelationRefs": [
+          "relations.relative_position_embedder_produces_pair_features"
+        ],
+        "outgoingRelationRefs": [
+          "relations.relative_position_pair_features_enter_assembler"
+        ],
+        "producerRefs": [
+          "modules.relative_position_embedder"
+        ],
+        "consumerRefs": [
+          "modules.pair_feature_assembler"
+        ]
+      },
+      "noisy_frame_pair_features": {
+        "incomingRelationRefs": [
+          "relations.noisy_pair_encoder_produces_pair_features"
+        ],
+        "outgoingRelationRefs": [
+          "relations.noisy_frame_pair_features_enter_assembler"
+        ],
+        "producerRefs": [
+          "modules.noisy_frame_pair_encoder"
+        ],
+        "consumerRefs": [
+          "modules.pair_feature_assembler"
+        ]
+      },
+      "conditioned_pair_features": {
+        "incomingRelationRefs": [
+          "relations.conditioned_pair_encoder_produces_pair_features"
+        ],
+        "outgoingRelationRefs": [
+          "relations.conditioned_pair_features_enter_assembler"
+        ],
+        "producerRefs": [
+          "modules.conditioned_pair_geometry_encoder"
+        ],
+        "consumerRefs": [
+          "modules.pair_feature_assembler"
         ]
       }
     },
@@ -6105,7 +7095,7 @@ export const manifest = {
           "relations.single_after_pair_attention_enters_single_to_pair_update",
           "relations.single_to_pair_update_produces_pair_state"
         ],
-        "aggregation": "projected_outer_product",
+        "aggregation": "projected_endpoint_broadcast_sum",
         "copy_vs_pool": "expand",
         "evidence": {
           "status": "confirmed_from_code",
@@ -6487,12 +7477,12 @@ export const manifest = {
       {
         "id": "initial_single_features_enter_pair_embedder",
         "from": "value_sites.initial_single_features",
-        "to": "modules.pair_feature_embedder",
+        "to": "modules.endpoint_pair_constructor",
         "kind": "data_flow",
         "carries": [
           "representations.single_features"
         ],
-        "operation": "project_outer_sum",
+        "operation": "project_endpoint_features",
         "evidence": {
           "status": "confirmed_from_code",
           "refs": [
@@ -6507,7 +7497,7 @@ export const manifest = {
       {
         "id": "current_frames_enter_pair_embedder",
         "from": "value_sites.current_frames",
-        "to": "modules.pair_feature_embedder",
+        "to": "modules.noisy_frame_pair_encoder",
         "kind": "data_flow",
         "carries": [
           "representations.token_frames"
@@ -6532,7 +7522,7 @@ export const manifest = {
         "carries": [
           "representations.feature_bundle"
         ],
-        "operation": "provide_relative_and_conditioned_geometry",
+        "operation": "provide_pair_feature_inputs",
         "evidence": {
           "status": "confirmed_from_code",
           "refs": [
@@ -6546,13 +7536,13 @@ export const manifest = {
       },
       {
         "id": "pair_embedder_produces_initial_pair_features",
-        "from": "modules.pair_feature_embedder",
+        "from": "modules.pair_feature_assembler",
         "to": "value_sites.initial_pair_features",
         "kind": "data_flow",
         "carries": [
           "representations.pair_features"
         ],
-        "operation": "sum_projected_pair_terms",
+        "operation": "mask_and_emit_initial_pair_features",
         "evidence": {
           "status": "confirmed_from_code",
           "refs": [
@@ -6812,7 +7802,7 @@ export const manifest = {
         "carries": [
           "representations.single_features"
         ],
-        "operation": "projected_outer_product",
+        "operation": "project_endpoint_features",
         "evidence": {
           "status": "confirmed_from_code",
           "refs": [
@@ -6832,7 +7822,7 @@ export const manifest = {
         "carries": [
           "representations.pair_features"
         ],
-        "operation": "receive_residual_pair_update",
+        "operation": "provide_pair_residual_state",
         "evidence": {
           "status": "confirmed_from_code",
           "refs": [
@@ -6852,7 +7842,7 @@ export const manifest = {
         "carries": [
           "representations.pair_features"
         ],
-        "operation": "add_outer_product_update",
+        "operation": "add_projected_endpoint_sum",
         "evidence": {
           "status": "confirmed_from_code",
           "refs": [
@@ -8233,6 +9223,246 @@ export const manifest = {
             }
           ]
         }
+      },
+      {
+        "id": "endpoint_pair_constructor_produces_pair_activations",
+        "from": "modules.endpoint_pair_constructor",
+        "to": "value_sites.endpoint_pair_activations",
+        "kind": "data_flow",
+        "carries": [
+          "representations.pair_features"
+        ],
+        "operation": "broadcast_add_endpoint_projections",
+        "evidence": {
+          "status": "confirmed_from_code",
+          "refs": [
+            {
+              "source_ref": "genie3_pair_feature_code",
+              "role": "implementation_evidence",
+              "locator": "V1PairFeatureNet.forward zi, zj, and zij outer-sum section"
+            }
+          ]
+        }
+      },
+      {
+        "id": "endpoint_pair_activations_enter_pair_assembler",
+        "from": "value_sites.endpoint_pair_activations",
+        "to": "modules.pair_feature_assembler",
+        "kind": "data_flow",
+        "carries": [
+          "representations.pair_features"
+        ],
+        "operation": "add_endpoint_pair_term",
+        "evidence": {
+          "status": "confirmed_from_code",
+          "refs": [
+            {
+              "source_ref": "genie3_pair_feature_code",
+              "role": "implementation_evidence",
+              "locator": "V1PairFeatureNet.forward accumulated zij updates"
+            }
+          ]
+        }
+      },
+      {
+        "id": "relative_position_embedder_produces_pair_features",
+        "from": "modules.relative_position_embedder",
+        "to": "value_sites.relative_position_pair_features",
+        "kind": "data_flow",
+        "carries": [
+          "representations.pair_features"
+        ],
+        "operation": "project_relative_position_features",
+        "evidence": {
+          "status": "confirmed_from_code",
+          "refs": [
+            {
+              "source_ref": "genie3_pair_feature_code",
+              "role": "implementation_evidence",
+              "locator": "V1PairFeatureNet.forward relpos_embedder contribution"
+            }
+          ]
+        }
+      },
+      {
+        "id": "relative_position_pair_features_enter_assembler",
+        "from": "value_sites.relative_position_pair_features",
+        "to": "modules.pair_feature_assembler",
+        "kind": "data_flow",
+        "carries": [
+          "representations.pair_features"
+        ],
+        "operation": "add_relative_position_term",
+        "evidence": {
+          "status": "confirmed_from_code",
+          "refs": [
+            {
+              "source_ref": "genie3_pair_feature_code",
+              "role": "implementation_evidence",
+              "locator": "V1PairFeatureNet.forward accumulated zij updates"
+            }
+          ]
+        }
+      },
+      {
+        "id": "feature_bundle_conditions_noisy_pair_encoder",
+        "from": "modules.pair_feature_embedder",
+        "to": "modules.noisy_frame_pair_encoder",
+        "kind": "conditioning",
+        "carries": [
+          "representations.feature_bundle"
+        ],
+        "operation": "provide_structure_availability_masks",
+        "evidence": {
+          "status": "confirmed_from_code",
+          "refs": [
+            {
+              "source_ref": "genie3_pair_feature_code",
+              "role": "implementation_evidence",
+              "locator": "V1PairFeatureNet.forward token structure pair-mask construction"
+            }
+          ]
+        }
+      },
+      {
+        "id": "noisy_pair_encoder_produces_pair_features",
+        "from": "modules.noisy_frame_pair_encoder",
+        "to": "value_sites.noisy_frame_pair_features",
+        "kind": "data_flow",
+        "carries": [
+          "representations.pair_features"
+        ],
+        "operation": "project_noisy_distance_orientation_features",
+        "evidence": {
+          "status": "confirmed_from_code",
+          "refs": [
+            {
+              "source_ref": "genie3_pair_feature_code",
+              "role": "implementation_evidence",
+              "locator": "V1PairFeatureNet.forward template-based encoding on noisy structure"
+            }
+          ]
+        }
+      },
+      {
+        "id": "noisy_frame_pair_features_enter_assembler",
+        "from": "value_sites.noisy_frame_pair_features",
+        "to": "modules.pair_feature_assembler",
+        "kind": "data_flow",
+        "carries": [
+          "representations.pair_features"
+        ],
+        "operation": "add_noisy_geometry_term",
+        "evidence": {
+          "status": "confirmed_from_code",
+          "refs": [
+            {
+              "source_ref": "genie3_pair_feature_code",
+              "role": "implementation_evidence",
+              "locator": "V1PairFeatureNet.forward accumulated zij updates"
+            }
+          ]
+        }
+      },
+      {
+        "id": "feature_bundle_conditions_conditioned_pair_encoder",
+        "from": "modules.pair_feature_embedder",
+        "to": "modules.conditioned_pair_geometry_encoder",
+        "kind": "conditioning",
+        "carries": [
+          "representations.feature_bundle"
+        ],
+        "operation": "provide_conditioned_coordinates_frames_and_groups",
+        "evidence": {
+          "status": "confirmed_from_code",
+          "refs": [
+            {
+              "source_ref": "genie3_pair_feature_code",
+              "role": "implementation_evidence",
+              "locator": "V1PairFeatureNet.forward conditional pair masks and compute_conditional_structure_frames call"
+            }
+          ]
+        }
+      },
+      {
+        "id": "conditioned_pair_encoder_produces_pair_features",
+        "from": "modules.conditioned_pair_geometry_encoder",
+        "to": "value_sites.conditioned_pair_features",
+        "kind": "data_flow",
+        "carries": [
+          "representations.pair_features"
+        ],
+        "operation": "project_conditioned_distance_orientation_features",
+        "evidence": {
+          "status": "confirmed_from_code",
+          "refs": [
+            {
+              "source_ref": "genie3_pair_feature_code",
+              "role": "implementation_evidence",
+              "locator": "V1PairFeatureNet.forward template-based encoding on conditional structure"
+            }
+          ]
+        }
+      },
+      {
+        "id": "conditioned_pair_features_enter_assembler",
+        "from": "value_sites.conditioned_pair_features",
+        "to": "modules.pair_feature_assembler",
+        "kind": "data_flow",
+        "carries": [
+          "representations.pair_features"
+        ],
+        "operation": "add_conditioned_geometry_term",
+        "evidence": {
+          "status": "confirmed_from_code",
+          "refs": [
+            {
+              "source_ref": "genie3_pair_feature_code",
+              "role": "implementation_evidence",
+              "locator": "V1PairFeatureNet.forward accumulated zij updates"
+            }
+          ]
+        }
+      },
+      {
+        "id": "feature_bundle_provides_pair_mask_to_assembler",
+        "from": "modules.pair_feature_embedder",
+        "to": "modules.pair_feature_assembler",
+        "kind": "conditioning",
+        "carries": [
+          "representations.feature_bundle"
+        ],
+        "operation": "provide_token_pair_mask",
+        "evidence": {
+          "status": "confirmed_from_code",
+          "refs": [
+            {
+              "source_ref": "genie3_pair_feature_code",
+              "role": "implementation_evidence",
+              "locator": "V1PairFeatureNet.forward token_pair_mask and final return"
+            }
+          ]
+        }
+      },
+      {
+        "id": "pair_embedder_routes_relative_fields",
+        "from": "modules.pair_feature_embedder",
+        "to": "modules.relative_position_embedder",
+        "kind": "conditioning",
+        "carries": [
+          "representations.feature_bundle"
+        ],
+        "operation": "provide_relative_index_fields",
+        "evidence": {
+          "status": "confirmed_from_code",
+          "refs": [
+            {
+              "source_ref": "genie3_pair_feature_code",
+              "role": "implementation_evidence",
+              "locator": "V1PairFeatureNet.forward relpos_embedder call"
+            }
+          ]
+        }
       }
     ],
     "claims": [
@@ -8584,6 +9814,75 @@ export const manifest = {
         "path": "alphafold/relax/relax.py",
         "url": "https://github.com/google-deepmind/alphafold/blob/09ed0c5d5a32d794ed9f78b70906cbeaff0ef439/alphafold/relax/relax.py",
         "href": "https://github.com/google-deepmind/alphafold/blob/09ed0c5d5a32d794ed9f78b70906cbeaff0ef439/alphafold/relax/relax.py"
+      },
+      {
+        "id": "af3_2024",
+        "kind": "paper",
+        "title": "Accurate structure prediction of biomolecular interactions with AlphaFold 3",
+        "authors": [
+          "Josh Abramson",
+          "Jonas Adler",
+          "Jack Dunger",
+          "Richard Evans",
+          "Tim Green",
+          "Alexander Pritzel",
+          "Olaf Ronneberger",
+          "Lindsay Willmore",
+          "Andrew J. Ballard",
+          "Joshua Bambrick",
+          "Sebastian W. Bodenstein",
+          "David A. Evans",
+          "Chia-Chun Hung",
+          "Michael O'Neill",
+          "David Reiman",
+          "Kathryn Tunyasuvunakool",
+          "Zachary Wu",
+          "Akvile Zemgulyte",
+          "Victor Bapst",
+          "Pushmeet Kohli",
+          "Max Jaderberg",
+          "Demis Hassabis",
+          "John M. Jumper"
+        ],
+        "year": 2024,
+        "identifiers": {
+          "doi": "10.1038/s41586-024-07487-w"
+        },
+        "url": "https://www.nature.com/articles/s41586-024-07487-w",
+        "href": "https://www.nature.com/articles/s41586-024-07487-w"
+      },
+      {
+        "id": "af3_pairformer_code",
+        "kind": "code",
+        "title": "AlphaFold 3 Pairformer iteration and pair-update implementation",
+        "organization": "Google DeepMind",
+        "repository": "google-deepmind/alphafold3",
+        "revision": "f3e86f27dfac16559d16f470bb2f9323eb357f1f",
+        "path": "src/alphafold3/model/network/modules.py",
+        "url": "https://github.com/google-deepmind/alphafold3/blob/f3e86f27dfac16559d16f470bb2f9323eb357f1f/src/alphafold3/model/network/modules.py",
+        "href": "https://github.com/google-deepmind/alphafold3/blob/f3e86f27dfac16559d16f470bb2f9323eb357f1f/src/alphafold3/model/network/modules.py"
+      },
+      {
+        "id": "af3_evoformer_code",
+        "kind": "code",
+        "title": "AlphaFold 3 trunk and Pairformer stack configuration",
+        "organization": "Google DeepMind",
+        "repository": "google-deepmind/alphafold3",
+        "revision": "f3e86f27dfac16559d16f470bb2f9323eb357f1f",
+        "path": "src/alphafold3/model/network/evoformer.py",
+        "url": "https://github.com/google-deepmind/alphafold3/blob/f3e86f27dfac16559d16f470bb2f9323eb357f1f/src/alphafold3/model/network/evoformer.py",
+        "href": "https://github.com/google-deepmind/alphafold3/blob/f3e86f27dfac16559d16f470bb2f9323eb357f1f/src/alphafold3/model/network/evoformer.py"
+      },
+      {
+        "id": "af3_self_attention_code",
+        "kind": "code",
+        "title": "AlphaFold 3 single self-attention implementation",
+        "organization": "Google DeepMind",
+        "repository": "google-deepmind/alphafold3",
+        "revision": "f3e86f27dfac16559d16f470bb2f9323eb357f1f",
+        "path": "src/alphafold3/model/network/diffusion_transformer.py",
+        "url": "https://github.com/google-deepmind/alphafold3/blob/f3e86f27dfac16559d16f470bb2f9323eb357f1f/src/alphafold3/model/network/diffusion_transformer.py",
+        "href": "https://github.com/google-deepmind/alphafold3/blob/f3e86f27dfac16559d16f470bb2f9323eb357f1f/src/alphafold3/model/network/diffusion_transformer.py"
       },
       {
         "id": "genie2_2024",
@@ -11714,6 +13013,1173 @@ export const manifest = {
           "Evidence for dropout and LayerNorm after the residual transition."
         ]
       }
+    },
+    "single_to_pair_endpoint_update": {
+      "id": "single_to_pair_endpoint_update",
+      "schemaVersion": "standard-block-v0.3",
+      "name": "Single-to-Pair Endpoint Update",
+      "sourceYaml": "../../standard_blocks/single-to-pair-endpoint-update.yaml",
+      "description": "Project each token state through distinct left/source and right/destination maps, broadcast-sum the endpoint features over ordered token pairs, project the resulting pair activations, and add them residually to an existing pair state.",
+      "math": [
+        {
+          "id": "project_left_single",
+          "text": "left_single = linear_left(single_state)",
+          "tex": "p_i = W_i s_i",
+          "operation": "linear_projection"
+        },
+        {
+          "id": "project_right_single",
+          "text": "right_single = linear_right(single_state)",
+          "tex": "p_j = W_j s_j",
+          "operation": "linear_projection"
+        },
+        {
+          "id": "broadcast_endpoint_sum",
+          "text": "pair_activations = left_single[:, :, None, :] + right_single[:, None, :, :]",
+          "tex": "a_{ij} = p_i + p_j",
+          "operation": "broadcast_sum"
+        },
+        {
+          "id": "project_pair_delta",
+          "text": "pair_delta = linear_pair(pair_activations)",
+          "tex": "delta z_{ij} = W_p a_{ij}",
+          "operation": "linear_projection"
+        },
+        {
+          "id": "add_pair_residual",
+          "text": "updated_pair_state = pair_state + pair_delta",
+          "tex": "z'_{ij} = z_{ij} + delta z_{ij}",
+          "operation": "residual_add"
+        }
+      ],
+      "kind": "communication",
+      "status": "review",
+      "parameters": [
+        {
+          "id": "b",
+          "notation": "B",
+          "kind": "batch",
+          "resolution": "boundary",
+          "role": "leading batch axis"
+        },
+        {
+          "id": "n",
+          "notation": "N",
+          "kind": "sequence",
+          "resolution": "boundary",
+          "role": "number of tokens"
+        },
+        {
+          "id": "c_s",
+          "notation": "C_s",
+          "kind": "channel",
+          "resolution": "boundary",
+          "role": "input single-state channel width"
+        },
+        {
+          "id": "c_z",
+          "notation": "C_z",
+          "kind": "channel",
+          "resolution": "boundary",
+          "role": "pair-state and endpoint-projection channel width"
+        }
+      ],
+      "ports": [
+        {
+          "id": "single_state",
+          "label": "updated single state",
+          "direction": "input",
+          "kind": "representation",
+          "required": true,
+          "cardinality": "one",
+          "relation_kinds": [
+            "data_flow",
+            "state_update"
+          ],
+          "glyph": "single",
+          "notation": "s",
+          "role": "token state whose two endpoint projections construct the pair update",
+          "shape_contract": {
+            "kind": "tensor",
+            "axes": [
+              {
+                "id": "batch",
+                "dimension": "b"
+              },
+              {
+                "id": "token",
+                "dimension": "n"
+              },
+              {
+                "id": "single_channel",
+                "dimension": "c_s"
+              }
+            ]
+          }
+        },
+        {
+          "id": "pair_state",
+          "label": "incoming pair state",
+          "direction": "input",
+          "kind": "representation",
+          "required": true,
+          "cardinality": "one",
+          "relation_kinds": [
+            "data_flow",
+            "state_update"
+          ],
+          "glyph": "pair",
+          "notation": "z",
+          "role": "existing ordered-pair state that receives the endpoint-derived residual update",
+          "shape_contract": {
+            "kind": "tensor",
+            "axes": [
+              {
+                "id": "batch",
+                "dimension": "b"
+              },
+              {
+                "id": "query_token",
+                "dimension": "n"
+              },
+              {
+                "id": "key_token",
+                "dimension": "n"
+              },
+              {
+                "id": "pair_channel",
+                "dimension": "c_z"
+              }
+            ]
+          }
+        },
+        {
+          "id": "updated_pair_state",
+          "label": "updated pair state",
+          "direction": "output",
+          "kind": "representation",
+          "required": true,
+          "cardinality": "one",
+          "relation_kinds": [
+            "data_flow",
+            "state_update"
+          ],
+          "glyph": "pair",
+          "notation": "z'",
+          "role": "pair state after adding the projected endpoint contribution",
+          "shape_contract": {
+            "kind": "tensor",
+            "axes": [
+              {
+                "id": "batch",
+                "dimension": "b"
+              },
+              {
+                "id": "query_token",
+                "dimension": "n"
+              },
+              {
+                "id": "key_token",
+                "dimension": "n"
+              },
+              {
+                "id": "pair_channel",
+                "dimension": "c_z"
+              }
+            ]
+          }
+        }
+      ],
+      "variants": [
+        {
+          "id": "projected_endpoint_sum_residual",
+          "label": "Projected endpoint sum + residual",
+          "description": "Construct left/source and right/destination token features, broadcast-sum them over ordered pairs, apply a final pair projection, and add the result to the incoming pair state.",
+          "step_refs": [
+            "steps.project_left_single",
+            "steps.project_right_single",
+            "steps.broadcast_endpoint_sum",
+            "steps.project_pair_delta",
+            "steps.add_pair_residual"
+          ]
+        }
+      ],
+      "defaultVariant": "projected_endpoint_sum_residual",
+      "values": [
+        {
+          "id": "left_single",
+          "label": "left/source endpoint features",
+          "kind": "representation",
+          "glyph": "single",
+          "notation": "p_i",
+          "role": "endpoint features broadcast over the destination index j",
+          "shape_contract": {
+            "kind": "tensor",
+            "axes": [
+              {
+                "id": "batch",
+                "dimension": "b"
+              },
+              {
+                "id": "token",
+                "dimension": "n"
+              },
+              {
+                "id": "pair_channel",
+                "dimension": "c_z"
+              }
+            ]
+          }
+        },
+        {
+          "id": "right_single",
+          "label": "right/destination endpoint features",
+          "kind": "representation",
+          "glyph": "single",
+          "notation": "p_j",
+          "role": "endpoint features broadcast over the source index i",
+          "shape_contract": {
+            "kind": "tensor",
+            "axes": [
+              {
+                "id": "batch",
+                "dimension": "b"
+              },
+              {
+                "id": "token",
+                "dimension": "n"
+              },
+              {
+                "id": "pair_channel",
+                "dimension": "c_z"
+              }
+            ]
+          }
+        },
+        {
+          "id": "pair_activations",
+          "label": "broadcast endpoint sum",
+          "kind": "representation",
+          "glyph": "pair",
+          "notation": "a",
+          "role": "ordered-pair activations formed as the sum of the two endpoint projections",
+          "shape_contract": {
+            "kind": "tensor",
+            "axes": [
+              {
+                "id": "batch",
+                "dimension": "b"
+              },
+              {
+                "id": "query_token",
+                "dimension": "n"
+              },
+              {
+                "id": "key_token",
+                "dimension": "n"
+              },
+              {
+                "id": "pair_channel",
+                "dimension": "c_z"
+              }
+            ]
+          }
+        },
+        {
+          "id": "pair_delta",
+          "label": "projected pair update",
+          "kind": "representation",
+          "glyph": "pair",
+          "notation": "delta_z",
+          "role": "endpoint-derived contribution in the canonical pair-state channel space",
+          "shape_contract": {
+            "kind": "tensor",
+            "axes": [
+              {
+                "id": "batch",
+                "dimension": "b"
+              },
+              {
+                "id": "query_token",
+                "dimension": "n"
+              },
+              {
+                "id": "key_token",
+                "dimension": "n"
+              },
+              {
+                "id": "pair_channel",
+                "dimension": "c_z"
+              }
+            ]
+          }
+        }
+      ],
+      "steps": [
+        {
+          "id": "project_left_single",
+          "label": "Project left/source endpoint",
+          "operation": "linear_projection",
+          "shape_rule": "linear",
+          "inputs": [
+            "ports.single_state"
+          ],
+          "outputs": [
+            "values.left_single"
+          ],
+          "code": "left_single = linear_left(single_state)",
+          "tex": "p_i = W_i s_i",
+          "role": "map every token to the features used when it occupies the first ordered-pair endpoint",
+          "code_bindings": [
+            {
+              "lexeme": "single_state",
+              "ref": "ports.single_state",
+              "access": "read"
+            },
+            {
+              "lexeme": "left_single",
+              "ref": "values.left_single",
+              "access": "write"
+            }
+          ]
+        },
+        {
+          "id": "project_right_single",
+          "label": "Project right/destination endpoint",
+          "operation": "linear_projection",
+          "shape_rule": "linear",
+          "inputs": [
+            "ports.single_state"
+          ],
+          "outputs": [
+            "values.right_single"
+          ],
+          "code": "right_single = linear_right(single_state)",
+          "tex": "p_j = W_j s_j",
+          "role": "map every token to a distinct feature set used when it occupies the second ordered-pair endpoint",
+          "code_bindings": [
+            {
+              "lexeme": "single_state",
+              "ref": "ports.single_state",
+              "access": "read"
+            },
+            {
+              "lexeme": "right_single",
+              "ref": "values.right_single",
+              "access": "write"
+            }
+          ]
+        },
+        {
+          "id": "broadcast_endpoint_sum",
+          "label": "Broadcast + add endpoints",
+          "operation": "broadcast_sum",
+          "shape_rule": "broadcast_sum",
+          "inputs": [
+            "values.left_single",
+            "values.right_single"
+          ],
+          "outputs": [
+            "values.pair_activations"
+          ],
+          "code": "pair_activations = left_single[:, :, None, :] + right_single[:, None, :, :]",
+          "tex": "a_{ij} = p_i + p_j",
+          "role": "expand both token streams across the missing endpoint axis and add them for every ordered token pair",
+          "code_bindings": [
+            {
+              "lexeme": "left_single",
+              "ref": "values.left_single",
+              "access": "read"
+            },
+            {
+              "lexeme": "right_single",
+              "ref": "values.right_single",
+              "access": "read"
+            },
+            {
+              "lexeme": "pair_activations",
+              "ref": "values.pair_activations",
+              "access": "write"
+            }
+          ]
+        },
+        {
+          "id": "project_pair_delta",
+          "label": "Project pair update",
+          "operation": "linear_projection",
+          "shape_rule": "linear",
+          "inputs": [
+            "values.pair_activations"
+          ],
+          "outputs": [
+            "values.pair_delta"
+          ],
+          "code": "pair_delta = linear_pair(pair_activations)",
+          "tex": "delta z_{ij} = W_p a_{ij}",
+          "role": "transform the endpoint sum in pair-channel space before it is added to the existing pair state",
+          "code_bindings": [
+            {
+              "lexeme": "pair_activations",
+              "ref": "values.pair_activations",
+              "access": "read"
+            },
+            {
+              "lexeme": "pair_delta",
+              "ref": "values.pair_delta",
+              "access": "write"
+            }
+          ]
+        },
+        {
+          "id": "add_pair_residual",
+          "label": "Add to pair state",
+          "operation": "residual_add",
+          "shape_rule": "residual_add",
+          "inputs": [
+            "ports.pair_state",
+            "values.pair_delta"
+          ],
+          "outputs": [
+            "ports.updated_pair_state"
+          ],
+          "code": "updated_pair_state = pair_state + pair_delta",
+          "tex": "z'_{ij} = z_{ij} + delta z_{ij}",
+          "role": "preserve the incoming pair state while adding the single-derived endpoint update",
+          "code_bindings": [
+            {
+              "lexeme": "pair_state",
+              "ref": "ports.pair_state",
+              "access": "read"
+            },
+            {
+              "lexeme": "pair_delta",
+              "ref": "values.pair_delta",
+              "access": "read"
+            },
+            {
+              "lexeme": "updated_pair_state",
+              "ref": "ports.updated_pair_state",
+              "access": "write"
+            }
+          ]
+        }
+      ],
+      "visualTemplate": {
+        "grid": {
+          "columns": 9,
+          "rows": 4,
+          "column_sizing": "content",
+          "row_sizing": "content",
+          "col_gap": 30,
+          "row_gap": 30
+        },
+        "nodes": [
+          {
+            "id": "single_state",
+            "ref": "ports.single_state",
+            "col": 1,
+            "row": 2,
+            "prominence": "secondary",
+            "treatment": "compact"
+          },
+          {
+            "id": "project_left_single",
+            "ref": "steps.project_left_single",
+            "col": 2,
+            "row": 1,
+            "prominence": "primary",
+            "treatment": "compact"
+          },
+          {
+            "id": "left_single",
+            "ref": "values.left_single",
+            "col": 3,
+            "row": 1,
+            "prominence": "context",
+            "treatment": "compact"
+          },
+          {
+            "id": "project_right_single",
+            "ref": "steps.project_right_single",
+            "col": 2,
+            "row": 3,
+            "prominence": "primary",
+            "treatment": "compact"
+          },
+          {
+            "id": "right_single",
+            "ref": "values.right_single",
+            "col": 3,
+            "row": 3,
+            "prominence": "context",
+            "treatment": "compact"
+          },
+          {
+            "id": "broadcast_endpoint_sum",
+            "ref": "steps.broadcast_endpoint_sum",
+            "col": 4,
+            "row": 2,
+            "prominence": "primary",
+            "treatment": "compact"
+          },
+          {
+            "id": "pair_activations",
+            "ref": "values.pair_activations",
+            "col": 5,
+            "row": 2,
+            "prominence": "context",
+            "treatment": "compact"
+          },
+          {
+            "id": "project_pair_delta",
+            "ref": "steps.project_pair_delta",
+            "col": 6,
+            "row": 2,
+            "prominence": "primary",
+            "treatment": "compact"
+          },
+          {
+            "id": "pair_delta",
+            "ref": "values.pair_delta",
+            "col": 7,
+            "row": 2,
+            "prominence": "context",
+            "treatment": "compact"
+          },
+          {
+            "id": "pair_state",
+            "ref": "ports.pair_state",
+            "col": 7,
+            "row": 4,
+            "prominence": "secondary",
+            "treatment": "compact"
+          },
+          {
+            "id": "add_pair_residual",
+            "ref": "steps.add_pair_residual",
+            "col": 8,
+            "row": 2,
+            "prominence": "primary",
+            "treatment": "compact"
+          },
+          {
+            "id": "updated_pair_state",
+            "ref": "ports.updated_pair_state",
+            "col": 9,
+            "row": 2,
+            "prominence": "secondary",
+            "treatment": "compact"
+          }
+        ],
+        "segments": [
+          {
+            "id": "endpoint_pair_construction",
+            "label": "Endpoint Pair Construction",
+            "description": "Distinct left/source and right/destination projections are broadcast over the two token axes and added.",
+            "vertical_alignment_group": "single_to_pair_phases",
+            "node_refs": [
+              "ports.single_state",
+              "steps.project_left_single",
+              "values.left_single",
+              "steps.project_right_single",
+              "values.right_single",
+              "steps.broadcast_endpoint_sum",
+              "values.pair_activations"
+            ]
+          },
+          {
+            "id": "residual_pair_update",
+            "label": "Residual Pair Update",
+            "description": "A final linear map produces the learned pair contribution, which is added to the current pair state.",
+            "vertical_alignment_group": "single_to_pair_phases",
+            "node_refs": [
+              "steps.project_pair_delta",
+              "values.pair_delta",
+              "ports.pair_state",
+              "steps.add_pair_residual",
+              "ports.updated_pair_state"
+            ]
+          }
+        ]
+      },
+      "evidencePolicy": {
+        "generic_definition": "The template names the common endpoint-pair construction using AF2's left_single, right_single, and pair_activations vocabulary, then keeps the final projection and residual addition as a separate explicit phase of the full update pattern.",
+        "usage_requires": [
+          "Evidence for distinct left/source and right/destination token projections.",
+          "Evidence that the projections are broadcast and added rather than multiplied.",
+          "Evidence locating the final pair projection and residual addition."
+        ]
+      }
+    },
+    "pair_transition": {
+      "id": "pair_transition",
+      "schemaVersion": "standard-block-v0.3",
+      "name": "Pointwise Pair Transition",
+      "sourceYaml": "../../standard_blocks/pair-transition.yaml",
+      "description": "Apply a shared pointwise channel MLP independently to every pair entry, mask the resulting update, and add it residually to the incoming pair state.",
+      "math": [
+        {
+          "id": "normalize_pair_state",
+          "text": "normalized_pair_state = layer_norm(pair_state)",
+          "tex": "z^{norm}_{ij} = LayerNorm(z_{ij})",
+          "operation": "layer_normalization"
+        },
+        {
+          "id": "expand_and_activate",
+          "text": "expanded_pair_state = relu(linear_1(normalized_pair_state))",
+          "tex": "h_{ij} = ReLU(W_1 z^{norm}_{ij})",
+          "operation": "linear_relu"
+        },
+        {
+          "id": "project_pair_delta",
+          "text": "projected_pair_delta = linear_2(expanded_pair_state)",
+          "tex": "delta z^{raw}_{ij} = W_2 h_{ij}",
+          "operation": "linear"
+        },
+        {
+          "id": "apply_pair_mask",
+          "text": "transition_delta = projected_pair_delta * pair_mask",
+          "tex": "delta z_{ij} = m_{ij} delta z^{raw}_{ij}",
+          "operation": "masking"
+        },
+        {
+          "id": "add_pair_residual",
+          "text": "updated_pair_state = pair_state + transition_delta",
+          "tex": "z'_{ij} = z_{ij} + delta z_{ij}",
+          "operation": "residual_add"
+        }
+      ],
+      "kind": "feed_forward",
+      "status": "review",
+      "parameters": [
+        {
+          "id": "b",
+          "notation": "B",
+          "kind": "batch",
+          "resolution": "boundary",
+          "role": "leading batch axes"
+        },
+        {
+          "id": "n",
+          "notation": "N",
+          "kind": "sequence",
+          "resolution": "boundary",
+          "role": "number of residue or atom tokens"
+        },
+        {
+          "id": "c_z",
+          "notation": "C_z",
+          "kind": "channel",
+          "resolution": "boundary",
+          "role": "pair-state channel width"
+        },
+        {
+          "id": "c_hidden",
+          "notation": "C_h",
+          "kind": "channel",
+          "resolution": "instance",
+          "role": "expanded hidden width of the pointwise transition"
+        }
+      ],
+      "ports": [
+        {
+          "id": "pair_state",
+          "label": "incoming pair state",
+          "direction": "input",
+          "kind": "representation",
+          "required": true,
+          "cardinality": "one",
+          "relation_kinds": [
+            "data_flow",
+            "state_update"
+          ],
+          "glyph": "pair",
+          "notation": "z",
+          "role": "pair representation entering the pointwise transition",
+          "shape_contract": {
+            "kind": "tensor",
+            "axes": [
+              {
+                "id": "batch",
+                "dimension": "b"
+              },
+              {
+                "id": "query_token",
+                "dimension": "n"
+              },
+              {
+                "id": "key_token",
+                "dimension": "n"
+              },
+              {
+                "id": "pair_channel",
+                "dimension": "c_z"
+              }
+            ]
+          }
+        },
+        {
+          "id": "pair_mask",
+          "label": "valid-pair mask",
+          "direction": "conditioning",
+          "kind": "mask",
+          "required": false,
+          "cardinality": "one",
+          "relation_kinds": [
+            "conditioning",
+            "control"
+          ],
+          "glyph": "pair",
+          "notation": "m",
+          "role": "optional validity mask multiplied into the projected pair update",
+          "shape_contract": {
+            "kind": "tensor",
+            "axes": [
+              {
+                "id": "batch",
+                "dimension": "b"
+              },
+              {
+                "id": "query_token",
+                "dimension": "n"
+              },
+              {
+                "id": "key_token",
+                "dimension": "n"
+              }
+            ]
+          }
+        },
+        {
+          "id": "updated_pair_state",
+          "label": "updated pair state",
+          "direction": "output",
+          "kind": "representation",
+          "required": true,
+          "cardinality": "one",
+          "relation_kinds": [
+            "data_flow",
+            "state_update"
+          ],
+          "glyph": "pair",
+          "notation": "z'",
+          "role": "pair state after the masked pointwise update is added residually",
+          "shape_contract": {
+            "kind": "tensor",
+            "axes": [
+              {
+                "id": "batch",
+                "dimension": "b"
+              },
+              {
+                "id": "query_token",
+                "dimension": "n"
+              },
+              {
+                "id": "key_token",
+                "dimension": "n"
+              },
+              {
+                "id": "pair_channel",
+                "dimension": "c_z"
+              }
+            ]
+          }
+        }
+      ],
+      "variants": [
+        {
+          "id": "layer_norm_expansion_relu_projection_mask_residual",
+          "label": "LayerNorm + expanded MLP + residual",
+          "description": "Normalize each pair entry, expand its channels, apply ReLU, project back to the pair width, apply the pair-validity mask, and add the result to the incoming pair state.",
+          "step_refs": [
+            "steps.normalize_pair_state",
+            "steps.expand_and_activate",
+            "steps.project_pair_delta",
+            "steps.apply_pair_mask",
+            "steps.add_pair_residual"
+          ]
+        }
+      ],
+      "defaultVariant": "layer_norm_expansion_relu_projection_mask_residual",
+      "values": [
+        {
+          "id": "normalized_pair_state",
+          "label": "normalized pair state",
+          "kind": "representation",
+          "glyph": "pair",
+          "notation": "z_norm",
+          "shape_contract": {
+            "kind": "tensor",
+            "axes": [
+              {
+                "id": "batch",
+                "dimension": "b"
+              },
+              {
+                "id": "query_token",
+                "dimension": "n"
+              },
+              {
+                "id": "key_token",
+                "dimension": "n"
+              },
+              {
+                "id": "pair_channel",
+                "dimension": "c_z"
+              }
+            ]
+          }
+        },
+        {
+          "id": "expanded_pair_state",
+          "label": "expanded hidden state",
+          "kind": "representation",
+          "glyph": "pair",
+          "notation": "h",
+          "shape_contract": {
+            "kind": "tensor",
+            "axes": [
+              {
+                "id": "batch",
+                "dimension": "b"
+              },
+              {
+                "id": "query_token",
+                "dimension": "n"
+              },
+              {
+                "id": "key_token",
+                "dimension": "n"
+              },
+              {
+                "id": "hidden_channel",
+                "dimension": "c_hidden"
+              }
+            ]
+          }
+        },
+        {
+          "id": "projected_pair_delta",
+          "label": "projected pair update",
+          "kind": "representation",
+          "glyph": "pair",
+          "notation": "delta_z_raw",
+          "shape_contract": {
+            "kind": "tensor",
+            "axes": [
+              {
+                "id": "batch",
+                "dimension": "b"
+              },
+              {
+                "id": "query_token",
+                "dimension": "n"
+              },
+              {
+                "id": "key_token",
+                "dimension": "n"
+              },
+              {
+                "id": "pair_channel",
+                "dimension": "c_z"
+              }
+            ]
+          }
+        },
+        {
+          "id": "transition_delta",
+          "label": "masked pair update",
+          "kind": "representation",
+          "glyph": "pair",
+          "notation": "delta_z",
+          "shape_contract": {
+            "kind": "tensor",
+            "axes": [
+              {
+                "id": "batch",
+                "dimension": "b"
+              },
+              {
+                "id": "query_token",
+                "dimension": "n"
+              },
+              {
+                "id": "key_token",
+                "dimension": "n"
+              },
+              {
+                "id": "pair_channel",
+                "dimension": "c_z"
+              }
+            ]
+          }
+        }
+      ],
+      "steps": [
+        {
+          "id": "normalize_pair_state",
+          "label": "LayerNorm each pair",
+          "operation": "layer_normalization",
+          "shape_rule": "preserve",
+          "inputs": [
+            "ports.pair_state"
+          ],
+          "outputs": [
+            "values.normalized_pair_state"
+          ],
+          "code": "normalized_pair_state = layer_norm(pair_state)",
+          "tex": "z^{norm}_{ij} = LayerNorm(z_{ij})",
+          "role": "normalize channels independently at every ordered token pair",
+          "code_bindings": [
+            {
+              "lexeme": "pair_state",
+              "ref": "ports.pair_state",
+              "access": "read"
+            },
+            {
+              "lexeme": "normalized_pair_state",
+              "ref": "values.normalized_pair_state",
+              "access": "write"
+            }
+          ]
+        },
+        {
+          "id": "expand_and_activate",
+          "label": "Expand channels + ReLU",
+          "operation": "linear_relu",
+          "shape_rule": "linear",
+          "inputs": [
+            "values.normalized_pair_state"
+          ],
+          "outputs": [
+            "values.expanded_pair_state"
+          ],
+          "code": "expanded_pair_state = relu(linear_1(normalized_pair_state))",
+          "tex": "h_{ij} = ReLU(W_1 z^{norm}_{ij})",
+          "role": "apply the shared channel expansion and nonlinearity independently to every pair entry",
+          "code_bindings": [
+            {
+              "lexeme": "normalized_pair_state",
+              "ref": "values.normalized_pair_state",
+              "access": "read"
+            },
+            {
+              "lexeme": "expanded_pair_state",
+              "ref": "values.expanded_pair_state",
+              "access": "write"
+            }
+          ]
+        },
+        {
+          "id": "project_pair_delta",
+          "label": "Project back to pair width",
+          "operation": "linear",
+          "shape_rule": "linear",
+          "inputs": [
+            "values.expanded_pair_state"
+          ],
+          "outputs": [
+            "values.projected_pair_delta"
+          ],
+          "code": "projected_pair_delta = linear_2(expanded_pair_state)",
+          "tex": "delta z^{raw}_{ij} = W_2 h_{ij}",
+          "role": "return the hidden channels to the canonical pair-state width",
+          "code_bindings": [
+            {
+              "lexeme": "expanded_pair_state",
+              "ref": "values.expanded_pair_state",
+              "access": "read"
+            },
+            {
+              "lexeme": "projected_pair_delta",
+              "ref": "values.projected_pair_delta",
+              "access": "write"
+            }
+          ]
+        },
+        {
+          "id": "apply_pair_mask",
+          "label": "Apply valid-pair mask",
+          "operation": "masking",
+          "shape_rule": "preserve",
+          "inputs": [
+            "values.projected_pair_delta",
+            "ports.pair_mask"
+          ],
+          "outputs": [
+            "values.transition_delta"
+          ],
+          "code": "transition_delta = projected_pair_delta * pair_mask",
+          "tex": "delta z_{ij} = m_{ij} delta z^{raw}_{ij}",
+          "role": "suppress updates at padded or otherwise invalid token pairs",
+          "code_bindings": [
+            {
+              "lexeme": "projected_pair_delta",
+              "ref": "values.projected_pair_delta",
+              "access": "read"
+            },
+            {
+              "lexeme": "pair_mask",
+              "ref": "ports.pair_mask",
+              "access": "read"
+            },
+            {
+              "lexeme": "transition_delta",
+              "ref": "values.transition_delta",
+              "access": "write"
+            }
+          ]
+        },
+        {
+          "id": "add_pair_residual",
+          "label": "Add pair residual",
+          "operation": "residual_add",
+          "shape_rule": "residual_add",
+          "inputs": [
+            "ports.pair_state",
+            "values.transition_delta"
+          ],
+          "outputs": [
+            "ports.updated_pair_state"
+          ],
+          "code": "updated_pair_state = pair_state + transition_delta",
+          "tex": "z'_{ij} = z_{ij} + delta z_{ij}",
+          "role": "preserve the incoming pair state while adding the learned pointwise update",
+          "code_bindings": [
+            {
+              "lexeme": "pair_state",
+              "ref": "ports.pair_state",
+              "access": "read"
+            },
+            {
+              "lexeme": "transition_delta",
+              "ref": "values.transition_delta",
+              "access": "read"
+            },
+            {
+              "lexeme": "updated_pair_state",
+              "ref": "ports.updated_pair_state",
+              "access": "write"
+            }
+          ]
+        }
+      ],
+      "visualTemplate": {
+        "grid": {
+          "columns": 11,
+          "rows": 3,
+          "column_sizing": "content",
+          "row_sizing": "content",
+          "col_gap": 26,
+          "row_gap": 34
+        },
+        "nodes": [
+          {
+            "id": "pair_state",
+            "ref": "ports.pair_state",
+            "col": 1,
+            "row": 2,
+            "prominence": "secondary",
+            "treatment": "compact"
+          },
+          {
+            "id": "normalize_pair_state",
+            "ref": "steps.normalize_pair_state",
+            "col": 2,
+            "row": 2,
+            "prominence": "primary",
+            "treatment": "compact"
+          },
+          {
+            "id": "normalized_pair_state",
+            "ref": "values.normalized_pair_state",
+            "col": 3,
+            "row": 2,
+            "prominence": "context",
+            "treatment": "compact"
+          },
+          {
+            "id": "expand_and_activate",
+            "ref": "steps.expand_and_activate",
+            "col": 4,
+            "row": 2,
+            "prominence": "primary",
+            "treatment": "compact"
+          },
+          {
+            "id": "expanded_pair_state",
+            "ref": "values.expanded_pair_state",
+            "col": 5,
+            "row": 2,
+            "prominence": "context",
+            "treatment": "compact"
+          },
+          {
+            "id": "project_pair_delta",
+            "ref": "steps.project_pair_delta",
+            "col": 6,
+            "row": 2,
+            "prominence": "primary",
+            "treatment": "compact"
+          },
+          {
+            "id": "projected_pair_delta",
+            "ref": "values.projected_pair_delta",
+            "col": 7,
+            "row": 2,
+            "prominence": "context",
+            "treatment": "compact"
+          },
+          {
+            "id": "pair_mask",
+            "ref": "ports.pair_mask",
+            "col": 7,
+            "row": 3,
+            "prominence": "context",
+            "treatment": "chip"
+          },
+          {
+            "id": "apply_pair_mask",
+            "ref": "steps.apply_pair_mask",
+            "col": 8,
+            "row": 2,
+            "prominence": "primary",
+            "treatment": "compact"
+          },
+          {
+            "id": "transition_delta",
+            "ref": "values.transition_delta",
+            "col": 9,
+            "row": 2,
+            "prominence": "context",
+            "treatment": "compact"
+          },
+          {
+            "id": "add_pair_residual",
+            "ref": "steps.add_pair_residual",
+            "col": 10,
+            "row": 2,
+            "prominence": "primary",
+            "treatment": "compact"
+          },
+          {
+            "id": "updated_pair_state",
+            "ref": "ports.updated_pair_state",
+            "col": 11,
+            "row": 2,
+            "prominence": "secondary",
+            "treatment": "compact"
+          }
+        ]
+      },
+      "evidencePolicy": {
+        "generic_definition": "The template captures the AF2-style pointwise pair-transition update; concrete architectures must separately cite their channel widths, mask behavior, and residual boundary.",
+        "usage_requires": [
+          "Evidence for LayerNorm, channel expansion, ReLU, projection, and pair masking.",
+          "Evidence locating where the returned transition update is added residually to the incoming pair state."
+        ]
+      }
     }
   },
   "pseudocode": {
@@ -13841,9 +16307,11 @@ export const manifest = {
         "classifications": {
           "modules.binder_target_feature_assembler": "collapsed:modules.feature_builder",
           "modules.binder_tokens": "collapsed:modules.feature_builder",
+          "modules.conditioned_pair_geometry_encoder": "excluded",
           "modules.coordinate_initializer": "collapsed:modules.diffusion_sampler",
           "modules.ddim_update": "collapsed:modules.diffusion_sampler",
           "modules.diffusion_sampler": "visible",
+          "modules.endpoint_pair_constructor": "excluded",
           "modules.feature_batch_assembler": "collapsed:modules.feature_builder",
           "modules.feature_builder": "visible",
           "modules.frame_update": "collapsed:modules.diffusion_sampler",
@@ -13859,10 +16327,13 @@ export const manifest = {
           "modules.motif_problem_parser": "collapsed:modules.feature_builder",
           "modules.motif_scaffold_tokens": "collapsed:modules.feature_builder",
           "modules.noise_readout": "collapsed:modules.diffusion_sampler",
+          "modules.noisy_frame_pair_encoder": "excluded",
           "modules.pair_biased_attention_update": "collapsed:modules.diffusion_sampler",
+          "modules.pair_feature_assembler": "excluded",
           "modules.pair_feature_embedder": "excluded",
           "modules.pair_transition": "collapsed:modules.diffusion_sampler",
           "modules.pdb_exporter": "visible",
+          "modules.relative_position_embedder": "excluded",
           "modules.sequence_head": "collapsed:modules.diffusion_sampler",
           "modules.sequence_sampler": "excluded",
           "modules.single_feature_embedder": "excluded",
@@ -13878,6 +16349,7 @@ export const manifest = {
           "modules.unconditional_frame_indices": "collapsed:modules.feature_builder",
           "modules.unconditional_placeholder_initializer": "collapsed:modules.feature_builder",
           "modules.unconditional_token_layout": "collapsed:modules.feature_builder",
+          "value_sites.conditioned_pair_features": "excluded",
           "value_sites.coordinate_prediction": "collapsed:modules.diffusion_sampler",
           "value_sites.current_coordinates": "collapsed:modules.diffusion_sampler",
           "value_sites.current_frames": "collapsed:modules.diffusion_sampler",
@@ -13885,6 +16357,7 @@ export const manifest = {
           "value_sites.decoder_output_frames": "collapsed:modules.diffusion_sampler",
           "value_sites.decoder_single_state": "collapsed:modules.diffusion_sampler",
           "value_sites.design_request": "visible",
+          "value_sites.endpoint_pair_activations": "excluded",
           "value_sites.feature_bundle": "visible",
           "value_sites.final_coordinates": "visible",
           "value_sites.fresh_step_noise": "collapsed:modules.diffusion_sampler",
@@ -13893,6 +16366,7 @@ export const manifest = {
           "value_sites.initial_pair_features": "collapsed:modules.diffusion_sampler",
           "value_sites.initial_single_features": "collapsed:modules.diffusion_sampler",
           "value_sites.next_coordinates": "collapsed:modules.diffusion_sampler",
+          "value_sites.noisy_frame_pair_features": "excluded",
           "value_sites.pair_after_single_update": "collapsed:modules.diffusion_sampler",
           "value_sites.pair_after_transition": "collapsed:modules.diffusion_sampler",
           "value_sites.pair_after_triangle_updates": "collapsed:modules.diffusion_sampler",
@@ -13901,6 +16375,7 @@ export const manifest = {
           "value_sites.predicted_sequence": "visible",
           "value_sites.refined_pair_features": "collapsed:modules.diffusion_sampler",
           "value_sites.refined_single_features": "collapsed:modules.diffusion_sampler",
+          "value_sites.relative_position_pair_features": "excluded",
           "value_sites.sampler_step_coordinates": "collapsed:modules.diffusion_sampler",
           "value_sites.sequence_logits": "collapsed:modules.diffusion_sampler",
           "value_sites.single_after_attention_residual_norm": "collapsed:modules.diffusion_sampler",
@@ -14463,8 +16938,10 @@ export const manifest = {
           }
         ],
         "classifications": {
+          "modules.conditioned_pair_geometry_encoder": "excluded",
           "modules.coordinate_initializer": "visible",
           "modules.ddim_update": "collapsed:modules.reverse_diffusion_step",
+          "modules.endpoint_pair_constructor": "excluded",
           "modules.frame_update": "excluded",
           "modules.frenet_frame_builder": "collapsed:modules.reverse_diffusion_step",
           "modules.global_token_adapter": "collapsed:modules.reverse_diffusion_step",
@@ -14473,9 +16950,12 @@ export const manifest = {
           "modules.latent_single_residual_norm": "collapsed:modules.reverse_diffusion_step",
           "modules.latent_single_transition": "collapsed:modules.reverse_diffusion_step",
           "modules.noise_readout": "collapsed:modules.reverse_diffusion_step",
+          "modules.noisy_frame_pair_encoder": "excluded",
           "modules.pair_biased_attention_update": "collapsed:modules.reverse_diffusion_step",
+          "modules.pair_feature_assembler": "excluded",
           "modules.pair_feature_embedder": "excluded",
           "modules.pair_transition": "collapsed:modules.reverse_diffusion_step",
+          "modules.relative_position_embedder": "excluded",
           "modules.reverse_diffusion_step": "visible",
           "modules.sequence_head": "collapsed:modules.reverse_diffusion_step",
           "modules.sequence_sampler": "visible",
@@ -14484,12 +16964,14 @@ export const manifest = {
           "modules.structure_transition": "collapsed:modules.reverse_diffusion_step",
           "modules.timestep_controller": "collapsed:modules.reverse_diffusion_step",
           "modules.triangle_multiplication_stack": "collapsed:modules.reverse_diffusion_step",
+          "value_sites.conditioned_pair_features": "excluded",
           "value_sites.coordinate_prediction": "collapsed:modules.reverse_diffusion_step",
           "value_sites.current_coordinates": "visible",
           "value_sites.current_frames": "collapsed:modules.reverse_diffusion_step",
           "value_sites.decoder_frames": "collapsed:modules.reverse_diffusion_step",
           "value_sites.decoder_output_frames": "collapsed:modules.reverse_diffusion_step",
           "value_sites.decoder_single_state": "collapsed:modules.reverse_diffusion_step",
+          "value_sites.endpoint_pair_activations": "excluded",
           "value_sites.feature_bundle": "visible",
           "value_sites.final_coordinates": "visible",
           "value_sites.fresh_step_noise": "collapsed:modules.reverse_diffusion_step",
@@ -14497,6 +16979,7 @@ export const manifest = {
           "value_sites.initial_pair_features": "collapsed:modules.reverse_diffusion_step",
           "value_sites.initial_single_features": "collapsed:modules.reverse_diffusion_step",
           "value_sites.next_coordinates": "visible",
+          "value_sites.noisy_frame_pair_features": "excluded",
           "value_sites.pair_after_single_update": "collapsed:modules.reverse_diffusion_step",
           "value_sites.pair_after_transition": "collapsed:modules.reverse_diffusion_step",
           "value_sites.pair_after_triangle_updates": "collapsed:modules.reverse_diffusion_step",
@@ -14505,6 +16988,7 @@ export const manifest = {
           "value_sites.predicted_sequence": "visible",
           "value_sites.refined_pair_features": "collapsed:modules.reverse_diffusion_step",
           "value_sites.refined_single_features": "collapsed:modules.reverse_diffusion_step",
+          "value_sites.relative_position_pair_features": "excluded",
           "value_sites.sampler_step_coordinates": "collapsed:modules.reverse_diffusion_step",
           "value_sites.sequence_logits": "excluded",
           "value_sites.single_after_attention_residual_norm": "collapsed:modules.reverse_diffusion_step",
@@ -15114,9 +17598,11 @@ export const manifest = {
           }
         ],
         "classifications": {
+          "modules.conditioned_pair_geometry_encoder": "excluded",
           "modules.ddim_update": "collapsed:modules.directional_ddim_sampler_math",
           "modules.denoiser": "visible",
           "modules.directional_ddim_sampler_math": "visible",
+          "modules.endpoint_pair_constructor": "excluded",
           "modules.frame_update": "excluded",
           "modules.frenet_frame_builder": "visible",
           "modules.global_token_adapter": "collapsed:modules.denoiser",
@@ -15125,26 +17611,32 @@ export const manifest = {
           "modules.latent_single_residual_norm": "collapsed:modules.denoiser",
           "modules.latent_single_transition": "collapsed:modules.denoiser",
           "modules.noise_readout": "collapsed:modules.directional_ddim_sampler_math",
+          "modules.noisy_frame_pair_encoder": "excluded",
           "modules.pair_biased_attention_update": "collapsed:modules.denoiser",
+          "modules.pair_feature_assembler": "excluded",
           "modules.pair_feature_embedder": "excluded",
           "modules.pair_transition": "collapsed:modules.denoiser",
+          "modules.relative_position_embedder": "excluded",
           "modules.sequence_head": "collapsed:modules.denoiser",
           "modules.single_feature_embedder": "collapsed:modules.denoiser",
           "modules.single_to_pair_update": "collapsed:modules.denoiser",
           "modules.structure_transition": "collapsed:modules.denoiser",
           "modules.timestep_controller": "excluded",
           "modules.triangle_multiplication_stack": "collapsed:modules.denoiser",
+          "value_sites.conditioned_pair_features": "excluded",
           "value_sites.coordinate_prediction": "elided",
           "value_sites.current_coordinates": "excluded",
           "value_sites.current_frames": "visible",
           "value_sites.decoder_frames": "collapsed:modules.denoiser",
           "value_sites.decoder_output_frames": "collapsed:modules.denoiser",
           "value_sites.decoder_single_state": "collapsed:modules.denoiser",
+          "value_sites.endpoint_pair_activations": "excluded",
           "value_sites.feature_bundle": "visible",
           "value_sites.fresh_step_noise": "collapsed:modules.directional_ddim_sampler_math",
           "value_sites.initial_pair_features": "collapsed:modules.denoiser",
           "value_sites.initial_single_features": "collapsed:modules.denoiser",
           "value_sites.next_coordinates": "visible",
+          "value_sites.noisy_frame_pair_features": "excluded",
           "value_sites.pair_after_single_update": "collapsed:modules.denoiser",
           "value_sites.pair_after_transition": "collapsed:modules.denoiser",
           "value_sites.pair_after_triangle_updates": "collapsed:modules.denoiser",
@@ -15152,6 +17644,7 @@ export const manifest = {
           "value_sites.predicted_noise": "collapsed:modules.directional_ddim_sampler_math",
           "value_sites.refined_pair_features": "collapsed:modules.denoiser",
           "value_sites.refined_single_features": "collapsed:modules.denoiser",
+          "value_sites.relative_position_pair_features": "excluded",
           "value_sites.sampler_step_coordinates": "collapsed:modules.directional_ddim_sampler_math",
           "value_sites.sequence_logits": "excluded",
           "value_sites.single_after_attention_residual_norm": "collapsed:modules.denoiser",
@@ -15667,7 +18160,8 @@ export const manifest = {
             "prominence": "primary",
             "treatment": "block",
             "col": 2,
-            "row": 4
+            "row": 4,
+            "board_ref": "pair_feature_embedder"
           },
           {
             "id": "latent_transformer",
@@ -15845,7 +18339,7 @@ export const manifest = {
             "id": "projection_8617456721d2",
             "from": "current_frames",
             "to": "pair_feature_embedder",
-            "projection": "direct",
+            "projection": "boundary",
             "origin": "canonical",
             "kind": "data_flow",
             "relation_path": [
@@ -16301,6 +18795,8 @@ export const manifest = {
           }
         ],
         "classifications": {
+          "modules.conditioned_pair_geometry_encoder": "collapsed:modules.pair_feature_embedder",
+          "modules.endpoint_pair_constructor": "collapsed:modules.pair_feature_embedder",
           "modules.frame_update": "collapsed:modules.structure_decoder",
           "modules.frenet_frame_builder": "excluded",
           "modules.global_token_adapter": "collapsed:modules.latent_transformer",
@@ -16310,30 +18806,37 @@ export const manifest = {
           "modules.latent_single_transition": "collapsed:modules.latent_transformer",
           "modules.latent_transformer": "visible",
           "modules.noise_readout": "excluded",
+          "modules.noisy_frame_pair_encoder": "collapsed:modules.pair_feature_embedder",
           "modules.pair_biased_attention_update": "collapsed:modules.latent_transformer",
+          "modules.pair_feature_assembler": "collapsed:modules.pair_feature_embedder",
           "modules.pair_feature_embedder": "visible",
           "modules.pair_transition": "collapsed:modules.latent_transformer",
+          "modules.relative_position_embedder": "collapsed:modules.pair_feature_embedder",
           "modules.sequence_head": "visible",
           "modules.single_feature_embedder": "visible",
           "modules.single_to_pair_update": "collapsed:modules.latent_transformer",
           "modules.structure_decoder": "visible",
           "modules.structure_transition": "collapsed:modules.structure_decoder",
           "modules.triangle_multiplication_stack": "collapsed:modules.latent_transformer",
+          "value_sites.conditioned_pair_features": "collapsed:modules.pair_feature_embedder",
           "value_sites.coordinate_prediction": "visible",
           "value_sites.current_frames": "visible",
           "value_sites.decoder_frames": "collapsed:modules.structure_decoder",
           "value_sites.decoder_output_frames": "visible",
           "value_sites.decoder_single_state": "collapsed:modules.structure_decoder",
+          "value_sites.endpoint_pair_activations": "collapsed:modules.pair_feature_embedder",
           "value_sites.feature_bundle": "visible",
           "value_sites.initial_pair_features": "elided",
           "value_sites.initial_single_features": "elided",
           "value_sites.ipa_delta": "collapsed:modules.structure_decoder",
+          "value_sites.noisy_frame_pair_features": "collapsed:modules.pair_feature_embedder",
           "value_sites.pair_after_single_update": "collapsed:modules.latent_transformer",
           "value_sites.pair_after_transition": "collapsed:modules.latent_transformer",
           "value_sites.pair_after_triangle_updates": "collapsed:modules.latent_transformer",
           "value_sites.pair_with_global_tokens": "collapsed:modules.latent_transformer",
           "value_sites.refined_pair_features": "visible",
           "value_sites.refined_single_features": "visible",
+          "value_sites.relative_position_pair_features": "collapsed:modules.pair_feature_embedder",
           "value_sites.sequence_logits": "visible",
           "value_sites.single_after_attention_residual_norm": "collapsed:modules.latent_transformer",
           "value_sites.single_after_ipa": "collapsed:modules.structure_decoder",
@@ -16350,7 +18853,7 @@ export const manifest = {
       {
         "id": "latent_transformer",
         "title": "Five-Block Bidirectional Latent Transformer",
-        "summary": "Ten global tokens are appended once. The repeated region shows one block, where pairs update singles through pair-biased attention, the updated singles feed pairs through an outer product, and triangle plus transition operations update the pair state. The block outputs become the next block inputs; after block five, global entries are removed to form the mature outputs.",
+        "summary": "Ten global tokens are appended once. The repeated region shows one block, where pairs update singles through pair-biased attention, distinct endpoint projections of the updated singles are broadcast-summed into a pair update, and triangle plus transition operations further refine the pair state. The block outputs become the next block inputs; after block five, global entries are removed to form the mature outputs.",
         "parent": "denoiser_forward",
         "subject_ref": "modules.latent_transformer",
         "expansion_depth": 1,
@@ -16514,7 +19017,8 @@ export const manifest = {
             "treatment": "compact",
             "density": "compact",
             "col": 9,
-            "row": 4
+            "row": 4,
+            "board_ref": "genie3_single_to_pair_endpoint_update_internals"
           },
           {
             "id": "pair_after_single_update",
@@ -16556,7 +19060,8 @@ export const manifest = {
             "treatment": "compact",
             "density": "compact",
             "col": 13,
-            "row": 4
+            "row": 4,
+            "board_ref": "genie3_pair_transition_internals"
           },
           {
             "id": "pair_after_transition",
@@ -16644,11 +19149,11 @@ export const manifest = {
             "match": {
               "relation_ref": "relations.single_after_pair_attention_enters_single_to_pair_update"
             },
-            "label": "outer product",
+            "label": "endpoint projections + sum",
             "connection": {
               "title": "Singles update pairs",
               "role": "single-to-pair communication",
-              "inside": "Projected updated singles form an outer product that is added to the pair state."
+              "inside": "Distinct source- and destination-endpoint projections of the updated singles are broadcast over i and j, summed, projected to pair channels, and added to the current pair state."
             }
           },
           {
@@ -16660,6 +19165,17 @@ export const manifest = {
               "title": "Triangular pair reasoning",
               "role": "pair refinement",
               "inside": "Outgoing and incoming triangular multiplication propagate information around three-token paths before the pair MLP."
+            }
+          },
+          {
+            "match": {
+              "relation_ref": "relations.pair_transition_produces_block_pair_output"
+            },
+            "label": "pointwise MLP + residual",
+            "connection": {
+              "title": "Pointwise pair transition",
+              "role": "final pair-state update",
+              "inside": "Each ordered token pair independently passes through LayerNorm and a 128-to-512-to-128 MLP; the masked update is then added back to the triangle-refined pair state."
             }
           }
         ],
@@ -16969,6 +19485,12 @@ export const manifest = {
               "representations.pair_features"
             ],
             "presentation": {
+              "label": "pointwise MLP + residual",
+              "connection": {
+                "title": "Pointwise pair transition",
+                "role": "final pair-state update",
+                "inside": "Each ordered token pair independently passes through LayerNorm and a 128-to-512-to-128 MLP; the masked update is then added back to the triangle-refined pair state."
+              }
             }
           },
           {
@@ -17096,11 +19618,11 @@ export const manifest = {
               "representations.single_features"
             ],
             "presentation": {
-              "label": "outer product",
+              "label": "endpoint projections + sum",
               "connection": {
                 "title": "Singles update pairs",
                 "role": "single-to-pair communication",
-                "inside": "Projected updated singles form an outer product that is added to the pair state."
+                "inside": "Distinct source- and destination-endpoint projections of the updated singles are broadcast over i and j, summed, projected to pair channels, and added to the current pair state."
               }
             }
           },
@@ -23903,6 +26425,1961 @@ export const manifest = {
         ]
       },
       {
+        "id": "genie3_single_to_pair_endpoint_update_internals",
+        "kind": "standard_block_instance",
+        "title": "Genie 3 Single-to-Pair Endpoint Update Internals",
+        "summary": "Updated singles are projected into distinct left/source and right/destination endpoint features. Their broadcast sum forms pair activations, which are projected to a pair delta and added residually to the current pair state.",
+        "parent": "latent_transformer",
+        "subject_ref": "modules.single_to_pair_update",
+        "expansion_depth": 0,
+        "block_instance_ref": "block_instances.latent_single_to_pair_endpoint_update",
+        "grid": {
+          "columns": 9,
+          "rows": 4,
+          "column_sizing": "content",
+          "row_sizing": "content",
+          "col_gap": 30,
+          "row_gap": 30
+        },
+        "nodes": [
+          {
+            "id": "single_state",
+            "label": "updated single state",
+            "role": "token state whose two endpoint projections construct the pair update",
+            "col": 1,
+            "row": 2,
+            "prominence": "secondary",
+            "treatment": "compact",
+            "standard_block_ref": "standard_blocks/single-to-pair-endpoint-update.yaml",
+            "standard_block_id": "single_to_pair_endpoint_update",
+            "block_instance_ref": "block_instances.latent_single_to_pair_endpoint_update",
+            "template_fact_ref": "standard_blocks.single_to_pair_endpoint_update.ports.single_state",
+            "instance_fact_ref": "block_instances.latent_single_to_pair_endpoint_update.ports.single_state",
+            "kind": "representation",
+            "rep_ref": "single_features",
+            "shape": "B x N x 384",
+            "resolved_shape": {
+              "kind": "tensor",
+              "axes": [
+                {
+                  "id": "batch",
+                  "dimension": "B"
+                },
+                {
+                  "id": "token",
+                  "dimension": "N"
+                },
+                {
+                  "id": "single_channel",
+                  "dimension": 384
+                }
+              ],
+              "label": "B x N x 384"
+            },
+            "shape_status": "resolved",
+            "scale": "token",
+            "glyph": "single",
+            "flow_family": "single",
+            "notation": "s",
+            "port_ref": "ports.single_state"
+          },
+          {
+            "id": "project_left_single",
+            "label": "Project left/source endpoint",
+            "role": "map every token to the features used when it occupies the first ordered-pair endpoint",
+            "col": 2,
+            "row": 1,
+            "prominence": "primary",
+            "treatment": "compact",
+            "standard_block_ref": "standard_blocks/single-to-pair-endpoint-update.yaml",
+            "standard_block_id": "single_to_pair_endpoint_update",
+            "block_instance_ref": "block_instances.latent_single_to_pair_endpoint_update",
+            "template_fact_ref": "standard_blocks.single_to_pair_endpoint_update.steps.project_left_single",
+            "instance_fact_ref": "block_instances.latent_single_to_pair_endpoint_update.steps.project_left_single",
+            "kind": "operation",
+            "scale": "operation",
+            "detail": "linear_projection",
+            "code": "left_single = linear_left(single_state)",
+            "tex": "p_i = W_i s_i",
+            "operation": "linear_projection"
+          },
+          {
+            "id": "left_single",
+            "label": "left/source endpoint features",
+            "role": "endpoint features broadcast over the destination index j",
+            "col": 3,
+            "row": 1,
+            "prominence": "context",
+            "treatment": "compact",
+            "standard_block_ref": "standard_blocks/single-to-pair-endpoint-update.yaml",
+            "standard_block_id": "single_to_pair_endpoint_update",
+            "block_instance_ref": "block_instances.latent_single_to_pair_endpoint_update",
+            "template_fact_ref": "standard_blocks.single_to_pair_endpoint_update.values.left_single",
+            "instance_fact_ref": "block_instances.latent_single_to_pair_endpoint_update.values.left_single",
+            "kind": "representation",
+            "shape": "B x N x 128",
+            "resolved_shape": {
+              "kind": "tensor",
+              "axes": [
+                {
+                  "id": "batch",
+                  "dimension": "B"
+                },
+                {
+                  "id": "token",
+                  "dimension": "N"
+                },
+                {
+                  "id": "pair_channel",
+                  "dimension": 128
+                }
+              ],
+              "label": "B x N x 128"
+            },
+            "shape_status": "resolved",
+            "scale": "item",
+            "glyph": "single",
+            "flow_family": "single",
+            "notation": "p_i"
+          },
+          {
+            "id": "project_right_single",
+            "label": "Project right/destination endpoint",
+            "role": "map every token to a distinct feature set used when it occupies the second ordered-pair endpoint",
+            "col": 2,
+            "row": 3,
+            "prominence": "primary",
+            "treatment": "compact",
+            "standard_block_ref": "standard_blocks/single-to-pair-endpoint-update.yaml",
+            "standard_block_id": "single_to_pair_endpoint_update",
+            "block_instance_ref": "block_instances.latent_single_to_pair_endpoint_update",
+            "template_fact_ref": "standard_blocks.single_to_pair_endpoint_update.steps.project_right_single",
+            "instance_fact_ref": "block_instances.latent_single_to_pair_endpoint_update.steps.project_right_single",
+            "kind": "operation",
+            "scale": "operation",
+            "detail": "linear_projection",
+            "code": "right_single = linear_right(single_state)",
+            "tex": "p_j = W_j s_j",
+            "operation": "linear_projection"
+          },
+          {
+            "id": "right_single",
+            "label": "right/destination endpoint features",
+            "role": "endpoint features broadcast over the source index i",
+            "col": 3,
+            "row": 3,
+            "prominence": "context",
+            "treatment": "compact",
+            "standard_block_ref": "standard_blocks/single-to-pair-endpoint-update.yaml",
+            "standard_block_id": "single_to_pair_endpoint_update",
+            "block_instance_ref": "block_instances.latent_single_to_pair_endpoint_update",
+            "template_fact_ref": "standard_blocks.single_to_pair_endpoint_update.values.right_single",
+            "instance_fact_ref": "block_instances.latent_single_to_pair_endpoint_update.values.right_single",
+            "kind": "representation",
+            "shape": "B x N x 128",
+            "resolved_shape": {
+              "kind": "tensor",
+              "axes": [
+                {
+                  "id": "batch",
+                  "dimension": "B"
+                },
+                {
+                  "id": "token",
+                  "dimension": "N"
+                },
+                {
+                  "id": "pair_channel",
+                  "dimension": 128
+                }
+              ],
+              "label": "B x N x 128"
+            },
+            "shape_status": "resolved",
+            "scale": "item",
+            "glyph": "single",
+            "flow_family": "single",
+            "notation": "p_j"
+          },
+          {
+            "id": "broadcast_endpoint_sum",
+            "label": "Broadcast + add endpoints",
+            "role": "expand both token streams across the missing endpoint axis and add them for every ordered token pair",
+            "col": 4,
+            "row": 2,
+            "prominence": "primary",
+            "treatment": "compact",
+            "standard_block_ref": "standard_blocks/single-to-pair-endpoint-update.yaml",
+            "standard_block_id": "single_to_pair_endpoint_update",
+            "block_instance_ref": "block_instances.latent_single_to_pair_endpoint_update",
+            "template_fact_ref": "standard_blocks.single_to_pair_endpoint_update.steps.broadcast_endpoint_sum",
+            "instance_fact_ref": "block_instances.latent_single_to_pair_endpoint_update.steps.broadcast_endpoint_sum",
+            "kind": "operation",
+            "scale": "operation",
+            "detail": "broadcast_sum",
+            "code": "pair_activations = left_single[:, :, None, :] + right_single[:, None, :, :]",
+            "tex": "a_{ij} = p_i + p_j",
+            "operation": "broadcast_sum"
+          },
+          {
+            "id": "pair_activations",
+            "label": "broadcast endpoint sum",
+            "role": "ordered-pair activations formed as the sum of the two endpoint projections",
+            "col": 5,
+            "row": 2,
+            "prominence": "context",
+            "treatment": "compact",
+            "standard_block_ref": "standard_blocks/single-to-pair-endpoint-update.yaml",
+            "standard_block_id": "single_to_pair_endpoint_update",
+            "block_instance_ref": "block_instances.latent_single_to_pair_endpoint_update",
+            "template_fact_ref": "standard_blocks.single_to_pair_endpoint_update.values.pair_activations",
+            "instance_fact_ref": "block_instances.latent_single_to_pair_endpoint_update.values.pair_activations",
+            "kind": "representation",
+            "shape": "B x N x N x 128",
+            "resolved_shape": {
+              "kind": "tensor",
+              "axes": [
+                {
+                  "id": "batch",
+                  "dimension": "B"
+                },
+                {
+                  "id": "query_token",
+                  "dimension": "N"
+                },
+                {
+                  "id": "key_token",
+                  "dimension": "N"
+                },
+                {
+                  "id": "pair_channel",
+                  "dimension": 128
+                }
+              ],
+              "label": "B x N x N x 128"
+            },
+            "shape_status": "resolved",
+            "scale": "item",
+            "glyph": "pair",
+            "flow_family": "pair",
+            "notation": "a"
+          },
+          {
+            "id": "project_pair_delta",
+            "label": "Project pair update",
+            "role": "transform the endpoint sum in pair-channel space before it is added to the existing pair state",
+            "col": 6,
+            "row": 2,
+            "prominence": "primary",
+            "treatment": "compact",
+            "standard_block_ref": "standard_blocks/single-to-pair-endpoint-update.yaml",
+            "standard_block_id": "single_to_pair_endpoint_update",
+            "block_instance_ref": "block_instances.latent_single_to_pair_endpoint_update",
+            "template_fact_ref": "standard_blocks.single_to_pair_endpoint_update.steps.project_pair_delta",
+            "instance_fact_ref": "block_instances.latent_single_to_pair_endpoint_update.steps.project_pair_delta",
+            "kind": "operation",
+            "scale": "operation",
+            "detail": "linear_projection",
+            "code": "pair_delta = linear_pair(pair_activations)",
+            "tex": "delta z_{ij} = W_p a_{ij}",
+            "operation": "linear_projection"
+          },
+          {
+            "id": "pair_delta",
+            "label": "projected pair update",
+            "role": "endpoint-derived contribution in the canonical pair-state channel space",
+            "col": 7,
+            "row": 2,
+            "prominence": "context",
+            "treatment": "compact",
+            "standard_block_ref": "standard_blocks/single-to-pair-endpoint-update.yaml",
+            "standard_block_id": "single_to_pair_endpoint_update",
+            "block_instance_ref": "block_instances.latent_single_to_pair_endpoint_update",
+            "template_fact_ref": "standard_blocks.single_to_pair_endpoint_update.values.pair_delta",
+            "instance_fact_ref": "block_instances.latent_single_to_pair_endpoint_update.values.pair_delta",
+            "kind": "representation",
+            "shape": "B x N x N x 128",
+            "resolved_shape": {
+              "kind": "tensor",
+              "axes": [
+                {
+                  "id": "batch",
+                  "dimension": "B"
+                },
+                {
+                  "id": "query_token",
+                  "dimension": "N"
+                },
+                {
+                  "id": "key_token",
+                  "dimension": "N"
+                },
+                {
+                  "id": "pair_channel",
+                  "dimension": 128
+                }
+              ],
+              "label": "B x N x N x 128"
+            },
+            "shape_status": "resolved",
+            "scale": "item",
+            "glyph": "pair",
+            "flow_family": "pair",
+            "notation": "delta_z"
+          },
+          {
+            "id": "pair_state",
+            "label": "incoming pair state",
+            "role": "existing ordered-pair state that receives the endpoint-derived residual update",
+            "col": 7,
+            "row": 4,
+            "prominence": "secondary",
+            "treatment": "compact",
+            "standard_block_ref": "standard_blocks/single-to-pair-endpoint-update.yaml",
+            "standard_block_id": "single_to_pair_endpoint_update",
+            "block_instance_ref": "block_instances.latent_single_to_pair_endpoint_update",
+            "template_fact_ref": "standard_blocks.single_to_pair_endpoint_update.ports.pair_state",
+            "instance_fact_ref": "block_instances.latent_single_to_pair_endpoint_update.ports.pair_state",
+            "kind": "representation",
+            "rep_ref": "pair_features",
+            "shape": "B x N x N x 128",
+            "resolved_shape": {
+              "kind": "tensor",
+              "axes": [
+                {
+                  "id": "batch",
+                  "dimension": "B"
+                },
+                {
+                  "id": "query_token",
+                  "dimension": "N"
+                },
+                {
+                  "id": "key_token",
+                  "dimension": "N"
+                },
+                {
+                  "id": "pair_channel",
+                  "dimension": 128
+                }
+              ],
+              "label": "B x N x N x 128"
+            },
+            "shape_status": "resolved",
+            "scale": "pair",
+            "glyph": "pair",
+            "flow_family": "pair",
+            "notation": "z",
+            "port_ref": "ports.pair_state"
+          },
+          {
+            "id": "add_pair_residual",
+            "label": "Add to pair state",
+            "role": "preserve the incoming pair state while adding the single-derived endpoint update",
+            "col": 8,
+            "row": 2,
+            "prominence": "primary",
+            "treatment": "compact",
+            "standard_block_ref": "standard_blocks/single-to-pair-endpoint-update.yaml",
+            "standard_block_id": "single_to_pair_endpoint_update",
+            "block_instance_ref": "block_instances.latent_single_to_pair_endpoint_update",
+            "template_fact_ref": "standard_blocks.single_to_pair_endpoint_update.steps.add_pair_residual",
+            "instance_fact_ref": "block_instances.latent_single_to_pair_endpoint_update.steps.add_pair_residual",
+            "kind": "operation",
+            "scale": "operation",
+            "detail": "residual_add",
+            "code": "updated_pair_state = pair_state + pair_delta",
+            "tex": "z'_{ij} = z_{ij} + delta z_{ij}",
+            "operation": "residual_add"
+          },
+          {
+            "id": "updated_pair_state",
+            "label": "updated pair state",
+            "role": "pair state after adding the projected endpoint contribution",
+            "col": 9,
+            "row": 2,
+            "prominence": "secondary",
+            "treatment": "compact",
+            "standard_block_ref": "standard_blocks/single-to-pair-endpoint-update.yaml",
+            "standard_block_id": "single_to_pair_endpoint_update",
+            "block_instance_ref": "block_instances.latent_single_to_pair_endpoint_update",
+            "template_fact_ref": "standard_blocks.single_to_pair_endpoint_update.ports.updated_pair_state",
+            "instance_fact_ref": "block_instances.latent_single_to_pair_endpoint_update.ports.updated_pair_state",
+            "kind": "representation",
+            "rep_ref": "pair_features",
+            "shape": "B x N x N x 128",
+            "resolved_shape": {
+              "kind": "tensor",
+              "axes": [
+                {
+                  "id": "batch",
+                  "dimension": "B"
+                },
+                {
+                  "id": "query_token",
+                  "dimension": "N"
+                },
+                {
+                  "id": "key_token",
+                  "dimension": "N"
+                },
+                {
+                  "id": "pair_channel",
+                  "dimension": 128
+                }
+              ],
+              "label": "B x N x N x 128"
+            },
+            "shape_status": "resolved",
+            "scale": "pair",
+            "glyph": "pair",
+            "flow_family": "pair",
+            "notation": "z'",
+            "port_ref": "ports.updated_pair_state"
+          }
+        ],
+        "edges": [
+          {
+            "id": "latent_single_to_pair_endpoint_update__project_left_single__input_1",
+            "from": "single_state",
+            "to": "project_left_single",
+            "kind": "data_flow",
+            "carries": [
+              "representations.single_features"
+            ],
+            "relation_path": [
+              "relations.single_after_pair_attention_enters_single_to_pair_update"
+            ],
+            "grounding": "canonical_relation_path",
+            "standard_block_ref": "standard_blocks/single-to-pair-endpoint-update.yaml",
+            "standard_block_id": "single_to_pair_endpoint_update",
+            "block_instance_ref": "block_instances.latent_single_to_pair_endpoint_update",
+            "template_fact_ref": "standard_blocks.single_to_pair_endpoint_update.steps.project_left_single",
+            "instance_fact_ref": "block_instances.latent_single_to_pair_endpoint_update.steps.project_left_single",
+            "template_data_ref": "ports.single_state",
+            "connection": {
+              "title": "Project left/source endpoint",
+              "role": "reusable step input",
+              "inside": "left_single = linear_left(single_state)"
+            }
+          },
+          {
+            "id": "latent_single_to_pair_endpoint_update__project_left_single__output_1",
+            "from": "project_left_single",
+            "to": "left_single",
+            "kind": "data_flow",
+            "carries": [
+
+            ],
+            "grounding": "standard_block_template",
+            "standard_block_ref": "standard_blocks/single-to-pair-endpoint-update.yaml",
+            "standard_block_id": "single_to_pair_endpoint_update",
+            "block_instance_ref": "block_instances.latent_single_to_pair_endpoint_update",
+            "template_fact_ref": "standard_blocks.single_to_pair_endpoint_update.steps.project_left_single",
+            "instance_fact_ref": "block_instances.latent_single_to_pair_endpoint_update.steps.project_left_single",
+            "template_data_ref": "values.left_single",
+            "connection": {
+              "title": "Project left/source endpoint",
+              "role": "reusable step output",
+              "inside": "left_single = linear_left(single_state)"
+            }
+          },
+          {
+            "id": "latent_single_to_pair_endpoint_update__project_right_single__input_1",
+            "from": "single_state",
+            "to": "project_right_single",
+            "kind": "data_flow",
+            "carries": [
+              "representations.single_features"
+            ],
+            "relation_path": [
+              "relations.single_after_pair_attention_enters_single_to_pair_update"
+            ],
+            "grounding": "canonical_relation_path",
+            "standard_block_ref": "standard_blocks/single-to-pair-endpoint-update.yaml",
+            "standard_block_id": "single_to_pair_endpoint_update",
+            "block_instance_ref": "block_instances.latent_single_to_pair_endpoint_update",
+            "template_fact_ref": "standard_blocks.single_to_pair_endpoint_update.steps.project_right_single",
+            "instance_fact_ref": "block_instances.latent_single_to_pair_endpoint_update.steps.project_right_single",
+            "template_data_ref": "ports.single_state",
+            "connection": {
+              "title": "Project right/destination endpoint",
+              "role": "reusable step input",
+              "inside": "right_single = linear_right(single_state)"
+            }
+          },
+          {
+            "id": "latent_single_to_pair_endpoint_update__project_right_single__output_1",
+            "from": "project_right_single",
+            "to": "right_single",
+            "kind": "data_flow",
+            "carries": [
+
+            ],
+            "grounding": "standard_block_template",
+            "standard_block_ref": "standard_blocks/single-to-pair-endpoint-update.yaml",
+            "standard_block_id": "single_to_pair_endpoint_update",
+            "block_instance_ref": "block_instances.latent_single_to_pair_endpoint_update",
+            "template_fact_ref": "standard_blocks.single_to_pair_endpoint_update.steps.project_right_single",
+            "instance_fact_ref": "block_instances.latent_single_to_pair_endpoint_update.steps.project_right_single",
+            "template_data_ref": "values.right_single",
+            "connection": {
+              "title": "Project right/destination endpoint",
+              "role": "reusable step output",
+              "inside": "right_single = linear_right(single_state)"
+            }
+          },
+          {
+            "id": "latent_single_to_pair_endpoint_update__broadcast_endpoint_sum__input_1",
+            "from": "left_single",
+            "to": "broadcast_endpoint_sum",
+            "kind": "data_flow",
+            "carries": [
+
+            ],
+            "grounding": "standard_block_template",
+            "standard_block_ref": "standard_blocks/single-to-pair-endpoint-update.yaml",
+            "standard_block_id": "single_to_pair_endpoint_update",
+            "block_instance_ref": "block_instances.latent_single_to_pair_endpoint_update",
+            "template_fact_ref": "standard_blocks.single_to_pair_endpoint_update.steps.broadcast_endpoint_sum",
+            "instance_fact_ref": "block_instances.latent_single_to_pair_endpoint_update.steps.broadcast_endpoint_sum",
+            "template_data_ref": "values.left_single",
+            "connection": {
+              "title": "Broadcast + add endpoints",
+              "role": "reusable step input",
+              "inside": "pair_activations = left_single[:, :, None, :] + right_single[:, None, :, :]"
+            }
+          },
+          {
+            "id": "latent_single_to_pair_endpoint_update__broadcast_endpoint_sum__input_2",
+            "from": "right_single",
+            "to": "broadcast_endpoint_sum",
+            "kind": "data_flow",
+            "carries": [
+
+            ],
+            "grounding": "standard_block_template",
+            "standard_block_ref": "standard_blocks/single-to-pair-endpoint-update.yaml",
+            "standard_block_id": "single_to_pair_endpoint_update",
+            "block_instance_ref": "block_instances.latent_single_to_pair_endpoint_update",
+            "template_fact_ref": "standard_blocks.single_to_pair_endpoint_update.steps.broadcast_endpoint_sum",
+            "instance_fact_ref": "block_instances.latent_single_to_pair_endpoint_update.steps.broadcast_endpoint_sum",
+            "template_data_ref": "values.right_single",
+            "connection": {
+              "title": "Broadcast + add endpoints",
+              "role": "reusable step input",
+              "inside": "pair_activations = left_single[:, :, None, :] + right_single[:, None, :, :]"
+            }
+          },
+          {
+            "id": "latent_single_to_pair_endpoint_update__broadcast_endpoint_sum__output_1",
+            "from": "broadcast_endpoint_sum",
+            "to": "pair_activations",
+            "kind": "data_flow",
+            "carries": [
+
+            ],
+            "grounding": "standard_block_template",
+            "standard_block_ref": "standard_blocks/single-to-pair-endpoint-update.yaml",
+            "standard_block_id": "single_to_pair_endpoint_update",
+            "block_instance_ref": "block_instances.latent_single_to_pair_endpoint_update",
+            "template_fact_ref": "standard_blocks.single_to_pair_endpoint_update.steps.broadcast_endpoint_sum",
+            "instance_fact_ref": "block_instances.latent_single_to_pair_endpoint_update.steps.broadcast_endpoint_sum",
+            "template_data_ref": "values.pair_activations",
+            "connection": {
+              "title": "Broadcast + add endpoints",
+              "role": "reusable step output",
+              "inside": "pair_activations = left_single[:, :, None, :] + right_single[:, None, :, :]"
+            }
+          },
+          {
+            "id": "latent_single_to_pair_endpoint_update__project_pair_delta__input_1",
+            "from": "pair_activations",
+            "to": "project_pair_delta",
+            "kind": "data_flow",
+            "carries": [
+
+            ],
+            "grounding": "standard_block_template",
+            "standard_block_ref": "standard_blocks/single-to-pair-endpoint-update.yaml",
+            "standard_block_id": "single_to_pair_endpoint_update",
+            "block_instance_ref": "block_instances.latent_single_to_pair_endpoint_update",
+            "template_fact_ref": "standard_blocks.single_to_pair_endpoint_update.steps.project_pair_delta",
+            "instance_fact_ref": "block_instances.latent_single_to_pair_endpoint_update.steps.project_pair_delta",
+            "template_data_ref": "values.pair_activations",
+            "connection": {
+              "title": "Project pair update",
+              "role": "reusable step input",
+              "inside": "pair_delta = linear_pair(pair_activations)"
+            }
+          },
+          {
+            "id": "latent_single_to_pair_endpoint_update__project_pair_delta__output_1",
+            "from": "project_pair_delta",
+            "to": "pair_delta",
+            "kind": "data_flow",
+            "carries": [
+
+            ],
+            "grounding": "standard_block_template",
+            "standard_block_ref": "standard_blocks/single-to-pair-endpoint-update.yaml",
+            "standard_block_id": "single_to_pair_endpoint_update",
+            "block_instance_ref": "block_instances.latent_single_to_pair_endpoint_update",
+            "template_fact_ref": "standard_blocks.single_to_pair_endpoint_update.steps.project_pair_delta",
+            "instance_fact_ref": "block_instances.latent_single_to_pair_endpoint_update.steps.project_pair_delta",
+            "template_data_ref": "values.pair_delta",
+            "connection": {
+              "title": "Project pair update",
+              "role": "reusable step output",
+              "inside": "pair_delta = linear_pair(pair_activations)"
+            }
+          },
+          {
+            "id": "latent_single_to_pair_endpoint_update__add_pair_residual__input_1",
+            "from": "pair_state",
+            "to": "add_pair_residual",
+            "kind": "state_update",
+            "carries": [
+              "representations.pair_features"
+            ],
+            "relation_path": [
+              "relations.pair_with_global_tokens_enters_single_to_pair_update"
+            ],
+            "grounding": "canonical_relation_path",
+            "standard_block_ref": "standard_blocks/single-to-pair-endpoint-update.yaml",
+            "standard_block_id": "single_to_pair_endpoint_update",
+            "block_instance_ref": "block_instances.latent_single_to_pair_endpoint_update",
+            "template_fact_ref": "standard_blocks.single_to_pair_endpoint_update.steps.add_pair_residual",
+            "instance_fact_ref": "block_instances.latent_single_to_pair_endpoint_update.steps.add_pair_residual",
+            "template_data_ref": "ports.pair_state",
+            "connection": {
+              "title": "Add to pair state",
+              "role": "reusable step input",
+              "inside": "updated_pair_state = pair_state + pair_delta"
+            }
+          },
+          {
+            "id": "latent_single_to_pair_endpoint_update__add_pair_residual__input_2",
+            "from": "pair_delta",
+            "to": "add_pair_residual",
+            "kind": "data_flow",
+            "carries": [
+
+            ],
+            "grounding": "standard_block_template",
+            "standard_block_ref": "standard_blocks/single-to-pair-endpoint-update.yaml",
+            "standard_block_id": "single_to_pair_endpoint_update",
+            "block_instance_ref": "block_instances.latent_single_to_pair_endpoint_update",
+            "template_fact_ref": "standard_blocks.single_to_pair_endpoint_update.steps.add_pair_residual",
+            "instance_fact_ref": "block_instances.latent_single_to_pair_endpoint_update.steps.add_pair_residual",
+            "template_data_ref": "values.pair_delta",
+            "connection": {
+              "title": "Add to pair state",
+              "role": "reusable step input",
+              "inside": "updated_pair_state = pair_state + pair_delta"
+            }
+          },
+          {
+            "id": "latent_single_to_pair_endpoint_update__add_pair_residual__output_1",
+            "from": "add_pair_residual",
+            "to": "updated_pair_state",
+            "kind": "state_update",
+            "carries": [
+              "representations.pair_features"
+            ],
+            "relation_path": [
+              "relations.single_to_pair_update_produces_pair_state"
+            ],
+            "grounding": "canonical_relation_path",
+            "standard_block_ref": "standard_blocks/single-to-pair-endpoint-update.yaml",
+            "standard_block_id": "single_to_pair_endpoint_update",
+            "block_instance_ref": "block_instances.latent_single_to_pair_endpoint_update",
+            "template_fact_ref": "standard_blocks.single_to_pair_endpoint_update.steps.add_pair_residual",
+            "instance_fact_ref": "block_instances.latent_single_to_pair_endpoint_update.steps.add_pair_residual",
+            "template_data_ref": "ports.updated_pair_state",
+            "connection": {
+              "title": "Add to pair state",
+              "role": "reusable step output",
+              "inside": "updated_pair_state = pair_state + pair_delta"
+            }
+          }
+        ],
+        "segments": [
+          {
+            "id": "endpoint_pair_construction",
+            "label": "Endpoint Pair Construction",
+            "description": "Distinct left/source and right/destination projections are broadcast over the two token axes and added.",
+            "vertical_alignment_group": "single_to_pair_phases",
+            "order": 1,
+            "node_ids": [
+              "single_state",
+              "project_left_single",
+              "left_single",
+              "project_right_single",
+              "right_single",
+              "broadcast_endpoint_sum",
+              "pair_activations"
+            ]
+          },
+          {
+            "id": "residual_pair_update",
+            "label": "Residual Pair Update",
+            "description": "A final linear map produces the learned pair contribution, which is added to the current pair state.",
+            "vertical_alignment_group": "single_to_pair_phases",
+            "order": 2,
+            "node_ids": [
+              "project_pair_delta",
+              "pair_delta",
+              "pair_state",
+              "add_pair_residual",
+              "updated_pair_state"
+            ]
+          }
+        ],
+        "projectionMode": "standard_block_template",
+        "standardBlockRef": "standard_blocks/single-to-pair-endpoint-update.yaml",
+        "standardBlockId": "single_to_pair_endpoint_update",
+        "blockInstanceRef": "block_instances.latent_single_to_pair_endpoint_update",
+        "variant": "projected_endpoint_sum_residual",
+        "variantLabel": "Projected endpoint sum + residual",
+        "useScope": "whole_module",
+        "conformance": "exact",
+        "shapeParameters": {
+          "b": "B",
+          "n": "N",
+          "c_s": 384,
+          "c_z": 128
+        },
+        "shapeParameterSources": {
+          "b": {
+            "kind": "boundary",
+            "portRef": "ports.single_state",
+            "representationRef": "representations.single_features"
+          },
+          "n": {
+            "kind": "boundary",
+            "portRef": "ports.single_state",
+            "representationRef": "representations.single_features"
+          },
+          "c_s": {
+            "kind": "boundary",
+            "portRef": "ports.single_state",
+            "representationRef": "representations.single_features"
+          },
+          "c_z": {
+            "kind": "boundary",
+            "portRef": "ports.pair_state",
+            "representationRef": "representations.pair_features"
+          }
+        },
+        "pseudocode": [
+          {
+            "id": "project_left_single",
+            "templateFactRef": "standard_blocks.single_to_pair_endpoint_update.steps.project_left_single",
+            "instanceFactRef": "block_instances.latent_single_to_pair_endpoint_update.steps.project_left_single",
+            "label": "Project left/source endpoint",
+            "operation": "linear_projection",
+            "code": "left_single = linear_left(single_state)",
+            "tex": "p_i = W_i s_i",
+            "inputs": [
+              "ports.single_state"
+            ],
+            "outputs": [
+              "values.left_single"
+            ],
+            "codeBindings": [
+              {
+                "lexeme": "single_state",
+                "access": "read",
+                "localRef": "ports.single_state",
+                "templateFactRef": "standard_blocks.single_to_pair_endpoint_update.ports.single_state",
+                "instanceFactRef": "block_instances.latent_single_to_pair_endpoint_update.ports.single_state",
+                "occurrences": [
+                  {
+                    "start": 26,
+                    "end": 38
+                  }
+                ]
+              },
+              {
+                "lexeme": "left_single",
+                "access": "write",
+                "localRef": "values.left_single",
+                "templateFactRef": "standard_blocks.single_to_pair_endpoint_update.values.left_single",
+                "instanceFactRef": "block_instances.latent_single_to_pair_endpoint_update.values.left_single",
+                "occurrences": [
+                  {
+                    "start": 0,
+                    "end": 11
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "id": "project_right_single",
+            "templateFactRef": "standard_blocks.single_to_pair_endpoint_update.steps.project_right_single",
+            "instanceFactRef": "block_instances.latent_single_to_pair_endpoint_update.steps.project_right_single",
+            "label": "Project right/destination endpoint",
+            "operation": "linear_projection",
+            "code": "right_single = linear_right(single_state)",
+            "tex": "p_j = W_j s_j",
+            "inputs": [
+              "ports.single_state"
+            ],
+            "outputs": [
+              "values.right_single"
+            ],
+            "codeBindings": [
+              {
+                "lexeme": "single_state",
+                "access": "read",
+                "localRef": "ports.single_state",
+                "templateFactRef": "standard_blocks.single_to_pair_endpoint_update.ports.single_state",
+                "instanceFactRef": "block_instances.latent_single_to_pair_endpoint_update.ports.single_state",
+                "occurrences": [
+                  {
+                    "start": 28,
+                    "end": 40
+                  }
+                ]
+              },
+              {
+                "lexeme": "right_single",
+                "access": "write",
+                "localRef": "values.right_single",
+                "templateFactRef": "standard_blocks.single_to_pair_endpoint_update.values.right_single",
+                "instanceFactRef": "block_instances.latent_single_to_pair_endpoint_update.values.right_single",
+                "occurrences": [
+                  {
+                    "start": 0,
+                    "end": 12
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "id": "broadcast_endpoint_sum",
+            "templateFactRef": "standard_blocks.single_to_pair_endpoint_update.steps.broadcast_endpoint_sum",
+            "instanceFactRef": "block_instances.latent_single_to_pair_endpoint_update.steps.broadcast_endpoint_sum",
+            "label": "Broadcast + add endpoints",
+            "operation": "broadcast_sum",
+            "code": "pair_activations = left_single[:, :, None, :] + right_single[:, None, :, :]",
+            "tex": "a_{ij} = p_i + p_j",
+            "inputs": [
+              "values.left_single",
+              "values.right_single"
+            ],
+            "outputs": [
+              "values.pair_activations"
+            ],
+            "codeBindings": [
+              {
+                "lexeme": "left_single",
+                "access": "read",
+                "localRef": "values.left_single",
+                "templateFactRef": "standard_blocks.single_to_pair_endpoint_update.values.left_single",
+                "instanceFactRef": "block_instances.latent_single_to_pair_endpoint_update.values.left_single",
+                "occurrences": [
+                  {
+                    "start": 19,
+                    "end": 30
+                  }
+                ]
+              },
+              {
+                "lexeme": "right_single",
+                "access": "read",
+                "localRef": "values.right_single",
+                "templateFactRef": "standard_blocks.single_to_pair_endpoint_update.values.right_single",
+                "instanceFactRef": "block_instances.latent_single_to_pair_endpoint_update.values.right_single",
+                "occurrences": [
+                  {
+                    "start": 48,
+                    "end": 60
+                  }
+                ]
+              },
+              {
+                "lexeme": "pair_activations",
+                "access": "write",
+                "localRef": "values.pair_activations",
+                "templateFactRef": "standard_blocks.single_to_pair_endpoint_update.values.pair_activations",
+                "instanceFactRef": "block_instances.latent_single_to_pair_endpoint_update.values.pair_activations",
+                "occurrences": [
+                  {
+                    "start": 0,
+                    "end": 16
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "id": "project_pair_delta",
+            "templateFactRef": "standard_blocks.single_to_pair_endpoint_update.steps.project_pair_delta",
+            "instanceFactRef": "block_instances.latent_single_to_pair_endpoint_update.steps.project_pair_delta",
+            "label": "Project pair update",
+            "operation": "linear_projection",
+            "code": "pair_delta = linear_pair(pair_activations)",
+            "tex": "delta z_{ij} = W_p a_{ij}",
+            "inputs": [
+              "values.pair_activations"
+            ],
+            "outputs": [
+              "values.pair_delta"
+            ],
+            "codeBindings": [
+              {
+                "lexeme": "pair_activations",
+                "access": "read",
+                "localRef": "values.pair_activations",
+                "templateFactRef": "standard_blocks.single_to_pair_endpoint_update.values.pair_activations",
+                "instanceFactRef": "block_instances.latent_single_to_pair_endpoint_update.values.pair_activations",
+                "occurrences": [
+                  {
+                    "start": 25,
+                    "end": 41
+                  }
+                ]
+              },
+              {
+                "lexeme": "pair_delta",
+                "access": "write",
+                "localRef": "values.pair_delta",
+                "templateFactRef": "standard_blocks.single_to_pair_endpoint_update.values.pair_delta",
+                "instanceFactRef": "block_instances.latent_single_to_pair_endpoint_update.values.pair_delta",
+                "occurrences": [
+                  {
+                    "start": 0,
+                    "end": 10
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "id": "add_pair_residual",
+            "templateFactRef": "standard_blocks.single_to_pair_endpoint_update.steps.add_pair_residual",
+            "instanceFactRef": "block_instances.latent_single_to_pair_endpoint_update.steps.add_pair_residual",
+            "label": "Add to pair state",
+            "operation": "residual_add",
+            "code": "updated_pair_state = pair_state + pair_delta",
+            "tex": "z'_{ij} = z_{ij} + delta z_{ij}",
+            "inputs": [
+              "ports.pair_state",
+              "values.pair_delta"
+            ],
+            "outputs": [
+              "ports.updated_pair_state"
+            ],
+            "codeBindings": [
+              {
+                "lexeme": "pair_state",
+                "access": "read",
+                "localRef": "ports.pair_state",
+                "templateFactRef": "standard_blocks.single_to_pair_endpoint_update.ports.pair_state",
+                "instanceFactRef": "block_instances.latent_single_to_pair_endpoint_update.ports.pair_state",
+                "occurrences": [
+                  {
+                    "start": 21,
+                    "end": 31
+                  }
+                ]
+              },
+              {
+                "lexeme": "pair_delta",
+                "access": "read",
+                "localRef": "values.pair_delta",
+                "templateFactRef": "standard_blocks.single_to_pair_endpoint_update.values.pair_delta",
+                "instanceFactRef": "block_instances.latent_single_to_pair_endpoint_update.values.pair_delta",
+                "occurrences": [
+                  {
+                    "start": 34,
+                    "end": 44
+                  }
+                ]
+              },
+              {
+                "lexeme": "updated_pair_state",
+                "access": "write",
+                "localRef": "ports.updated_pair_state",
+                "templateFactRef": "standard_blocks.single_to_pair_endpoint_update.ports.updated_pair_state",
+                "instanceFactRef": "block_instances.latent_single_to_pair_endpoint_update.ports.updated_pair_state",
+                "occurrences": [
+                  {
+                    "start": 0,
+                    "end": 18
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "id": "genie3_pair_transition_internals",
+        "kind": "standard_block_instance",
+        "title": "Genie 3 Pointwise Pair Transition Internals",
+        "summary": "Every pair entry independently passes through LayerNorm, a fourfold channel expansion with ReLU, and projection back to 128 channels. The pair-validity mask suppresses padded entries before the update is added residually to the incoming pair state.",
+        "parent": "latent_transformer",
+        "subject_ref": "modules.pair_transition",
+        "expansion_depth": 0,
+        "block_instance_ref": "block_instances.latent_pair_transition",
+        "grid": {
+          "columns": 11,
+          "rows": 3,
+          "column_sizing": "content",
+          "row_sizing": "content",
+          "col_gap": 26,
+          "row_gap": 34
+        },
+        "nodes": [
+          {
+            "id": "pair_state",
+            "label": "incoming pair state",
+            "role": "pair representation entering the pointwise transition",
+            "col": 1,
+            "row": 2,
+            "prominence": "secondary",
+            "treatment": "compact",
+            "standard_block_ref": "standard_blocks/pair-transition.yaml",
+            "standard_block_id": "pair_transition",
+            "block_instance_ref": "block_instances.latent_pair_transition",
+            "template_fact_ref": "standard_blocks.pair_transition.ports.pair_state",
+            "instance_fact_ref": "block_instances.latent_pair_transition.ports.pair_state",
+            "kind": "representation",
+            "rep_ref": "pair_features",
+            "shape": "B x N x N x 128",
+            "resolved_shape": {
+              "kind": "tensor",
+              "axes": [
+                {
+                  "id": "batch",
+                  "dimension": "B"
+                },
+                {
+                  "id": "query_token",
+                  "dimension": "N"
+                },
+                {
+                  "id": "key_token",
+                  "dimension": "N"
+                },
+                {
+                  "id": "pair_channel",
+                  "dimension": 128
+                }
+              ],
+              "label": "B x N x N x 128"
+            },
+            "shape_status": "resolved",
+            "scale": "pair",
+            "glyph": "pair",
+            "flow_family": "pair",
+            "notation": "z",
+            "port_ref": "ports.pair_state"
+          },
+          {
+            "id": "normalize_pair_state",
+            "label": "LayerNorm each pair",
+            "role": "normalize channels independently at every ordered token pair",
+            "col": 2,
+            "row": 2,
+            "prominence": "primary",
+            "treatment": "compact",
+            "standard_block_ref": "standard_blocks/pair-transition.yaml",
+            "standard_block_id": "pair_transition",
+            "block_instance_ref": "block_instances.latent_pair_transition",
+            "template_fact_ref": "standard_blocks.pair_transition.steps.normalize_pair_state",
+            "instance_fact_ref": "block_instances.latent_pair_transition.steps.normalize_pair_state",
+            "kind": "operation",
+            "scale": "operation",
+            "detail": "layer_normalization",
+            "code": "normalized_pair_state = layer_norm(pair_state)",
+            "tex": "z^{norm}_{ij} = LayerNorm(z_{ij})",
+            "operation": "layer_normalization"
+          },
+          {
+            "id": "normalized_pair_state",
+            "label": "normalized pair state",
+            "col": 3,
+            "row": 2,
+            "prominence": "context",
+            "treatment": "compact",
+            "standard_block_ref": "standard_blocks/pair-transition.yaml",
+            "standard_block_id": "pair_transition",
+            "block_instance_ref": "block_instances.latent_pair_transition",
+            "template_fact_ref": "standard_blocks.pair_transition.values.normalized_pair_state",
+            "instance_fact_ref": "block_instances.latent_pair_transition.values.normalized_pair_state",
+            "kind": "representation",
+            "shape": "B x N x N x 128",
+            "resolved_shape": {
+              "kind": "tensor",
+              "axes": [
+                {
+                  "id": "batch",
+                  "dimension": "B"
+                },
+                {
+                  "id": "query_token",
+                  "dimension": "N"
+                },
+                {
+                  "id": "key_token",
+                  "dimension": "N"
+                },
+                {
+                  "id": "pair_channel",
+                  "dimension": 128
+                }
+              ],
+              "label": "B x N x N x 128"
+            },
+            "shape_status": "resolved",
+            "scale": "item",
+            "glyph": "pair",
+            "flow_family": "pair",
+            "notation": "z_norm"
+          },
+          {
+            "id": "expand_and_activate",
+            "label": "Expand channels + ReLU",
+            "role": "apply the shared channel expansion and nonlinearity independently to every pair entry",
+            "col": 4,
+            "row": 2,
+            "prominence": "primary",
+            "treatment": "compact",
+            "standard_block_ref": "standard_blocks/pair-transition.yaml",
+            "standard_block_id": "pair_transition",
+            "block_instance_ref": "block_instances.latent_pair_transition",
+            "template_fact_ref": "standard_blocks.pair_transition.steps.expand_and_activate",
+            "instance_fact_ref": "block_instances.latent_pair_transition.steps.expand_and_activate",
+            "kind": "operation",
+            "scale": "operation",
+            "detail": "linear_relu",
+            "code": "expanded_pair_state = relu(linear_1(normalized_pair_state))",
+            "tex": "h_{ij} = ReLU(W_1 z^{norm}_{ij})",
+            "operation": "linear_relu"
+          },
+          {
+            "id": "expanded_pair_state",
+            "label": "expanded hidden state",
+            "col": 5,
+            "row": 2,
+            "prominence": "context",
+            "treatment": "compact",
+            "standard_block_ref": "standard_blocks/pair-transition.yaml",
+            "standard_block_id": "pair_transition",
+            "block_instance_ref": "block_instances.latent_pair_transition",
+            "template_fact_ref": "standard_blocks.pair_transition.values.expanded_pair_state",
+            "instance_fact_ref": "block_instances.latent_pair_transition.values.expanded_pair_state",
+            "kind": "representation",
+            "shape": "B x N x N x 512",
+            "resolved_shape": {
+              "kind": "tensor",
+              "axes": [
+                {
+                  "id": "batch",
+                  "dimension": "B"
+                },
+                {
+                  "id": "query_token",
+                  "dimension": "N"
+                },
+                {
+                  "id": "key_token",
+                  "dimension": "N"
+                },
+                {
+                  "id": "hidden_channel",
+                  "dimension": 512
+                }
+              ],
+              "label": "B x N x N x 512"
+            },
+            "shape_status": "resolved",
+            "scale": "item",
+            "glyph": "pair",
+            "flow_family": "pair",
+            "notation": "h"
+          },
+          {
+            "id": "project_pair_delta",
+            "label": "Project back to pair width",
+            "role": "return the hidden channels to the canonical pair-state width",
+            "col": 6,
+            "row": 2,
+            "prominence": "primary",
+            "treatment": "compact",
+            "standard_block_ref": "standard_blocks/pair-transition.yaml",
+            "standard_block_id": "pair_transition",
+            "block_instance_ref": "block_instances.latent_pair_transition",
+            "template_fact_ref": "standard_blocks.pair_transition.steps.project_pair_delta",
+            "instance_fact_ref": "block_instances.latent_pair_transition.steps.project_pair_delta",
+            "kind": "operation",
+            "scale": "operation",
+            "detail": "linear",
+            "code": "projected_pair_delta = linear_2(expanded_pair_state)",
+            "tex": "delta z^{raw}_{ij} = W_2 h_{ij}",
+            "operation": "linear"
+          },
+          {
+            "id": "projected_pair_delta",
+            "label": "projected pair update",
+            "col": 7,
+            "row": 2,
+            "prominence": "context",
+            "treatment": "compact",
+            "standard_block_ref": "standard_blocks/pair-transition.yaml",
+            "standard_block_id": "pair_transition",
+            "block_instance_ref": "block_instances.latent_pair_transition",
+            "template_fact_ref": "standard_blocks.pair_transition.values.projected_pair_delta",
+            "instance_fact_ref": "block_instances.latent_pair_transition.values.projected_pair_delta",
+            "kind": "representation",
+            "shape": "B x N x N x 128",
+            "resolved_shape": {
+              "kind": "tensor",
+              "axes": [
+                {
+                  "id": "batch",
+                  "dimension": "B"
+                },
+                {
+                  "id": "query_token",
+                  "dimension": "N"
+                },
+                {
+                  "id": "key_token",
+                  "dimension": "N"
+                },
+                {
+                  "id": "pair_channel",
+                  "dimension": 128
+                }
+              ],
+              "label": "B x N x N x 128"
+            },
+            "shape_status": "resolved",
+            "scale": "item",
+            "glyph": "pair",
+            "flow_family": "pair",
+            "notation": "delta_z_raw"
+          },
+          {
+            "id": "pair_mask",
+            "label": "valid-pair mask",
+            "role": "optional validity mask multiplied into the projected pair update",
+            "col": 7,
+            "row": 3,
+            "prominence": "context",
+            "treatment": "chip",
+            "standard_block_ref": "standard_blocks/pair-transition.yaml",
+            "standard_block_id": "pair_transition",
+            "block_instance_ref": "block_instances.latent_pair_transition",
+            "template_fact_ref": "standard_blocks.pair_transition.ports.pair_mask",
+            "instance_fact_ref": "block_instances.latent_pair_transition.ports.pair_mask",
+            "kind": "representation",
+            "shape": "B x N x N",
+            "resolved_shape": {
+              "kind": "tensor",
+              "axes": [
+                {
+                  "id": "batch",
+                  "dimension": "B"
+                },
+                {
+                  "id": "query_token",
+                  "dimension": "N"
+                },
+                {
+                  "id": "key_token",
+                  "dimension": "N"
+                }
+              ],
+              "label": "B x N x N"
+            },
+            "shape_status": "resolved",
+            "scale": "item",
+            "glyph": "pair",
+            "flow_family": "pair",
+            "notation": "m",
+            "port_ref": "ports.pair_mask"
+          },
+          {
+            "id": "apply_pair_mask",
+            "label": "Apply valid-pair mask",
+            "role": "suppress updates at padded or otherwise invalid token pairs",
+            "col": 8,
+            "row": 2,
+            "prominence": "primary",
+            "treatment": "compact",
+            "standard_block_ref": "standard_blocks/pair-transition.yaml",
+            "standard_block_id": "pair_transition",
+            "block_instance_ref": "block_instances.latent_pair_transition",
+            "template_fact_ref": "standard_blocks.pair_transition.steps.apply_pair_mask",
+            "instance_fact_ref": "block_instances.latent_pair_transition.steps.apply_pair_mask",
+            "kind": "operation",
+            "scale": "operation",
+            "detail": "masking",
+            "code": "transition_delta = projected_pair_delta * pair_mask",
+            "tex": "delta z_{ij} = m_{ij} delta z^{raw}_{ij}",
+            "operation": "masking"
+          },
+          {
+            "id": "transition_delta",
+            "label": "masked pair update",
+            "col": 9,
+            "row": 2,
+            "prominence": "context",
+            "treatment": "compact",
+            "standard_block_ref": "standard_blocks/pair-transition.yaml",
+            "standard_block_id": "pair_transition",
+            "block_instance_ref": "block_instances.latent_pair_transition",
+            "template_fact_ref": "standard_blocks.pair_transition.values.transition_delta",
+            "instance_fact_ref": "block_instances.latent_pair_transition.values.transition_delta",
+            "kind": "representation",
+            "shape": "B x N x N x 128",
+            "resolved_shape": {
+              "kind": "tensor",
+              "axes": [
+                {
+                  "id": "batch",
+                  "dimension": "B"
+                },
+                {
+                  "id": "query_token",
+                  "dimension": "N"
+                },
+                {
+                  "id": "key_token",
+                  "dimension": "N"
+                },
+                {
+                  "id": "pair_channel",
+                  "dimension": 128
+                }
+              ],
+              "label": "B x N x N x 128"
+            },
+            "shape_status": "resolved",
+            "scale": "item",
+            "glyph": "pair",
+            "flow_family": "pair",
+            "notation": "delta_z"
+          },
+          {
+            "id": "add_pair_residual",
+            "label": "Add pair residual",
+            "role": "preserve the incoming pair state while adding the learned pointwise update",
+            "col": 10,
+            "row": 2,
+            "prominence": "primary",
+            "treatment": "compact",
+            "standard_block_ref": "standard_blocks/pair-transition.yaml",
+            "standard_block_id": "pair_transition",
+            "block_instance_ref": "block_instances.latent_pair_transition",
+            "template_fact_ref": "standard_blocks.pair_transition.steps.add_pair_residual",
+            "instance_fact_ref": "block_instances.latent_pair_transition.steps.add_pair_residual",
+            "kind": "operation",
+            "scale": "operation",
+            "detail": "residual_add",
+            "code": "updated_pair_state = pair_state + transition_delta",
+            "tex": "z'_{ij} = z_{ij} + delta z_{ij}",
+            "operation": "residual_add"
+          },
+          {
+            "id": "updated_pair_state",
+            "label": "updated pair state",
+            "role": "pair state after the masked pointwise update is added residually",
+            "col": 11,
+            "row": 2,
+            "prominence": "secondary",
+            "treatment": "compact",
+            "standard_block_ref": "standard_blocks/pair-transition.yaml",
+            "standard_block_id": "pair_transition",
+            "block_instance_ref": "block_instances.latent_pair_transition",
+            "template_fact_ref": "standard_blocks.pair_transition.ports.updated_pair_state",
+            "instance_fact_ref": "block_instances.latent_pair_transition.ports.updated_pair_state",
+            "kind": "representation",
+            "rep_ref": "pair_features",
+            "shape": "B x N x N x 128",
+            "resolved_shape": {
+              "kind": "tensor",
+              "axes": [
+                {
+                  "id": "batch",
+                  "dimension": "B"
+                },
+                {
+                  "id": "query_token",
+                  "dimension": "N"
+                },
+                {
+                  "id": "key_token",
+                  "dimension": "N"
+                },
+                {
+                  "id": "pair_channel",
+                  "dimension": 128
+                }
+              ],
+              "label": "B x N x N x 128"
+            },
+            "shape_status": "resolved",
+            "scale": "pair",
+            "glyph": "pair",
+            "flow_family": "pair",
+            "notation": "z'",
+            "port_ref": "ports.updated_pair_state"
+          }
+        ],
+        "edges": [
+          {
+            "id": "latent_pair_transition__normalize_pair_state__input_1",
+            "from": "pair_state",
+            "to": "normalize_pair_state",
+            "kind": "data_flow",
+            "carries": [
+              "representations.pair_features"
+            ],
+            "relation_path": [
+              "relations.pair_after_triangle_updates_enter_transition"
+            ],
+            "grounding": "canonical_relation_path",
+            "standard_block_ref": "standard_blocks/pair-transition.yaml",
+            "standard_block_id": "pair_transition",
+            "block_instance_ref": "block_instances.latent_pair_transition",
+            "template_fact_ref": "standard_blocks.pair_transition.steps.normalize_pair_state",
+            "instance_fact_ref": "block_instances.latent_pair_transition.steps.normalize_pair_state",
+            "template_data_ref": "ports.pair_state",
+            "connection": {
+              "title": "LayerNorm each pair",
+              "role": "reusable step input",
+              "inside": "normalized_pair_state = layer_norm(pair_state)"
+            }
+          },
+          {
+            "id": "latent_pair_transition__normalize_pair_state__output_1",
+            "from": "normalize_pair_state",
+            "to": "normalized_pair_state",
+            "kind": "data_flow",
+            "carries": [
+
+            ],
+            "grounding": "standard_block_template",
+            "standard_block_ref": "standard_blocks/pair-transition.yaml",
+            "standard_block_id": "pair_transition",
+            "block_instance_ref": "block_instances.latent_pair_transition",
+            "template_fact_ref": "standard_blocks.pair_transition.steps.normalize_pair_state",
+            "instance_fact_ref": "block_instances.latent_pair_transition.steps.normalize_pair_state",
+            "template_data_ref": "values.normalized_pair_state",
+            "connection": {
+              "title": "LayerNorm each pair",
+              "role": "reusable step output",
+              "inside": "normalized_pair_state = layer_norm(pair_state)"
+            }
+          },
+          {
+            "id": "latent_pair_transition__expand_and_activate__input_1",
+            "from": "normalized_pair_state",
+            "to": "expand_and_activate",
+            "kind": "data_flow",
+            "carries": [
+
+            ],
+            "grounding": "standard_block_template",
+            "standard_block_ref": "standard_blocks/pair-transition.yaml",
+            "standard_block_id": "pair_transition",
+            "block_instance_ref": "block_instances.latent_pair_transition",
+            "template_fact_ref": "standard_blocks.pair_transition.steps.expand_and_activate",
+            "instance_fact_ref": "block_instances.latent_pair_transition.steps.expand_and_activate",
+            "template_data_ref": "values.normalized_pair_state",
+            "connection": {
+              "title": "Expand channels + ReLU",
+              "role": "reusable step input",
+              "inside": "expanded_pair_state = relu(linear_1(normalized_pair_state))"
+            }
+          },
+          {
+            "id": "latent_pair_transition__expand_and_activate__output_1",
+            "from": "expand_and_activate",
+            "to": "expanded_pair_state",
+            "kind": "data_flow",
+            "carries": [
+
+            ],
+            "grounding": "standard_block_template",
+            "standard_block_ref": "standard_blocks/pair-transition.yaml",
+            "standard_block_id": "pair_transition",
+            "block_instance_ref": "block_instances.latent_pair_transition",
+            "template_fact_ref": "standard_blocks.pair_transition.steps.expand_and_activate",
+            "instance_fact_ref": "block_instances.latent_pair_transition.steps.expand_and_activate",
+            "template_data_ref": "values.expanded_pair_state",
+            "connection": {
+              "title": "Expand channels + ReLU",
+              "role": "reusable step output",
+              "inside": "expanded_pair_state = relu(linear_1(normalized_pair_state))"
+            }
+          },
+          {
+            "id": "latent_pair_transition__project_pair_delta__input_1",
+            "from": "expanded_pair_state",
+            "to": "project_pair_delta",
+            "kind": "data_flow",
+            "carries": [
+
+            ],
+            "grounding": "standard_block_template",
+            "standard_block_ref": "standard_blocks/pair-transition.yaml",
+            "standard_block_id": "pair_transition",
+            "block_instance_ref": "block_instances.latent_pair_transition",
+            "template_fact_ref": "standard_blocks.pair_transition.steps.project_pair_delta",
+            "instance_fact_ref": "block_instances.latent_pair_transition.steps.project_pair_delta",
+            "template_data_ref": "values.expanded_pair_state",
+            "connection": {
+              "title": "Project back to pair width",
+              "role": "reusable step input",
+              "inside": "projected_pair_delta = linear_2(expanded_pair_state)"
+            }
+          },
+          {
+            "id": "latent_pair_transition__project_pair_delta__output_1",
+            "from": "project_pair_delta",
+            "to": "projected_pair_delta",
+            "kind": "data_flow",
+            "carries": [
+
+            ],
+            "grounding": "standard_block_template",
+            "standard_block_ref": "standard_blocks/pair-transition.yaml",
+            "standard_block_id": "pair_transition",
+            "block_instance_ref": "block_instances.latent_pair_transition",
+            "template_fact_ref": "standard_blocks.pair_transition.steps.project_pair_delta",
+            "instance_fact_ref": "block_instances.latent_pair_transition.steps.project_pair_delta",
+            "template_data_ref": "values.projected_pair_delta",
+            "connection": {
+              "title": "Project back to pair width",
+              "role": "reusable step output",
+              "inside": "projected_pair_delta = linear_2(expanded_pair_state)"
+            }
+          },
+          {
+            "id": "latent_pair_transition__apply_pair_mask__input_1",
+            "from": "projected_pair_delta",
+            "to": "apply_pair_mask",
+            "kind": "data_flow",
+            "carries": [
+
+            ],
+            "grounding": "standard_block_template",
+            "standard_block_ref": "standard_blocks/pair-transition.yaml",
+            "standard_block_id": "pair_transition",
+            "block_instance_ref": "block_instances.latent_pair_transition",
+            "template_fact_ref": "standard_blocks.pair_transition.steps.apply_pair_mask",
+            "instance_fact_ref": "block_instances.latent_pair_transition.steps.apply_pair_mask",
+            "template_data_ref": "values.projected_pair_delta",
+            "connection": {
+              "title": "Apply valid-pair mask",
+              "role": "reusable step input",
+              "inside": "transition_delta = projected_pair_delta * pair_mask"
+            }
+          },
+          {
+            "id": "latent_pair_transition__apply_pair_mask__input_2",
+            "from": "pair_mask",
+            "to": "apply_pair_mask",
+            "kind": "data_flow",
+            "carries": [
+
+            ],
+            "grounding": "standard_block_template",
+            "standard_block_ref": "standard_blocks/pair-transition.yaml",
+            "standard_block_id": "pair_transition",
+            "block_instance_ref": "block_instances.latent_pair_transition",
+            "template_fact_ref": "standard_blocks.pair_transition.steps.apply_pair_mask",
+            "instance_fact_ref": "block_instances.latent_pair_transition.steps.apply_pair_mask",
+            "template_data_ref": "ports.pair_mask",
+            "connection": {
+              "title": "Apply valid-pair mask",
+              "role": "reusable step input",
+              "inside": "transition_delta = projected_pair_delta * pair_mask"
+            }
+          },
+          {
+            "id": "latent_pair_transition__apply_pair_mask__output_1",
+            "from": "apply_pair_mask",
+            "to": "transition_delta",
+            "kind": "data_flow",
+            "carries": [
+
+            ],
+            "grounding": "standard_block_template",
+            "standard_block_ref": "standard_blocks/pair-transition.yaml",
+            "standard_block_id": "pair_transition",
+            "block_instance_ref": "block_instances.latent_pair_transition",
+            "template_fact_ref": "standard_blocks.pair_transition.steps.apply_pair_mask",
+            "instance_fact_ref": "block_instances.latent_pair_transition.steps.apply_pair_mask",
+            "template_data_ref": "values.transition_delta",
+            "connection": {
+              "title": "Apply valid-pair mask",
+              "role": "reusable step output",
+              "inside": "transition_delta = projected_pair_delta * pair_mask"
+            }
+          },
+          {
+            "id": "latent_pair_transition__add_pair_residual__input_1",
+            "from": "pair_state",
+            "to": "add_pair_residual",
+            "kind": "data_flow",
+            "carries": [
+              "representations.pair_features"
+            ],
+            "relation_path": [
+              "relations.pair_after_triangle_updates_enter_transition"
+            ],
+            "grounding": "canonical_relation_path",
+            "standard_block_ref": "standard_blocks/pair-transition.yaml",
+            "standard_block_id": "pair_transition",
+            "block_instance_ref": "block_instances.latent_pair_transition",
+            "template_fact_ref": "standard_blocks.pair_transition.steps.add_pair_residual",
+            "instance_fact_ref": "block_instances.latent_pair_transition.steps.add_pair_residual",
+            "template_data_ref": "ports.pair_state",
+            "connection": {
+              "title": "Add pair residual",
+              "role": "reusable step input",
+              "inside": "updated_pair_state = pair_state + transition_delta"
+            }
+          },
+          {
+            "id": "latent_pair_transition__add_pair_residual__input_2",
+            "from": "transition_delta",
+            "to": "add_pair_residual",
+            "kind": "data_flow",
+            "carries": [
+
+            ],
+            "grounding": "standard_block_template",
+            "standard_block_ref": "standard_blocks/pair-transition.yaml",
+            "standard_block_id": "pair_transition",
+            "block_instance_ref": "block_instances.latent_pair_transition",
+            "template_fact_ref": "standard_blocks.pair_transition.steps.add_pair_residual",
+            "instance_fact_ref": "block_instances.latent_pair_transition.steps.add_pair_residual",
+            "template_data_ref": "values.transition_delta",
+            "connection": {
+              "title": "Add pair residual",
+              "role": "reusable step input",
+              "inside": "updated_pair_state = pair_state + transition_delta"
+            }
+          },
+          {
+            "id": "latent_pair_transition__add_pair_residual__output_1",
+            "from": "add_pair_residual",
+            "to": "updated_pair_state",
+            "kind": "state_update",
+            "carries": [
+              "representations.pair_features"
+            ],
+            "relation_path": [
+              "relations.pair_transition_produces_block_pair_output"
+            ],
+            "grounding": "canonical_relation_path",
+            "standard_block_ref": "standard_blocks/pair-transition.yaml",
+            "standard_block_id": "pair_transition",
+            "block_instance_ref": "block_instances.latent_pair_transition",
+            "template_fact_ref": "standard_blocks.pair_transition.steps.add_pair_residual",
+            "instance_fact_ref": "block_instances.latent_pair_transition.steps.add_pair_residual",
+            "template_data_ref": "ports.updated_pair_state",
+            "connection": {
+              "title": "Add pair residual",
+              "role": "reusable step output",
+              "inside": "updated_pair_state = pair_state + transition_delta"
+            }
+          }
+        ],
+        "projectionMode": "standard_block_template",
+        "standardBlockRef": "standard_blocks/pair-transition.yaml",
+        "standardBlockId": "pair_transition",
+        "blockInstanceRef": "block_instances.latent_pair_transition",
+        "variant": "layer_norm_expansion_relu_projection_mask_residual",
+        "variantLabel": "LayerNorm + expanded MLP + residual",
+        "useScope": "whole_module",
+        "conformance": "exact",
+        "shapeParameters": {
+          "c_hidden": 512,
+          "b": "B",
+          "n": "N",
+          "c_z": 128
+        },
+        "shapeParameterSources": {
+          "c_hidden": {
+            "kind": "configuration",
+            "ref": "reference_configuration.pair_transition_hidden_dimension"
+          },
+          "b": {
+            "kind": "boundary",
+            "portRef": "ports.pair_state",
+            "representationRef": "representations.pair_features"
+          },
+          "n": {
+            "kind": "boundary",
+            "portRef": "ports.pair_state",
+            "representationRef": "representations.pair_features"
+          },
+          "c_z": {
+            "kind": "boundary",
+            "portRef": "ports.pair_state",
+            "representationRef": "representations.pair_features"
+          }
+        },
+        "pseudocode": [
+          {
+            "id": "normalize_pair_state",
+            "templateFactRef": "standard_blocks.pair_transition.steps.normalize_pair_state",
+            "instanceFactRef": "block_instances.latent_pair_transition.steps.normalize_pair_state",
+            "label": "LayerNorm each pair",
+            "operation": "layer_normalization",
+            "code": "normalized_pair_state = layer_norm(pair_state)",
+            "tex": "z^{norm}_{ij} = LayerNorm(z_{ij})",
+            "inputs": [
+              "ports.pair_state"
+            ],
+            "outputs": [
+              "values.normalized_pair_state"
+            ],
+            "codeBindings": [
+              {
+                "lexeme": "pair_state",
+                "access": "read",
+                "localRef": "ports.pair_state",
+                "templateFactRef": "standard_blocks.pair_transition.ports.pair_state",
+                "instanceFactRef": "block_instances.latent_pair_transition.ports.pair_state",
+                "occurrences": [
+                  {
+                    "start": 35,
+                    "end": 45
+                  }
+                ]
+              },
+              {
+                "lexeme": "normalized_pair_state",
+                "access": "write",
+                "localRef": "values.normalized_pair_state",
+                "templateFactRef": "standard_blocks.pair_transition.values.normalized_pair_state",
+                "instanceFactRef": "block_instances.latent_pair_transition.values.normalized_pair_state",
+                "occurrences": [
+                  {
+                    "start": 0,
+                    "end": 21
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "id": "expand_and_activate",
+            "templateFactRef": "standard_blocks.pair_transition.steps.expand_and_activate",
+            "instanceFactRef": "block_instances.latent_pair_transition.steps.expand_and_activate",
+            "label": "Expand channels + ReLU",
+            "operation": "linear_relu",
+            "code": "expanded_pair_state = relu(linear_1(normalized_pair_state))",
+            "tex": "h_{ij} = ReLU(W_1 z^{norm}_{ij})",
+            "inputs": [
+              "values.normalized_pair_state"
+            ],
+            "outputs": [
+              "values.expanded_pair_state"
+            ],
+            "codeBindings": [
+              {
+                "lexeme": "normalized_pair_state",
+                "access": "read",
+                "localRef": "values.normalized_pair_state",
+                "templateFactRef": "standard_blocks.pair_transition.values.normalized_pair_state",
+                "instanceFactRef": "block_instances.latent_pair_transition.values.normalized_pair_state",
+                "occurrences": [
+                  {
+                    "start": 36,
+                    "end": 57
+                  }
+                ]
+              },
+              {
+                "lexeme": "expanded_pair_state",
+                "access": "write",
+                "localRef": "values.expanded_pair_state",
+                "templateFactRef": "standard_blocks.pair_transition.values.expanded_pair_state",
+                "instanceFactRef": "block_instances.latent_pair_transition.values.expanded_pair_state",
+                "occurrences": [
+                  {
+                    "start": 0,
+                    "end": 19
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "id": "project_pair_delta",
+            "templateFactRef": "standard_blocks.pair_transition.steps.project_pair_delta",
+            "instanceFactRef": "block_instances.latent_pair_transition.steps.project_pair_delta",
+            "label": "Project back to pair width",
+            "operation": "linear",
+            "code": "projected_pair_delta = linear_2(expanded_pair_state)",
+            "tex": "delta z^{raw}_{ij} = W_2 h_{ij}",
+            "inputs": [
+              "values.expanded_pair_state"
+            ],
+            "outputs": [
+              "values.projected_pair_delta"
+            ],
+            "codeBindings": [
+              {
+                "lexeme": "expanded_pair_state",
+                "access": "read",
+                "localRef": "values.expanded_pair_state",
+                "templateFactRef": "standard_blocks.pair_transition.values.expanded_pair_state",
+                "instanceFactRef": "block_instances.latent_pair_transition.values.expanded_pair_state",
+                "occurrences": [
+                  {
+                    "start": 32,
+                    "end": 51
+                  }
+                ]
+              },
+              {
+                "lexeme": "projected_pair_delta",
+                "access": "write",
+                "localRef": "values.projected_pair_delta",
+                "templateFactRef": "standard_blocks.pair_transition.values.projected_pair_delta",
+                "instanceFactRef": "block_instances.latent_pair_transition.values.projected_pair_delta",
+                "occurrences": [
+                  {
+                    "start": 0,
+                    "end": 20
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "id": "apply_pair_mask",
+            "templateFactRef": "standard_blocks.pair_transition.steps.apply_pair_mask",
+            "instanceFactRef": "block_instances.latent_pair_transition.steps.apply_pair_mask",
+            "label": "Apply valid-pair mask",
+            "operation": "masking",
+            "code": "transition_delta = projected_pair_delta * pair_mask",
+            "tex": "delta z_{ij} = m_{ij} delta z^{raw}_{ij}",
+            "inputs": [
+              "values.projected_pair_delta",
+              "ports.pair_mask"
+            ],
+            "outputs": [
+              "values.transition_delta"
+            ],
+            "codeBindings": [
+              {
+                "lexeme": "projected_pair_delta",
+                "access": "read",
+                "localRef": "values.projected_pair_delta",
+                "templateFactRef": "standard_blocks.pair_transition.values.projected_pair_delta",
+                "instanceFactRef": "block_instances.latent_pair_transition.values.projected_pair_delta",
+                "occurrences": [
+                  {
+                    "start": 19,
+                    "end": 39
+                  }
+                ]
+              },
+              {
+                "lexeme": "pair_mask",
+                "access": "read",
+                "localRef": "ports.pair_mask",
+                "templateFactRef": "standard_blocks.pair_transition.ports.pair_mask",
+                "instanceFactRef": "block_instances.latent_pair_transition.ports.pair_mask",
+                "occurrences": [
+                  {
+                    "start": 42,
+                    "end": 51
+                  }
+                ]
+              },
+              {
+                "lexeme": "transition_delta",
+                "access": "write",
+                "localRef": "values.transition_delta",
+                "templateFactRef": "standard_blocks.pair_transition.values.transition_delta",
+                "instanceFactRef": "block_instances.latent_pair_transition.values.transition_delta",
+                "occurrences": [
+                  {
+                    "start": 0,
+                    "end": 16
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "id": "add_pair_residual",
+            "templateFactRef": "standard_blocks.pair_transition.steps.add_pair_residual",
+            "instanceFactRef": "block_instances.latent_pair_transition.steps.add_pair_residual",
+            "label": "Add pair residual",
+            "operation": "residual_add",
+            "code": "updated_pair_state = pair_state + transition_delta",
+            "tex": "z'_{ij} = z_{ij} + delta z_{ij}",
+            "inputs": [
+              "ports.pair_state",
+              "values.transition_delta"
+            ],
+            "outputs": [
+              "ports.updated_pair_state"
+            ],
+            "codeBindings": [
+              {
+                "lexeme": "pair_state",
+                "access": "read",
+                "localRef": "ports.pair_state",
+                "templateFactRef": "standard_blocks.pair_transition.ports.pair_state",
+                "instanceFactRef": "block_instances.latent_pair_transition.ports.pair_state",
+                "occurrences": [
+                  {
+                    "start": 21,
+                    "end": 31
+                  }
+                ]
+              },
+              {
+                "lexeme": "transition_delta",
+                "access": "read",
+                "localRef": "values.transition_delta",
+                "templateFactRef": "standard_blocks.pair_transition.values.transition_delta",
+                "instanceFactRef": "block_instances.latent_pair_transition.values.transition_delta",
+                "occurrences": [
+                  {
+                    "start": 34,
+                    "end": 50
+                  }
+                ]
+              },
+              {
+                "lexeme": "updated_pair_state",
+                "access": "write",
+                "localRef": "ports.updated_pair_state",
+                "templateFactRef": "standard_blocks.pair_transition.ports.updated_pair_state",
+                "instanceFactRef": "block_instances.latent_pair_transition.ports.updated_pair_state",
+                "occurrences": [
+                  {
+                    "start": 0,
+                    "end": 18
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      {
         "id": "task_featurization",
         "title": "Task Featurization",
         "summary": "Exactly one configured task source selects the unconditional, motif, or target path for a run. Unknown designed regions stay C-alpha tokens; Atom14 selectively expands known motif or target-interface residues before all paths converge on one model-ready feature batch.",
@@ -24989,6 +29466,612 @@ export const manifest = {
           "modules.target_conditioned_tokens": "visible",
           "modules.target_problem_parser": "visible",
           "modules.task_source_router": "excluded"
+        },
+        "projectionMode": "derived"
+      },
+      {
+        "id": "pair_feature_embedder",
+        "title": "Pair-Feature Embedder",
+        "summary": "Four 128-channel pair terms are constructed in parallel from endpoint singles, relative indices, the current noisy frames, and task-conditioned geometry; their sum is finally masked to valid token pairs.",
+        "subject_ref": "modules.pair_feature_embedder",
+        "expansion_depth": 1,
+        "grid": {
+          "columns": 5,
+          "rows": 5,
+          "column_sizing": "content",
+          "row_sizing": "content",
+          "col_gap": 32,
+          "row_gap": 28
+        },
+        "nodes": [
+          {
+            "id": "value_current_frames",
+            "ref": "value_sites.current_frames",
+            "prominence": "secondary",
+            "treatment": "compact",
+            "density": "compact",
+            "col": 1,
+            "row": 5
+          },
+          {
+            "id": "module_conditioned_pair_geometry_encoder",
+            "ref": "modules.conditioned_pair_geometry_encoder",
+            "prominence": "primary",
+            "treatment": "block",
+            "col": 2,
+            "row": 4
+          },
+          {
+            "id": "module_relative_position_embedder",
+            "ref": "modules.relative_position_embedder",
+            "prominence": "primary",
+            "treatment": "block",
+            "col": 2,
+            "row": 2
+          },
+          {
+            "id": "value_initial_single_features",
+            "ref": "value_sites.initial_single_features",
+            "prominence": "secondary",
+            "treatment": "compact",
+            "density": "compact",
+            "col": 1,
+            "row": 1
+          },
+          {
+            "id": "value_feature_bundle",
+            "ref": "value_sites.feature_bundle",
+            "prominence": "secondary",
+            "treatment": "compact",
+            "density": "compact",
+            "col": 1,
+            "row": 3
+          },
+          {
+            "id": "module_endpoint_pair_constructor",
+            "ref": "modules.endpoint_pair_constructor",
+            "prominence": "primary",
+            "treatment": "block",
+            "col": 2,
+            "row": 1
+          },
+          {
+            "id": "module_noisy_frame_pair_encoder",
+            "ref": "modules.noisy_frame_pair_encoder",
+            "prominence": "primary",
+            "treatment": "block",
+            "col": 2,
+            "row": 5
+          },
+          {
+            "id": "module_pair_feature_assembler",
+            "ref": "modules.pair_feature_assembler",
+            "prominence": "primary",
+            "treatment": "block",
+            "col": 4,
+            "row": 3
+          },
+          {
+            "id": "value_initial_pair_features",
+            "ref": "value_sites.initial_pair_features",
+            "prominence": "secondary",
+            "treatment": "compact",
+            "density": "compact",
+            "col": 5,
+            "row": 3
+          }
+        ],
+        "parent": "denoiser_forward",
+        "elide": [
+          {
+            "ref": "value_sites.endpoint_pair_activations"
+          },
+          {
+            "ref": "value_sites.relative_position_pair_features"
+          },
+          {
+            "ref": "value_sites.noisy_frame_pair_features"
+          },
+          {
+            "ref": "value_sites.conditioned_pair_features"
+          },
+          {
+            "ref": "modules.pair_feature_embedder"
+          }
+        ],
+        "edge_overrides": [
+          {
+            "match": {
+              "relation_path": [
+                "relations.endpoint_pair_constructor_produces_pair_activations",
+                "relations.endpoint_pair_activations_enter_pair_assembler"
+              ]
+            },
+            "label": "endpoint pair activations",
+            "connection": {
+              "title": "Endpoint-derived term",
+              "role": "single-to-pair initialization",
+              "inside": "Distinct source and destination projections are broadcast across i and j and added to produce one 128-channel term for every ordered token pair."
+            }
+          },
+          {
+            "match": {
+              "relation_path": [
+                "relations.relative_position_embedder_produces_pair_features",
+                "relations.relative_position_pair_features_enter_assembler"
+              ]
+            },
+            "label": "relative-position term",
+            "connection": {
+              "title": "Relative-position term",
+              "role": "sequence and chain relationship encoding",
+              "inside": "Chain, entity, token-index, and residue-index relationships are projected into the same 128-channel pair space before addition."
+            }
+          },
+          {
+            "match": {
+              "relation_path": [
+                "relations.noisy_pair_encoder_produces_pair_features",
+                "relations.noisy_frame_pair_features_enter_assembler"
+              ]
+            },
+            "label": "noisy-geometry term",
+            "connection": {
+              "title": "Current-structure geometry",
+              "role": "diffusion-state pair geometry",
+              "inside": "Binned distances, relative frame orientations, and structure-availability indicators describe the current noisy structure in pair channels."
+            }
+          },
+          {
+            "match": {
+              "relation_path": [
+                "relations.conditioned_pair_encoder_produces_pair_features",
+                "relations.conditioned_pair_features_enter_assembler"
+              ]
+            },
+            "label": "conditioned-geometry term",
+            "connection": {
+              "title": "Known-structure geometry",
+              "role": "task-conditioned pair geometry",
+              "inside": "Known coordinates and frames contribute only within the same valid conditioning group, leaving unrelated or unknown pairs unconditioned."
+            }
+          },
+          {
+            "match": {
+              "relation_ref": "relations.pair_embedder_produces_initial_pair_features"
+            },
+            "label": "B × N × N × 128",
+            "connection": {
+              "title": "Initial pair representation",
+              "role": "latent-transformer pair input",
+              "inside": "The four additive terms are summed and multiplied by the valid token-pair mask before entering the latent transformer."
+            }
+          },
+          {
+            "match": {
+              "relation_path": [
+                "relations.feature_bundle_conditions_pair_embedder",
+                "relations.pair_embedder_routes_relative_fields"
+              ]
+            },
+            "label": "relative indices",
+            "connection": {
+              "title": "Relative-index fields",
+              "role": "pairwise sequence and chain context",
+              "inside": "Chain, entity, token, and residue indices are compared pairwise and projected into the relative-position contribution."
+            }
+          },
+          {
+            "match": {
+              "relation_path": [
+                "relations.feature_bundle_conditions_pair_embedder",
+                "relations.feature_bundle_conditions_noisy_pair_encoder"
+              ]
+            },
+            "label": "structure masks",
+            "connection": {
+              "title": "Current-structure validity",
+              "role": "noisy-geometry masking",
+              "inside": "Token structure and frame masks determine which current-frame distances, orientations, and availability indicators may contribute."
+            }
+          },
+          {
+            "match": {
+              "relation_path": [
+                "relations.feature_bundle_conditions_pair_embedder",
+                "relations.feature_bundle_conditions_conditioned_pair_encoder"
+              ]
+            },
+            "label": "conditioned coordinates + groups",
+            "connection": {
+              "title": "Known-structure conditioning",
+              "role": "conditioned pair geometry",
+              "inside": "Known coordinates, valid conditioning frames, and group identities restrict geometry features to related conditioned tokens."
+            }
+          },
+          {
+            "match": {
+              "relation_path": [
+                "relations.feature_bundle_conditions_pair_embedder",
+                "relations.feature_bundle_provides_pair_mask_to_assembler"
+              ]
+            },
+            "label": "valid token-pair mask",
+            "connection": {
+              "title": "Final pair validity",
+              "role": "output masking",
+              "inside": "The outer product of token-validity masks zeros invalid rows and columns after the four pair terms are added."
+            }
+          }
+        ],
+        "projection_mode": "derived",
+        "edges": [
+          {
+            "id": "projection_b59ae113ac49",
+            "from": "module_conditioned_pair_geometry_encoder",
+            "to": "module_pair_feature_assembler",
+            "projection": "contracted",
+            "origin": "canonical",
+            "kind": "data_flow",
+            "relation_path": [
+              "relations.conditioned_pair_encoder_produces_pair_features",
+              "relations.conditioned_pair_features_enter_assembler"
+            ],
+            "provenance_hops": [
+              {
+                "relation_ref": "relations.conditioned_pair_encoder_produces_pair_features"
+              },
+              {
+                "relation_ref": "relations.conditioned_pair_features_enter_assembler"
+              }
+            ],
+            "hidden_refs": [
+              "value_sites.conditioned_pair_features"
+            ],
+            "carries": [
+              "representations.pair_features"
+            ],
+            "presentation": {
+              "label": "conditioned-geometry term",
+              "connection": {
+                "title": "Known-structure geometry",
+                "role": "task-conditioned pair geometry",
+                "inside": "Known coordinates and frames contribute only within the same valid conditioning group, leaving unrelated or unknown pairs unconditioned."
+              }
+            }
+          },
+          {
+            "id": "projection_f9cd1a2f1691",
+            "from": "module_endpoint_pair_constructor",
+            "to": "module_pair_feature_assembler",
+            "projection": "contracted",
+            "origin": "canonical",
+            "kind": "data_flow",
+            "relation_path": [
+              "relations.endpoint_pair_constructor_produces_pair_activations",
+              "relations.endpoint_pair_activations_enter_pair_assembler"
+            ],
+            "provenance_hops": [
+              {
+                "relation_ref": "relations.endpoint_pair_constructor_produces_pair_activations"
+              },
+              {
+                "relation_ref": "relations.endpoint_pair_activations_enter_pair_assembler"
+              }
+            ],
+            "hidden_refs": [
+              "value_sites.endpoint_pair_activations"
+            ],
+            "carries": [
+              "representations.pair_features"
+            ],
+            "presentation": {
+              "label": "endpoint pair activations",
+              "connection": {
+                "title": "Endpoint-derived term",
+                "role": "single-to-pair initialization",
+                "inside": "Distinct source and destination projections are broadcast across i and j and added to produce one 128-channel term for every ordered token pair."
+              }
+            }
+          },
+          {
+            "id": "projection_16e520833580",
+            "from": "module_noisy_frame_pair_encoder",
+            "to": "module_pair_feature_assembler",
+            "projection": "contracted",
+            "origin": "canonical",
+            "kind": "data_flow",
+            "relation_path": [
+              "relations.noisy_pair_encoder_produces_pair_features",
+              "relations.noisy_frame_pair_features_enter_assembler"
+            ],
+            "provenance_hops": [
+              {
+                "relation_ref": "relations.noisy_pair_encoder_produces_pair_features"
+              },
+              {
+                "relation_ref": "relations.noisy_frame_pair_features_enter_assembler"
+              }
+            ],
+            "hidden_refs": [
+              "value_sites.noisy_frame_pair_features"
+            ],
+            "carries": [
+              "representations.pair_features"
+            ],
+            "presentation": {
+              "label": "noisy-geometry term",
+              "connection": {
+                "title": "Current-structure geometry",
+                "role": "diffusion-state pair geometry",
+                "inside": "Binned distances, relative frame orientations, and structure-availability indicators describe the current noisy structure in pair channels."
+              }
+            }
+          },
+          {
+            "id": "projection_dbb903490a8f",
+            "from": "module_pair_feature_assembler",
+            "to": "value_initial_pair_features",
+            "projection": "direct",
+            "origin": "canonical",
+            "kind": "data_flow",
+            "relation_path": [
+              "relations.pair_embedder_produces_initial_pair_features"
+            ],
+            "provenance_hops": [
+              {
+                "relation_ref": "relations.pair_embedder_produces_initial_pair_features"
+              }
+            ],
+            "hidden_refs": [
+
+            ],
+            "carries": [
+              "representations.pair_features"
+            ],
+            "presentation": {
+              "label": "B × N × N × 128",
+              "connection": {
+                "title": "Initial pair representation",
+                "role": "latent-transformer pair input",
+                "inside": "The four additive terms are summed and multiplied by the valid token-pair mask before entering the latent transformer."
+              }
+            }
+          },
+          {
+            "id": "projection_53c22f4bdb23",
+            "from": "module_relative_position_embedder",
+            "to": "module_pair_feature_assembler",
+            "projection": "contracted",
+            "origin": "canonical",
+            "kind": "data_flow",
+            "relation_path": [
+              "relations.relative_position_embedder_produces_pair_features",
+              "relations.relative_position_pair_features_enter_assembler"
+            ],
+            "provenance_hops": [
+              {
+                "relation_ref": "relations.relative_position_embedder_produces_pair_features"
+              },
+              {
+                "relation_ref": "relations.relative_position_pair_features_enter_assembler"
+              }
+            ],
+            "hidden_refs": [
+              "value_sites.relative_position_pair_features"
+            ],
+            "carries": [
+              "representations.pair_features"
+            ],
+            "presentation": {
+              "label": "relative-position term",
+              "connection": {
+                "title": "Relative-position term",
+                "role": "sequence and chain relationship encoding",
+                "inside": "Chain, entity, token-index, and residue-index relationships are projected into the same 128-channel pair space before addition."
+              }
+            }
+          },
+          {
+            "id": "projection_b94c198d3881",
+            "from": "value_current_frames",
+            "to": "module_noisy_frame_pair_encoder",
+            "projection": "direct",
+            "origin": "canonical",
+            "kind": "data_flow",
+            "relation_path": [
+              "relations.current_frames_enter_pair_embedder"
+            ],
+            "provenance_hops": [
+              {
+                "relation_ref": "relations.current_frames_enter_pair_embedder"
+              }
+            ],
+            "hidden_refs": [
+
+            ],
+            "carries": [
+              "representations.token_frames"
+            ],
+            "presentation": {
+            }
+          },
+          {
+            "id": "projection_e5f99d8f1e27",
+            "from": "value_feature_bundle",
+            "to": "module_conditioned_pair_geometry_encoder",
+            "projection": "contracted",
+            "origin": "canonical",
+            "kind": "conditioning",
+            "relation_path": [
+              "relations.feature_bundle_conditions_pair_embedder",
+              "relations.feature_bundle_conditions_conditioned_pair_encoder"
+            ],
+            "provenance_hops": [
+              {
+                "relation_ref": "relations.feature_bundle_conditions_pair_embedder"
+              },
+              {
+                "relation_ref": "relations.feature_bundle_conditions_conditioned_pair_encoder"
+              }
+            ],
+            "hidden_refs": [
+              "modules.pair_feature_embedder"
+            ],
+            "carries": [
+              "representations.feature_bundle"
+            ],
+            "presentation": {
+              "label": "conditioned coordinates + groups",
+              "connection": {
+                "title": "Known-structure conditioning",
+                "role": "conditioned pair geometry",
+                "inside": "Known coordinates, valid conditioning frames, and group identities restrict geometry features to related conditioned tokens."
+              }
+            }
+          },
+          {
+            "id": "projection_e3a44a5cf92b",
+            "from": "value_feature_bundle",
+            "to": "module_noisy_frame_pair_encoder",
+            "projection": "contracted",
+            "origin": "canonical",
+            "kind": "conditioning",
+            "relation_path": [
+              "relations.feature_bundle_conditions_pair_embedder",
+              "relations.feature_bundle_conditions_noisy_pair_encoder"
+            ],
+            "provenance_hops": [
+              {
+                "relation_ref": "relations.feature_bundle_conditions_pair_embedder"
+              },
+              {
+                "relation_ref": "relations.feature_bundle_conditions_noisy_pair_encoder"
+              }
+            ],
+            "hidden_refs": [
+              "modules.pair_feature_embedder"
+            ],
+            "carries": [
+              "representations.feature_bundle"
+            ],
+            "presentation": {
+              "label": "structure masks",
+              "connection": {
+                "title": "Current-structure validity",
+                "role": "noisy-geometry masking",
+                "inside": "Token structure and frame masks determine which current-frame distances, orientations, and availability indicators may contribute."
+              }
+            }
+          },
+          {
+            "id": "projection_67737e7c6457",
+            "from": "value_feature_bundle",
+            "to": "module_pair_feature_assembler",
+            "projection": "contracted",
+            "origin": "canonical",
+            "kind": "conditioning",
+            "relation_path": [
+              "relations.feature_bundle_conditions_pair_embedder",
+              "relations.feature_bundle_provides_pair_mask_to_assembler"
+            ],
+            "provenance_hops": [
+              {
+                "relation_ref": "relations.feature_bundle_conditions_pair_embedder"
+              },
+              {
+                "relation_ref": "relations.feature_bundle_provides_pair_mask_to_assembler"
+              }
+            ],
+            "hidden_refs": [
+              "modules.pair_feature_embedder"
+            ],
+            "carries": [
+              "representations.feature_bundle"
+            ],
+            "presentation": {
+              "label": "valid token-pair mask",
+              "connection": {
+                "title": "Final pair validity",
+                "role": "output masking",
+                "inside": "The outer product of token-validity masks zeros invalid rows and columns after the four pair terms are added."
+              }
+            }
+          },
+          {
+            "id": "projection_65ba24ba6d1a",
+            "from": "value_feature_bundle",
+            "to": "module_relative_position_embedder",
+            "projection": "contracted",
+            "origin": "canonical",
+            "kind": "conditioning",
+            "relation_path": [
+              "relations.feature_bundle_conditions_pair_embedder",
+              "relations.pair_embedder_routes_relative_fields"
+            ],
+            "provenance_hops": [
+              {
+                "relation_ref": "relations.feature_bundle_conditions_pair_embedder"
+              },
+              {
+                "relation_ref": "relations.pair_embedder_routes_relative_fields"
+              }
+            ],
+            "hidden_refs": [
+              "modules.pair_feature_embedder"
+            ],
+            "carries": [
+              "representations.feature_bundle"
+            ],
+            "presentation": {
+              "label": "relative indices",
+              "connection": {
+                "title": "Relative-index fields",
+                "role": "pairwise sequence and chain context",
+                "inside": "Chain, entity, token, and residue indices are compared pairwise and projected into the relative-position contribution."
+              }
+            }
+          },
+          {
+            "id": "projection_7dd706ea37b6",
+            "from": "value_initial_single_features",
+            "to": "module_endpoint_pair_constructor",
+            "projection": "direct",
+            "origin": "canonical",
+            "kind": "data_flow",
+            "relation_path": [
+              "relations.initial_single_features_enter_pair_embedder"
+            ],
+            "provenance_hops": [
+              {
+                "relation_ref": "relations.initial_single_features_enter_pair_embedder"
+              }
+            ],
+            "hidden_refs": [
+
+            ],
+            "carries": [
+              "representations.single_features"
+            ],
+            "presentation": {
+            }
+          }
+        ],
+        "classifications": {
+          "modules.conditioned_pair_geometry_encoder": "visible",
+          "modules.endpoint_pair_constructor": "visible",
+          "modules.noisy_frame_pair_encoder": "visible",
+          "modules.pair_feature_assembler": "visible",
+          "modules.pair_feature_embedder": "elided",
+          "modules.relative_position_embedder": "visible",
+          "value_sites.conditioned_pair_features": "elided",
+          "value_sites.current_frames": "visible",
+          "value_sites.endpoint_pair_activations": "elided",
+          "value_sites.feature_bundle": "visible",
+          "value_sites.initial_pair_features": "visible",
+          "value_sites.initial_single_features": "visible",
+          "value_sites.noisy_frame_pair_features": "elided",
+          "value_sites.relative_position_pair_features": "elided"
         },
         "projectionMode": "derived"
       }

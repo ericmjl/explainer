@@ -4398,6 +4398,9 @@ function blockCardHtml(node, module) {
 }
 
 function blockBadges(node, module) {
+  const attentionHeads = Number.isInteger(module?.attention?.heads)
+    ? `${module.attention.heads} heads`
+    : null;
   const pairBias = module?.attention?.pair_bias === true
     ? "pair bias"
     : module?.attention?.pair_bias === false
@@ -4406,6 +4409,7 @@ function blockBadges(node, module) {
   return [
     node.scale || module?.scale,
     module?.attention?.pattern,
+    attentionHeads,
     pairBias,
   ].filter(Boolean);
 }
@@ -5818,6 +5822,7 @@ function renderAttentionSummary(module) {
     <h3>Attention</h3>
     <dl class="focus-dl">
       <dt>pattern</dt><dd>${escapeHtml(attention.pattern)}</dd>
+      <dt>heads</dt><dd>${escapeHtml(attention.heads)}</dd>
       <dt>query</dt><dd>${escapeHtml(attention.query_scale)}</dd>
       <dt>key/value</dt><dd>${escapeHtml(attention.key_value_scale)}</dd>
       <dt>window</dt><dd>${escapeHtml(window)}</dd>

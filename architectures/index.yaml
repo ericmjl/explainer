@@ -31,6 +31,13 @@ source_sets:
     view: views/alphafold2-semantic-zoom.view.yaml
     pseudocode: pseudocode/alphafold2.yaml
     standard_blocks: []
+  - id: af3_pairformer
+    label: AlphaFold 3 Pairformer
+    directory_role: architecture
+    architecture: architectures/alphafold3-pairformer.yaml
+    view: views/alphafold3-pairformer-semantic-zoom.view.yaml
+    pseudocode: pseudocode/alphafold3-pairformer.yaml
+    standard_blocks: []
   - id: genie2
     label: Genie 2 Protein Backbone Diffusion
     directory_role: architecture
@@ -49,3 +56,5 @@ source_sets:
       - standard_blocks/pair-biased-attention.yaml
       - standard_blocks/invariant-point-attention.yaml
       - standard_blocks/structure-transition.yaml
+      - standard_blocks/single-to-pair-endpoint-update.yaml
+      - standard_blocks/pair-transition.yaml

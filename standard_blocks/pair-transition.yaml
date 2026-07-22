@@ -1,0 +1,187 @@
+schema_version: standard-block-v0.3
+id: pair_transition
+name: Pointwise Pair Transition
+kind: feed_forward
+status: review
+description: Apply a shared pointwise channel MLP independently to every pair entry, mask the resulting update, and add it residually to the incoming pair state.
+parameters:
+  - { id: b, notation: B, kind: batch, resolution: boundary, role: leading batch axes }
+  - { id: n, notation: N, kind: sequence, resolution: boundary, role: number of residue or atom tokens }
+  - { id: c_z, notation: C_z, kind: channel, resolution: boundary, role: pair-state channel width }
+  - { id: c_hidden, notation: C_h, kind: channel, resolution: instance, role: expanded hidden width of the pointwise transition }
+ports:
+  - id: pair_state
+    label: incoming pair state
+    direction: input
+    kind: representation
+    required: true
+    cardinality: one
+    relation_kinds: [data_flow, state_update]
+    glyph: pair
+    notation: z
+    role: pair representation entering the pointwise transition
+    shape_contract: &pair_shape
+      kind: tensor
+      axes:
+        - { id: batch, dimension: b }
+        - { id: query_token, dimension: n }
+        - { id: key_token, dimension: n }
+        - { id: pair_channel, dimension: c_z }
+  - id: pair_mask
+    label: valid-pair mask
+    direction: conditioning
+    kind: mask
+    required: false
+    cardinality: one
+    relation_kinds: [conditioning, control]
+    glyph: pair
+    notation: m
+    role: optional validity mask multiplied into the projected pair update
+    shape_contract:
+      kind: tensor
+      axes:
+        - { id: batch, dimension: b }
+        - { id: query_token, dimension: n }
+        - { id: key_token, dimension: n }
+  - id: updated_pair_state
+    label: updated pair state
+    direction: output
+    kind: representation
+    required: true
+    cardinality: one
+    relation_kinds: [data_flow, state_update]
+    glyph: pair
+    notation: z'
+    role: pair state after the masked pointwise update is added residually
+    shape_contract: *pair_shape
+variants:
+  - id: layer_norm_expansion_relu_projection_mask_residual
+    label: LayerNorm + expanded MLP + residual
+    description: Normalize each pair entry, expand its channels, apply ReLU, project back to the pair width, apply the pair-validity mask, and add the result to the incoming pair state.
+    step_refs:
+      - steps.normalize_pair_state
+      - steps.expand_and_activate
+      - steps.project_pair_delta
+      - steps.apply_pair_mask
+      - steps.add_pair_residual
+default_variant: layer_norm_expansion_relu_projection_mask_residual
+values:
+  - id: normalized_pair_state
+    label: normalized pair state
+    kind: representation
+    glyph: pair
+    notation: z_norm
+    shape_contract: *pair_shape
+  - id: expanded_pair_state
+    label: expanded hidden state
+    kind: representation
+    glyph: pair
+    notation: h
+    shape_contract:
+      kind: tensor
+      axes:
+        - { id: batch, dimension: b }
+        - { id: query_token, dimension: n }
+        - { id: key_token, dimension: n }
+        - { id: hidden_channel, dimension: c_hidden }
+  - id: projected_pair_delta
+    label: projected pair update
+    kind: representation
+    glyph: pair
+    notation: delta_z_raw
+    shape_contract: *pair_shape
+  - id: transition_delta
+    label: masked pair update
+    kind: representation
+    glyph: pair
+    notation: delta_z
+    shape_contract: *pair_shape
+steps:
+  - id: normalize_pair_state
+    label: LayerNorm each pair
+    operation: layer_normalization
+    shape_rule: preserve
+    inputs: [ports.pair_state]
+    outputs: [values.normalized_pair_state]
+    code: "normalized_pair_state = layer_norm(pair_state)"
+    tex: "z^{norm}_{ij} = LayerNorm(z_{ij})"
+    role: normalize channels independently at every ordered token pair
+    code_bindings:
+      - { lexeme: pair_state, ref: ports.pair_state, access: read }
+      - { lexeme: normalized_pair_state, ref: values.normalized_pair_state, access: write }
+  - id: expand_and_activate
+    label: Expand channels + ReLU
+    operation: linear_relu
+    shape_rule: linear
+    inputs: [values.normalized_pair_state]
+    outputs: [values.expanded_pair_state]
+    code: "expanded_pair_state = relu(linear_1(normalized_pair_state))"
+    tex: "h_{ij} = ReLU(W_1 z^{norm}_{ij})"
+    role: apply the shared channel expansion and nonlinearity independently to every pair entry
+    code_bindings:
+      - { lexeme: normalized_pair_state, ref: values.normalized_pair_state, access: read }
+      - { lexeme: expanded_pair_state, ref: values.expanded_pair_state, access: write }
+  - id: project_pair_delta
+    label: Project back to pair width
+    operation: linear
+    shape_rule: linear
+    inputs: [values.expanded_pair_state]
+    outputs: [values.projected_pair_delta]
+    code: "projected_pair_delta = linear_2(expanded_pair_state)"
+    tex: "delta z^{raw}_{ij} = W_2 h_{ij}"
+    role: return the hidden channels to the canonical pair-state width
+    code_bindings:
+      - { lexeme: expanded_pair_state, ref: values.expanded_pair_state, access: read }
+      - { lexeme: projected_pair_delta, ref: values.projected_pair_delta, access: write }
+  - id: apply_pair_mask
+    label: Apply valid-pair mask
+    operation: masking
+    shape_rule: preserve
+    inputs: [values.projected_pair_delta, ports.pair_mask]
+    outputs: [values.transition_delta]
+    code: "transition_delta = projected_pair_delta * pair_mask"
+    tex: "delta z_{ij} = m_{ij} delta z^{raw}_{ij}"
+    role: suppress updates at padded or otherwise invalid token pairs
+    code_bindings:
+      - { lexeme: projected_pair_delta, ref: values.projected_pair_delta, access: read }
+      - { lexeme: pair_mask, ref: ports.pair_mask, access: read }
+      - { lexeme: transition_delta, ref: values.transition_delta, access: write }
+  - id: add_pair_residual
+    label: Add pair residual
+    operation: residual_add
+    shape_rule: residual_add
+    inputs: [ports.pair_state, values.transition_delta]
+    outputs: [ports.updated_pair_state]
+    code: "updated_pair_state = pair_state + transition_delta"
+    tex: "z'_{ij} = z_{ij} + delta z_{ij}"
+    role: preserve the incoming pair state while adding the learned pointwise update
+    code_bindings:
+      - { lexeme: pair_state, ref: ports.pair_state, access: read }
+      - { lexeme: transition_delta, ref: values.transition_delta, access: read }
+      - { lexeme: updated_pair_state, ref: ports.updated_pair_state, access: write }
+visual_template:
+  grid:
+    columns: 11
+    rows: 3
+    column_sizing: content
+    row_sizing: content
+    col_gap: 26
+    row_gap: 34
+  nodes:
+    - { id: pair_state, ref: ports.pair_state, col: 1, row: 2, prominence: secondary, treatment: compact }
+    - { id: normalize_pair_state, ref: steps.normalize_pair_state, col: 2, row: 2, prominence: primary, treatment: compact }
+    - { id: normalized_pair_state, ref: values.normalized_pair_state, col: 3, row: 2, prominence: context, treatment: compact }
+    - { id: expand_and_activate, ref: steps.expand_and_activate, col: 4, row: 2, prominence: primary, treatment: compact }
+    - { id: expanded_pair_state, ref: values.expanded_pair_state, col: 5, row: 2, prominence: context, treatment: compact }
+    - { id: project_pair_delta, ref: steps.project_pair_delta, col: 6, row: 2, prominence: primary, treatment: compact }
+    - { id: projected_pair_delta, ref: values.projected_pair_delta, col: 7, row: 2, prominence: context, treatment: compact }
+    - { id: pair_mask, ref: ports.pair_mask, col: 7, row: 3, prominence: context, treatment: chip }
+    - { id: apply_pair_mask, ref: steps.apply_pair_mask, col: 8, row: 2, prominence: primary, treatment: compact }
+    - { id: transition_delta, ref: values.transition_delta, col: 9, row: 2, prominence: context, treatment: compact }
+    - { id: add_pair_residual, ref: steps.add_pair_residual, col: 10, row: 2, prominence: primary, treatment: compact }
+    - { id: updated_pair_state, ref: ports.updated_pair_state, col: 11, row: 2, prominence: secondary, treatment: compact }
+evidence_policy:
+  generic_definition: The template captures the AF2-style pointwise pair-transition update; concrete architectures must separately cite their channel widths, mask behavior, and residual boundary.
+  usage_requires:
+    - Evidence for LayerNorm, channel expansion, ReLU, projection, and pair masking.
+    - Evidence locating where the returned transition update is added residually to the incoming pair state.

@@ -18,6 +18,12 @@ export const manifestIndex = [
     "file": "manifest-af2.js"
   },
   {
+    "id": "af3_pairformer",
+    "name": "AlphaFold 3 Pairformer",
+    "role": "architecture",
+    "file": "manifest-af3_pairformer.js"
+  },
+  {
     "id": "genie2",
     "name": "Genie 2 Protein Backbone Diffusion",
     "role": "architecture",
@@ -39,7 +45,7 @@ export const comparisonIndex = {
     "inputDigests": {
       "comparisons/index.yaml": "54059100527b7b47f0096e90227ce5668a3d2693e0b48c8af971a200feed97e4",
       "comparisons/genie3-reduced-vs-full-ipa.yaml": "402bf54881eeb6b38d20b3049f839fbd1bdbfc35812e17909a7e63d9794dd4ba",
-      "references/bibliography.yaml": "aa83264d6b5cce1245347f404a9d13daa41d4b6782fd94f1458397f312843b9f",
+      "references/bibliography.yaml": "82f709e900c8a4856e4b834e7d3d7269313b9e4aa08f6bea91d75c33ef974bdd",
       "architectures/generic-feature-refinement.yaml": "856e34131dc78dd2454df9b0dc3ad3d0adff67c5a7f9dee5809cacf311722d68",
       "views/generic-semantic-zoom.view.yaml": "2212d81c8217db03c68fa7d59f44dc36e55052503d8d503b3386bded040b5714",
       "standard_blocks/pair-biased-attention.yaml": "3c6be1ec47623fa320eb6eace772216f41014d4bf14765b8ff52b1602cf26fb7",
@@ -51,12 +57,16 @@ export const comparisonIndex = {
       "standard_blocks/sinusoidal-timestep-embedding.yaml": "8cb2d467fe967e9a83da657ef85940406be89836de502d24cb7f557152763039",
       "architectures/alphafold2.yaml": "a754a17dc83303c7dff50f6925771b01dc51d237dae382476b8bf87fbead77fe",
       "views/alphafold2-semantic-zoom.view.yaml": "6b317c6d224a7e3b8416839247c0c12d6b9e0cd34d859475f4529a939d51fe8e",
+      "architectures/alphafold3-pairformer.yaml": "0e9baf415f97e87da42420e5fde1916ff0563839695638aea1c159c09d20419d",
+      "views/alphafold3-pairformer-semantic-zoom.view.yaml": "3978a4c18d06c27104497dce4c349e90e65ea95f684ddf878f22c323badc440b",
       "architectures/genie2.yaml": "dc70626daca21c212b372e601a3a064ee1a1ea01e226b955b21e00e4c308bdb0",
       "views/genie2-semantic-zoom.view.yaml": "e5ed5c07d6c8bc3215aa09b1e2ca261c2861a1dc19bdf8c3968d69c23e28b0d2",
       "standard_blocks/invariant-point-attention.yaml": "a5c02021172a36135808767943f20309424cc956240bf956ed156d1c380bb7b5",
-      "architectures/genie3.yaml": "9f6b978940bdcb1547f1484b2f261e1def12375f556d7cf151fe74ddb6358735",
-      "views/genie3-semantic-zoom.view.yaml": "2c3d2e6fad18e180f51548b75d4cbee898cfcb667cc931763f28a773798f4775",
-      "standard_blocks/structure-transition.yaml": "2708baf8035a8e77ab3e3da3bf2f067225757a813743efb90c72ac0f0c77b723"
+      "architectures/genie3.yaml": "19cbf29d593acad3a8a93ac275de668b1b5f8187605d039fc2922267f461a37d",
+      "views/genie3-semantic-zoom.view.yaml": "11cc5437e51ad87c6af03242817f6d6bfc4a143c0507fbd9499f03e26b8d432e",
+      "standard_blocks/structure-transition.yaml": "2708baf8035a8e77ab3e3da3bf2f067225757a813743efb90c72ac0f0c77b723",
+      "standard_blocks/single-to-pair-endpoint-update.yaml": "d8ff8b5a5a9faa2d0af710afcc20d7094b1a9107238b402a9dc5f290642e7606",
+      "standard_blocks/pair-transition.yaml": "67972606f8b0da22bce83da0c93d37075755df487fe100865ab7fc98e5941bd1"
     }
   },
   "items": [

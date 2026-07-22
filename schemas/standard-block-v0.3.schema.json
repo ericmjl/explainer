@@ -255,6 +255,7 @@
             "weighted_point_sum",
             "rigid_inverse_apply",
             "pair_value_aggregation",
+            "broadcast_sum",
             "output_projection",
             "concat",
             "residual_add",
@@ -329,6 +330,7 @@
         "id": { "$ref": "#/$defs/id" },
         "label": { "$ref": "#/$defs/nonEmptyString" },
         "description": { "$ref": "#/$defs/nonEmptyString" },
+        "vertical_alignment_group": { "$ref": "#/$defs/id" },
         "node_refs": {
           "type": "array",
           "minItems": 1,

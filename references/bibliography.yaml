@@ -197,6 +197,65 @@ sources:
     path: alphafold/relax/relax.py
     url: https://github.com/google-deepmind/alphafold/blob/09ed0c5d5a32d794ed9f78b70906cbeaff0ef439/alphafold/relax/relax.py
 
+  - id: af3_2024
+    kind: paper
+    title: Accurate structure prediction of biomolecular interactions with AlphaFold 3
+    authors:
+      - Josh Abramson
+      - Jonas Adler
+      - Jack Dunger
+      - Richard Evans
+      - Tim Green
+      - Alexander Pritzel
+      - Olaf Ronneberger
+      - Lindsay Willmore
+      - Andrew J. Ballard
+      - Joshua Bambrick
+      - Sebastian W. Bodenstein
+      - David A. Evans
+      - Chia-Chun Hung
+      - Michael O'Neill
+      - David Reiman
+      - Kathryn Tunyasuvunakool
+      - Zachary Wu
+      - Akvile Zemgulyte
+      - Victor Bapst
+      - Pushmeet Kohli
+      - Max Jaderberg
+      - Demis Hassabis
+      - John M. Jumper
+    year: 2024
+    identifiers:
+      doi: 10.1038/s41586-024-07487-w
+    url: https://www.nature.com/articles/s41586-024-07487-w
+
+  - id: af3_pairformer_code
+    kind: code
+    title: AlphaFold 3 Pairformer iteration and pair-update implementation
+    organization: Google DeepMind
+    repository: google-deepmind/alphafold3
+    revision: f3e86f27dfac16559d16f470bb2f9323eb357f1f
+    path: src/alphafold3/model/network/modules.py
+    url: https://github.com/google-deepmind/alphafold3/blob/f3e86f27dfac16559d16f470bb2f9323eb357f1f/src/alphafold3/model/network/modules.py
+
+  - id: af3_evoformer_code
+    kind: code
+    title: AlphaFold 3 trunk and Pairformer stack configuration
+    organization: Google DeepMind
+    repository: google-deepmind/alphafold3
+    revision: f3e86f27dfac16559d16f470bb2f9323eb357f1f
+    path: src/alphafold3/model/network/evoformer.py
+    url: https://github.com/google-deepmind/alphafold3/blob/f3e86f27dfac16559d16f470bb2f9323eb357f1f/src/alphafold3/model/network/evoformer.py
+
+  - id: af3_self_attention_code
+    kind: code
+    title: AlphaFold 3 single self-attention implementation
+    organization: Google DeepMind
+    repository: google-deepmind/alphafold3
+    revision: f3e86f27dfac16559d16f470bb2f9323eb357f1f
+    path: src/alphafold3/model/network/diffusion_transformer.py
+    url: https://github.com/google-deepmind/alphafold3/blob/f3e86f27dfac16559d16f470bb2f9323eb357f1f/src/alphafold3/model/network/diffusion_transformer.py
+
   - id: genie2_2024
     kind: paper
     title: "Out of Many, One: Designing and Scaffolding Proteins at the Scale of the Structural Universe with Genie 2"

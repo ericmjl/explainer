@@ -35,6 +35,8 @@ class StandardBlockCompilerTest < Minitest::Test
       "standard_blocks/pair-biased-attention.yaml",
       "standard_blocks/invariant-point-attention.yaml",
       "standard_blocks/structure-transition.yaml",
+      "standard_blocks/single-to-pair-endpoint-update.yaml",
+      "standard_blocks/pair-transition.yaml",
     )
     instances = catalog.compile_instances(architecture, registered_blocks: catalog.blocks_by_path.keys)
     reduced = instances.find { |instance| instance.fetch("id") == "latent_reduced_pair_attention" }
@@ -55,6 +57,8 @@ class StandardBlockCompilerTest < Minitest::Test
       path,
       "standard_blocks/pair-biased-attention.yaml",
       "standard_blocks/structure-transition.yaml",
+      "standard_blocks/single-to-pair-endpoint-update.yaml",
+      "standard_blocks/pair-transition.yaml",
     )
     compiled = %w[genie2 genie3].to_h do |id|
       architecture = load_yaml("architectures/#{id}.yaml")
@@ -82,12 +86,16 @@ class StandardBlockCompilerTest < Minitest::Test
       path,
       "standard_blocks/pair-biased-attention.yaml",
       "standard_blocks/structure-transition.yaml",
+      "standard_blocks/single-to-pair-endpoint-update.yaml",
+      "standard_blocks/pair-transition.yaml",
     ).compile_instances(
       architecture,
       registered_blocks: [
         path,
         "standard_blocks/pair-biased-attention.yaml",
         "standard_blocks/structure-transition.yaml",
+        "standard_blocks/single-to-pair-endpoint-update.yaml",
+        "standard_blocks/pair-transition.yaml",
       ],
     ).find { |candidate| candidate.fetch("id") == "structure_ipa" }
 
@@ -125,12 +133,16 @@ class StandardBlockCompilerTest < Minitest::Test
       path,
       "standard_blocks/pair-biased-attention.yaml",
       "standard_blocks/invariant-point-attention.yaml",
+      "standard_blocks/single-to-pair-endpoint-update.yaml",
+      "standard_blocks/pair-transition.yaml",
     ).compile_instances(
       architecture,
       registered_blocks: [
         path,
         "standard_blocks/pair-biased-attention.yaml",
         "standard_blocks/invariant-point-attention.yaml",
+        "standard_blocks/single-to-pair-endpoint-update.yaml",
+        "standard_blocks/pair-transition.yaml",
       ],
     ).find { |candidate| candidate.fetch("id") == "structure_transition" }
 
@@ -177,6 +189,66 @@ class StandardBlockCompilerTest < Minitest::Test
     aggregations = board.fetch("nodes").select { |node| node.fetch("id").start_with?("aggregate_") }
     assert aggregations.all? { |node| node.fetch("row") > attention.fetch("row") },
       "value extraction should follow the shared attention-weight hinge"
+  end
+
+  def test_v03_pair_transition_resolves_pointwise_pair_shapes
+    path = "standard_blocks/pair-transition.yaml"
+    architecture = load_yaml("architectures/genie3.yaml")
+    catalog = catalog_for(
+      path,
+      "standard_blocks/pair-biased-attention.yaml",
+      "standard_blocks/invariant-point-attention.yaml",
+      "standard_blocks/structure-transition.yaml",
+      "standard_blocks/single-to-pair-endpoint-update.yaml",
+    )
+    instance = catalog.compile_instances(
+      architecture,
+      registered_blocks: catalog.blocks_by_path.keys,
+    ).find { |candidate| candidate.fetch("id") == "latent_pair_transition" }
+
+    assert_equal({
+      "c_hidden" => 512,
+      "b" => "B",
+      "n" => "N",
+      "c_z" => 128,
+    }, instance.fetch("shapeParameters"))
+
+    nodes = instance.dig("scene", "nodes").to_h { |node| [node.fetch("id"), node] }
+    assert_equal "B x N x N x 512", nodes.dig("expanded_pair_state", "shape")
+    assert_equal "B x N x N x 128", nodes.dig("transition_delta", "shape")
+    assert_equal "B x N x N x 128", nodes.dig("updated_pair_state", "shape")
+    assert_equal "exact", instance.fetch("conformance")
+  end
+
+  def test_v03_single_to_pair_endpoint_update_resolves_broadcast_pair_shapes
+    path = "standard_blocks/single-to-pair-endpoint-update.yaml"
+    architecture = load_yaml("architectures/genie3.yaml")
+    catalog = catalog_for(
+      path,
+      "standard_blocks/pair-biased-attention.yaml",
+      "standard_blocks/invariant-point-attention.yaml",
+      "standard_blocks/structure-transition.yaml",
+      "standard_blocks/pair-transition.yaml",
+    )
+    instance = catalog.compile_instances(
+      architecture,
+      registered_blocks: catalog.blocks_by_path.keys,
+    ).find { |candidate| candidate.fetch("id") == "latent_single_to_pair_endpoint_update" }
+
+    assert_equal({
+      "b" => "B",
+      "n" => "N",
+      "c_s" => 384,
+      "c_z" => 128,
+    }, instance.fetch("shapeParameters"))
+
+    nodes = instance.dig("scene", "nodes").to_h { |node| [node.fetch("id"), node] }
+    assert_equal "B x N x 128", nodes.dig("left_single", "shape")
+    assert_equal "B x N x 128", nodes.dig("right_single", "shape")
+    assert_equal "B x N x N x 128", nodes.dig("pair_activations", "shape")
+    assert_equal "B x N x N x 128", nodes.dig("pair_delta", "shape")
+    assert_equal "B x N x N x 128", nodes.dig("updated_pair_state", "shape")
+    assert_equal "exact", instance.fetch("conformance")
   end
 
   def test_ipa_semantic_code_bindings_compile_to_template_and_instance_facts

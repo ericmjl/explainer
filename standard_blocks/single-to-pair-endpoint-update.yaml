@@ -1,0 +1,214 @@
+schema_version: standard-block-v0.3
+id: single_to_pair_endpoint_update
+name: Single-to-Pair Endpoint Update
+kind: communication
+status: review
+description: Project each token state through distinct left/source and right/destination maps, broadcast-sum the endpoint features over ordered token pairs, project the resulting pair activations, and add them residually to an existing pair state.
+parameters:
+  - { id: b, notation: B, kind: batch, resolution: boundary, role: leading batch axis }
+  - { id: n, notation: N, kind: sequence, resolution: boundary, role: number of tokens }
+  - { id: c_s, notation: C_s, kind: channel, resolution: boundary, role: input single-state channel width }
+  - { id: c_z, notation: C_z, kind: channel, resolution: boundary, role: pair-state and endpoint-projection channel width }
+ports:
+  - id: single_state
+    label: updated single state
+    direction: input
+    kind: representation
+    required: true
+    cardinality: one
+    relation_kinds: [data_flow, state_update]
+    glyph: single
+    notation: s
+    role: token state whose two endpoint projections construct the pair update
+    shape_contract: &single_shape
+      kind: tensor
+      axes:
+        - { id: batch, dimension: b }
+        - { id: token, dimension: n }
+        - { id: single_channel, dimension: c_s }
+  - id: pair_state
+    label: incoming pair state
+    direction: input
+    kind: representation
+    required: true
+    cardinality: one
+    relation_kinds: [data_flow, state_update]
+    glyph: pair
+    notation: z
+    role: existing ordered-pair state that receives the endpoint-derived residual update
+    shape_contract: &pair_shape
+      kind: tensor
+      axes:
+        - { id: batch, dimension: b }
+        - { id: query_token, dimension: n }
+        - { id: key_token, dimension: n }
+        - { id: pair_channel, dimension: c_z }
+  - id: updated_pair_state
+    label: updated pair state
+    direction: output
+    kind: representation
+    required: true
+    cardinality: one
+    relation_kinds: [data_flow, state_update]
+    glyph: pair
+    notation: z'
+    role: pair state after adding the projected endpoint contribution
+    shape_contract: *pair_shape
+variants:
+  - id: projected_endpoint_sum_residual
+    label: Projected endpoint sum + residual
+    description: Construct left/source and right/destination token features, broadcast-sum them over ordered pairs, apply a final pair projection, and add the result to the incoming pair state.
+    step_refs:
+      - steps.project_left_single
+      - steps.project_right_single
+      - steps.broadcast_endpoint_sum
+      - steps.project_pair_delta
+      - steps.add_pair_residual
+default_variant: projected_endpoint_sum_residual
+values:
+  - id: left_single
+    label: left/source endpoint features
+    kind: representation
+    glyph: single
+    notation: p_i
+    role: endpoint features broadcast over the destination index j
+    shape_contract: &endpoint_shape
+      kind: tensor
+      axes:
+        - { id: batch, dimension: b }
+        - { id: token, dimension: n }
+        - { id: pair_channel, dimension: c_z }
+  - id: right_single
+    label: right/destination endpoint features
+    kind: representation
+    glyph: single
+    notation: p_j
+    role: endpoint features broadcast over the source index i
+    shape_contract: *endpoint_shape
+  - id: pair_activations
+    label: broadcast endpoint sum
+    kind: representation
+    glyph: pair
+    notation: a
+    role: ordered-pair activations formed as the sum of the two endpoint projections
+    shape_contract: *pair_shape
+  - id: pair_delta
+    label: projected pair update
+    kind: representation
+    glyph: pair
+    notation: delta_z
+    role: endpoint-derived contribution in the canonical pair-state channel space
+    shape_contract: *pair_shape
+steps:
+  - id: project_left_single
+    label: Project left/source endpoint
+    operation: linear_projection
+    shape_rule: linear
+    inputs: [ports.single_state]
+    outputs: [values.left_single]
+    code: "left_single = linear_left(single_state)"
+    tex: "p_i = W_i s_i"
+    role: map every token to the features used when it occupies the first ordered-pair endpoint
+    code_bindings:
+      - { lexeme: single_state, ref: ports.single_state, access: read }
+      - { lexeme: left_single, ref: values.left_single, access: write }
+  - id: project_right_single
+    label: Project right/destination endpoint
+    operation: linear_projection
+    shape_rule: linear
+    inputs: [ports.single_state]
+    outputs: [values.right_single]
+    code: "right_single = linear_right(single_state)"
+    tex: "p_j = W_j s_j"
+    role: map every token to a distinct feature set used when it occupies the second ordered-pair endpoint
+    code_bindings:
+      - { lexeme: single_state, ref: ports.single_state, access: read }
+      - { lexeme: right_single, ref: values.right_single, access: write }
+  - id: broadcast_endpoint_sum
+    label: Broadcast + add endpoints
+    operation: broadcast_sum
+    shape_rule: broadcast_sum
+    inputs: [values.left_single, values.right_single]
+    outputs: [values.pair_activations]
+    code: "pair_activations = left_single[:, :, None, :] + right_single[:, None, :, :]"
+    tex: "a_{ij} = p_i + p_j"
+    role: expand both token streams across the missing endpoint axis and add them for every ordered token pair
+    code_bindings:
+      - { lexeme: left_single, ref: values.left_single, access: read }
+      - { lexeme: right_single, ref: values.right_single, access: read }
+      - { lexeme: pair_activations, ref: values.pair_activations, access: write }
+  - id: project_pair_delta
+    label: Project pair update
+    operation: linear_projection
+    shape_rule: linear
+    inputs: [values.pair_activations]
+    outputs: [values.pair_delta]
+    code: "pair_delta = linear_pair(pair_activations)"
+    tex: "delta z_{ij} = W_p a_{ij}"
+    role: transform the endpoint sum in pair-channel space before it is added to the existing pair state
+    code_bindings:
+      - { lexeme: pair_activations, ref: values.pair_activations, access: read }
+      - { lexeme: pair_delta, ref: values.pair_delta, access: write }
+  - id: add_pair_residual
+    label: Add to pair state
+    operation: residual_add
+    shape_rule: residual_add
+    inputs: [ports.pair_state, values.pair_delta]
+    outputs: [ports.updated_pair_state]
+    code: "updated_pair_state = pair_state + pair_delta"
+    tex: "z'_{ij} = z_{ij} + delta z_{ij}"
+    role: preserve the incoming pair state while adding the single-derived endpoint update
+    code_bindings:
+      - { lexeme: pair_state, ref: ports.pair_state, access: read }
+      - { lexeme: pair_delta, ref: values.pair_delta, access: read }
+      - { lexeme: updated_pair_state, ref: ports.updated_pair_state, access: write }
+visual_template:
+  grid:
+    columns: 9
+    rows: 4
+    column_sizing: content
+    row_sizing: content
+    col_gap: 30
+    row_gap: 30
+  nodes:
+    - { id: single_state, ref: ports.single_state, col: 1, row: 2, prominence: secondary, treatment: compact }
+    - { id: project_left_single, ref: steps.project_left_single, col: 2, row: 1, prominence: primary, treatment: compact }
+    - { id: left_single, ref: values.left_single, col: 3, row: 1, prominence: context, treatment: compact }
+    - { id: project_right_single, ref: steps.project_right_single, col: 2, row: 3, prominence: primary, treatment: compact }
+    - { id: right_single, ref: values.right_single, col: 3, row: 3, prominence: context, treatment: compact }
+    - { id: broadcast_endpoint_sum, ref: steps.broadcast_endpoint_sum, col: 4, row: 2, prominence: primary, treatment: compact }
+    - { id: pair_activations, ref: values.pair_activations, col: 5, row: 2, prominence: context, treatment: compact }
+    - { id: project_pair_delta, ref: steps.project_pair_delta, col: 6, row: 2, prominence: primary, treatment: compact }
+    - { id: pair_delta, ref: values.pair_delta, col: 7, row: 2, prominence: context, treatment: compact }
+    - { id: pair_state, ref: ports.pair_state, col: 7, row: 4, prominence: secondary, treatment: compact }
+    - { id: add_pair_residual, ref: steps.add_pair_residual, col: 8, row: 2, prominence: primary, treatment: compact }
+    - { id: updated_pair_state, ref: ports.updated_pair_state, col: 9, row: 2, prominence: secondary, treatment: compact }
+  segments:
+    - id: endpoint_pair_construction
+      label: Endpoint Pair Construction
+      description: Distinct left/source and right/destination projections are broadcast over the two token axes and added.
+      vertical_alignment_group: single_to_pair_phases
+      node_refs:
+        - ports.single_state
+        - steps.project_left_single
+        - values.left_single
+        - steps.project_right_single
+        - values.right_single
+        - steps.broadcast_endpoint_sum
+        - values.pair_activations
+    - id: residual_pair_update
+      label: Residual Pair Update
+      description: A final linear map produces the learned pair contribution, which is added to the current pair state.
+      vertical_alignment_group: single_to_pair_phases
+      node_refs:
+        - steps.project_pair_delta
+        - values.pair_delta
+        - ports.pair_state
+        - steps.add_pair_residual
+        - ports.updated_pair_state
+evidence_policy:
+  generic_definition: The template names the common endpoint-pair construction using AF2's left_single, right_single, and pair_activations vocabulary, then keeps the final projection and residual addition as a separate explicit phase of the full update pattern.
+  usage_requires:
+    - Evidence for distinct left/source and right/destination token projections.
+    - Evidence that the projections are broadcast and added rather than multiplied.
+    - Evidence locating the final pair projection and residual addition.

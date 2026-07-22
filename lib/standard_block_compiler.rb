@@ -275,6 +275,7 @@ module StandardBlockCompiler
           "id" => segment.fetch("id"),
           "label" => segment.fetch("label"),
           "description" => segment["description"],
+          "vertical_alignment_group" => segment["vertical_alignment_group"],
           "order" => index + 1,
           "node_ids" => node_ids,
         }.compact

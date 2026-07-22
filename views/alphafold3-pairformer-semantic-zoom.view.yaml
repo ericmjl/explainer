@@ -1,0 +1,561 @@
+schema_version: visualization-v0.4
+id: alphafold3_pairformer_semantic_zoom
+title: AlphaFold 3 Pairformer
+entry:
+  architecture: architectures/alphafold3-pairformer.yaml
+root_board: pairformer_overview
+boards:
+  - id: pairformer_overview
+    title: AlphaFold 3 Pairformer
+    summary: The AF3 trunk hands the Pairformer a token-wise single representation and an ordered token-pair representation. Forty-eight independently parameterized blocks refine both tracks, then return them to downstream AF3 modules.
+    subject_ref: architecture
+    expansion_depth: 1
+    grid:
+      columns: 5
+      rows: 5
+      column_sizing: content
+      col_gap: 40
+      row_gap: 32
+    nodes:
+      - id: token_mask_input
+        ref: value_sites.token_mask_input
+        label: token mask
+        prominence: context
+        treatment: chip
+        density: micro
+        col: 1
+        row: 1
+      - id: single_state_input
+        ref: value_sites.single_state_input
+        label: input singles
+        notation: s
+        prominence: secondary
+        treatment: compact
+        density: compact
+        col: 1
+        row: 2
+      - id: pair_state_input
+        ref: value_sites.pair_state_input
+        label: input pairs
+        notation: z
+        prominence: secondary
+        treatment: compact
+        density: compact
+        col: 1
+        row: 4
+      - id: pair_mask_input
+        ref: value_sites.pair_mask_input
+        label: pair mask
+        prominence: context
+        treatment: chip
+        density: micro
+        col: 1
+        row: 5
+      - id: pairformer_stack
+        ref: modules.pairformer_stack
+        label: 48-block Pairformer
+        prominence: primary
+        treatment: block
+        col: 3
+        row: 3
+        board_ref: pairformer_block
+      - id: single_state_output
+        ref: value_sites.single_state_output
+        label: trunk singles
+        notation: 's^{trunk}'
+        prominence: secondary
+        treatment: compact
+        density: compact
+        col: 5
+        row: 2
+      - id: pair_state_output
+        ref: value_sites.pair_state_output
+        label: trunk pairs
+        notation: 'z^{trunk}'
+        prominence: secondary
+        treatment: compact
+        density: compact
+        col: 5
+        row: 4
+    edge_overrides:
+      - match: { relation_ref: relations.final_single_block_state_becomes_output }
+        label: 's^{trunk}'
+        connection:
+          title: Final single representation
+          role: downstream trunk state
+          inside: After block 48, the token-wise state is exposed to downstream AF3 modules.
+      - match: { relation_ref: relations.final_pair_block_state_becomes_output }
+        label: 'z^{trunk}'
+        connection:
+          title: Final pair representation
+          role: downstream pair context
+          inside: After block 48, the ordered token-pair state is exposed to downstream AF3 modules.
+
+  - id: pairformer_block
+    title: One Pairformer Block, Repeated 48 Times
+    summary: Each block first completes the pair-track update. Only then is that updated pair state projected to attention logits that bias the single-track update. The two outputs become the next block's inputs.
+    parent: pairformer_overview
+    subject_ref: modules.pairformer_stack
+    expansion_depth: 1
+    grid:
+      columns: 9
+      rows: 5
+      column_sizing: content
+      col_gap: 32
+      row_gap: 30
+    regions:
+      - id: pairformer_block_iteration
+        kind: repeat
+        execution_ref: execution.loops.pairformer_stack
+        label: one Pairformer block
+        node_ids:
+          - block_single_state
+          - block_pair_state
+          - pair_update_stage
+          - pair_after_transition
+          - single_update_stage
+          - single_after_transition
+        iteration_relation_refs:
+          - relations.block_pair_output_reenters_next_pairformer_block
+          - relations.block_single_output_reenters_next_pairformer_block
+    nodes:
+      - id: single_state_input
+        ref: value_sites.single_state_input
+        label: initial singles
+        notation: s
+        prominence: context
+        treatment: compact
+        density: compact
+        col: 1
+        row: 2
+      - id: pair_state_input
+        ref: value_sites.pair_state_input
+        label: initial pairs
+        notation: z
+        prominence: context
+        treatment: compact
+        density: compact
+        col: 1
+        row: 4
+      - id: block_single_state
+        ref: value_sites.block_single_state
+        label: block-input singles
+        notation: s_i
+        prominence: secondary
+        treatment: compact
+        density: compact
+        col: 2
+        row: 2
+      - id: block_pair_state
+        ref: value_sites.block_pair_state
+        label: block-input pairs
+        notation: z_i
+        prominence: secondary
+        treatment: compact
+        density: compact
+        col: 2
+        row: 4
+      - id: pair_mask_input
+        ref: value_sites.pair_mask_input
+        label: pair mask
+        prominence: context
+        treatment: chip
+        density: micro
+        col: 3
+        row: 5
+      - id: pair_update_stage
+        ref: modules.pair_update_stage
+        prominence: primary
+        treatment: block
+        col: 4
+        row: 4
+        board_ref: pair_track
+      - id: pair_after_transition
+        ref: value_sites.pair_after_transition
+        label: updated pairs
+        notation: 'z_{i+1}'
+        prominence: secondary
+        treatment: compact
+        density: compact
+        col: 5
+        row: 4
+      - id: token_mask_input
+        ref: value_sites.token_mask_input
+        label: token mask
+        prominence: context
+        treatment: chip
+        density: micro
+        col: 5
+        row: 1
+      - id: single_update_stage
+        ref: modules.single_update_stage
+        prominence: primary
+        treatment: block
+        col: 6
+        row: 2
+        board_ref: single_track
+      - id: single_after_transition
+        ref: value_sites.single_after_transition
+        label: updated singles
+        notation: 's_{i+1}'
+        prominence: secondary
+        treatment: compact
+        density: compact
+        col: 7
+        row: 2
+      - id: single_state_output
+        ref: value_sites.single_state_output
+        label: final singles
+        notation: 's^{trunk}'
+        prominence: context
+        treatment: compact
+        density: compact
+        col: 9
+        row: 2
+      - id: pair_state_output
+        ref: value_sites.pair_state_output
+        label: final pairs
+        notation: 'z^{trunk}'
+        prominence: context
+        treatment: compact
+        density: compact
+        col: 9
+        row: 4
+    exclude:
+      - ref: value_sites.single_pair_attention_logits
+        reason: The parent block board keeps the single update atomic; its pair-logit intermediate is expanded on the Single Track child board.
+    edge_overrides:
+      - match: { relation_ref: relations.input_pair_state_initializes_block_pair_state }
+        label: initialize z
+        connection:
+          title: Initialize pair rail
+          role: first-block pair state
+          inside: The incoming trunk pair representation becomes z_i for the first Pairformer block.
+      - match: { relation_ref: relations.input_single_state_initializes_block_single_state }
+        label: initialize s
+        connection:
+          title: Initialize single rail
+          role: first-block single state
+          inside: The incoming trunk single representation becomes s_i for the first Pairformer block.
+      - match: { relation_ref: relations.block_pair_state_enters_outgoing_multiplication }
+        label: z_i
+        connection:
+          title: Pair track enters its five updates
+          role: pair reasoning
+          inside: The pair update stage applies the two triangle multiplications, two axial attentions, and pair transition in sequence.
+      - match: { relation_ref: relations.pair_transition_updates_pair_state }
+        label: five residual updates
+        connection:
+          title: Completed pair track
+          role: updated pair state
+          inside: The stage emits z_(i+1) only after all five pair residual updates have completed.
+      - match: { relation_ref: relations.updated_pair_state_enters_bias_projection }
+        label: pair-derived bias
+        tone: conditioning
+        connection:
+          title: Updated pairs condition singles
+          role: attention-logit bias source
+          inside: The updated pair state is normalized and projected to 16 additive logits per ordered token pair inside the single update stage.
+      - match: { relation_ref: relations.block_single_state_enters_pair_biased_attention }
+        label: s_i
+        connection:
+          title: Single track enters attention
+          role: token reasoning
+          inside: The block-input single state receives full self-attention conditioned by the updated pair representation.
+      - match: { relation_ref: relations.single_transition_updates_single_state }
+        label: attention + transition
+        connection:
+          title: Completed single track
+          role: updated single state
+          inside: Pair-biased self-attention and a pointwise SwiGLU transition produce s_(i+1).
+      - match: { relation_ref: relations.block_pair_output_reenters_next_pairformer_block }
+        label: next block z
+        tone: recurrence
+        route_side: bottom
+        route_clearance: 52
+        connection:
+          title: Pair loop carry
+          role: next-block state
+          inside: The updated pair representation becomes z_i for the next independently parameterized block.
+      - match: { relation_ref: relations.block_single_output_reenters_next_pairformer_block }
+        label: next block s
+        tone: recurrence
+        route_side: top
+        route_clearance: 52
+        connection:
+          title: Single loop carry
+          role: next-block state
+          inside: The updated single representation becomes s_i for the next independently parameterized block.
+
+  - id: pair_track
+    title: "Pair Track: Five Ordered Residual Updates"
+    summary: One 128-channel ordered-pair state passes through outgoing triangle multiplication, incoming triangle multiplication, starting-node attention, ending-node attention, and a 4x SwiGLU transition. Every step adds a delta before the next step reads the state.
+    parent: pairformer_block
+    subject_ref: modules.pair_update_stage
+    expansion_depth: 1
+    grid:
+      columns: 11
+      rows: 4
+      column_sizing: content
+      col_gap: 24
+      row_gap: 28
+    nodes:
+      - id: pair_mask_input
+        ref: value_sites.pair_mask_input
+        label: pair mask
+        prominence: context
+        treatment: chip
+        density: micro
+        col: 1
+        row: 1
+      - id: block_pair_state
+        ref: value_sites.block_pair_state
+        label: pair state
+        notation: z_i
+        prominence: secondary
+        treatment: compact
+        density: compact
+        col: 1
+        row: 3
+      - id: triangle_multiplication_outgoing
+        ref: modules.triangle_multiplication_outgoing
+        label: outgoing triangle multiplication + residual
+        prominence: primary
+        treatment: compact
+        density: compact
+        col: 2
+        row: 3
+      - id: pair_after_outgoing_multiplication
+        ref: value_sites.pair_after_outgoing_multiplication
+        label: outgoing-updated pairs
+        notation: z^{out}
+        prominence: context
+        treatment: compact
+        density: micro
+        col: 3
+        row: 3
+      - id: triangle_multiplication_incoming
+        ref: modules.triangle_multiplication_incoming
+        label: incoming triangle multiplication + residual
+        prominence: primary
+        treatment: compact
+        density: compact
+        col: 4
+        row: 3
+      - id: pair_after_incoming_multiplication
+        ref: value_sites.pair_after_incoming_multiplication
+        label: incoming-updated pairs
+        notation: z^{in}
+        prominence: context
+        treatment: compact
+        density: micro
+        col: 5
+        row: 3
+      - id: pair_attention_starting_node
+        ref: modules.pair_attention_starting_node
+        label: starting-node attention + residual
+        prominence: primary
+        treatment: compact
+        density: compact
+        col: 6
+        row: 3
+      - id: pair_after_starting_attention
+        ref: value_sites.pair_after_starting_attention
+        label: start-attended pairs
+        notation: z^{start}
+        prominence: context
+        treatment: compact
+        density: micro
+        col: 7
+        row: 3
+      - id: pair_attention_ending_node
+        ref: modules.pair_attention_ending_node
+        label: ending-node attention + residual
+        prominence: primary
+        treatment: compact
+        density: compact
+        col: 8
+        row: 3
+      - id: pair_after_ending_attention
+        ref: value_sites.pair_after_ending_attention
+        label: end-attended pairs
+        notation: z^{end}
+        prominence: context
+        treatment: compact
+        density: micro
+        col: 9
+        row: 3
+      - id: pair_transition
+        ref: modules.pair_transition
+        label: pair transition + residual
+        prominence: primary
+        treatment: compact
+        density: compact
+        col: 10
+        row: 3
+      - id: pair_after_transition
+        ref: value_sites.pair_after_transition
+        label: block-output pairs
+        notation: 'z_{i+1}'
+        prominence: secondary
+        treatment: compact
+        density: compact
+        col: 11
+        row: 3
+    edge_overrides:
+      - match: { relation_ref: relations.block_pair_state_enters_outgoing_multiplication }
+        label: z
+        connection:
+          title: Pair state enters outgoing update
+          role: ordered-pair input
+          inside: The outgoing triangle operation mixes pairs that share their outgoing endpoint pattern.
+      - match: { relation_ref: relations.outgoing_multiplication_updates_pair_state }
+        label: '+ Δz_out'
+        connection:
+          title: Outgoing residual update
+          role: pair-state mutation
+          inside: The gated outgoing triangle result is projected back to 128 channels and added to the incoming pair state.
+      - match: { relation_ref: relations.incoming_multiplication_updates_pair_state }
+        label: '+ Δz_in'
+        connection:
+          title: Incoming residual update
+          role: pair-state mutation
+          inside: The incoming triangle result is added to the already outgoing-updated pair state.
+      - match: { relation_ref: relations.starting_attention_updates_pair_state }
+        label: '+ Δz_start'
+        connection:
+          title: Starting-node attention update
+          role: axial pair attention
+          inside: Four-head gated attention follows one axis of the pair grid and adds its projected result.
+      - match: { relation_ref: relations.ending_attention_updates_pair_state }
+        label: '+ Δz_end'
+        connection:
+          title: Ending-node attention update
+          role: complementary axial pair attention
+          inside: The implementation transposes the pair grid, applies the same attention anatomy along the other axis, then transposes back.
+      - match: { relation_ref: relations.pair_transition_updates_pair_state }
+        label: '+ Δz_ffn'
+        connection:
+          title: Pair transition update
+          role: pointwise pair feed-forward
+          inside: LayerNorm and a 4x SwiGLU hidden projection produce a 128-channel delta that is added to each pair entry.
+
+  - id: single_track
+    title: "Single Track: Pair-Biased Attention Then Transition"
+    summary: The completed pair state is normalized and projected to 16 attention-head logits. Those logits bias full self-attention over the 384-channel token states; a second residual update comes from a pointwise 4x SwiGLU transition.
+    parent: pairformer_block
+    subject_ref: modules.single_update_stage
+    expansion_depth: 1
+    grid:
+      columns: 7
+      rows: 4
+      column_sizing: content
+      col_gap: 30
+      row_gap: 28
+    nodes:
+      - id: pair_after_transition
+        ref: value_sites.pair_after_transition
+        label: updated pairs
+        notation: 'z_{i+1}'
+        prominence: secondary
+        treatment: compact
+        density: compact
+        col: 1
+        row: 1
+      - id: single_pair_logits_projection
+        ref: modules.single_pair_logits_projection
+        prominence: primary
+        treatment: compact
+        density: compact
+        col: 2
+        row: 1
+      - id: single_pair_attention_logits
+        ref: value_sites.single_pair_attention_logits
+        label: pair attention bias
+        notation: b
+        prominence: secondary
+        treatment: compact
+        density: compact
+        col: 3
+        row: 1
+      - id: token_mask_input
+        ref: value_sites.token_mask_input
+        label: token mask
+        prominence: context
+        treatment: chip
+        density: micro
+        col: 3
+        row: 2
+      - id: block_single_state
+        ref: value_sites.block_single_state
+        label: block-input singles
+        notation: s_i
+        prominence: secondary
+        treatment: compact
+        density: compact
+        col: 1
+        row: 3
+      - id: single_attention_with_pair_bias
+        ref: modules.single_attention_with_pair_bias
+        prominence: primary
+        treatment: block
+        col: 4
+        row: 3
+      - id: single_after_pair_attention
+        ref: value_sites.single_after_pair_attention
+        label: attention-updated singles
+        notation: s^{attn}
+        prominence: secondary
+        treatment: compact
+        density: compact
+        col: 5
+        row: 3
+      - id: single_transition
+        ref: modules.single_transition
+        label: single transition + residual
+        prominence: primary
+        treatment: compact
+        density: compact
+        col: 6
+        row: 3
+      - id: single_after_transition
+        ref: value_sites.single_after_transition
+        label: block-output singles
+        notation: 's_{i+1}'
+        prominence: secondary
+        treatment: compact
+        density: compact
+        col: 7
+        row: 3
+    edge_overrides:
+      - match: { relation_ref: relations.updated_pair_state_enters_bias_projection }
+        label: LN(z)
+        connection:
+          title: Normalize updated pairs
+          role: bias source
+          inside: The pair state is read after all five pair updates and normalized before projection.
+      - match: { relation_ref: relations.bias_projection_produces_pair_logits }
+        label: 'Linear 128→16'
+        connection:
+          title: Project attention-head logits
+          role: pair-to-attention adapter
+          inside: Each ordered token pair produces one additive scalar for each of the 16 single-attention heads.
+      - match: { relation_ref: relations.pair_logits_bias_single_attention }
+        label: add to logits
+        tone: conditioning
+        connection:
+          title: Pair-derived attention bias
+          role: pair-to-single information flow
+          inside: The projected pair tensor is added to the query-key dot-product logits before softmax; it is not concatenated with single values.
+      - match: { relation_ref: relations.pair_biased_attention_updates_single_state }
+        label: '+ Δs_attn'
+        connection:
+          title: Attention residual update
+          role: single-state mutation
+          inside: Full 16-head self-attention aggregates token values, applies query gating and an output projection, then the caller adds that delta to s_i.
+      - match: { relation_ref: relations.single_transition_updates_single_state }
+        label: '+ Δs_ffn'
+        connection:
+          title: Single transition update
+          role: pointwise token feed-forward
+          inside: LayerNorm and a 4x SwiGLU hidden projection produce a 384-channel delta that is added to each token state.
